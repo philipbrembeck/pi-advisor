@@ -1,0 +1,45 @@
+{
+  "name": "pi-advisor",
+  "version": "0.1.0",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/philipbrembeck/pi-advisor.git"
+  },
+  "description": "Executor/Advisor flow for autonomous pi coding agents",
+  "type": "module",
+  "main": "extensions/index.ts",
+  "types": "extensions/index.ts",
+  "keywords": [
+    "pi-package"
+  ],
+  "files": [
+    "extensions",
+    "src",
+    "README.md"
+  ],
+  "pi": {
+    "extensions": [
+      "./extensions/index.ts"
+    ]
+  },
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-ai": "^0.80.7",
+    "@earendil-works/pi-coding-agent": "^0.80.7",
+    "@earendil-works/pi-tui": "^0.80.7",
+    "typebox": "^1.1.38"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-ai": "^0.80.7",
+    "@earendil-works/pi-coding-agent": "^0.80.7",
+    "@earendil-works/pi-tui": "^0.80.7",
+    "typebox": "^1.1.38",
+    "@types/node": "^20.11.0",
+    "bun-types": "^1.0.0",
+    "typescript": "^5.3.3"
+  }
+}
