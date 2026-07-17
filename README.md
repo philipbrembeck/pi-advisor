@@ -6,7 +6,7 @@ This extension introduces a strategic "Executor/Advisor" workflow, inspired by C
 
 The primary agent (the Executor) acts, writes code, and executes tools. Whenever the Executor encounters high risk, ambiguity, or potential loops, it MUST escalate the scenario to a smarter, second-opinion LLM (the Advisor) for strategic guidance.
 
-[Read more about it here](https://philipbrembeck.com/writings/2026/07/blog/2026/07/only-as-much-intelligence-as-you-need).
+[Read more about it here](https://philipbrembeck.com/writings/2026/07/only-as-much-intelligence-as-you-need).
 
 ## Installation
 
