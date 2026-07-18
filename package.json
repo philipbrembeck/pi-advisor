@@ -4,7 +4,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/philipbrembeck/pi-advisor.git"
+    "url": "https://github.com/philipbrembeck/pi-advisor.git"
   },
   "homepage": "https://github.com/philipbrembeck/pi-advisor",
   "author": "Philip Brembeck",

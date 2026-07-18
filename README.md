@@ -89,6 +89,13 @@ All fields are optional. `executor`, `advisor`, and their effort settings are ma
 
 Disables the Advisor flow, removing the `ask_advisor` tool from the active session.
 
+## Publishing releases
+
+Pushing a version tag (`vX.Y.Z`) runs the release workflow. It verifies that the tag matches `package.json`, type-checks, tests, then publishes:
+
+- `pi-advisor-flow` to [npm](https://www.npmjs.com/package/pi-advisor-flow)
+- `@philipbrembeck/pi-advisor-flow` to GitHub Packages, which makes the package appear in this repository’s **Packages** sidebar
+
 ## Local Development
 
 `pi-advisor` uses Bun for rapid testing and TypeScript. Standard commands apply:
