@@ -1,6 +1,6 @@
 {
   "name": "pi-advisor-flow",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -11,7 +11,11 @@
   "main": "extensions/index.ts",
   "types": "extensions/index.ts",
   "keywords": [
-    "pi-package"
+    "pi-package",
+    "pi-extension",
+    "pi-coding-agent",
+    "advisor",
+    "pi-advisor"
   ],
   "files": [
     "extensions",
@@ -21,7 +25,8 @@
   "pi": {
     "extensions": [
       "./extensions/index.ts"
-    ]
+    ],
+    "image": ""
   },
   "scripts": {
     "test": "bun test",
