@@ -71,7 +71,32 @@ describe("Extension Registration", () => {
     expect(response).not.toContain("Advisor (test/model)");
   });
 
-  test("uses a general contextual request when the question is omitted", () => {
+  test("advertises and uses a general contextual request when the question is omitted", () => {
+    let advisorTool: any;
+    const mockPi = {
+      registerTool(tool: any) {
+        if (tool.name === "ask_advisor") advisorTool = tool;
+      },
+      registerCommand() {},
+      getActiveTools() {
+        return [];
+      },
+    } as unknown as ExtensionAPI;
+    registerExtension(mockPi);
+
+    expect(advisorTool.description).toContain("no arguments");
+    expect(advisorTool.promptSnippet).toContain("no arguments");
+    expect(advisorTool.promptGuidelines.join(" ")).toContain("empty object");
+    expect(advisorTool.promptGuidelines.join(" ")).toContain("Do not delegate the whole plan or task");
+    const theme = {
+      fg: (_color: string, text: string) => text,
+      bg: (_color: string, text: string) => text,
+      bold: (text: string) => text,
+    };
+    const context = { lastComponent: undefined, state: {}, invalidate() {} };
+    const noQuestionCall = advisorTool.renderCall({}, theme, context).render(120).join("\n");
+    expect(noQuestionCall).toContain("[advisor] Executor → Advisor");
+    expect(noQuestionCall).not.toContain("General task review");
     expect(resolveAdvisorRequest()).toBe(DEFAULT_ADVISOR_REQUEST);
     expect(resolveAdvisorRequest("   ")).toBe(DEFAULT_ADVISOR_REQUEST);
     expect(resolveAdvisorRequest("Review the migration plan.")).toBe("Review the migration plan.");

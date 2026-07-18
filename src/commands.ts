@@ -12,10 +12,14 @@ export const registerCommands = (pi: ExtensionAPI) => {
   const flowEnabled = () => pi.getActiveTools().includes("ask_advisor");
 
   pi.registerCommand("advisor", {
-    description: "Enable the Executor/Advisor flow and switch to the configured Executor model",
+    description: "Enable the Executor/Advisor flow and switch to the configured Executor model; accepts contextMaxChars=N",
     handler: async (args, ctx) => {
       loadConfig(ctx);
-      parseArgs(args);
+      const argumentError = parseArgs(args);
+      if (argumentError) {
+        if (ctx.hasUI) ctx.ui.notify(argumentError, "error");
+        return;
+      }
       const [provider, modelId] = splitRef(executorRef);
       const executor = ctx.modelRegistry.find(provider, modelId);
       if (!executor) return ctx.hasUI ? ctx.ui.notify(`Executor model not found: ${executorRef}`, "error") : undefined;

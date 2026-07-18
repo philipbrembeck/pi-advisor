@@ -1,5 +1,5 @@
 import { expect, test, describe } from "bun:test";
-import { textFrom } from "../src/conversation.js";
+import { recentConversation, textFrom } from "../src/conversation.js";
 
 describe("Conversation Module", () => {
   test("textFrom should parse simple strings", () => {
@@ -19,5 +19,17 @@ describe("Conversation Module", () => {
     expect(textFrom(null)).toBe("");
     expect(textFrom(undefined)).toBe("");
     expect(textFrom({})).toBe("");
+  });
+
+  test("recentConversation keeps the configured tail length", () => {
+    const ctx = {
+      sessionManager: {
+        getBranch: () => [{
+          type: "message",
+          message: { role: "user", content: [{ type: "text", text: "abcdefghij" }] },
+        }],
+      },
+    } as any;
+    expect(recentConversation(ctx, 8)).toBe("cdefghij");
   });
 });

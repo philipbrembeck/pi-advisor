@@ -2,7 +2,7 @@ import { stream, type Message, type AssistantMessage } from "@earendil-works/pi-
 import { getMarkdownTheme, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Box, Markdown, Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
-import { advisorRef, advisorEffortRef, loadConfig, splitRef } from "./config.js";
+import { advisorRef, advisorEffortRef, contextMaxCharsRef, loadConfig, splitRef } from "./config.js";
 import { recentConversation, textFrom } from "./conversation.js";
 
 export const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
@@ -11,9 +11,9 @@ export const DEFAULT_ADVISOR_REQUEST = "Review the current task and conversation
 export const resolveAdvisorRequest = (question?: string) => question?.trim() || DEFAULT_ADVISOR_REQUEST;
 
 export const ADVISOR_SYSTEM = [
-  "You are the Advisor: a senior engineer consulted by an autonomous coding agent.",
-  "You do not act — you advise. Give concise, high-signal guidance: identify risks,",
-  "the smallest correct next step, and wrong assumptions. No preamble.",
+  "You are the Advisor: a senior engineer giving a brief second opinion to an autonomous coding agent.",
+  "You do not act or take over planning. Help the Executor validate its own proposed direction:",
+  "identify risks, challenge assumptions, and recommend the smallest correct next step. No preamble.",
 ].join(" ");
 
 export const consult = async (
@@ -30,7 +30,7 @@ export const consult = async (
   if (!auth.ok) throw new Error((auth as { error: string }).error);
   if (!auth.apiKey) throw new Error(`No API key for ${advisorRef}`);
 
-  const conversation = recentConversation(ctx);
+  const conversation = recentConversation(ctx, contextMaxCharsRef);
   const messages: Message[] = [{
     role: "user",
     content: [{ type: "text", text: `${conversation ? `<conversation>\n${conversation}\n</conversation>\n\n` : ""}Request from the Executor:\n${question}` }],
@@ -74,14 +74,14 @@ export const registerAdvisorTool = (pi: ExtensionAPI) => {
   pi.registerTool({
     name: "ask_advisor",
     label: "Ask Advisor",
-    description: "Consult the on-demand Advisor model for strategic guidance, a second opinion, a sanity check, or general contextual advice.",
-    promptSnippet: "Consult the Advisor model for a second opinion or general contextual advice",
+    description: "Consult the on-demand Advisor model for strategic guidance. Call with no arguments for a general review of the current task and conversation, or provide question for targeted advice.",
+    promptSnippet: "Consult the Advisor for targeted advice, or call with no arguments for a general task and conversation review",
     promptGuidelines: [
       "You MUST call `ask_advisor` in each of these scenarios:",
-      "1. PLAN GATE: You MUST call `ask_advisor` BEFORE selecting or implementing a plan when multiple materially different approaches exist, requirements are ambiguous, or the decision has architectural, security, data-loss, compatibility, or difficult-to-reverse consequences.",
+      "1. PLAN GATE: Before committing to a materially consequential plan, first investigate and form your own candidate direction. Then call `ask_advisor` to stress-test the decision when multiple approaches exist, requirements are ambiguous, or the decision has architectural, security, data-loss, compatibility, or difficult-to-reverse consequences. Do not delegate the whole plan or task to the Advisor.",
       "2. FAILURE GATE: You MUST call `ask_advisor` after two consecutive materially equivalent failed attempts, when an attempted fix recreates an earlier failure, or when two consecutive actions produce no measurable progress. Do NOT attempt another materially equivalent fix before consulting.",
       "3. COMPLETION GATE: You MUST call `ask_advisor` with the goal, changed files, key decisions, tests performed, results, and remaining risks BEFORE declaring success or calling `goal_complete`. You MAY skip this only for demonstrably trivial, low-risk work with no meaningful trade-offs or failures.",
-      "For a context-based review without a specific question, call `ask_advisor` with an empty object.",
+      "Call `ask_advisor` with an empty object for a general review of the current task and conversation. Provide `question` when you want the Advisor to assess a specific assumption, trade-off, or proposed next step.",
       "Do NOT use `ask_advisor` for routine decisions outside these three gates.",
     ],
     parameters: Type.Object({ question: Type.Optional(Type.String({ description: "The specific question or decision to get advice on. Omit for a general contextual review." })) }),
@@ -93,10 +93,7 @@ export const registerAdvisorTool = (pi: ExtensionAPI) => {
       const request = args.question?.trim();
       const label = theme.fg("customMessageLabel", theme.bold("[advisor]"));
       const title = theme.fg("customMessageText", "Executor → Advisor");
-      const detail = request
-        ? theme.fg("dim", `  ${request}`)
-        : theme.fg("dim", "  General task review");
-      box.addChild(new Text(`${label} ${title}\n${detail}`, 0, 0));
+      box.addChild(new Text(request ? `${label} ${title}\n${theme.fg("dim", `  ${request}`)}` : `${label} ${title}`, 0, 0));
       return box;
     },
     renderResult(result, { isPartial }, theme, context) {

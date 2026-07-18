@@ -43,6 +43,7 @@ Once installed, the following commands are available inside the Pi terminal:
 Enables the Advisor flow. Switches the primary model to the configured Executor model and registers the `ask_advisor` tool.
 
 - _Example:_ `/advisor executor=anthropic/claude-sonnet-5 advisor=openai/gpt-5.6-sol`
+- _Context size:_ `/advisor contextMaxChars=30000` uses up to 30,000 characters of the reconstructed conversation for each consultation. The default is 15,000; the maximum is 1,000,000. Larger values increase request cost and can exceed the advisor model's context window.
 
 ### `/advisor-models`
 
@@ -52,6 +53,22 @@ Opens an interactive, scrollable fuzzy-search picker in the TUI to choose:
 2. Advisor Model & Reasoning Effort
 
 Saves and persists your configuration to `~/.pi/agent/advisor.json`.
+
+### `ask_advisor`
+
+The Executor can call `ask_advisor` with an empty object for a general review of the current task and conversation, or provide `question` for targeted feedback. The Advisor is a brief second opinion: the Executor investigates and forms its own candidate direction first, then uses the Advisor to challenge assumptions and validate a consequential next step. It should not delegate the entire plan or task.
+
+### Context configuration
+
+The selected configuration is saved as `advisor.json` in the Pi agent directory (or an existing trusted project configuration). Set `contextMaxChars` there to increase the reconstructed conversation limit for all consultations:
+
+```json
+{
+  "contextMaxChars": 30000
+}
+```
+
+`contextMaxChars` must be a positive integer up to 1,000,000. Its default is 15,000.
 
 ### `/advisor-off`
 
