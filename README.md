@@ -119,5 +119,5 @@ Verify code-splitting correctness and registration logic:
 
 ```bash
 bun test            # Run unit tests
-npm run typecheck   # Perform strict TS checks
+bun run typecheck   # Perform strict TS checks
 ```
