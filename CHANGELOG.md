@@ -4,6 +4,17 @@ All notable changes to this project are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.6]
+
+### Added
+
+- `/advisor-manual [focus]` to start an Advisor consultation in parallel without interrupting the Executor's active tool work; the completed advice is delivered before the Executor's next model call.
+- Immediate transcript entries and rendered Advisor responses for manual consultations.
+
+### Changed
+
+- Reuse the Advisor call UI for manual consultations and cancel an earlier manual request when a newer one starts or the session shuts down.
+
 ## [0.1.5]
 
 ### Added

@@ -1,4 +1,5 @@
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { getMarkdownTheme, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { Box, Markdown, Text } from "@earendil-works/pi-tui";
 import {
   advisorCollapseResponsesRef, advisorCompletionGateRef, advisorCustomInvocationRef, advisorFailureGateRef, advisorPlanGateRef,
   advisorRef, advisorEffortRef, executorRef, executorEffortRef,
@@ -7,6 +8,7 @@ import {
   contextMaxCharsRef, loadConfig, saveConfig, parseArgs, splitRef,
 } from "./config.js";
 import { AdvisorSettingsSelector, SearchableModelSelector, type AdvisorSettings, type ContextPreset } from "./ui.js";
+import { adviceForDisplay, consult, renderAdvisorCallBox, resolveAdvisorRequest } from "./tools.js";
 
 const EFFORT_LEVELS = ["Default (Model Default)", "off", "minimal", "low", "medium", "high", "xhigh", "max"];
 
@@ -19,8 +21,66 @@ const CONTEXT_PRESETS: ContextPreset[] = [
   { label: "ALL", value: Number.MAX_SAFE_INTEGER, description: "The complete reconstructed conversation branch. Cost and model context limits apply." },
 ];
 
-export const registerCommands = (pi: ExtensionAPI) => {
+export const registerCommands = (pi: ExtensionAPI, dependencies: { consult?: typeof consult } = {}) => {
   const flowEnabled = () => pi.getActiveTools().includes("ask_advisor");
+  const requestAdvisor = dependencies.consult ?? consult;
+  const manualConsultations = new Set<AbortController>();
+
+  pi.registerEntryRenderer?.("advisor-manual-call", (entry, _options, theme) => {
+    const { question } = (entry.data ?? {}) as { question?: string };
+    return renderAdvisorCallBox(question, theme);
+  });
+
+  pi.registerMessageRenderer?.("advisor-manual-result", (message, { expanded }, theme) => {
+    const details = message.details as { advisor?: string; text?: string } | undefined;
+    const box = new Box(1, 1, (text) => theme.bg("customMessageBg", text));
+    box.addChild(new Text(theme.fg("warning", theme.bold("◆ ADVISOR RESPONSE")), 0, 0));
+    if (details?.advisor) box.addChild(new Text(theme.fg("dim", `  ${details.advisor}`), 0, 0));
+    const advice = details?.text ?? (typeof message.content === "string" ? message.content : "(Advisor returned no advice.)");
+    box.addChild(new Markdown(adviceForDisplay(advice, expanded), 0, 0, getMarkdownTheme()));
+    return box;
+  });
+
+  pi.on("session_shutdown", () => {
+    for (const controller of manualConsultations) controller.abort();
+    manualConsultations.clear();
+  });
+
+  pi.registerCommand("advisor-manual", {
+    description: "Consult the Advisor in parallel; accepts an optional focused question and fans its response out to the Executor",
+    handler: async (args, ctx) => {
+      const question = resolveAdvisorRequest(args);
+      // A single visible progress surface avoids competing consultations overwriting
+      // each other's streamed state. A newer manual request replaces the previous one.
+      for (const pending of manualConsultations) pending.abort();
+      manualConsultations.clear();
+      const controller = new AbortController();
+      manualConsultations.add(controller);
+      pi.appendEntry?.("advisor-manual-call", { question });
+
+      void requestAdvisor(ctx, question, controller.signal)
+        .then(({ advice }) => {
+          if (controller.signal.aborted) return;
+          pi.sendMessage({
+            customType: "advisor-manual-result",
+            content: `Manual Advisor consultation${question ? ` (${question})` : ""}:\n\n${advice}`,
+            display: true,
+            details: { advisor: advisorRef, question, text: advice },
+          }, {
+            // Steer lets the current turn finish its active work; the Executor sees
+            // the result before its next model call rather than being interrupted.
+            deliverAs: "steer",
+            triggerTurn: true,
+          });
+        })
+        .catch((error: unknown) => {
+          if (controller.signal.aborted) return;
+          const message = error instanceof Error ? error.message : String(error);
+          if (ctx.hasUI) ctx.ui.notify(`Advisor consultation failed: ${message}`, "error");
+        })
+        .finally(() => manualConsultations.delete(controller));
+    },
+  });
 
   pi.registerCommand("advisor", {
     description: "Enable the Executor/Advisor flow and switch to the configured Executor model; accepts contextMaxChars=N",

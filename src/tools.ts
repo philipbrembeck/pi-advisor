@@ -13,6 +13,14 @@ export const resolveAdvisorRequest = (question?: string) => question?.trim() || 
 export const advisorMessageText = (conversation: string, question?: string) =>
   `${conversation ? `<conversation>\n${conversation}\n</conversation>` : ""}${question ? `\n\nTargeted focus:\n${question}` : ""}`;
 
+export const renderAdvisorCallBox = (question: string | undefined, theme: any) => {
+  const box = new Box(1, 1, (text) => theme.bg("customMessageBg", text));
+  const label = theme.fg("customMessageLabel", theme.bold("[advisor]"));
+  const title = theme.fg("customMessageText", "Executor → Advisor");
+  box.addChild(new Text(question ? `${label} ${title}\n${theme.fg("dim", `  ${question}`)}` : `${label} ${title}`, 0, 0));
+  return box;
+};
+
 const COLLAPSED_ADVICE_LINES = 12;
 
 export const adviceForDisplay = (advice: string, expanded: boolean) => {
@@ -112,15 +120,8 @@ export const registerAdvisorTool = (pi: ExtensionAPI) => {
     ],
     parameters: Type.Object({ question: Type.Optional(Type.String({ description: "The specific question or decision to get advice on. Omit this for normal reviews: the Advisor already has the conversation context." })) }),
     renderShell: "self",
-    renderCall(args, theme, context) {
-      const box = context.lastComponent instanceof Box ? context.lastComponent : new Box(1, 1, (text) => theme.bg("customMessageBg", text));
-      box.setBgFn((text) => theme.bg("customMessageBg", text));
-      box.clear();
-      const request = args.question?.trim();
-      const label = theme.fg("customMessageLabel", theme.bold("[advisor]"));
-      const title = theme.fg("customMessageText", "Executor → Advisor");
-      box.addChild(new Text(request ? `${label} ${title}\n${theme.fg("dim", `  ${request}`)}` : `${label} ${title}`, 0, 0));
-      return box;
+    renderCall(args, theme, _context) {
+      return renderAdvisorCallBox(args.question?.trim(), theme);
     },
     renderResult(result, { isPartial, expanded }, theme, context) {
       const box = context.lastComponent instanceof Box ? context.lastComponent : new Box(1, 1, (text) => theme.bg("customMessageBg", text));

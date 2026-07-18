@@ -45,6 +45,10 @@ Enables the Advisor flow. Switches the primary model to the configured Executor 
 - _Example:_ `/advisor executor=anthropic/claude-sonnet-5 advisor=openai/gpt-5.6-sol`
 - _Context size:_ `/advisor contextMaxChars=30000` uses up to 30,000 characters of the reconstructed conversation for each consultation. `0` disables history; `Number.MAX_SAFE_INTEGER` represents the complete branch. Larger values increase request cost and can exceed the Advisor model's context window.
 
+### `/advisor-manual [focus]`
+
+Starts an Advisor consultation in parallel without interrupting the Executor's active tool work. An optional `focus` is passed to the Advisor; when it completes, the advice is delivered to the Executor before its next model call. This works while the Executor is mid-turn.
+
 ### `/advisor-settings`
 
 Opens a single keyboard-navigable settings screen. It includes a Claude Code-style context slider with `0`, `10k`, `25k`, `100k`, `200k`, and `ALL`; `0` sends no reconstructed history and `ALL` sends the complete current branch, subject to the Advisor model's context limit.

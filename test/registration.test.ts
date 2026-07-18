@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import registerExtension from "../extensions/index.js";
+import { registerCommands } from "../src/commands.js";
 import { ADVISOR_SYSTEM, adviceForDisplay, advisorMessageText, resolveAdvisorRequest } from "../src/tools.js";
 import { setAdvisorCollapseResponsesRef } from "../src/config.js";
 import { AdvisorSettingsSelector } from "../src/ui.js";
@@ -35,9 +36,106 @@ describe("Extension Registration", () => {
 
     // Verify all commands registered
     expect(registeredCommands).toContain("advisor");
+    expect(registeredCommands).toContain("advisor-manual");
     expect(registeredCommands).toContain("advisor-models");
     expect(registeredCommands).toContain("advisor-settings");
     expect(registeredCommands).toContain("advisor-off");
+  });
+
+  test("fans a manual Advisor response out to the Executor without waiting for the command", async () => {
+    const commands = new Map<string, any>();
+    const sent: Array<{ message: any; options: any }> = [];
+    let receivedQuestion: string | undefined;
+    const mockPi = {
+      registerCommand(name: string, config: any) { commands.set(name, config); },
+      on() {},
+      getActiveTools() { return []; },
+      sendMessage(message: any, options: any) { sent.push({ message, options }); },
+    } as unknown as ExtensionAPI;
+
+    registerCommands(mockPi, {
+      consult: async (_ctx, question) => {
+        receivedQuestion = question;
+        return { advice: "Ship the focused fix.", thinkingText: "" };
+      },
+    });
+
+    await commands.get("advisor-manual").handler("Check the migration", { hasUI: false });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(receivedQuestion).toBe("Check the migration");
+    expect(sent).toEqual([{
+      message: expect.objectContaining({
+        customType: "advisor-manual-result",
+        content: expect.stringContaining("Ship the focused fix."),
+        details: expect.objectContaining({ question: "Check the migration", text: "Ship the focused fix." }),
+      }),
+      options: { deliverAs: "steer", triggerTurn: true },
+    }]);
+  });
+
+  test("adds an immediate Advisor call entry to the transcript", async () => {
+    const commands = new Map<string, any>();
+    const entries: Array<{ type: string; data: unknown }> = [];
+    const mockPi = {
+      registerCommand(name: string, config: any) { commands.set(name, config); },
+      on() {},
+      getActiveTools() { return []; },
+      appendEntry(type: string, data: unknown) { entries.push({ type, data }); },
+      sendMessage() {},
+    } as unknown as ExtensionAPI;
+    registerCommands(mockPi, { consult: async () => new Promise(() => {}) });
+
+    await commands.get("advisor-manual").handler("Check the migration", { hasUI: false });
+
+    expect(entries).toEqual([{ type: "advisor-manual-call", data: { question: "Check the migration" } }]);
+  });
+
+  test("cancels a manual consultation before its late response can fan out", async () => {
+    const commands = new Map<string, any>();
+    const events = new Map<string, () => void>();
+    const sent: unknown[] = [];
+    let resolveConsult!: (value: { advice: string; thinkingText: string }) => void;
+    const pendingConsult = new Promise<{ advice: string; thinkingText: string }>((resolve) => { resolveConsult = resolve; });
+    const mockPi = {
+      registerCommand(name: string, config: any) { commands.set(name, config); },
+      on(event: string, handler: () => void) { events.set(event, handler); },
+      getActiveTools() { return []; },
+      sendMessage(message: unknown) { sent.push(message); },
+    } as unknown as ExtensionAPI;
+
+    registerCommands(mockPi, { consult: async () => pendingConsult });
+    await commands.get("advisor-manual").handler("", { hasUI: false });
+    expect(sent).toEqual([]);
+
+    events.get("session_shutdown")?.();
+    resolveConsult({ advice: "Too late.", thinkingText: "" });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(sent).toEqual([]);
+  });
+
+  test("replaces an in-flight manual consultation with a newer request", async () => {
+    const commands = new Map<string, any>();
+    const signals: AbortSignal[] = [];
+    const mockPi = {
+      registerCommand(name: string, config: any) { commands.set(name, config); },
+      on() {},
+      getActiveTools() { return []; },
+      sendMessage() {},
+    } as unknown as ExtensionAPI;
+    registerCommands(mockPi, {
+      consult: async (_ctx, _question, signal) => {
+        signals.push(signal!);
+        return await new Promise<{ advice: string; thinkingText: string }>(() => {});
+      },
+    });
+
+    await commands.get("advisor-manual").handler("First", { hasUI: false });
+    await commands.get("advisor-manual").handler("Second", { hasUI: false });
+
+    expect(signals).toHaveLength(2);
+    expect(signals[0].aborted).toBe(true);
+    expect(signals[1].aborted).toBe(false);
   });
 
   test("distinguishes the executor request from the advisor response", () => {
