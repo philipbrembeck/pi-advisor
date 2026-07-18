@@ -1,5 +1,5 @@
 import { expect, test, describe } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CONFIG_DIR_NAME } from "@earendil-works/pi-coding-agent";
@@ -16,7 +16,12 @@ import {
   advisorEffortRef,
   contextMaxCharsRef,
   loadConfig,
+  saveConfig,
+  setAdvisorCollapseResponsesRef,
+  setAdvisorCompletionGateRef,
   setAdvisorEffortRef,
+  setAdvisorFailureGateRef,
+  setAdvisorPlanGateRef,
   setAdvisorRef,
   setContextMaxCharsRef,
   setExecutorEffortRef,
@@ -47,12 +52,17 @@ describe("Config Module", () => {
     setContextMaxCharsRef(DEFAULT_CONTEXT_MAX_CHARS);
     const executorBefore = executorRef;
     const advisorBefore = advisorRef;
-    expect(parseArgs("executor=other/model advisor=other/advisor contextMaxChars=0")).toContain("positive integer");
+    expect(parseArgs("executor=other/model advisor=other/advisor contextMaxChars=-1")).toContain("non-negative integer");
     expect(executorRef).toBe(executorBefore);
     expect(advisorRef).toBe(advisorBefore);
     expect(contextMaxCharsRef).toBe(DEFAULT_CONTEXT_MAX_CHARS);
     expect(parseArgs(`contextMaxChars=${MAX_CONTEXT_MAX_CHARS + 1}`)).toContain(String(MAX_CONTEXT_MAX_CHARS));
     expect(contextMaxCharsRef).toBe(DEFAULT_CONTEXT_MAX_CHARS);
+  });
+
+  test("parseArgs accepts zero as a no-history context cap", () => {
+    expect(parseArgs("contextMaxChars=0")).toBeUndefined();
+    expect(contextMaxCharsRef).toBe(0);
   });
 
   test("loadConfig ignores a parseable config with invalid field types", () => {
@@ -84,6 +94,36 @@ describe("Config Module", () => {
       setContextMaxCharsRef(previousConfig.contextMaxChars);
       setExecutorRef(previousConfig.executor);
       setExecutorEffortRef(previousConfig.executorEffort);
+      rmSync(cwd, { recursive: true, force: true });
+      rmSync(agentDir, { recursive: true, force: true });
+    }
+  });
+
+  test("saveConfig preserves unknown fields", () => {
+    const cwd = mkdtempSync(join(tmpdir(), "pi-advisor-project-"));
+    const agentDir = mkdtempSync(join(tmpdir(), "pi-advisor-agent-"));
+    const previousAgentDir = process.env[AGENT_DIR_ENV];
+    process.env[AGENT_DIR_ENV] = agentDir;
+    writeFileSync(join(agentDir, "advisor.json"), '{"futureSetting":true}\n');
+
+    try {
+      setContextMaxCharsRef(Number.MAX_SAFE_INTEGER);
+      setAdvisorPlanGateRef(false);
+      setAdvisorFailureGateRef(false);
+      setAdvisorCompletionGateRef(false);
+      setAdvisorCollapseResponsesRef(true);
+      const path = saveConfig({ cwd, isProjectTrusted: () => false } as any);
+      expect(JSON.parse(readFileSync(path, "utf8"))).toMatchObject({
+        futureSetting: true,
+        contextMaxChars: Number.MAX_SAFE_INTEGER,
+        advisorPlanGate: false,
+        advisorFailureGate: false,
+        advisorCompletionGate: false,
+        advisorCollapseResponses: true,
+      });
+    } finally {
+      if (previousAgentDir === undefined) delete process.env[AGENT_DIR_ENV];
+      else process.env[AGENT_DIR_ENV] = previousAgentDir;
       rmSync(cwd, { recursive: true, force: true });
       rmSync(agentDir, { recursive: true, force: true });
     }

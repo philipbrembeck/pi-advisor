@@ -1,12 +1,23 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
+  advisorCollapseResponsesRef, advisorCompletionGateRef, advisorCustomInvocationRef, advisorFailureGateRef, advisorPlanGateRef,
   advisorRef, advisorEffortRef, executorRef, executorEffortRef,
-  setAdvisorRef, setAdvisorEffortRef, setExecutorRef, setExecutorEffortRef,
-  loadConfig, saveConfig, parseArgs, splitRef,
+  setAdvisorCollapseResponsesRef, setAdvisorCompletionGateRef, setAdvisorCustomInvocationRef, setAdvisorFailureGateRef, setAdvisorPlanGateRef,
+  setAdvisorRef, setAdvisorEffortRef, setContextMaxCharsRef, setExecutorRef, setExecutorEffortRef,
+  contextMaxCharsRef, loadConfig, saveConfig, parseArgs, splitRef,
 } from "./config.js";
-import { SearchableModelSelector } from "./ui.js";
+import { AdvisorSettingsSelector, SearchableModelSelector, type AdvisorSettings, type ContextPreset } from "./ui.js";
 
 const EFFORT_LEVELS = ["Default (Model Default)", "off", "minimal", "low", "medium", "high", "xhigh", "max"];
+
+const CONTEXT_PRESETS: ContextPreset[] = [
+  { label: "0", value: 0, description: "No conversation history. The Advisor receives only its standing instructions." },
+  { label: "10k", value: 10_000, description: "The most recent 10,000 characters of the current branch." },
+  { label: "25k", value: 25_000, description: "The most recent 25,000 characters of the current branch." },
+  { label: "100k", value: 100_000, description: "The most recent 100,000 characters of the current branch." },
+  { label: "200k", value: 200_000, description: "The most recent 200,000 characters of the current branch." },
+  { label: "ALL", value: Number.MAX_SAFE_INTEGER, description: "The complete reconstructed conversation branch. Cost and model context limits apply." },
+];
 
 export const registerCommands = (pi: ExtensionAPI) => {
   const flowEnabled = () => pi.getActiveTools().includes("ask_advisor");
@@ -61,6 +72,46 @@ export const registerCommands = (pi: ExtensionAPI) => {
 
       const path = saveConfig(ctx);
       ctx.ui.notify(`Saved Executor + Advisor configurations to ${path}`, "info");
+    },
+  });
+
+  pi.registerCommand("advisor-settings", {
+    description: "Configure Advisor context and reasoning effort",
+    handler: async (_args, ctx) => {
+      loadConfig(ctx);
+      if (!ctx.hasUI) return;
+
+      const initial: AdvisorSettings = {
+        contextMaxChars: contextMaxCharsRef,
+        effort: advisorEffortRef,
+        planGate: advisorPlanGateRef,
+        failureGate: advisorFailureGateRef,
+        completionGate: advisorCompletionGateRef,
+        collapseResponses: advisorCollapseResponsesRef,
+        customRule: advisorCustomInvocationRef,
+      };
+      const settings = await ctx.ui.custom<AdvisorSettings | undefined>((tui, theme, _keybindings, done) =>
+        new AdvisorSettingsSelector({
+          tui,
+          theme,
+          presets: CONTEXT_PRESETS,
+          effortLevels: EFFORT_LEVELS,
+          initial,
+          onSave: done,
+          onCancel: () => done(undefined),
+        })
+      );
+      if (!settings) return;
+
+      setAdvisorEffortRef(settings.effort === "Default (Model Default)" ? undefined : settings.effort);
+      setContextMaxCharsRef(settings.contextMaxChars);
+      setAdvisorPlanGateRef(settings.planGate);
+      setAdvisorFailureGateRef(settings.failureGate);
+      setAdvisorCompletionGateRef(settings.completionGate);
+      setAdvisorCollapseResponsesRef(settings.collapseResponses);
+      setAdvisorCustomInvocationRef(settings.customRule);
+      const path = saveConfig(ctx);
+      ctx.ui.notify(`Saved Advisor settings to ${path}`, "info");
     },
   });
 

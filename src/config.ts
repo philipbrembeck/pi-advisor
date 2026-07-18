@@ -5,21 +5,32 @@ import { CONFIG_DIR_NAME, type ExtensionContext, getAgentDir } from "@earendil-w
 export const FALLBACK_EXECUTOR = "aikeys/claude-sonnet-5";
 export const FALLBACK_ADVISOR = "aikeys/claude-fable-5";
 export const DEFAULT_CONTEXT_MAX_CHARS = 15_000;
-export const MAX_CONTEXT_MAX_CHARS = 1_000_000;
+// MAX_SAFE_INTEGER represents the complete reconstructed branch (the ALL preset).
+export const MAX_CONTEXT_MAX_CHARS = Number.MAX_SAFE_INTEGER;
 
 export let executorRef = FALLBACK_EXECUTOR;
 export let advisorRef = FALLBACK_ADVISOR;
 export let executorEffortRef: string | undefined = undefined;
 export let advisorEffortRef: string | undefined = undefined;
 export let contextMaxCharsRef = DEFAULT_CONTEXT_MAX_CHARS;
+export let advisorPlanGateRef = true;
+export let advisorFailureGateRef = true;
+export let advisorCompletionGateRef = true;
+export let advisorCustomInvocationRef: string | undefined = undefined;
+export let advisorCollapseResponsesRef = false;
 
 export const setExecutorRef = (ref: string) => { executorRef = ref; };
 export const setAdvisorRef = (ref: string) => { advisorRef = ref; };
 export const setExecutorEffortRef = (effort: string | undefined) => { executorEffortRef = effort; };
 export const setAdvisorEffortRef = (effort: string | undefined) => { advisorEffortRef = effort; };
 export const isValidContextMaxChars = (value: unknown): value is number =>
-  typeof value === "number" && Number.isSafeInteger(value) && value > 0 && value <= MAX_CONTEXT_MAX_CHARS;
+  typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && value <= MAX_CONTEXT_MAX_CHARS;
 export const setContextMaxCharsRef = (value: number) => { contextMaxCharsRef = value; };
+export const setAdvisorPlanGateRef = (enabled: boolean) => { advisorPlanGateRef = enabled; };
+export const setAdvisorFailureGateRef = (enabled: boolean) => { advisorFailureGateRef = enabled; };
+export const setAdvisorCompletionGateRef = (enabled: boolean) => { advisorCompletionGateRef = enabled; };
+export const setAdvisorCustomInvocationRef = (rule: string | undefined) => { advisorCustomInvocationRef = rule?.trim() || undefined; };
+export const setAdvisorCollapseResponsesRef = (enabled: boolean) => { advisorCollapseResponsesRef = enabled; };
 
 export const splitRef = (ref: string): [string, string] => {
   const i = ref.indexOf("/");
@@ -37,6 +48,11 @@ type AdvisorConfig = {
   executorEffort?: string;
   advisorEffort?: string;
   contextMaxChars?: number;
+  advisorPlanGate?: boolean;
+  advisorFailureGate?: boolean;
+  advisorCompletionGate?: boolean;
+  advisorCustomInvocation?: string;
+  advisorCollapseResponses?: boolean;
 };
 
 const isValidConfig = (value: unknown): value is AdvisorConfig => {
@@ -46,7 +62,12 @@ const isValidConfig = (value: unknown): value is AdvisorConfig => {
     && (config.advisor === undefined || typeof config.advisor === "string")
     && (config.executorEffort === undefined || typeof config.executorEffort === "string")
     && (config.advisorEffort === undefined || typeof config.advisorEffort === "string")
-    && (config.contextMaxChars === undefined || isValidContextMaxChars(config.contextMaxChars));
+    && (config.contextMaxChars === undefined || isValidContextMaxChars(config.contextMaxChars))
+    && (config.advisorPlanGate === undefined || typeof config.advisorPlanGate === "boolean")
+    && (config.advisorFailureGate === undefined || typeof config.advisorFailureGate === "boolean")
+    && (config.advisorCompletionGate === undefined || typeof config.advisorCompletionGate === "boolean")
+    && (config.advisorCustomInvocation === undefined || typeof config.advisorCustomInvocation === "string")
+    && (config.advisorCollapseResponses === undefined || typeof config.advisorCollapseResponses === "boolean");
 };
 
 export const loadConfig = (ctx: ExtensionContext) => {
@@ -55,6 +76,11 @@ export const loadConfig = (ctx: ExtensionContext) => {
   executorEffortRef = undefined;
   advisorEffortRef = undefined;
   contextMaxCharsRef = DEFAULT_CONTEXT_MAX_CHARS;
+  advisorPlanGateRef = true;
+  advisorFailureGateRef = true;
+  advisorCompletionGateRef = true;
+  advisorCustomInvocationRef = undefined;
+  advisorCollapseResponsesRef = false;
   for (const path of configPaths(ctx)) {
     if (!path || !existsSync(path)) continue;
     try {
@@ -65,6 +91,11 @@ export const loadConfig = (ctx: ExtensionContext) => {
       if (config.executorEffort) executorEffortRef = config.executorEffort;
       if (config.advisorEffort) advisorEffortRef = config.advisorEffort;
       if (isValidContextMaxChars(config.contextMaxChars)) contextMaxCharsRef = config.contextMaxChars;
+      if (typeof config.advisorPlanGate === "boolean") advisorPlanGateRef = config.advisorPlanGate;
+      if (typeof config.advisorFailureGate === "boolean") advisorFailureGateRef = config.advisorFailureGate;
+      if (typeof config.advisorCompletionGate === "boolean") advisorCompletionGateRef = config.advisorCompletionGate;
+      if (typeof config.advisorCustomInvocation === "string") advisorCustomInvocationRef = config.advisorCustomInvocation || undefined;
+      if (typeof config.advisorCollapseResponses === "boolean") advisorCollapseResponsesRef = config.advisorCollapseResponses;
       return path;
     } catch {
       // Ignore malformed config and keep looking for a valid fallback.
@@ -76,12 +107,26 @@ export const loadConfig = (ctx: ExtensionContext) => {
 export const saveConfig = (ctx: ExtensionContext) => {
   const project = join(ctx.cwd, CONFIG_DIR_NAME, "advisor.json");
   const path = ctx.isProjectTrusted() && existsSync(project) ? project : join(getAgentDir(), "advisor.json");
+  // Preserve settings owned by future versions or other tools that share this file.
+  let existing: Record<string, unknown> = {};
+  try {
+    const parsed = JSON.parse(readFileSync(path, "utf8"));
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) existing = parsed as Record<string, unknown>;
+  } catch {
+    // A missing or malformed file is safely replaced with the current settings.
+  }
   const data = {
+    ...existing,
     executor: executorRef,
     advisor: advisorRef,
     executorEffort: executorEffortRef,
     advisorEffort: advisorEffortRef,
     contextMaxChars: contextMaxCharsRef,
+    advisorPlanGate: advisorPlanGateRef,
+    advisorFailureGate: advisorFailureGateRef,
+    advisorCompletionGate: advisorCompletionGateRef,
+    advisorCustomInvocation: advisorCustomInvocationRef,
+    advisorCollapseResponses: advisorCollapseResponsesRef,
   };
   writeFileSync(path, `${JSON.stringify(data, null, 2)}\n`);
   return path;
@@ -99,7 +144,7 @@ export const parseArgs = (args: string): string | undefined => {
     if (key === "contextMaxChars") {
       const parsed = Number(value);
       if (!isValidContextMaxChars(parsed)) {
-        return `contextMaxChars must be a positive integer no greater than ${MAX_CONTEXT_MAX_CHARS}.`;
+        return `contextMaxChars must be a non-negative integer no greater than ${MAX_CONTEXT_MAX_CHARS}.`;
       }
       nextContextMaxChars = parsed;
     }

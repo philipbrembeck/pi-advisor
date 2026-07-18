@@ -21,6 +21,11 @@ describe("Conversation Module", () => {
     expect(textFrom({})).toBe("");
   });
 
+  test("recentConversation omits history when configured to zero", () => {
+    const ctx = { sessionManager: { getBranch: () => [{ type: "message", message: { role: "user", content: "keep out" } }] } } as any;
+    expect(recentConversation(ctx, 0)).toBe("");
+  });
+
   test("recentConversation keeps the configured tail length", () => {
     const ctx = {
       sessionManager: {

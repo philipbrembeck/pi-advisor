@@ -14,6 +14,7 @@ export const textFrom = (content: unknown): string => {
 };
 
 export const recentConversation = (ctx: ExtensionContext, maxChars = 15000): string => {
+  if (maxChars === 0) return "";
   const entries: string[] = [];
   for (const entry of ctx.sessionManager.getBranch()) {
     if (entry.type === "message") {

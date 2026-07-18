@@ -43,7 +43,13 @@ Once installed, the following commands are available inside the Pi terminal:
 Enables the Advisor flow. Switches the primary model to the configured Executor model and registers the `ask_advisor` tool.
 
 - _Example:_ `/advisor executor=anthropic/claude-sonnet-5 advisor=openai/gpt-5.6-sol`
-- _Context size:_ `/advisor contextMaxChars=30000` uses up to 30,000 characters of the reconstructed conversation for each consultation. The default is 15,000; the maximum is 1,000,000. Larger values increase request cost and can exceed the advisor model's context window.
+- _Context size:_ `/advisor contextMaxChars=30000` uses up to 30,000 characters of the reconstructed conversation for each consultation. `0` disables history; `Number.MAX_SAFE_INTEGER` represents the complete branch. Larger values increase request cost and can exceed the Advisor model's context window.
+
+### `/advisor-settings`
+
+Opens a single keyboard-navigable settings screen. It includes a Claude Code-style context slider with `0`, `10k`, `25k`, `100k`, `200k`, and `ALL`; `0` sends no reconstructed history and `ALL` sends the complete current branch, subject to the Advisor model's context limit.
+
+It also configures Advisor reasoning effort, whether long Advisor responses collapse to a short preview (`Ctrl+O` expands them), and each built-in invocation gate independently (consequential plans, repeated failures, and completion review). Response collapsing is off by default. You can add one custom natural-language invocation rule. Settings persist in `advisor.json`.
 
 ### `/advisor-models`
 
@@ -60,15 +66,24 @@ The Executor can call `ask_advisor` with an empty object for a general review of
 
 ### Context configuration
 
-The selected configuration is saved as `advisor.json` in the Pi agent directory (or an existing trusted project configuration). Set `contextMaxChars` there to increase the reconstructed conversation limit for all consultations:
+The selected configuration is saved as `advisor.json` in the Pi agent directory (or an existing trusted project configuration). `/advisor-models` and `/advisor-settings` share this file:
 
 ```json
 {
-  "contextMaxChars": 30000
+  "executor": "aikeys/claude-sonnet-5",
+  "advisor": "aikeys/claude-fable-5",
+  "executorEffort": "high",
+  "advisorEffort": "high",
+  "contextMaxChars": 25000,
+  "advisorPlanGate": true,
+  "advisorFailureGate": true,
+  "advisorCompletionGate": true,
+  "advisorCollapseResponses": false,
+  "advisorCustomInvocation": "before changing a production deployment"
 }
 ```
 
-`contextMaxChars` must be a positive integer up to 1,000,000. Its default is 15,000.
+All fields are optional. `executor`, `advisor`, and their effort settings are managed by `/advisor-models`. `/advisor-settings` manages `advisorEffort`, `contextMaxChars`, the three gate booleans, `advisorCollapseResponses`, and `advisorCustomInvocation`. `contextMaxChars` must be a non-negative safe integer: its default is 15,000, `0` omits history, and `9007199254740991` means ALL.
 
 ### `/advisor-off`
 

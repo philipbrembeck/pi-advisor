@@ -2,23 +2,47 @@ import { stream, type Message, type AssistantMessage } from "@earendil-works/pi-
 import { getMarkdownTheme, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Box, Markdown, Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
-import { advisorRef, advisorEffortRef, contextMaxCharsRef, loadConfig, splitRef } from "./config.js";
+import {
+  advisorCollapseResponsesRef, advisorCompletionGateRef, advisorCustomInvocationRef, advisorFailureGateRef, advisorPlanGateRef,
+  advisorRef, advisorEffortRef, contextMaxCharsRef, loadConfig, splitRef,
+} from "./config.js";
 import { recentConversation, textFrom } from "./conversation.js";
 
 export const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-export const DEFAULT_ADVISOR_REQUEST = "Review the current task and conversation context. Identify the highest-risk assumption, the smallest correct next step, and any important validation.";
+export const resolveAdvisorRequest = (question?: string) => question?.trim() || undefined;
+export const advisorMessageText = (conversation: string, question?: string) =>
+  `${conversation ? `<conversation>\n${conversation}\n</conversation>` : ""}${question ? `\n\nTargeted focus:\n${question}` : ""}`;
 
-export const resolveAdvisorRequest = (question?: string) => question?.trim() || DEFAULT_ADVISOR_REQUEST;
+const COLLAPSED_ADVICE_LINES = 12;
+
+export const adviceForDisplay = (advice: string, expanded: boolean) => {
+  if (!advisorCollapseResponsesRef || expanded) return advice;
+  const lines = advice.split("\n");
+  if (lines.length <= COLLAPSED_ADVICE_LINES) return advice;
+  return `${lines.slice(0, COLLAPSED_ADVICE_LINES).join("\n")}\n\n… (${lines.length - COLLAPSED_ADVICE_LINES} more lines, Ctrl+O to expand)`;
+};
+
+export const advisorInvocationGuidelines = () => {
+  const guidelines: string[] = [];
+  if (advisorPlanGateRef) guidelines.push("Before committing to a materially consequential plan, use ask_advisor after investigating and forming your own candidate direction. Use it to stress-test consequential architectural, security, data-loss, compatibility, or difficult-to-reverse decisions. Do not delegate the entire plan or task.");
+  if (advisorFailureGateRef) guidelines.push("Use ask_advisor after two consecutive materially equivalent failed attempts, when a fix recreates an earlier failure, or after two actions produce no measurable progress. Do not make another materially equivalent attempt before consulting.");
+  if (advisorCompletionGateRef) guidelines.push("Before declaring success, use ask_advisor to review the goal, changed files, key decisions, tests, results, and remaining risks. Skip this only for demonstrably trivial, low-risk work.");
+  if (advisorCustomInvocationRef) guidelines.push(`Also use ask_advisor when: ${advisorCustomInvocationRef}`);
+  if (guidelines.length > 0) guidelines.push("Call ask_advisor with an empty object by default. Do not invent a question merely to request a review: the Advisor already receives context. Include question only for a genuinely specific assumption or trade-off.");
+  return guidelines;
+};
 
 export const ADVISOR_SYSTEM = [
   "You are the Advisor: a senior engineer giving a brief second opinion to an autonomous coding agent.",
-  "You do not act or take over planning. Help the Executor validate its own proposed direction:",
-  "identify risks, challenge assumptions, and recommend the smallest correct next step. No preamble.",
+  "You already have the relevant reconstructed conversation context. No question or other input from the Executor is needed for a general review.",
+  "When no targeted focus is supplied, proactively review the task, risks, proposed direction, and validation from the context. Do not ask the Executor for a question, clarification, more input, or confirmation.",
+  "The context may be truncated, so state any material uncertainty and make the best recommendation you can from what is present.",
+  "You do not act or take over planning. Identify risks, challenge assumptions, and recommend the smallest correct next step. No preamble.",
 ].join(" ");
 
 export const consult = async (
   ctx: ExtensionContext,
-  question: string,
+  question?: string,
   signal?: AbortSignal,
   onChunk?: (thinking: string, text: string) => void,
 ) => {
@@ -33,7 +57,7 @@ export const consult = async (
   const conversation = recentConversation(ctx, contextMaxCharsRef);
   const messages: Message[] = [{
     role: "user",
-    content: [{ type: "text", text: `${conversation ? `<conversation>\n${conversation}\n</conversation>\n\n` : ""}Request from the Executor:\n${question}` }],
+    content: [{ type: "text", text: advisorMessageText(conversation, question) }],
     timestamp: Date.now(),
   }];
 
@@ -71,20 +95,22 @@ export const consult = async (
 };
 
 export const registerAdvisorTool = (pi: ExtensionAPI) => {
+  pi.on("before_agent_start", (_event, ctx) => {
+    if (!pi.getActiveTools().includes("ask_advisor")) return;
+    loadConfig(ctx);
+    const guidelines = advisorInvocationGuidelines();
+    return guidelines.length > 0 ? { systemPrompt: `${ctx.getSystemPrompt()}\n\nAdvisor invocation settings:\n${guidelines.map((rule) => `- ${rule}`).join("\n")}` } : undefined;
+  });
+
   pi.registerTool({
     name: "ask_advisor",
     label: "Ask Advisor",
-    description: "Consult the on-demand Advisor model for strategic guidance. Call with no arguments for a general review of the current task and conversation, or provide question for targeted advice.",
-    promptSnippet: "Consult the Advisor for targeted advice, or call with no arguments for a general task and conversation review",
+    description: "Consult the on-demand Advisor model for strategic guidance. Call with an empty object for a context-aware review; add question only for a genuinely targeted focus.",
+    promptSnippet: "Consult the Advisor using its existing context; omit question unless a specific focus is necessary",
     promptGuidelines: [
-      "You MUST call `ask_advisor` in each of these scenarios:",
-      "1. PLAN GATE: Before committing to a materially consequential plan, first investigate and form your own candidate direction. Then call `ask_advisor` to stress-test the decision when multiple approaches exist, requirements are ambiguous, or the decision has architectural, security, data-loss, compatibility, or difficult-to-reverse consequences. Do not delegate the whole plan or task to the Advisor.",
-      "2. FAILURE GATE: You MUST call `ask_advisor` after two consecutive materially equivalent failed attempts, when an attempted fix recreates an earlier failure, or when two consecutive actions produce no measurable progress. Do NOT attempt another materially equivalent fix before consulting.",
-      "3. COMPLETION GATE: You MUST call `ask_advisor` with the goal, changed files, key decisions, tests performed, results, and remaining risks BEFORE declaring success or calling `goal_complete`. You MAY skip this only for demonstrably trivial, low-risk work with no meaningful trade-offs or failures.",
-      "Call `ask_advisor` with an empty object for a general review of the current task and conversation. Provide `question` when you want the Advisor to assess a specific assumption, trade-off, or proposed next step.",
-      "Do NOT use `ask_advisor` for routine decisions outside these three gates.",
+      "Call ask_advisor with an empty object by default. Do not invent a question merely to request a review: the Advisor already receives the context. Include question only for a genuinely specific assumption or trade-off.",
     ],
-    parameters: Type.Object({ question: Type.Optional(Type.String({ description: "The specific question or decision to get advice on. Omit for a general contextual review." })) }),
+    parameters: Type.Object({ question: Type.Optional(Type.String({ description: "The specific question or decision to get advice on. Omit this for normal reviews: the Advisor already has the conversation context." })) }),
     renderShell: "self",
     renderCall(args, theme, context) {
       const box = context.lastComponent instanceof Box ? context.lastComponent : new Box(1, 1, (text) => theme.bg("customMessageBg", text));
@@ -96,7 +122,7 @@ export const registerAdvisorTool = (pi: ExtensionAPI) => {
       box.addChild(new Text(request ? `${label} ${title}\n${theme.fg("dim", `  ${request}`)}` : `${label} ${title}`, 0, 0));
       return box;
     },
-    renderResult(result, { isPartial }, theme, context) {
+    renderResult(result, { isPartial, expanded }, theme, context) {
       const box = context.lastComponent instanceof Box ? context.lastComponent : new Box(1, 1, (text) => theme.bg("customMessageBg", text));
       box.setBgFn((text) => theme.bg("customMessageBg", text));
       box.clear();
@@ -112,7 +138,7 @@ export const registerAdvisorTool = (pi: ExtensionAPI) => {
           lines.push(theme.fg("thinkingText", `  💭 ${snippet.replace(/\n/g, " ")}`));
         }
         box.addChild(new Text(lines.join("\n"), 0, 0));
-        if (d?.text) box.addChild(new Markdown(d.text, 0, 0, getMarkdownTheme()));
+        if (d?.text) box.addChild(new Markdown(adviceForDisplay(d.text, Boolean(expanded)), 0, 0, getMarkdownTheme()));
       } else {
         if (context.state.timerId) {
           clearInterval(context.state.timerId);
@@ -126,7 +152,7 @@ export const registerAdvisorTool = (pi: ExtensionAPI) => {
         }
         const advice = d?.text || textFrom(result.content) || "(Advisor returned no advice.)";
         box.addChild(new Text(lines.join("\n"), 0, 0));
-        box.addChild(new Markdown(advice, 0, 0, getMarkdownTheme()));
+        box.addChild(new Markdown(adviceForDisplay(advice, Boolean(expanded)), 0, 0, getMarkdownTheme()));
       }
       return box;
     },

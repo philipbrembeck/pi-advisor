@@ -4,11 +4,27 @@ All notable changes to this project are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.1.5]
+
+### Added
+
+- `/advisor-settings`: one keyboard-navigable screen for Advisor context size, reasoning effort, invocation gates, response collapsing, and a custom invocation rule.
+- Claude Code-style Advisor context selector with `0`, `10k`, `25k`, `100k`, `200k`, and `ALL` presets.
+- Individually configurable plan, repeated-failure, and completion-review Advisor gates.
+- Optional collapsed Advisor responses that expand with `Ctrl+O`.
+- Inline custom invocation-rule editing in Advisor settings.
+
+### Changed
+
+- General `ask_advisor({})` consultations now send conversation context without an invented request or question; targeted questions remain optional.
+- Advisor instructions explicitly tell the Executor not to invent a question for a normal review and tell the Advisor to make a best-effort contextual review without requesting more input.
+- Preserve unknown fields when saving `advisor.json`.
+- Support `0` as a no-history context setting and `Number.MAX_SAFE_INTEGER` as the ALL-context sentinel.
 
 ### Fixed
 
 - Ignore persisted Advisor configuration files with invalid field types instead of crashing during model resolution.
+- Restore interactive Advisor settings arrow-key navigation using Pi TUI key matching.
 
 ## [0.1.4]
 
