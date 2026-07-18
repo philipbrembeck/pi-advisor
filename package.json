@@ -26,7 +26,7 @@
     "extensions": [
       "./extensions/index.ts"
     ],
-    "image": ""
+    "image": "https://raw.githubusercontent.com/philipbrembeck/pi-advisor/refs/heads/main/assets/hero.png"
   },
   "scripts": {
     "test": "bun test",

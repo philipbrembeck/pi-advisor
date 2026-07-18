@@ -1,5 +1,9 @@
 # pi-advisor
 
+<div align="center">
+<img src="https://raw.githubusercontent.com/philipbrembeck/pi-advisor/refs/heads/main/assets/screenshot.png" alt="Pi Advisor Flow Screenshot" width="600">
+</div>
+
 An on-demand Advisor model flow for autonomous **Pi** coding agents.
 
 This extension introduces a strategic "Executor/Advisor" workflow, inspired by Claudes [Advisor](https://code.claude.com/docs/en/advisor).
