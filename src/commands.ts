@@ -8,6 +8,7 @@ import {
   contextMaxCharsRef, loadConfig, saveConfig, parseArgs, splitRef,
 } from "./config.js";
 import { AdvisorSettingsSelector, SearchableModelSelector, type AdvisorSettings, type ContextPreset } from "./ui.js";
+import { herdrAdvisorActivity } from "./herdr.js";
 import { adviceForDisplay, consult, renderAdvisorCallBox, resolveAdvisorRequest } from "./tools.js";
 
 const EFFORT_LEVELS = ["Default (Model Default)", "off", "minimal", "low", "medium", "high", "xhigh", "max"];
@@ -44,6 +45,7 @@ export const registerCommands = (pi: ExtensionAPI, dependencies: { consult?: typ
   pi.on("session_shutdown", () => {
     for (const controller of manualConsultations) controller.abort();
     manualConsultations.clear();
+    herdrAdvisorActivity.clear();
   });
 
   pi.registerCommand("advisor-manual", {
@@ -58,6 +60,7 @@ export const registerCommands = (pi: ExtensionAPI, dependencies: { consult?: typ
       manualConsultations.add(controller);
       pi.appendEntry?.("advisor-manual-call", { question });
 
+      herdrAdvisorActivity.start();
       void requestAdvisor(ctx, question, controller.signal)
         .then(({ advice }) => {
           if (controller.signal.aborted) return;
@@ -78,7 +81,10 @@ export const registerCommands = (pi: ExtensionAPI, dependencies: { consult?: typ
           const message = error instanceof Error ? error.message : String(error);
           if (ctx.hasUI) ctx.ui.notify(`Advisor consultation failed: ${message}`, "error");
         })
-        .finally(() => manualConsultations.delete(controller));
+        .finally(() => {
+          manualConsultations.delete(controller);
+          herdrAdvisorActivity.finish();
+        });
     },
   });
 

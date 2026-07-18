@@ -6,10 +6,51 @@ import registerExtension from "../extensions/index.js";
 import { registerCommands } from "../src/commands.js";
 import { ADVISOR_SYSTEM, adviceForDisplay, advisorMessageText, resolveAdvisorRequest } from "../src/tools.js";
 import { setAdvisorCollapseResponsesRef } from "../src/config.js";
+import { HerdrAdvisorActivity } from "../src/herdr.js";
 import { AdvisorSettingsSelector } from "../src/ui.js";
 import { initTheme, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 initTheme();
+
+describe("Herdr Advisor activity", () => {
+  test("keeps seeking advice visible until overlapping consultations finish", () => {
+    const reports: any[] = [];
+    const activity = new HerdrAdvisorActivity((request) => reports.push(request));
+
+    activity.start();
+    activity.start();
+    activity.finish();
+    expect(reports).toHaveLength(1);
+    expect(reports[0].params).toMatchObject({
+      state_labels: { working: "seeking advice" },
+      agent: "pi",
+      applies_to_source: "herdr:pi",
+    });
+
+    activity.finish();
+    expect(reports).toHaveLength(2);
+    expect(reports[1].params).toMatchObject({ clear_state_labels: true });
+  });
+
+  test("clears seeking advice on shutdown", () => {
+    const reports: any[] = [];
+    const activity = new HerdrAdvisorActivity((request) => reports.push(request));
+
+    activity.start();
+    activity.clear();
+    activity.clear();
+
+    expect(reports).toHaveLength(2);
+    expect(reports[1].params).toMatchObject({ clear_state_labels: true });
+  });
+
+  test("does not let unavailable Herdr reporting interrupt advice", () => {
+    const activity = new HerdrAdvisorActivity(() => { throw new Error("socket unavailable"); });
+
+    expect(() => activity.start()).not.toThrow();
+    expect(() => activity.finish()).not.toThrow();
+  });
+});
 
 describe("Extension Registration", () => {
   test("should register advisor tool and commands correctly", () => {

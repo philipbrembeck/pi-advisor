@@ -7,6 +7,7 @@ import {
   advisorRef, advisorEffortRef, contextMaxCharsRef, loadConfig, splitRef,
 } from "./config.js";
 import { recentConversation, textFrom } from "./conversation.js";
+import { herdrAdvisorActivity } from "./herdr.js";
 
 export const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 export const resolveAdvisorRequest = (question?: string) => question?.trim() || undefined;
@@ -159,16 +160,21 @@ export const registerAdvisorTool = (pi: ExtensionAPI) => {
     },
     async execute(_id, params, signal, onUpdate, ctx) {
       const question = resolveAdvisorRequest(params.question);
-      const { advice, thinkingText } = await consult(ctx, question, signal, (t, tx) => {
-        onUpdate?.({
-          content: [{ type: "text", text: tx }],
-          details: { thinking: t, text: tx, advisor: advisorRef, question },
+      herdrAdvisorActivity.start();
+      try {
+        const { advice, thinkingText } = await consult(ctx, question, signal, (t, tx) => {
+          onUpdate?.({
+            content: [{ type: "text", text: tx }],
+            details: { thinking: t, text: tx, advisor: advisorRef, question },
+          });
         });
-      });
-      return {
-        content: [{ type: "text", text: `Advisor (${advisorRef})\n\n${advice}` }],
-        details: { thinking: thinkingText, text: advice, advisor: advisorRef, question },
-      };
+        return {
+          content: [{ type: "text", text: `Advisor (${advisorRef})\n\n${advice}` }],
+          details: { thinking: thinkingText, text: advice, advisor: advisorRef, question },
+        };
+      } finally {
+        herdrAdvisorActivity.finish();
+      }
     },
   });
 };
