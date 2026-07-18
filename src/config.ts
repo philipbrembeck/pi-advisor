@@ -31,6 +31,24 @@ export const configPaths = (ctx: ExtensionContext) => [
   join(getAgentDir(), "advisor.json"),
 ];
 
+type AdvisorConfig = {
+  executor?: string;
+  advisor?: string;
+  executorEffort?: string;
+  advisorEffort?: string;
+  contextMaxChars?: number;
+};
+
+const isValidConfig = (value: unknown): value is AdvisorConfig => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const config = value as Record<string, unknown>;
+  return (config.executor === undefined || typeof config.executor === "string")
+    && (config.advisor === undefined || typeof config.advisor === "string")
+    && (config.executorEffort === undefined || typeof config.executorEffort === "string")
+    && (config.advisorEffort === undefined || typeof config.advisorEffort === "string")
+    && (config.contextMaxChars === undefined || isValidContextMaxChars(config.contextMaxChars));
+};
+
 export const loadConfig = (ctx: ExtensionContext) => {
   executorRef = FALLBACK_EXECUTOR;
   advisorRef = FALLBACK_ADVISOR;
@@ -40,13 +58,8 @@ export const loadConfig = (ctx: ExtensionContext) => {
   for (const path of configPaths(ctx)) {
     if (!path || !existsSync(path)) continue;
     try {
-      const config = JSON.parse(readFileSync(path, "utf8")) as {
-        executor?: string;
-        advisor?: string;
-        executorEffort?: string;
-        advisorEffort?: string;
-        contextMaxChars?: number;
-      };
+      const config = JSON.parse(readFileSync(path, "utf8"));
+      if (!isValidConfig(config)) throw new TypeError("Invalid advisor configuration");
       if (config.executor) executorRef = config.executor;
       if (config.advisor) advisorRef = config.advisor;
       if (config.executorEffort) executorEffortRef = config.executorEffort;
