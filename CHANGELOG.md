@@ -4,6 +4,26 @@ All notable changes to this project are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.8]
+
+### Added
+
+- Structured Advisor verdicts: `proceed`, `revise`, `insufficient-evidence`, and critical `blocked` responses, with findings, required verification, and a smallest next step.
+- Critical-block handling: optionally abort the active run, mark the session blocked, and report the blocked state to Herdr.
+- Automatic loop gate that consults the Advisor after three equivalent tool calls. A `proceed` verdict resumes execution; `revise` and `insufficient-evidence` block only the repeated action; critical verdicts, failed reviews, and exhausted budgets block the session and report Herdr state.
+- Per-session Advisor-call limit, with an Executor prompt hint only when a finite limit is configured.
+- Local, in-memory-only `[Session Advisor Summary]` after a non-blocked settled run; no summary data is persisted or sent to Herdr.
+- `/advisor-settings` controls for critical blocking, enabling/disabling the automatic loop gate, loop threshold, max Advisor calls per session, and the Session Advisor Summary.
+- Session-state tests covering loop detection, Advisor-call budgets, and summary generation.
+- Research note covering evidence-backed Advisor-flow improvements.
+
+### Changed
+
+- Advisor responses now require validated JSON and safely fall back to `insufficient-evidence` when the response is malformed.
+- Manual, Executor-requested, and automatic Advisor consultations share the configured session call limit.
+- Herdr activity and blocked state use separate extension metadata sources so clearing one does not clear the other.
+
+
 ## [0.1.7]
 
 ### Added

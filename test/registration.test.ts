@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import registerExtension from "../extensions/index.js";
 import { registerCommands } from "../src/commands.js";
-import { ADVISOR_SYSTEM, adviceForDisplay, advisorMessageText, resolveAdvisorRequest } from "../src/tools.js";
+import { ADVISOR_SYSTEM, adviceForDisplay, advisorMessageText, parseAdvice, resolveAdvisorRequest } from "../src/tools.js";
 import { setAdvisorCollapseResponsesRef } from "../src/config.js";
 import { HerdrAdvisorActivity } from "../src/herdr.js";
 import { AdvisorSettingsSelector } from "../src/ui.js";
@@ -49,6 +49,13 @@ describe("Herdr Advisor activity", () => {
 
     expect(() => activity.start()).not.toThrow();
     expect(() => activity.finish()).not.toThrow();
+  });
+});
+
+describe("Structured Advisor advice", () => {
+  test("falls back safely for malformed structured findings", () => {
+    expect(parseAdvice(JSON.stringify({ verdict: "revise", criticalFindings: [null], missingEvidence: [], smallestNextStep: "Retry", verificationRequired: [] })).verdict).toBe("insufficient-evidence");
+    expect(parseAdvice(JSON.stringify({ verdict: "proceed", criticalFindings: [], missingEvidence: [1], smallestNextStep: "Continue", verificationRequired: [] })).verdict).toBe("insufficient-evidence");
   });
 });
 
@@ -101,7 +108,7 @@ describe("Extension Registration", () => {
       },
     });
 
-    await commands.get("advisor-manual").handler("Check the migration", { hasUI: false });
+    await commands.get("advisor-manual").handler("Check the migration", { hasUI: false, isProjectTrusted: () => false, cwd: tmpdir() });
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(receivedQuestion).toBe("Check the migration");
@@ -127,7 +134,7 @@ describe("Extension Registration", () => {
     } as unknown as ExtensionAPI;
     registerCommands(mockPi, { consult: async () => new Promise(() => {}) });
 
-    await commands.get("advisor-manual").handler("Check the migration", { hasUI: false });
+    await commands.get("advisor-manual").handler("Check the migration", { hasUI: false, isProjectTrusted: () => false, cwd: tmpdir() });
 
     expect(entries).toEqual([{ type: "advisor-manual-call", data: { question: "Check the migration" } }]);
   });
@@ -146,7 +153,7 @@ describe("Extension Registration", () => {
     } as unknown as ExtensionAPI;
 
     registerCommands(mockPi, { consult: async () => pendingConsult });
-    await commands.get("advisor-manual").handler("", { hasUI: false });
+    await commands.get("advisor-manual").handler("", { hasUI: false, isProjectTrusted: () => false, cwd: tmpdir() });
     expect(sent).toEqual([]);
 
     events.get("session_shutdown")?.();
@@ -171,8 +178,8 @@ describe("Extension Registration", () => {
       },
     });
 
-    await commands.get("advisor-manual").handler("First", { hasUI: false });
-    await commands.get("advisor-manual").handler("Second", { hasUI: false });
+    await commands.get("advisor-manual").handler("First", { hasUI: false, isProjectTrusted: () => false, cwd: tmpdir() });
+    await commands.get("advisor-manual").handler("Second", { hasUI: false, isProjectTrusted: () => false, cwd: tmpdir() });
 
     expect(signals).toHaveLength(2);
     expect(signals[0].aborted).toBe(true);
@@ -304,9 +311,9 @@ describe("Extension Registration", () => {
       onCancel: () => {},
     });
     selector.handleInput("\u001b[C");
-    for (let index = 0; index < 7; index++) selector.handleInput("\u001b[B");
+    for (let index = 0; index < 12; index++) selector.handleInput("\u001b[B");
     selector.handleInput("\r");
-    expect(renderRequests).toBe(8);
+    expect(renderRequests).toBe(13);
     expect(saved.contextMaxChars).toBe(10_000);
     const screen = selector.render(80).join("\n");
     expect(screen).toContain("Advisor reasoning");
@@ -334,7 +341,7 @@ describe("Extension Registration", () => {
     selector.handleInput("o");
     selector.handleInput("y");
     selector.handleInput("\r");
-    selector.handleInput("\u001b[B");
+    for (let index = 0; index < 6; index++) selector.handleInput("\u001b[B");
     selector.handleInput("\r");
     expect(saved.customRule).toBe("deploy");
   });

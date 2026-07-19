@@ -3,11 +3,14 @@ import { getMarkdownTheme, type ExtensionAPI, type ExtensionContext } from "@ear
 import { Box, Markdown, Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import {
-  advisorCollapseResponsesRef, advisorCompletionGateRef, advisorCustomInvocationRef, advisorFailureGateRef, advisorPlanGateRef,
+  advisorAutoLoopGateRef, advisorMaxCallsPerSessionRef, advisorBlockOnBlockedRef, advisorCollapseResponsesRef, advisorCompletionGateRef, advisorCustomInvocationRef, advisorFailureGateRef, advisorLoopThresholdRef, advisorPlanGateRef, advisorSessionSummaryRef,
   advisorRef, advisorEffortRef, contextMaxCharsRef, loadConfig, splitRef,
 } from "./config.js";
 import { recentConversation, textFrom } from "./conversation.js";
-import { herdrAdvisorActivity } from "./herdr.js";
+import { herdrAdvisorActivity, herdrAdvisorBlock } from "./herdr.js";
+import { AdvisorSessionState, type AdvisorVerdict } from "./session-state.js";
+
+export const advisorSessionState = new AdvisorSessionState();
 
 export const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 export const resolveAdvisorRequest = (question?: string) => question?.trim() || undefined;
@@ -46,8 +49,29 @@ export const ADVISOR_SYSTEM = [
   "You already have the relevant reconstructed conversation context. No question or other input from the Executor is needed for a general review.",
   "When no targeted focus is supplied, proactively review the task, risks, proposed direction, and validation from the context. Do not ask the Executor for a question, clarification, more input, or confirmation.",
   "The context may be truncated, so state any material uncertainty and make the best recommendation you can from what is present.",
-  "You do not act or take over planning. Identify risks, challenge assumptions, and recommend the smallest correct next step. No preamble.",
+  "You do not act or take over planning. Return only a JSON object with verdict (proceed, revise, insufficient-evidence, or blocked), criticalFindings (array of {severity, claim, evidence}), missingEvidence (string array), smallestNextStep (string), verificationRequired (string array), and escalationReason (string or null). Use blocked only for a critical issue requiring the user; never claim verification that the supplied evidence does not show.",
 ].join(" ");
+
+type Advice = { verdict: AdvisorVerdict; criticalFindings: Array<{ severity: string; claim: string; evidence: string }>; missingEvidence: string[]; smallestNextStep: string; verificationRequired: string[]; escalationReason: string | null };
+
+export const parseAdvice = (text: string): Advice => {
+  try {
+    const value = JSON.parse(text) as Partial<Advice>;
+    if (!["proceed", "revise", "blocked", "insufficient-evidence"].includes(value.verdict ?? "")) throw new Error("invalid verdict");
+    if (!Array.isArray(value.criticalFindings) || !Array.isArray(value.missingEvidence) || !Array.isArray(value.verificationRequired) || typeof value.smallestNextStep !== "string" || !value.missingEvidence.every((item) => typeof item === "string") || !value.verificationRequired.every((item) => typeof item === "string") || !value.criticalFindings.every((item) => item && typeof item === "object" && typeof (item as Record<string, unknown>).severity === "string" && typeof (item as Record<string, unknown>).claim === "string" && typeof (item as Record<string, unknown>).evidence === "string")) throw new Error("invalid shape");
+    return { verdict: value.verdict as AdvisorVerdict, criticalFindings: value.criticalFindings as Advice["criticalFindings"], missingEvidence: value.missingEvidence as string[], smallestNextStep: value.smallestNextStep, verificationRequired: value.verificationRequired as string[], escalationReason: typeof value.escalationReason === "string" ? value.escalationReason : null };
+  } catch {
+    return { verdict: "insufficient-evidence", criticalFindings: [{ severity: "medium", claim: "Advisor response was not structured", evidence: "The response could not be parsed as the required JSON." }], missingEvidence: [], smallestNextStep: "Request a structured Advisor review before relying on this advice.", verificationRequired: [], escalationReason: null };
+  }
+};
+
+const adviceForText = (advice: Advice) => [
+  `**Verdict: ${advice.verdict}**`,
+  ...advice.criticalFindings.map((finding) => `- **${finding.severity}:** ${finding.claim}${finding.evidence ? ` — ${finding.evidence}` : ""}`),
+  advice.missingEvidence.length ? `\n**Missing evidence**\n${advice.missingEvidence.map((item) => `- ${item}`).join("\n")}` : "",
+  `\n**Smallest next step**\n${advice.smallestNextStep}`,
+  advice.verificationRequired.length ? `\n**Required verification**\n${advice.verificationRequired.map((item) => `- ${item}`).join("\n")}` : "",
+].filter(Boolean).join("\n");
 
 export const consult = async (
   ctx: ExtensionContext,
@@ -100,16 +124,101 @@ export const consult = async (
     .trim() || responseText;
 
   if (!advice) throw new Error("Advisor returned no advice.");
-  return { advice, thinkingText };
+  const structured = parseAdvice(advice);
+  return { advice: adviceForText(structured), thinkingText, structured };
 };
 
 export const registerAdvisorTool = (pi: ExtensionAPI) => {
+  const session = advisorSessionState;
+
+  pi.registerMessageRenderer?.("advisor-loop-call", (message, _options, theme) => {
+    const details = message.details as { question?: string } | undefined;
+    return renderAdvisorCallBox(details?.question, theme);
+  });
+
+  pi.on("session_start", () => {
+    session.resetTask();
+    herdrAdvisorBlock.clear();
+  });
+
   pi.on("before_agent_start", (_event, ctx) => {
     if (!pi.getActiveTools().includes("ask_advisor")) return;
     loadConfig(ctx);
     const guidelines = advisorInvocationGuidelines();
+    const budget = session.remainingAutomaticCalls(advisorMaxCallsPerSessionRef);
+    if (budget !== undefined) guidelines.push(`Advisor calls remaining this session: ${budget}.\nReserve calls for material decisions, repeated failures, or final review.`);
     return guidelines.length > 0 ? { systemPrompt: `${ctx.getSystemPrompt()}\n\nAdvisor invocation settings:\n${guidelines.map((rule) => `- ${rule}`).join("\n")}` } : undefined;
   });
+
+  pi.on("tool_call", async (event, ctx) => {
+    if (!pi.getActiveTools().includes("ask_advisor")) return;
+    loadConfig(ctx);
+    if (event.toolName === "ask_advisor" && !session.canUseAutomaticCall(advisorMaxCallsPerSessionRef)) {
+      return { block: true, reason: "Advisor call budget exhausted for this session." };
+    }
+    if (!advisorAutoLoopGateRef) return;
+    if (!session.recordToolCall(event.toolName, event.input, advisorLoopThresholdRef)) return;
+    let reason = `Advisor loop gate: ${event.toolName} repeated ${advisorLoopThresholdRef} times without a different tool action.`;
+    let blockSession = false;
+    if (session.canUseAutomaticCall(advisorMaxCallsPerSessionRef)) {
+      session.consumeAutomaticCall();
+      herdrAdvisorActivity.start();
+      pi.sendMessage({
+        customType: "advisor-loop-call",
+        content: "Automatic Advisor loop review",
+        display: true,
+        details: { question: `Loop gate: ${event.toolName} repeated ${advisorLoopThresholdRef} times` },
+      }, { deliverAs: "steer" });
+      try {
+        const { advice, structured } = await consult(ctx, `${reason} Review the repeated actions and recommend the smallest safe next step.`);
+        session.recordConsultation("automatic", structured.verdict);
+        pi.sendMessage({
+          customType: "advisor-manual-result",
+          content: `Automatic loop-gate Advisor review:\n\n${advice}`,
+          display: true,
+          details: { advisor: advisorRef, text: advice },
+        }, { deliverAs: "steer" });
+        if (structured.verdict === "proceed") {
+          session.resetRepetition();
+          return;
+        }
+        blockSession = structured.verdict === "blocked";
+        if (blockSession) {
+          const escalation = structured.escalationReason || structured.smallestNextStep;
+          session.block(escalation);
+          herdrAdvisorBlock.set(escalation);
+        } else {
+          reason = "Advisor loop review delivered. Follow its guidance before retrying this command.";
+        }
+      } catch (error) {
+        session.recordConsultation("automatic");
+        const message = error instanceof Error ? error.message : String(error);
+        reason = `${reason}\nAdvisor loop review failed: ${message}`;
+        session.block(reason);
+        herdrAdvisorBlock.set(reason);
+        blockSession = true;
+        if (ctx.hasUI) ctx.ui.notify(`Advisor loop review failed. Session is blocked: ${message}`, "error");
+      } finally {
+        herdrAdvisorActivity.finish();
+      }
+    } else {
+      reason = `${reason}\nAdvisor loop review was not run because the session call budget is exhausted.`;
+      session.block(reason);
+      herdrAdvisorBlock.set(reason);
+      blockSession = true;
+      if (ctx.hasUI) ctx.ui.notify("Advisor loop review was not run because the session call budget is exhausted. Session is blocked.", "error");
+    }
+    if (blockSession && advisorBlockOnBlockedRef) ctx.abort();
+    return { block: true, reason };
+  });
+
+  pi.on("agent_settled", (_event, ctx) => {
+    if (session.blocked || !advisorSessionSummaryRef) return;
+    const summary = session.summary(advisorMaxCallsPerSessionRef);
+    if (summary && ctx.hasUI) ctx.ui.notify(summary, "info");
+  });
+
+  pi.on("session_shutdown", () => herdrAdvisorBlock.clear());
 
   pi.registerTool({
     name: "ask_advisor",
@@ -162,15 +271,23 @@ export const registerAdvisorTool = (pi: ExtensionAPI) => {
       const question = resolveAdvisorRequest(params.question);
       herdrAdvisorActivity.start();
       try {
-        const { advice, thinkingText } = await consult(ctx, question, signal, (t, tx) => {
+        session.consumeAutomaticCall();
+        const { advice, thinkingText, structured } = await consult(ctx, question, signal, (t, tx) => {
           onUpdate?.({
             content: [{ type: "text", text: tx }],
             details: { thinking: t, text: tx, advisor: advisorRef, question },
           });
         });
+        session.recordConsultation("executor", structured.verdict);
+        if (structured.verdict === "blocked") {
+          const reason = structured.escalationReason || structured.smallestNextStep;
+          session.block(reason);
+          herdrAdvisorBlock.set(reason);
+          if (advisorBlockOnBlockedRef) ctx.abort();
+        }
         return {
           content: [{ type: "text", text: `Advisor (${advisorRef})\n\n${advice}` }],
-          details: { thinking: thinkingText, text: advice, advisor: advisorRef, question },
+          details: { thinking: thinkingText, text: advice, advisor: advisorRef, question, verdict: structured.verdict },
         };
       } finally {
         herdrAdvisorActivity.finish();

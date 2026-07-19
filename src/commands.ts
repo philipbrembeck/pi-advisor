@@ -1,15 +1,15 @@
-import { getMarkdownTheme, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { getMarkdownTheme, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Box, Markdown, Text } from "@earendil-works/pi-tui";
 import {
-  advisorCollapseResponsesRef, advisorCompletionGateRef, advisorCustomInvocationRef, advisorFailureGateRef, advisorPlanGateRef,
+  advisorAutoLoopGateRef, advisorMaxCallsPerSessionRef, advisorBlockOnBlockedRef, advisorCollapseResponsesRef, advisorCompletionGateRef, advisorCustomInvocationRef, advisorFailureGateRef, advisorLoopThresholdRef, advisorPlanGateRef, advisorSessionSummaryRef,
   advisorRef, advisorEffortRef, executorRef, executorEffortRef,
-  setAdvisorCollapseResponsesRef, setAdvisorCompletionGateRef, setAdvisorCustomInvocationRef, setAdvisorFailureGateRef, setAdvisorPlanGateRef,
+  setAdvisorAutoLoopGateRef, setAdvisorMaxCallsPerSessionRef, setAdvisorBlockOnBlockedRef, setAdvisorCollapseResponsesRef, setAdvisorCompletionGateRef, setAdvisorCustomInvocationRef, setAdvisorFailureGateRef, setAdvisorLoopThresholdRef, setAdvisorPlanGateRef, setAdvisorSessionSummaryRef,
   setAdvisorRef, setAdvisorEffortRef, setContextMaxCharsRef, setExecutorRef, setExecutorEffortRef,
   contextMaxCharsRef, loadConfig, saveConfig, parseArgs, splitRef,
 } from "./config.js";
 import { AdvisorSettingsSelector, SearchableModelSelector, type AdvisorSettings, type ContextPreset } from "./ui.js";
 import { herdrAdvisorActivity } from "./herdr.js";
-import { adviceForDisplay, consult, renderAdvisorCallBox, resolveAdvisorRequest } from "./tools.js";
+import { adviceForDisplay, advisorSessionState, consult, renderAdvisorCallBox, resolveAdvisorRequest } from "./tools.js";
 
 const EFFORT_LEVELS = ["Default (Model Default)", "off", "minimal", "low", "medium", "high", "xhigh", "max"];
 
@@ -22,7 +22,9 @@ const CONTEXT_PRESETS: ContextPreset[] = [
   { label: "ALL", value: Number.MAX_SAFE_INTEGER, description: "The complete reconstructed conversation branch. Cost and model context limits apply." },
 ];
 
-export const registerCommands = (pi: ExtensionAPI, dependencies: { consult?: typeof consult } = {}) => {
+type ManualConsult = (ctx: ExtensionContext, question?: string, signal?: AbortSignal) => Promise<{ advice: string; thinkingText: string }>;
+
+export const registerCommands = (pi: ExtensionAPI, dependencies: { consult?: ManualConsult } = {}) => {
   const flowEnabled = () => pi.getActiveTools().includes("ask_advisor");
   const requestAdvisor = dependencies.consult ?? consult;
   const manualConsultations = new Set<AbortController>();
@@ -51,6 +53,12 @@ export const registerCommands = (pi: ExtensionAPI, dependencies: { consult?: typ
   pi.registerCommand("advisor-manual", {
     description: "Consult the Advisor in parallel; accepts an optional focused question and fans its response out to the Executor",
     handler: async (args, ctx) => {
+      loadConfig(ctx);
+      if (!advisorSessionState.canUseAutomaticCall(advisorMaxCallsPerSessionRef)) {
+        if (ctx.hasUI) ctx.ui.notify("Advisor call budget exhausted for this session.", "warning");
+        return;
+      }
+      advisorSessionState.consumeAutomaticCall();
       const question = resolveAdvisorRequest(args);
       // A single visible progress surface avoids competing consultations overwriting
       // each other's streamed state. A newer manual request replaces the previous one.
@@ -63,6 +71,7 @@ export const registerCommands = (pi: ExtensionAPI, dependencies: { consult?: typ
       herdrAdvisorActivity.start();
       void requestAdvisor(ctx, question, controller.signal)
         .then(({ advice }) => {
+          advisorSessionState.recordConsultation("manual");
           if (controller.signal.aborted) return;
           pi.sendMessage({
             customType: "advisor-manual-result",
@@ -155,6 +164,11 @@ export const registerCommands = (pi: ExtensionAPI, dependencies: { consult?: typ
         completionGate: advisorCompletionGateRef,
         collapseResponses: advisorCollapseResponsesRef,
         customRule: advisorCustomInvocationRef,
+        blockOnBlocked: advisorBlockOnBlockedRef,
+        autoLoopGate: advisorAutoLoopGateRef,
+        loopThreshold: advisorLoopThresholdRef,
+        maxCallsPerSession: advisorMaxCallsPerSessionRef,
+        sessionSummary: advisorSessionSummaryRef,
       };
       const settings = await ctx.ui.custom<AdvisorSettings | undefined>((tui, theme, _keybindings, done) =>
         new AdvisorSettingsSelector({
@@ -176,6 +190,11 @@ export const registerCommands = (pi: ExtensionAPI, dependencies: { consult?: typ
       setAdvisorCompletionGateRef(settings.completionGate);
       setAdvisorCollapseResponsesRef(settings.collapseResponses);
       setAdvisorCustomInvocationRef(settings.customRule);
+      setAdvisorBlockOnBlockedRef(settings.blockOnBlocked ?? true);
+      setAdvisorAutoLoopGateRef(settings.autoLoopGate ?? true);
+      setAdvisorLoopThresholdRef(settings.loopThreshold ?? 3);
+      setAdvisorMaxCallsPerSessionRef(settings.maxCallsPerSession);
+      setAdvisorSessionSummaryRef(settings.sessionSummary ?? true);
       const path = saveConfig(ctx);
       ctx.ui.notify(`Saved Advisor settings to ${path}`, "info");
     },

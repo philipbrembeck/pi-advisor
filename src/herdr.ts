@@ -1,6 +1,7 @@
 import net from "node:net";
 
 const SOURCE = "pi-advisor:advisor-activity";
+const BLOCK_SOURCE = "pi-advisor:advisor-block";
 const HERDR_PI_SOURCE = "herdr:pi";
 let sequence = Date.now() * 1_000;
 
@@ -14,7 +15,7 @@ type HerdrRequest = {
     source: string;
     agent: "pi";
     applies_to_source: string;
-    state_labels?: { working: string };
+    state_labels?: { working?: string; blocked?: string };
     clear_state_labels?: true;
     seq: number;
   };
@@ -84,4 +85,42 @@ export class HerdrAdvisorActivity {
   }
 }
 
+export class HerdrAdvisorBlock {
+  #blocked = false;
+
+  constructor(private readonly report: Report = sendToHerdr) {}
+
+  set(reason: string) {
+    this.#blocked = true;
+    this.safeReport({ blocked: reason });
+  }
+
+  clear() {
+    if (!this.#blocked) return;
+    this.#blocked = false;
+    try {
+      this.report({
+        id: `${BLOCK_SOURCE}:${nextSequence()}`,
+        method: "pane.report_metadata",
+        params: { pane_id: process.env.HERDR_PANE_ID ?? "", source: BLOCK_SOURCE, agent: "pi", applies_to_source: HERDR_PI_SOURCE, clear_state_labels: true, seq: nextSequence() },
+      });
+    } catch {
+      // Herdr remains optional.
+    }
+  }
+
+  private safeReport(labels: { blocked: string }) {
+    try {
+      this.report({
+        id: `${BLOCK_SOURCE}:${nextSequence()}`,
+        method: "pane.report_metadata",
+        params: { pane_id: process.env.HERDR_PANE_ID ?? "", source: BLOCK_SOURCE, agent: "pi", applies_to_source: HERDR_PI_SOURCE, state_labels: labels, seq: nextSequence() },
+      });
+    } catch {
+      // Herdr remains optional.
+    }
+  }
+}
+
 export const herdrAdvisorActivity = new HerdrAdvisorActivity();
+export const herdrAdvisorBlock = new HerdrAdvisorBlock();

@@ -53,7 +53,7 @@ Starts an Advisor consultation in parallel without interrupting the Executor's a
 
 Opens a single keyboard-navigable settings screen. It includes a Claude Code-style context slider with `0`, `10k`, `25k`, `100k`, `200k`, and `ALL`; `0` sends no reconstructed history and `ALL` sends the complete current branch, subject to the Advisor model's context limit.
 
-It also configures Advisor reasoning effort, whether long Advisor responses collapse to a short preview (`Ctrl+O` expands them), and each built-in invocation gate independently (consequential plans, repeated failures, and completion review). Response collapsing is off by default. You can add one custom natural-language invocation rule. Settings persist in `advisor.json`.
+It also configures Advisor reasoning effort, whether long Advisor responses collapse to a short preview (`Ctrl+O` expands them), and each built-in invocation gate independently (consequential plans, repeated failures, and completion review). It includes controls for critical-response blocking, the automatic loop gate and its repeat threshold, a per-session Advisor-call limit, and the local Session Advisor Summary. Response collapsing is off by default. You can add one custom natural-language invocation rule. Settings persist in `advisor.json`.
 
 ### `/advisor-models`
 
@@ -67,6 +67,14 @@ Saves and persists your configuration to `~/.pi/agent/advisor.json`.
 ### `ask_advisor`
 
 The Executor can call `ask_advisor` with an empty object for a general review of the current task and conversation, or provide `question` for targeted feedback. The Advisor is a brief second opinion: the Executor investigates and forms its own candidate direction first, then uses the Advisor to challenge assumptions and validate a consequential next step. It should not delegate the entire plan or task.
+
+Advisor responses use a structured verdict: `proceed`, `revise`, `insufficient-evidence`, or `blocked`. A `blocked` verdict is reserved for critical escalation. When critical blocking is enabled (the default), it aborts the active run and marks the Pi pane blocked in Herdr.
+
+### Automatic loop gate
+
+When enabled, the loop gate consults the Advisor after the configured number of consecutive equivalent tool calls (default: three). A `proceed` verdict resets the repetition counter and allows the call. `revise` and `insufficient-evidence` stop only the repeated call and deliver the Advisor guidance to the Executor. A critical `blocked` verdict, an Advisor failure, or an exhausted Advisor-call budget blocks the session and reports that state to Herdr.
+
+The maximum Advisor calls per session defaults to unlimited. When set to a finite value, the Executor receives the remaining-call count in its system instructions. The optional Session Advisor Summary is local, in-memory only, and appears after a non-blocked settled run; it is never persisted or sent to Herdr.
 
 ### Context configuration
 
@@ -83,11 +91,18 @@ The selected configuration is saved as `advisor.json` in the Pi agent directory 
   "advisorFailureGate": true,
   "advisorCompletionGate": true,
   "advisorCollapseResponses": false,
-  "advisorCustomInvocation": "before changing a production deployment"
+  "advisorCustomInvocation": "before changing a production deployment",
+  "advisorBlockOnBlocked": true,
+  "advisorAutoLoopGate": true,
+  "advisorLoopThreshold": 3,
+  "advisorMaxCallsPerSession": 5,
+  "advisorSessionSummary": true
 }
 ```
 
-All fields are optional. `executor`, `advisor`, and their effort settings are managed by `/advisor-models`. `/advisor-settings` manages `advisorEffort`, `contextMaxChars`, the three gate booleans, `advisorCollapseResponses`, and `advisorCustomInvocation`. `contextMaxChars` must be a non-negative safe integer: its default is 15,000, `0` omits history, and `9007199254740991` means ALL.
+All fields are optional. `executor`, `advisor`, and their effort settings are managed by `/advisor-models`. `/advisor-settings` manages `advisorEffort`, `contextMaxChars`, the three invocation-gate booleans, `advisorCollapseResponses`, `advisorCustomInvocation`, `advisorBlockOnBlocked`, `advisorAutoLoopGate`, `advisorLoopThreshold`, `advisorMaxCallsPerSession`, and `advisorSessionSummary`.
+
+`contextMaxChars` must be a non-negative safe integer: its default is 15,000, `0` omits history, and `9007199254740991` means ALL. `advisorLoopThreshold` must be at least `2` and defaults to `3`. Omit `advisorMaxCallsPerSession` for an unlimited session budget; otherwise it must be a non-negative safe integer. Critical blocking, the automatic loop gate, and the Session Advisor Summary default to `true`.
 
 ### `/advisor-off`
 

@@ -1,6 +1,6 @@
 {
   "name": "pi-advisor-flow",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -8,7 +8,7 @@
   },
   "homepage": "https://github.com/philipbrembeck/pi-advisor",
   "author": "Philip Brembeck",
-  "description": "Executor/Advisor flow for autonomous pi coding agents",
+  "description": "Advanced Executor/Advisor flow for Pi, fully configurable and extendable.",
   "type": "module",
   "main": "extensions/index.ts",
   "types": "extensions/index.ts",
@@ -17,7 +17,8 @@
     "pi-extension",
     "pi-coding-agent",
     "advisor",
-    "pi-advisor"
+    "pi-advisor",
+    "herdr"
   ],
   "files": [
     "extensions",

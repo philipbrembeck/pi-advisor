@@ -104,6 +104,11 @@ export type AdvisorSettings = {
   completionGate: boolean;
   collapseResponses: boolean;
   customRule?: string;
+  blockOnBlocked?: boolean;
+  autoLoopGate?: boolean;
+  loopThreshold?: number;
+  maxCallsPerSession?: number;
+  sessionSummary?: boolean;
 };
 
 export class AdvisorSettingsSelector implements Component, Focusable {
@@ -178,9 +183,14 @@ export class AdvisorSettingsSelector implements Component, Focusable {
       this.row("Completion gate", onOff(this.settings.completionGate), 4),
       this.row("Collapse long responses", onOff(this.settings.collapseResponses), 5),
       this.row("Custom invocation", this.settings.customRule || "None", 6),
+      this.row("Block on critical advice", onOff(this.settings.blockOnBlocked ?? true), 7),
+      this.row("Automatic loop gate", onOff(this.settings.autoLoopGate ?? true), 8),
+      this.row("Loop threshold", `After ${this.settings.loopThreshold ?? 3} repeats`, 9),
+      this.row("Max Advisor calls/session", this.settings.maxCallsPerSession === undefined ? "∞" : String(this.settings.maxCallsPerSession), 10),
+      this.row("Session Advisor Summary", onOff(this.settings.sessionSummary ?? true), 11),
     ];
     if (this.editingCustom) rows.push(`    ${this.customInput.render(Math.max(10, width - 6))[0] || ""}`);
-    rows.push(this.row("Save changes", "", 7));
+    rows.push(this.row("Save changes", "", 12));
     return [
       theme.fg("accent", theme.bold("  Advisor settings")),
       "",
@@ -203,7 +213,7 @@ export class AdvisorSettingsSelector implements Component, Focusable {
     if (matchesKey(keyData, Key.up)) {
       this.selectedRow = Math.max(0, this.selectedRow - 1);
     } else if (matchesKey(keyData, Key.down)) {
-      this.selectedRow = Math.min(7, this.selectedRow + 1);
+      this.selectedRow = Math.min(12, this.selectedRow + 1);
     } else if (matchesKey(keyData, Key.left)) {
       this.adjust(-1);
     } else if (matchesKey(keyData, Key.right)) {
@@ -216,7 +226,7 @@ export class AdvisorSettingsSelector implements Component, Focusable {
         tui.requestRender();
         return;
       }
-      if (this.selectedRow === 7) return this.options.onSave({ ...this.settings, contextMaxChars: this.currentContext().value, effort: this.options.effortLevels[this.effortIndex] });
+      if (this.selectedRow === 12) return this.options.onSave({ ...this.settings, contextMaxChars: this.currentContext().value, effort: this.options.effortLevels[this.effortIndex] });
       this.adjust(1);
     } else if (matchesKey(keyData, Key.escape)) {
       return this.options.onCancel();
@@ -232,6 +242,16 @@ export class AdvisorSettingsSelector implements Component, Focusable {
       case 3: this.settings.failureGate = !this.settings.failureGate; break;
       case 4: this.settings.completionGate = !this.settings.completionGate; break;
       case 5: this.settings.collapseResponses = !this.settings.collapseResponses; break;
+      case 7: this.settings.blockOnBlocked = !(this.settings.blockOnBlocked ?? true); break;
+      case 8: this.settings.autoLoopGate = !(this.settings.autoLoopGate ?? true); break;
+      case 9: this.settings.loopThreshold = Math.max(2, (this.settings.loopThreshold ?? 3) + direction); break;
+      case 10: {
+        const values = [undefined, 0, 1, 2, 3, 5, 10, 25, 50];
+        const index = Math.max(0, values.indexOf(this.settings.maxCallsPerSession));
+        this.settings.maxCallsPerSession = values[Math.max(0, Math.min(values.length - 1, index + direction))];
+        break;
+      }
+      case 11: this.settings.sessionSummary = !(this.settings.sessionSummary ?? true); break;
     }
   }
 }

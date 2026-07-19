@@ -18,6 +18,11 @@ export let advisorFailureGateRef = true;
 export let advisorCompletionGateRef = true;
 export let advisorCustomInvocationRef: string | undefined = undefined;
 export let advisorCollapseResponsesRef = false;
+export let advisorBlockOnBlockedRef = true;
+export let advisorAutoLoopGateRef = true;
+export let advisorLoopThresholdRef = 3;
+export let advisorMaxCallsPerSessionRef: number | undefined = undefined;
+export let advisorSessionSummaryRef = true;
 
 export const setExecutorRef = (ref: string) => { executorRef = ref; };
 export const setAdvisorRef = (ref: string) => { advisorRef = ref; };
@@ -31,6 +36,13 @@ export const setAdvisorFailureGateRef = (enabled: boolean) => { advisorFailureGa
 export const setAdvisorCompletionGateRef = (enabled: boolean) => { advisorCompletionGateRef = enabled; };
 export const setAdvisorCustomInvocationRef = (rule: string | undefined) => { advisorCustomInvocationRef = rule?.trim() || undefined; };
 export const setAdvisorCollapseResponsesRef = (enabled: boolean) => { advisorCollapseResponsesRef = enabled; };
+export const setAdvisorBlockOnBlockedRef = (enabled: boolean) => { advisorBlockOnBlockedRef = enabled; };
+export const setAdvisorAutoLoopGateRef = (enabled: boolean) => { advisorAutoLoopGateRef = enabled; };
+export const isValidLoopThreshold = (value: unknown): value is number => typeof value === "number" && Number.isSafeInteger(value) && value >= 2;
+export const setAdvisorLoopThresholdRef = (value: number) => { advisorLoopThresholdRef = value; };
+export const isValidMaxCallsPerSession = (value: unknown): value is number => typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+export const setAdvisorMaxCallsPerSessionRef = (value: number | undefined) => { advisorMaxCallsPerSessionRef = value; };
+export const setAdvisorSessionSummaryRef = (enabled: boolean) => { advisorSessionSummaryRef = enabled; };
 
 export const splitRef = (ref: string): [string, string] => {
   const i = ref.indexOf("/");
@@ -53,6 +65,11 @@ type AdvisorConfig = {
   advisorCompletionGate?: boolean;
   advisorCustomInvocation?: string;
   advisorCollapseResponses?: boolean;
+  advisorBlockOnBlocked?: boolean;
+  advisorAutoLoopGate?: boolean;
+  advisorLoopThreshold?: number;
+  advisorMaxCallsPerSession?: number;
+  advisorSessionSummary?: boolean;
 };
 
 const isValidConfig = (value: unknown): value is AdvisorConfig => {
@@ -67,7 +84,12 @@ const isValidConfig = (value: unknown): value is AdvisorConfig => {
     && (config.advisorFailureGate === undefined || typeof config.advisorFailureGate === "boolean")
     && (config.advisorCompletionGate === undefined || typeof config.advisorCompletionGate === "boolean")
     && (config.advisorCustomInvocation === undefined || typeof config.advisorCustomInvocation === "string")
-    && (config.advisorCollapseResponses === undefined || typeof config.advisorCollapseResponses === "boolean");
+    && (config.advisorCollapseResponses === undefined || typeof config.advisorCollapseResponses === "boolean")
+    && (config.advisorBlockOnBlocked === undefined || typeof config.advisorBlockOnBlocked === "boolean")
+    && (config.advisorAutoLoopGate === undefined || typeof config.advisorAutoLoopGate === "boolean")
+    && (config.advisorLoopThreshold === undefined || isValidLoopThreshold(config.advisorLoopThreshold))
+    && (config.advisorMaxCallsPerSession === undefined || isValidMaxCallsPerSession(config.advisorMaxCallsPerSession))
+    && (config.advisorSessionSummary === undefined || typeof config.advisorSessionSummary === "boolean");
 };
 
 export const loadConfig = (ctx: ExtensionContext) => {
@@ -81,6 +103,11 @@ export const loadConfig = (ctx: ExtensionContext) => {
   advisorCompletionGateRef = true;
   advisorCustomInvocationRef = undefined;
   advisorCollapseResponsesRef = false;
+  advisorBlockOnBlockedRef = true;
+  advisorAutoLoopGateRef = true;
+  advisorLoopThresholdRef = 3;
+  advisorMaxCallsPerSessionRef = undefined;
+  advisorSessionSummaryRef = true;
   for (const path of configPaths(ctx)) {
     if (!path || !existsSync(path)) continue;
     try {
@@ -96,6 +123,11 @@ export const loadConfig = (ctx: ExtensionContext) => {
       if (typeof config.advisorCompletionGate === "boolean") advisorCompletionGateRef = config.advisorCompletionGate;
       if (typeof config.advisorCustomInvocation === "string") advisorCustomInvocationRef = config.advisorCustomInvocation || undefined;
       if (typeof config.advisorCollapseResponses === "boolean") advisorCollapseResponsesRef = config.advisorCollapseResponses;
+      if (typeof config.advisorBlockOnBlocked === "boolean") advisorBlockOnBlockedRef = config.advisorBlockOnBlocked;
+      if (typeof config.advisorAutoLoopGate === "boolean") advisorAutoLoopGateRef = config.advisorAutoLoopGate;
+      if (isValidLoopThreshold(config.advisorLoopThreshold)) advisorLoopThresholdRef = config.advisorLoopThreshold;
+      if (isValidMaxCallsPerSession(config.advisorMaxCallsPerSession)) advisorMaxCallsPerSessionRef = config.advisorMaxCallsPerSession;
+      if (typeof config.advisorSessionSummary === "boolean") advisorSessionSummaryRef = config.advisorSessionSummary;
       return path;
     } catch {
       // Ignore malformed config and keep looking for a valid fallback.
@@ -127,6 +159,11 @@ export const saveConfig = (ctx: ExtensionContext) => {
     advisorCompletionGate: advisorCompletionGateRef,
     advisorCustomInvocation: advisorCustomInvocationRef,
     advisorCollapseResponses: advisorCollapseResponsesRef,
+    advisorBlockOnBlocked: advisorBlockOnBlockedRef,
+    advisorAutoLoopGate: advisorAutoLoopGateRef,
+    advisorLoopThreshold: advisorLoopThresholdRef,
+    ...(advisorMaxCallsPerSessionRef === undefined ? {} : { advisorMaxCallsPerSession: advisorMaxCallsPerSessionRef }),
+    advisorSessionSummary: advisorSessionSummaryRef,
   };
   writeFileSync(path, `${JSON.stringify(data, null, 2)}\n`);
   return path;

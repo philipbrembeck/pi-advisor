@@ -18,6 +18,11 @@ import {
   loadConfig,
   saveConfig,
   setAdvisorCollapseResponsesRef,
+  setAdvisorBlockOnBlockedRef,
+  setAdvisorAutoLoopGateRef,
+  setAdvisorLoopThresholdRef,
+  setAdvisorMaxCallsPerSessionRef,
+  setAdvisorSessionSummaryRef,
   setAdvisorCompletionGateRef,
   setAdvisorEffortRef,
   setAdvisorFailureGateRef,
@@ -112,6 +117,11 @@ describe("Config Module", () => {
       setAdvisorFailureGateRef(false);
       setAdvisorCompletionGateRef(false);
       setAdvisorCollapseResponsesRef(true);
+      setAdvisorBlockOnBlockedRef(false);
+      setAdvisorAutoLoopGateRef(false);
+      setAdvisorLoopThresholdRef(5);
+      setAdvisorMaxCallsPerSessionRef(2);
+      setAdvisorSessionSummaryRef(false);
       const path = saveConfig({ cwd, isProjectTrusted: () => false } as any);
       expect(JSON.parse(readFileSync(path, "utf8"))).toMatchObject({
         futureSetting: true,
@@ -120,6 +130,11 @@ describe("Config Module", () => {
         advisorFailureGate: false,
         advisorCompletionGate: false,
         advisorCollapseResponses: true,
+        advisorBlockOnBlocked: false,
+        advisorAutoLoopGate: false,
+        advisorLoopThreshold: 5,
+        advisorMaxCallsPerSession: 2,
+        advisorSessionSummary: false,
       });
     } finally {
       if (previousAgentDir === undefined) delete process.env[AGENT_DIR_ENV];
