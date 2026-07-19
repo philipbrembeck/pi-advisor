@@ -3,7 +3,8 @@ name: Publish packages
 on:
   push:
     tags:
-      - "v*"
+      - "*.*.*"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -34,7 +35,7 @@ jobs:
 
       - name: Verify the release
         run: |
-          test "${GITHUB_REF_NAME#v}" = "$(node -p "require('./package.json').version")"
+          test "$GITHUB_REF_NAME" = "$(node -p "require('./package.json').version")"
           bun run typecheck
           bun test
 
