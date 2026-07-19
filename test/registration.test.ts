@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import registerExtension from "../extensions/index.js";
 import { registerCommands } from "../src/commands.js";
-import { ADVISOR_SYSTEM, adviceForDisplay, advisorMessageText, parseAdvice, resolveAdvisorRequest } from "../src/tools.js";
+import { ADVISOR_DECISION_SYSTEM, ADVISOR_SYSTEM, adviceForDisplay, advisorMessageText, parseAdvice, parseAutomaticDecision, resolveAdvisorRequest } from "../src/tools.js";
 import { setAdvisorCollapseResponsesRef } from "../src/config.js";
 import { HerdrAdvisorActivity } from "../src/herdr.js";
 import { AdvisorSettingsSelector } from "../src/ui.js";
@@ -53,9 +53,20 @@ describe("Herdr Advisor activity", () => {
 });
 
 describe("Structured Advisor advice", () => {
-  test("falls back safely for malformed structured findings", () => {
+  test("keeps automatic decision instructions separate from manual Markdown", () => {
+    expect(ADVISOR_SYSTEM).toContain("human-readable Markdown");
+    expect(ADVISOR_DECISION_SYSTEM).toContain("Decision: proceed");
+    expect(ADVISOR_DECISION_SYSTEM).not.toContain("Return only a valid JSON object");
+  });
+
+  test("accepts valid automatic decisions and rejects malformed ones", () => {
+    expect(parseAdvice(JSON.stringify({ verdict: "proceed", criticalFindings: [], missingEvidence: [], smallestNextStep: "Continue", verificationRequired: [], escalationReason: null })).verdict).toBe("proceed");
     expect(parseAdvice(JSON.stringify({ verdict: "revise", criticalFindings: [null], missingEvidence: [], smallestNextStep: "Retry", verificationRequired: [] })).verdict).toBe("insufficient-evidence");
     expect(parseAdvice(JSON.stringify({ verdict: "proceed", criticalFindings: [], missingEvidence: [1], smallestNextStep: "Continue", verificationRequired: [] })).verdict).toBe("insufficient-evidence");
+    expect(parseAutomaticDecision("Decision: proceed\nMore guidance").verdict).toBe("proceed");
+    expect(parseAutomaticDecision("\nDecision: proceed").verdict).toBe("insufficient-evidence");
+    expect(parseAutomaticDecision("Advice\nDecision: proceed").verdict).toBe("insufficient-evidence");
+    expect(parseAutomaticDecision("Decision: proceed now").verdict).toBe("insufficient-evidence");
   });
 });
 
@@ -223,6 +234,13 @@ describe("Extension Registration", () => {
     expect(response).toContain("Ship it.");
     expect(response).not.toContain("**Ship it.**");
     expect(response).not.toContain("Advisor (test/model)");
+
+    const markdownPartial = advisorTool.renderResult({
+      content: [{ type: "text", text: "The migration looks safe so far" }],
+      details: { text: "The migration looks safe so far" },
+    }, { isPartial: true }, theme, context).render(120).join("\n");
+    expect(markdownPartial).toContain("The migration looks safe so far");
+    expect(markdownPartial).not.toContain("criticalFindings");
   });
 
   test("advertises and uses a general contextual request when the question is omitted", () => {

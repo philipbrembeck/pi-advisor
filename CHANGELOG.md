@@ -4,6 +4,12 @@ All notable changes to this project are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.9]
+
+### Fixed
+
+- Keep manual and automatic Advisor responses human-readable. Manual consultations return direct Markdown; automatic loop reviews use a concise Markdown `Decision:` line for machine-readable gating without exposing a JSON protocol.
+
 ## [0.1.8]
 
 ### Added

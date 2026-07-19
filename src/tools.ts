@@ -49,10 +49,24 @@ export const ADVISOR_SYSTEM = [
   "You already have the relevant reconstructed conversation context. No question or other input from the Executor is needed for a general review.",
   "When no targeted focus is supplied, proactively review the task, risks, proposed direction, and validation from the context. Do not ask the Executor for a question, clarification, more input, or confirmation.",
   "The context may be truncated, so state any material uncertainty and make the best recommendation you can from what is present.",
-  "You do not act or take over planning. Return only a JSON object with verdict (proceed, revise, insufficient-evidence, or blocked), criticalFindings (array of {severity, claim, evidence}), missingEvidence (string array), smallestNextStep (string), verificationRequired (string array), and escalationReason (string or null). Use blocked only for a critical issue requiring the user; never claim verification that the supplied evidence does not show.",
+  "You do not act or take over planning. Answer the Executor's request directly in concise, human-readable Markdown. State uncertainty plainly and never claim verification that the supplied evidence does not show.",
+].join(" ");
+
+export const ADVISOR_DECISION_SYSTEM = [
+  "You are the Advisor's automatic safety gate for a repeated-tool loop.",
+  "Review the supplied context and decide whether the Executor may proceed.",
+  "Answer in concise Markdown. Your first line must be exactly `Decision: proceed`, `Decision: revise`, `Decision: insufficient-evidence`, or `Decision: blocked`.",
+  "Use blocked only for a critical issue requiring the user. Never claim verification that the supplied evidence does not show.",
 ].join(" ");
 
 type Advice = { verdict: AdvisorVerdict; criticalFindings: Array<{ severity: string; claim: string; evidence: string }>; missingEvidence: string[]; smallestNextStep: string; verificationRequired: string[]; escalationReason: string | null };
+
+export const parseAutomaticDecision = (text: string): Advice => {
+  const firstLine = text.split(/\r?\n/, 1)[0];
+  const match = /^Decision: (proceed|revise|blocked|insufficient-evidence)$/i.exec(firstLine);
+  if (!match) return parseAdvice("");
+  return { verdict: match[1] as AdvisorVerdict, criticalFindings: [], missingEvidence: [], smallestNextStep: text.trim(), verificationRequired: [], escalationReason: null };
+};
 
 export const parseAdvice = (text: string): Advice => {
   try {
@@ -61,7 +75,7 @@ export const parseAdvice = (text: string): Advice => {
     if (!Array.isArray(value.criticalFindings) || !Array.isArray(value.missingEvidence) || !Array.isArray(value.verificationRequired) || typeof value.smallestNextStep !== "string" || !value.missingEvidence.every((item) => typeof item === "string") || !value.verificationRequired.every((item) => typeof item === "string") || !value.criticalFindings.every((item) => item && typeof item === "object" && typeof (item as Record<string, unknown>).severity === "string" && typeof (item as Record<string, unknown>).claim === "string" && typeof (item as Record<string, unknown>).evidence === "string")) throw new Error("invalid shape");
     return { verdict: value.verdict as AdvisorVerdict, criticalFindings: value.criticalFindings as Advice["criticalFindings"], missingEvidence: value.missingEvidence as string[], smallestNextStep: value.smallestNextStep, verificationRequired: value.verificationRequired as string[], escalationReason: typeof value.escalationReason === "string" ? value.escalationReason : null };
   } catch {
-    return { verdict: "insufficient-evidence", criticalFindings: [{ severity: "medium", claim: "Advisor response was not structured", evidence: "The response could not be parsed as the required JSON." }], missingEvidence: [], smallestNextStep: "Request a structured Advisor review before relying on this advice.", verificationRequired: [], escalationReason: null };
+    return { verdict: "insufficient-evidence", criticalFindings: [{ severity: "medium", claim: "Advisor response was not structured for an automatic safety decision", evidence: "The response was not valid structured decision data." }], missingEvidence: [], smallestNextStep: "Review the Advisor's guidance before retrying.", verificationRequired: [], escalationReason: null };
   }
 };
 
@@ -78,6 +92,7 @@ export const consult = async (
   question?: string,
   signal?: AbortSignal,
   onChunk?: (thinking: string, text: string) => void,
+  structuredMode = false,
 ) => {
   loadConfig(ctx);
   const [provider, modelId] = splitRef(advisorRef);
@@ -97,7 +112,7 @@ export const consult = async (
   let thinkingText = "";
   let responseText = "";
 
-  const eventStream = stream(model, { systemPrompt: ADVISOR_SYSTEM, messages }, {
+  const eventStream = stream(model, { systemPrompt: structuredMode ? ADVISOR_DECISION_SYSTEM : ADVISOR_SYSTEM, messages }, {
     apiKey: auth.apiKey,
     headers: auth.headers,
     env: auth.env,
@@ -124,8 +139,8 @@ export const consult = async (
     .trim() || responseText;
 
   if (!advice) throw new Error("Advisor returned no advice.");
-  const structured = parseAdvice(advice);
-  return { advice: adviceForText(structured), thinkingText, structured };
+  const structured = structuredMode ? parseAutomaticDecision(advice) : parseAdvice(advice);
+  return { advice, thinkingText, structured };
 };
 
 export const registerAdvisorTool = (pi: ExtensionAPI) => {
@@ -170,7 +185,7 @@ export const registerAdvisorTool = (pi: ExtensionAPI) => {
         details: { question: `Loop gate: ${event.toolName} repeated ${advisorLoopThresholdRef} times` },
       }, { deliverAs: "steer" });
       try {
-        const { advice, structured } = await consult(ctx, `${reason} Review the repeated actions and recommend the smallest safe next step.`);
+        const { advice, structured } = await consult(ctx, `${reason} Review the repeated actions and recommend the smallest safe next step.`, undefined, undefined, true);
         session.recordConsultation("automatic", structured.verdict);
         pi.sendMessage({
           customType: "advisor-manual-result",
