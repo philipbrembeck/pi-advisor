@@ -114,7 +114,7 @@ Disables the Advisor flow, removing the `ask_advisor` tool from the active sessi
 
 ## Publishing releases
 
-CI manages release tags from the version in `package.json`; contributors must not create or push release tags manually. The release workflow verifies the version, type-checks, tests, and then publishes:
+CI manages `vX.Y.Z` release tags from the version in `package.json`; contributors must not create or push release tags manually. The release workflow verifies the version, type-checks, tests, and then publishes:
 
 - `pi-advisor-flow` to [npm](https://www.npmjs.com/package/pi-advisor-flow)
 - `@philipbrembeck/pi-advisor-flow` to GitHub Packages, which makes the package appear in this repository’s **Packages** sidebar

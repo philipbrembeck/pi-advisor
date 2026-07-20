@@ -36,17 +36,18 @@ jobs:
             echo "Invalid package version: $version" >&2
             exit 1
           fi
-          existing_commit="$(git ls-remote origin "refs/tags/$version^{}" | awk '{print $1}')"
+          tag="v$version"
+          existing_commit="$(git ls-remote origin "refs/tags/$tag^{}" | awk '{print $1}')"
           if [ -n "$existing_commit" ]; then
             if [ "$existing_commit" != "${{ github.sha }}" ]; then
-              echo "Tag $version already exists at $existing_commit, not ${{ github.sha }}." >&2
+              echo "Tag $tag already exists at $existing_commit, not ${{ github.sha }}." >&2
               exit 1
             fi
-            echo "Tag $version already points at this commit."
+            echo "Tag $tag already points at this commit."
           else
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git tag -a "$version" -m "Release $version"
-            git push origin "$version"
+            git tag -a "$tag" -m "Release $tag"
+            git push origin "$tag"
           fi
-          gh workflow run publish.yml --ref "$version"
+          gh workflow run publish.yml --ref "$tag"
