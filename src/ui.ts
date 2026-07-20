@@ -254,8 +254,20 @@ export class AdvisorSettingsSelector implements Component, Focusable {
     this.options.tui.requestRender();
   }
 
-  private currentContext() {
-    return this.options.presets[this.contextIndex];
+  private currentContext(): ContextPreset {
+    const preset = this.options.presets.find(
+      (item) => item.value === this.settings.contextMaxChars
+    );
+    return (
+      preset ?? {
+        description: "Current custom context limit",
+        label: String(this.settings.contextMaxChars),
+        value: this.settings.contextMaxChars,
+      }
+    );
+  }
+  private currentEffort() {
+    return this.settings.effort || "Default (Model Default)";
   }
   private row(label: string, value: string, index: number) {
     const { theme } = this.options;
@@ -292,11 +304,7 @@ export class AdvisorSettingsSelector implements Component, Focusable {
     const onOff = (value: boolean) => (value ? "On" : "Off");
     const rows = [
       this.row("Context window", this.currentContext().label, 0),
-      this.row(
-        "Advisor reasoning",
-        this.options.effortLevels[this.effortIndex],
-        1
-      ),
+      this.row("Advisor reasoning", this.currentEffort(), 1),
       this.row("Plan gate", onOff(this.settings.planGate), 2),
       this.row("Failure gate", onOff(this.settings.failureGate), 3),
       this.row("Completion gate", onOff(this.settings.completionGate), 4),
@@ -399,7 +407,7 @@ export class AdvisorSettingsSelector implements Component, Focusable {
         this.options.onSave({
           ...this.settings,
           contextMaxChars: this.currentContext().value,
-          effort: this.options.effortLevels[this.effortIndex],
+          effort: this.currentEffort(),
         });
         return;
       }
@@ -423,6 +431,8 @@ export class AdvisorSettingsSelector implements Component, Focusable {
             this.contextIndex + direction
           )
         );
+        this.settings.contextMaxChars =
+          this.options.presets[this.contextIndex].value;
         break;
       case 1:
         this.effortIndex = Math.max(
@@ -432,6 +442,7 @@ export class AdvisorSettingsSelector implements Component, Focusable {
             this.effortIndex + direction
           )
         );
+        this.settings.effort = this.options.effortLevels[this.effortIndex];
         break;
       case 2:
         this.settings.planGate = !this.settings.planGate;

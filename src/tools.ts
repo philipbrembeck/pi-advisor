@@ -479,6 +479,18 @@ const sendAutomaticGateCall = (pi: ExtensionAPI, event: ToolCallEvent) => {
   );
 };
 
+const sendAutomaticGateFailure = (pi: ExtensionAPI, markdown: string) => {
+  pi.sendMessage(
+    {
+      content: markdown,
+      customType: "advisor-loop-result",
+      details: { text: markdown },
+      display: true,
+    },
+    { deliverAs: "steer" }
+  );
+};
+
 const sendAutomaticGateResult = (
   pi: ExtensionAPI,
   result: AdvisorGateResult
@@ -546,6 +558,10 @@ const handleAutomaticGate = async (
         result.message,
         ctx,
         session
+      );
+      sendAutomaticGateFailure(
+        pi,
+        `**Advisor gate failure (${result.category}):** ${result.message}`
       );
       return failure.block
         ? { block: true, reason: `${reason}\n${failure.reason}` }
@@ -777,6 +793,12 @@ export const registerAdvisorTool = (pi: ExtensionAPI) => {
       return;
     }
     loadConfig(ctx);
+    if (session.blocked) {
+      return {
+        block: true,
+        reason: session.blockedReason ?? "Advisor session is blocked.",
+      };
+    }
     const reservation = reserveAdvisorCall(event, ctx, session, reservedCalls);
     if (event.toolName === "ask_advisor") {
       return reservation;

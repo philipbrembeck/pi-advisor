@@ -69,30 +69,49 @@ export const capToolResult = (
   }
 
   const marker = "[... omitted tool-result section ...]";
-  const availableBytes = Math.max(0, maxBytes - byteLength(marker) - 2);
-  const headCount = Math.max(1, Math.floor(Math.max(1, maxLines - 1) / 2));
-  const tailCount = Math.max(1, Math.max(1, maxLines - 1) - headCount);
-  const head: string[] = [];
-  let headBytes = 0;
-  for (const line of lines.slice(0, headCount)) {
-    const next = headBytes + byteLength(line) + (head.length ? 1 : 0);
-    if (head.length && next > Math.ceil(availableBytes / 2)) {
-      break;
-    }
-    head.push(line);
-    headBytes = next;
+  const markerBytes = byteLength(marker);
+  if (maxBytes < markerBytes || maxLines === 1) {
+    const content = [...marker].reduce(
+      (result, character) =>
+        byteLength(result + character) <= maxBytes
+          ? result + character
+          : result,
+      ""
+    );
+    return {
+      content,
+      omittedLines: totalLines,
+      totalBytes,
+      totalLines,
+      truncated: true,
+    };
   }
-  const tail: string[] = [];
-  let tailBytes = 0;
-  const tailStart = Math.max(head.length, lines.length - tailCount);
-  for (const line of lines.slice(tailStart)) {
-    const next = tailBytes + byteLength(line) + (tail.length ? 1 : 0);
-    if (tail.length && next > Math.floor(availableBytes / 2)) {
-      break;
+  const headCount = Math.floor((maxLines - 1) / 2);
+  const tailCount = maxLines - 1 - headCount;
+  const collect = (
+    candidates: string[],
+    maxEntries: number,
+    maxContentBytes: number
+  ) => {
+    const selected: string[] = [];
+    let used = 0;
+    for (const line of candidates.slice(0, maxEntries)) {
+      const next = used + byteLength(line) + (selected.length ? 1 : 0);
+      if (next > maxContentBytes) {
+        break;
+      }
+      selected.push(line);
+      used = next;
     }
-    tail.push(line);
-    tailBytes = next;
-  }
+    return selected;
+  };
+  const availableBytes = maxBytes - markerBytes - 2;
+  const head = collect(lines, headCount, Math.floor(availableBytes / 2));
+  const tail = collect(
+    lines.slice(Math.max(head.length, lines.length - tailCount)),
+    tailCount,
+    availableBytes - byteLength(head.join("\n"))
+  );
   const content = [...head, marker, ...tail].join("\n");
   return {
     content,

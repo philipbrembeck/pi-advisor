@@ -443,6 +443,9 @@ export const saveConfig = (ctx: ExtensionContext) => {
   } catch {
     /* replace a missing or malformed file */
   }
+  if (advisorMaxCallsPerSessionRef === undefined) {
+    existing.advisorMaxCallsPerSession = undefined;
+  }
   const data = {
     ...existing,
     advisor: advisorRef,

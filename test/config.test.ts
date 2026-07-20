@@ -189,6 +189,33 @@ describe("Config Module", () => {
     ).toThrow(INVALID_FAILURE_MODE_PATTERN);
   });
 
+  test("saveConfig removes a previous finite budget when unlimited", () => {
+    const cwd = mkdtempSync(join(tmpdir(), "pi-advisor-project-"));
+    const agentDir = mkdtempSync(join(tmpdir(), "pi-advisor-agent-"));
+    const previousAgentDir = process.env[AGENT_DIR_ENV];
+    process.env[AGENT_DIR_ENV] = agentDir;
+    writeFileSync(
+      join(agentDir, "advisor.json"),
+      '{"advisorMaxCallsPerSession":5}\n'
+    );
+
+    try {
+      setAdvisorMaxCallsPerSessionRef(undefined);
+      const path = saveConfig({ cwd, isProjectTrusted: () => false } as any);
+      expect(JSON.parse(readFileSync(path, "utf8"))).not.toHaveProperty(
+        "advisorMaxCallsPerSession"
+      );
+    } finally {
+      if (previousAgentDir === undefined) {
+        delete process.env[AGENT_DIR_ENV];
+      } else {
+        process.env[AGENT_DIR_ENV] = previousAgentDir;
+      }
+      rmSync(cwd, { force: true, recursive: true });
+      rmSync(agentDir, { force: true, recursive: true });
+    }
+  });
+
   test("saveConfig preserves unknown fields", () => {
     const cwd = mkdtempSync(join(tmpdir(), "pi-advisor-project-"));
     const agentDir = mkdtempSync(join(tmpdir(), "pi-advisor-agent-"));

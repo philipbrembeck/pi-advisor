@@ -30,13 +30,15 @@ jobs:
           previous_version="$(git show "${{ github.event.before }}:package.json" 2>/dev/null | node -e 'let s=""; process.stdin.on("data", d => s += d).on("end", () => console.log(JSON.parse(s).version))' || true)"
           version="$(node -p "require('./package.json').version")"
           if [ "$version" = "$previous_version" ]; then
-            echo "package.json version unchanged; checking for a missed release tag."
+            echo "package.json version unchanged; no release tag needed."
+            exit 0
           fi
           if ! node -e 'const v = process.argv[1]; if (!/^\d+\.\d+\.\d+$/.test(v)) process.exit(1)' "$version"; then
             echo "Invalid package version: $version" >&2
             exit 1
           fi
           tag="v$version"
+          created=false
           existing_commit="$(git ls-remote origin "refs/tags/$tag^{}" | awk '{print $1}')"
           if [ -n "$existing_commit" ]; then
             if [ "$existing_commit" != "${{ github.sha }}" ]; then
@@ -49,5 +51,8 @@ jobs:
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git tag -a "$tag" -m "Release $tag"
             git push origin "$tag"
+            created=true
           fi
-          gh workflow run publish.yml --ref "$tag"
+          if [ "$created" = true ]; then
+            gh workflow run publish.yml --ref "$tag"
+          fi

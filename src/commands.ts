@@ -186,6 +186,18 @@ export const registerCommands = (
           model: advisorRef,
           trigger: "manual",
         });
+        pi.sendMessage(
+          {
+            content: `Manual Advisor consultation failed: ${message}`,
+            customType: "advisor-manual-result",
+            details: {
+              advisor: advisorRef,
+              text: `**Advisor consultation failed:** ${message}`,
+            },
+            display: true,
+          },
+          { deliverAs: "steer", triggerTurn: true }
+        );
         notify(ctx, `Advisor consultation failed: ${message}`, "error");
         notifyHerdrAdvisorFailure("Advisor consultation failed", message);
       })
@@ -311,6 +323,7 @@ export const registerCommands = (
     description:
       "Select and persist the Executor and Advisor models with reasoning levels",
     handler: async (_args, ctx) => {
+      loadConfig(ctx);
       if (!ctx.hasUI) {
         return;
       }

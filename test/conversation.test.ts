@@ -59,9 +59,16 @@ describe("Conversation Module", () => {
     expect(result.content).toContain("omitted tool-result section");
   });
 
-  test("does not split a Unicode or single semantic tool-result entry", () => {
+  test("enforces byte and line caps without splitting Unicode", () => {
     const single = capToolResult("😀😀😀😀", 2, 4);
-    expect(single.content).toContain("😀😀😀😀");
+    expect(Buffer.byteLength(single.content, "utf8")).toBeLessThanOrEqual(4);
+    expect(single.content.split("\n")).toHaveLength(1);
+    expect(single.content).toBe("[...");
+    const oversized = capToolResult("x".repeat(10_000), 10, 10);
+    expect(Buffer.byteLength(oversized.content, "utf8")).toBeLessThanOrEqual(
+      10
+    );
+    expect(oversized.content.split("\n")).toHaveLength(1);
     const ctx = {
       sessionManager: {
         getBranch: () => [

@@ -43,6 +43,12 @@ describe("AdvisorSessionState", () => {
     );
   });
 
+  test("does not treat semantic keys containing date as timestamps", () => {
+    expect(normalizeToolInput("tool", { update: "first" })).not.toEqual(
+      normalizeToolInput("tool", { update: "second" })
+    );
+  });
+
   test("tracks a finite shared Advisor budget", () => {
     const state = new AdvisorSessionState();
     expect(state.remainingCalls(2)).toBe(2);

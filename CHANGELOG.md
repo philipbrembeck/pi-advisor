@@ -4,7 +4,7 @@ All notable changes to this project are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 0.2.1
 
 ### Added
 
@@ -17,6 +17,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ### Fixed
 
 - Empty persisted Executor, Advisor, and reasoning-effort settings now retain their configured defaults.
+- Keep a session blocked after a critical automatic-gate decision or session-blocking gate failure.
+- Preserve custom Advisor context and reasoning settings when saving unrelated changes.
+- Persist an unlimited Advisor-call budget correctly after removing a prior finite limit.
+- Enforce configured Advisor tool-result byte and line limits, including for long Unicode lines.
+- Render automatic and manual Advisor failures in the transcript.
+- Avoid false loop detection for semantic field names such as `update`.
+- Make release automation skip unchanged versions while explicitly dispatching publication after an Action-created tag.
 
 ## 0.2.0
 

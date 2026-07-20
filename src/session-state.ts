@@ -19,10 +19,18 @@ export interface AdvisorInvocationRecord {
 }
 
 const WHITESPACE = /\s/;
-const TIMESTAMP_KEY = /timestamp|time|date/;
-const REQUEST_ID_KEY = /requestid|correlationid|traceid/;
-const isVolatileKey = (key: string, pattern: RegExp) =>
-  pattern.test(key.replace(/[-_]/g, "").toLowerCase());
+const TIMESTAMP_KEYS = new Set([
+  "createdat",
+  "date",
+  "datetime",
+  "time",
+  "timestamp",
+  "updatedat",
+]);
+const REQUEST_ID_KEYS = new Set(["correlationid", "requestid", "traceid"]);
+const normalizedKey = (key: string) => key.replace(/[-_]/g, "").toLowerCase();
+const isVolatileKey = (key: string, keys: Set<string>) =>
+  keys.has(normalizedKey(key));
 
 const normalizeShellWhitespace = (command: string) => {
   let result = "";
@@ -67,10 +75,10 @@ export const normalizeToolInput = (
 ): unknown => {
   const visit = (value: unknown, key?: string): unknown => {
     if (typeof value === "string") {
-      if (key && isVolatileKey(key, TIMESTAMP_KEY)) {
+      if (key && isVolatileKey(key, TIMESTAMP_KEYS)) {
         return "<timestamp>";
       }
-      if (key && isVolatileKey(key, REQUEST_ID_KEY)) {
+      if (key && isVolatileKey(key, REQUEST_ID_KEYS)) {
         return "<request-id>";
       }
       const normalized = normalizeString(value);
