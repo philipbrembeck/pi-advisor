@@ -5,25 +5,12 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { Box, Markdown, Text } from "@earendil-works/pi-tui";
 import {
-  advisorAutoLoopGateRef,
-  advisorBlockOnBlockedRef,
-  advisorCollapseResponsesRef,
-  advisorCompletionGateRef,
-  advisorCustomInvocationRef,
   advisorEffortRef,
-  advisorFailureGateRef,
-  advisorFailureModeRef,
-  advisorHerdrIntegrationRef,
-  advisorLoopThresholdRef,
   advisorMaxCallsPerSessionRef,
-  advisorPlanGateRef,
   advisorRef,
-  advisorSessionSummaryRef,
-  advisorToolResultMaxBytesRef,
-  advisorToolResultMaxLinesRef,
-  contextMaxCharsRef,
   executorEffortRef,
   executorRef,
+  getAdvisorSettings,
   loadConfig,
   parseArgs,
   saveConfig,
@@ -406,24 +393,7 @@ export const registerCommands = (
         return;
       }
 
-      const initial: AdvisorSettings = {
-        autoLoopGate: advisorAutoLoopGateRef,
-        blockOnBlocked: advisorBlockOnBlockedRef,
-        collapseResponses: advisorCollapseResponsesRef,
-        completionGate: advisorCompletionGateRef,
-        contextMaxChars: contextMaxCharsRef,
-        customRule: advisorCustomInvocationRef,
-        effort: advisorEffortRef,
-        failureGate: advisorFailureGateRef,
-        failureMode: advisorFailureModeRef,
-        herdrIntegration: advisorHerdrIntegrationRef,
-        loopThreshold: advisorLoopThresholdRef,
-        maxCallsPerSession: advisorMaxCallsPerSessionRef,
-        planGate: advisorPlanGateRef,
-        sessionSummary: advisorSessionSummaryRef,
-        toolResultMaxBytes: advisorToolResultMaxBytesRef,
-        toolResultMaxLines: advisorToolResultMaxLinesRef,
-      };
+      const initial: AdvisorSettings = getAdvisorSettings();
       const settings = await ctx.ui.custom<AdvisorSettings | undefined>(
         (tui, theme, _keybindings, done) =>
           new AdvisorSettingsSelector({

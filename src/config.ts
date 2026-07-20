@@ -120,6 +120,29 @@ export const setAdvisorToolResultMaxBytesRef = (value: number) => {
   advisorToolResultMaxBytesRef = value;
 };
 
+/**
+ * Returns the current live settings state. Use this at UI boundaries instead of
+ * imported mutable bindings, which can be snapshotted by extension loaders.
+ */
+export const getAdvisorSettings = () => ({
+  autoLoopGate: advisorAutoLoopGateRef,
+  blockOnBlocked: advisorBlockOnBlockedRef,
+  collapseResponses: advisorCollapseResponsesRef,
+  completionGate: advisorCompletionGateRef,
+  contextMaxChars: contextMaxCharsRef,
+  customRule: advisorCustomInvocationRef,
+  effort: advisorEffortRef,
+  failureGate: advisorFailureGateRef,
+  failureMode: advisorFailureModeRef,
+  herdrIntegration: advisorHerdrIntegrationRef,
+  loopThreshold: advisorLoopThresholdRef,
+  maxCallsPerSession: advisorMaxCallsPerSessionRef,
+  planGate: advisorPlanGateRef,
+  sessionSummary: advisorSessionSummaryRef,
+  toolResultMaxBytes: advisorToolResultMaxBytesRef,
+  toolResultMaxLines: advisorToolResultMaxLinesRef,
+});
+
 export const splitRef = (ref: string): [string, string] => {
   const i = ref.indexOf("/");
   return i === -1 ? ["aikeys", ref] : [ref.slice(0, i), ref.slice(i + 1)];

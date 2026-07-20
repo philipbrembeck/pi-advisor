@@ -27,6 +27,7 @@ import { AdvisorSettingsSelector } from "../src/ui.js";
 initTheme();
 
 const SPINNER_PATTERN = /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/;
+const MAX_CALLS_ROW_PATTERN = /Max Advisor calls\/session\s+10/;
 
 describe("Herdr Advisor activity", () => {
   test("constructs sanitized request notifications within Herdr limits", () => {
@@ -626,6 +627,78 @@ describe("Extension Registration", () => {
     }
     selector.handleInput("\r");
     expect(saved.customRule).toBe("deploy");
+  });
+
+  test("reopens Advisor settings with the value saved in the same session", async () => {
+    const agentDir = mkdtempSync(join(tmpdir(), "pi-advisor-agent-"));
+    const previousAgentDir = process.env.PI_CODING_AGENT_DIR;
+    process.env.PI_CODING_AGENT_DIR = agentDir;
+    writeFileSync(
+      join(agentDir, "advisor.json"),
+      JSON.stringify({ advisorMaxCallsPerSession: 5 })
+    );
+    const commands = new Map<string, any>();
+    const theme = {
+      bold: (text: string) => text,
+      fg: (_color: string, text: string) => text,
+    } as any;
+    const custom = async (factory: any) =>
+      new Promise<any>((resolve) => {
+        const selector = factory(
+          { requestRender: () => undefined },
+          theme,
+          {},
+          resolve
+        );
+        for (let index = 0; index < 10; index += 1) {
+          selector.handleInput("\u001b[B");
+        }
+        selector.handleInput("\u001b[C");
+        for (let index = 0; index < 6; index += 1) {
+          selector.handleInput("\u001b[B");
+        }
+        selector.handleInput("\r");
+      });
+    const reopened = async (factory: any) =>
+      new Promise<any>((resolve) => {
+        const selector = factory(
+          { requestRender: () => undefined },
+          theme,
+          {},
+          resolve
+        );
+        expect(selector.render(100).join("\n")).toMatch(MAX_CALLS_ROW_PATTERN);
+        selector.handleInput("\u001b");
+      });
+    const mockPi = {
+      on: () => undefined,
+      registerCommand(name: string, config: any) {
+        commands.set(name, config);
+      },
+    } as unknown as ExtensionAPI;
+    const context = {
+      cwd: tmpdir(),
+      hasUI: true,
+      isProjectTrusted: () => false,
+      ui: { custom, notify: () => undefined },
+    } as any;
+
+    try {
+      registerCommands(mockPi);
+      await commands.get("advisor-settings").handler("", context);
+      expect(
+        JSON.parse(readFileSync(join(agentDir, "advisor.json"), "utf8"))
+      ).toMatchObject({ advisorMaxCallsPerSession: 10 });
+      context.ui.custom = reopened;
+      await commands.get("advisor-settings").handler("", context);
+    } finally {
+      if (previousAgentDir === undefined) {
+        delete process.env.PI_CODING_AGENT_DIR;
+      } else {
+        process.env.PI_CODING_AGENT_DIR = previousAgentDir;
+      }
+      rmSync(agentDir, { force: true, recursive: true });
+    }
   });
 
   test("keeps Advisor answers expanded unless collapse is enabled", () => {
