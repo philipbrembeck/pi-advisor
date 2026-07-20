@@ -1,6 +1,30 @@
 {
+  "devDependencies": {
+    "@earendil-works/pi-ai": "^0.80.7",
+    "@earendil-works/pi-coding-agent": "^0.80.7",
+    "@earendil-works/pi-tui": "^0.80.7",
+    "@types/node": "^20.11.0",
+    "bun-types": "^1.0.0",
+    "typebox": "^1.1.38",
+    "typescript": "^5.3.3",
+    "ultracite": "7.9.4",
+    "@biomejs/biome": "2.5.3"
+  },
   "name": "pi-advisor-flow",
-  "version": "0.1.9",
+  "peerDependencies": {
+    "@earendil-works/pi-ai": "^0.80.7",
+    "@earendil-works/pi-coding-agent": "^0.80.7",
+    "@earendil-works/pi-tui": "^0.80.7",
+    "typebox": "^1.1.38"
+  },
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "format": "bunx ultracite fix --linter-enabled=false",
+    "package:check": "npm pack --dry-run --json >/dev/null"
+  },
+  "type": "module",
+  "version": "0.2.0",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -9,7 +33,6 @@
   "homepage": "https://github.com/philipbrembeck/pi-advisor",
   "author": "Philip Brembeck",
   "description": "Advanced Executor/Advisor flow for Pi, fully configurable and extendable.",
-  "type": "module",
   "main": "extensions/index.ts",
   "types": "extensions/index.ts",
   "keywords": [
@@ -30,24 +53,5 @@
       "./extensions/index.ts"
     ],
     "image": "https://raw.githubusercontent.com/philipbrembeck/pi-advisor/refs/heads/main/assets/hero.png"
-  },
-  "scripts": {
-    "test": "bun test",
-    "typecheck": "tsc --noEmit"
-  },
-  "peerDependencies": {
-    "@earendil-works/pi-ai": "^0.80.7",
-    "@earendil-works/pi-coding-agent": "^0.80.7",
-    "@earendil-works/pi-tui": "^0.80.7",
-    "typebox": "^1.1.38"
-  },
-  "devDependencies": {
-    "@earendil-works/pi-ai": "^0.80.7",
-    "@earendil-works/pi-coding-agent": "^0.80.7",
-    "@earendil-works/pi-tui": "^0.80.7",
-    "typebox": "^1.1.38",
-    "@types/node": "^20.11.0",
-    "bun-types": "^1.0.0",
-    "typescript": "^5.3.3"
   }
 }

@@ -4,6 +4,25 @@ All notable changes to this project are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.2.0
+
+### Added
+
+- Separate Markdown consultations from strict automatic loop-gate decisions.
+- Typed gate parsing for `proceed`, `revise`, and `blocked`, including safe failure classification.
+
+### Changed
+
+- Normal Advisor and Executor-requested consultations preserve raw Markdown and no longer fabricate or enforce a structured verdict.
+- Automatic gate decisions render separately from their Markdown explanation.
+- Advisor calls now use one shared per-session budget with explicit used/remaining accounting.
+- Gate failures support `block-session`, `block-tool`, and `warn-and-continue`; Herdr failures also show sanitized `notification.show` toasts when integration is enabled.
+- Advisor settings validate values at startup, preserve unknown fields on save, and expose Herdr integration plus tool-result limits.
+- Advisor context keeps complete semantic entries and caps oversized tool results using Pi-compatible defaults while preserving head/tail sections.
+- Tool-result limits are configurable by line and byte count, with explicit omission markers that never split semantic entries.
+- Loop detection now uses explainable normalized tool signatures with allowlisted volatile-field and shell-whitespace normalization.
+- Local ephemeral summaries distinguish Markdown advice from automatic gate decisions and include triggers, models, usage/cost when available, budget, failures, and execution effects.
+
 ## [0.1.9]
 
 ### Fixed

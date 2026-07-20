@@ -38,6 +38,8 @@ jobs:
           test "${GITHUB_REF_NAME#v}" = "$(node -p "require('./package.json').version")"
           bun run typecheck
           bun test
+          bun run package:check
+          bun audit --audit-level=high
 
       - name: Publish to npm
         run: |

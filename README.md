@@ -68,13 +68,13 @@ Saves and persists your configuration to `~/.pi/agent/advisor.json`.
 
 The Executor can call `ask_advisor` with an empty object for a general review of the current task and conversation, or provide `question` for targeted feedback. The Advisor is a brief second opinion: the Executor investigates and forms its own candidate direction first, then uses the Advisor to challenge assumptions and validate a consequential next step. It should not delegate the entire plan or task.
 
-Advisor responses use a structured verdict: `proceed`, `revise`, `insufficient-evidence`, or `blocked`. A `blocked` verdict is reserved for critical escalation. When critical blocking is enabled (the default), it aborts the active run and marks the Pi pane blocked in Herdr.
+Normal Advisor consultations return the provider's final Markdown unchanged. They never parse JSON, synthesize a verdict, or block Executor work. Only automatic loop gates use machine-readable decisions: the first non-empty line must be `Decision: proceed`, `Decision: revise`, or `Decision: blocked`; malformed, missing, duplicate, or contradictory decisions are explicit gate failures.
 
 ### Automatic loop gate
 
-When enabled, the loop gate consults the Advisor after the configured number of consecutive equivalent tool calls (default: three). A `proceed` verdict resets the repetition counter and allows the call. `revise` and `insufficient-evidence` stop only the repeated call and deliver the Advisor guidance to the Executor. A critical `blocked` verdict, an Advisor failure, or an exhausted Advisor-call budget blocks the session and reports that state to Herdr.
+When enabled, the loop gate consults the Advisor after the configured number of consecutive calls with the same normalized tool signature (default: three). A `proceed` decision resets the repetition counter and allows the call. `revise` blocks only the repeated tool action; `blocked` can block the session according to the configured policy. Gate failures default to `block-session` and may be changed to `block-tool` or `warn-and-continue`. Normalization is allowlisted: object keys are deterministic, arrays retain order, and only volatile IDs/timestamps, temporary paths, and safe shell whitespace are normalized.
 
-The maximum Advisor calls per session defaults to unlimited. When set to a finite value, the Executor receives the remaining-call count in its system instructions. The optional Session Advisor Summary is local, in-memory only, and appears after a non-blocked settled run; it is never persisted or sent to Herdr.
+Every manual, Executor-requested, and automatic Advisor invocation consumes one shared session budget. The default is unlimited; a finite budget appears as used/remaining in the Executor instructions and local summary. The optional Session Advisor Summary is local, in-memory only, and appears after a non-blocked settled run; it is never persisted or sent to Herdr. It separates Markdown advice from gate decisions and records trigger, model, usage/cost when available, failure, budget, and execution effect.
 
 ### Context configuration
 
@@ -82,10 +82,10 @@ The selected configuration is saved as `advisor.json` in the Pi agent directory 
 
 ```json
 {
-  "executor": "aikeys/claude-sonnet-5",
-  "advisor": "aikeys/claude-fable-5",
-  "executorEffort": "high",
-  "advisorEffort": "high",
+  "executor": "openai/gpt-5.6-luna",
+  "advisor": "anthropic/claude-fable-5",
+  "executorEffort": "medium",
+  "advisorEffort": "xhigh",
   "contextMaxChars": 25000,
   "advisorPlanGate": true,
   "advisorFailureGate": true,
@@ -96,13 +96,17 @@ The selected configuration is saved as `advisor.json` in the Pi agent directory 
   "advisorAutoLoopGate": true,
   "advisorLoopThreshold": 3,
   "advisorMaxCallsPerSession": 5,
-  "advisorSessionSummary": true
+  "advisorSessionSummary": true,
+  "gateFailureMode": "block-session",
+  "advisorHerdrIntegration": true,
+  "advisorToolResultMaxLines": 2000,
+  "advisorToolResultMaxBytes": 51200
 }
 ```
 
-All fields are optional. `executor`, `advisor`, and their effort settings are managed by `/advisor-models`. `/advisor-settings` manages `advisorEffort`, `contextMaxChars`, the three invocation-gate booleans, `advisorCollapseResponses`, `advisorCustomInvocation`, `advisorBlockOnBlocked`, `advisorAutoLoopGate`, `advisorLoopThreshold`, `advisorMaxCallsPerSession`, and `advisorSessionSummary`.
+All fields are optional. `executor`, `advisor`, and their effort settings are managed by `/advisor-models`. `/advisor-settings` manages `advisorEffort`, `contextMaxChars`, the three invocation-gate booleans, `advisorCollapseResponses`, `advisorCustomInvocation`, `advisorBlockOnBlocked`, `advisorAutoLoopGate`, `advisorLoopThreshold`, `advisorMaxCallsPerSession`, `advisorSessionSummary`, `gateFailureMode`, `advisorHerdrIntegration`, and the tool-result line/byte limits.
 
-`contextMaxChars` must be a non-negative safe integer: its default is 15,000, `0` omits history, and `9007199254740991` means ALL. `advisorLoopThreshold` must be at least `2` and defaults to `3`. Omit `advisorMaxCallsPerSession` for an unlimited session budget; otherwise it must be a non-negative safe integer. Critical blocking, the automatic loop gate, and the Session Advisor Summary default to `true`.
+`contextMaxChars` is a soft character budget: it preserves complete semantic entries and adds an older-context omission marker rather than starting mid-message. Its default is 15,000, `0` omits history, and `9007199254740991` means ALL. Oversized tool results default to Pi's 2,000-line/50 KiB limits and preserve beginning/end sections with an omission marker; `advisorToolResultMaxLines` and `advisorToolResultMaxBytes` override them. `advisorLoopThreshold` must be at least `2` and defaults to `3`. Omit `advisorMaxCallsPerSession` for an unlimited shared budget; otherwise it must be a non-negative safe integer. `gateFailureMode` accepts `block-session`, `block-tool`, or `warn-and-continue`, defaulting to `block-session`. Herdr integration and the notification/activity/blocked metadata paths default to enabled; failure notifications use sanitized `notification.show` requests and can be disabled with `advisorHerdrIntegration`. Critical blocking, the automatic loop gate, and the Session Advisor Summary default to `true`. Unknown or invalid configuration keys fail at startup with the file, key, accepted values, and remediation; save operations preserve unknown fields.
 
 ### `/advisor-off`
 
@@ -110,7 +114,7 @@ Disables the Advisor flow, removing the `ask_advisor` tool from the active sessi
 
 ## Publishing releases
 
-Pushing a version tag (`vX.Y.Z`) runs the release workflow. It verifies that the tag matches `package.json`, type-checks, tests, then publishes:
+CI manages release tags from the version in `package.json`; contributors must not create or push release tags manually. The release workflow verifies the version, type-checks, tests, and then publishes:
 
 - `pi-advisor-flow` to [npm](https://www.npmjs.com/package/pi-advisor-flow)
 - `@philipbrembeck/pi-advisor-flow` to GitHub Packages, which makes the package appear in this repository’s **Packages** sidebar

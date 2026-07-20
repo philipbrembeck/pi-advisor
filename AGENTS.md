@@ -10,7 +10,7 @@ Pi extension providing an Executor/Advisor flow and optional Herdr integration.
 | Extension API | `@earendil-works/pi-coding-agent` |
 | UI            | `@earendil-works/pi-tui`          |
 | Tests         | `bun test`                        |
-| Release       | GitHub Actions on `vX.Y.Z` tags   |
+| Release       | GitHub Actions manages tags/publishing |
 
 ## Development
 
@@ -33,7 +33,7 @@ git -c diff.stat=false diff --no-ext-diff --check --no-stat
 - MUST keep session summaries local and ephemeral; MUST NOT send them to Herdr or persist them.
 - MUST document released user-facing behavior in README and CHANGELOG; MUST NOT document internal iterations or unreleased defects.
 - MUST preserve public `advisor.json` fields and unknown fields when saving configuration.
-- MUST run all checks above before reporting completion. MUST NOT commit, push, or tag unless asked.
+- MUST run all checks above before reporting completion. MUST NOT commit or push unless asked. MUST NOT create or push release tags: CI manages tagging from `package.json`.
 
 ## Common pitfalls
 
