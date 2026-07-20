@@ -15,12 +15,15 @@ const INVALID_EXECUTOR_PATTERN = /executor.*provider\/model string/;
 const UNKNOWN_CONFIG_KEY_PATTERN = /unknown key.*unexpected/;
 const INVALID_FAILURE_MODE_PATTERN =
   /block-session.*block-tool.*warn-and-continue/;
+const INVALID_TOOL_POLICIES_PATTERN = /advisorToolPolicies/;
 
 import {
   advisorEffortRef,
   advisorFailureModeRef,
   advisorHerdrIntegrationRef,
+  advisorRedactSecretsRef,
   advisorRef,
+  advisorToolPoliciesRef,
   advisorToolResultMaxBytesRef,
   advisorToolResultMaxLinesRef,
   contextMaxCharsRef,
@@ -46,8 +49,10 @@ import {
   setAdvisorLoopThresholdRef,
   setAdvisorMaxCallsPerSessionRef,
   setAdvisorPlanGateRef,
+  setAdvisorRedactSecretsRef,
   setAdvisorRef,
   setAdvisorSessionSummaryRef,
+  setAdvisorToolPoliciesRef,
   setAdvisorToolResultMaxBytesRef,
   setAdvisorToolResultMaxLinesRef,
   setContextMaxCharsRef,
@@ -181,12 +186,19 @@ describe("Config Module", () => {
     expect(advisorToolResultMaxBytesRef).toBe(
       DEFAULT_ADVISOR_TOOL_RESULT_MAX_BYTES
     );
+    expect(advisorRedactSecretsRef).toBe(false);
+    expect(advisorToolPoliciesRef).toEqual({});
     expect(() =>
       validateConfig({ unexpected: true }, "/tmp/advisor.json")
     ).toThrow(UNKNOWN_CONFIG_KEY_PATTERN);
     expect(() =>
       validateConfig({ gateFailureMode: "bad" }, "/tmp/advisor.json")
     ).toThrow(INVALID_FAILURE_MODE_PATTERN);
+    for (const invalid of [[], { bash: "invalid" }, { "": "full" }]) {
+      expect(() => validateConfig({ advisorToolPolicies: invalid })).toThrow(
+        INVALID_TOOL_POLICIES_PATTERN
+      );
+    }
   });
 
   test("saveConfig removes a previous finite budget when unlimited", () => {
@@ -238,6 +250,8 @@ describe("Config Module", () => {
       setAdvisorHerdrIntegrationRef(false);
       setAdvisorToolResultMaxLinesRef(100);
       setAdvisorToolResultMaxBytesRef(10_240);
+      setAdvisorRedactSecretsRef(true);
+      setAdvisorToolPoliciesRef({ bash: "summary", deploy: "exclude" });
       const path = saveConfig({ cwd, isProjectTrusted: () => false } as any);
       expect(JSON.parse(readFileSync(path, "utf8"))).toMatchObject({
         advisorAutoLoopGate: false,
@@ -249,7 +263,9 @@ describe("Config Module", () => {
         advisorLoopThreshold: 5,
         advisorMaxCallsPerSession: 2,
         advisorPlanGate: false,
+        advisorRedactSecrets: true,
         advisorSessionSummary: false,
+        advisorToolPolicies: { bash: "summary", deploy: "exclude" },
         advisorToolResultMaxBytes: 10_240,
         advisorToolResultMaxLines: 100,
         contextMaxChars: Number.MAX_SAFE_INTEGER,

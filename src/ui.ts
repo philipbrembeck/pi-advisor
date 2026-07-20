@@ -10,6 +10,7 @@ import {
   matchesKey,
   truncateToWidth,
 } from "@earendil-works/pi-tui";
+import { isValidAdvisorToolPolicies } from "./config.js";
 
 interface RenderRequester {
   requestRender: () => void;
@@ -197,7 +198,9 @@ export interface AdvisorSettings {
   loopThreshold?: number;
   maxCallsPerSession?: number;
   planGate: boolean;
+  redactSecrets?: boolean;
   sessionSummary?: boolean;
+  toolPolicies?: Record<string, "full" | "summary" | "exclude">;
   toolResultMaxBytes?: number;
   toolResultMaxLines?: number;
 }
@@ -208,7 +211,10 @@ export class AdvisorSettingsSelector implements Component, Focusable {
   private effortIndex: number;
   private readonly settings: AdvisorSettings;
   private readonly customInput = new Input();
+  private readonly policiesInput = new Input();
   private editingCustom: boolean;
+  private editingPolicies: boolean;
+  private policiesError: string | undefined;
   private _focused = false;
   private readonly options: AdvisorSettingsSelectorOptions;
 
@@ -218,11 +224,14 @@ export class AdvisorSettingsSelector implements Component, Focusable {
   set focused(value: boolean) {
     this._focused = value;
     this.customInput.focused = value && this.editingCustom;
+    this.policiesInput.focused = value && this.editingPolicies;
   }
 
   constructor(options: AdvisorSettingsSelectorOptions) {
     this.selectedRow = 0;
     this.editingCustom = false;
+    this.editingPolicies = false;
+    this.policiesError = undefined;
     this.options = options;
     this.settings = { ...options.initial };
     this.contextIndex = Math.max(
@@ -246,6 +255,32 @@ export class AdvisorSettingsSelector implements Component, Focusable {
     this.customInput.onEscape = () => {
       this.editingCustom = false;
       this.customInput.focused = false;
+      this.options.tui.requestRender();
+    };
+    this.policiesInput.onSubmit = (value) => {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(value || "{}");
+      } catch {
+        this.policiesError = "Enter a valid JSON object.";
+        this.options.tui.requestRender();
+        return;
+      }
+      if (!isValidAdvisorToolPolicies(parsed)) {
+        this.policiesError =
+          "Use non-empty tool names with full, summary, or exclude values.";
+        this.options.tui.requestRender();
+        return;
+      }
+      this.settings.toolPolicies = parsed;
+      this.policiesError = undefined;
+      this.editingPolicies = false;
+      this.policiesInput.focused = false;
+      this.options.tui.requestRender();
+    };
+    this.policiesInput.onEscape = () => {
+      this.editingPolicies = false;
+      this.policiesInput.focused = false;
       this.options.tui.requestRender();
     };
   }
@@ -276,6 +311,19 @@ export class AdvisorSettingsSelector implements Component, Focusable {
     return index === this.selectedRow
       ? theme.fg("accent", theme.bold(text))
       : theme.fg("text", text);
+  }
+
+  private policyInputRows(width: number): string[] {
+    if (!this.editingPolicies) {
+      return [];
+    }
+    const rows = [
+      `    ${this.policiesInput.render(Math.max(10, width - 6))[0] || ""}`,
+    ];
+    if (this.policiesError) {
+      rows.push(`    ${this.options.theme.fg("error", this.policiesError)}`);
+    }
+    return rows;
   }
 
   render(width: number): string[] {
@@ -361,13 +409,26 @@ export class AdvisorSettingsSelector implements Component, Focusable {
         String(this.settings.toolResultMaxBytes ?? 50 * 1024),
         15
       ),
+      this.row(
+        "Redact common secrets",
+        onOff(this.settings.redactSecrets ?? false),
+        16
+      ),
+      this.row(
+        "Tool disclosure policies",
+        Object.keys(this.settings.toolPolicies ?? {}).length
+          ? "Exact names configured"
+          : "All tools: full",
+        17
+      ),
     ];
     if (this.editingCustom) {
       rows.push(
         `    ${this.customInput.render(Math.max(10, width - 6))[0] || ""}`
       );
     }
-    rows.push(this.row("Save changes", "", 16));
+    rows.push(...this.policyInputRows(width));
+    rows.push(this.row("Save changes", "", 18));
     return [
       theme.fg("accent", theme.bold("  Advisor settings")),
       "",
@@ -387,10 +448,14 @@ export class AdvisorSettingsSelector implements Component, Focusable {
       this.customInput.handleInput(keyData);
       return;
     }
+    if (this.editingPolicies) {
+      this.policiesInput.handleInput(keyData);
+      return;
+    }
     if (matchesKey(keyData, Key.up)) {
       this.selectedRow = Math.max(0, this.selectedRow - 1);
     } else if (matchesKey(keyData, Key.down)) {
-      this.selectedRow = Math.min(16, this.selectedRow + 1);
+      this.selectedRow = Math.min(18, this.selectedRow + 1);
     } else if (matchesKey(keyData, Key.left)) {
       this.adjust(-1);
     } else if (matchesKey(keyData, Key.right)) {
@@ -403,7 +468,17 @@ export class AdvisorSettingsSelector implements Component, Focusable {
         tui.requestRender();
         return;
       }
-      if (this.selectedRow === 16) {
+      if (this.selectedRow === 17) {
+        this.editingPolicies = true;
+        this.policiesError = undefined;
+        this.policiesInput.setValue(
+          JSON.stringify(this.settings.toolPolicies ?? {})
+        );
+        this.policiesInput.focused = this.focused;
+        tui.requestRender();
+        return;
+      }
+      if (this.selectedRow === 18) {
         this.options.onSave({
           ...this.settings,
           contextMaxChars: this.currentContext().value,
@@ -499,6 +574,9 @@ export class AdvisorSettingsSelector implements Component, Focusable {
         this.settings.herdrIntegration = !(
           this.settings.herdrIntegration ?? true
         );
+        break;
+      case 16:
+        this.settings.redactSecrets = !(this.settings.redactSecrets ?? false);
         break;
       case 14: {
         const values = [0, 500, 1000, 2000, 5000, 10_000];

@@ -26,8 +26,10 @@ import {
   setAdvisorLoopThresholdRef,
   setAdvisorMaxCallsPerSessionRef,
   setAdvisorPlanGateRef,
+  setAdvisorRedactSecretsRef,
   setAdvisorRef,
   setAdvisorSessionSummaryRef,
+  setAdvisorToolPoliciesRef,
   setAdvisorToolResultMaxBytesRef,
   setAdvisorToolResultMaxLinesRef,
   setContextMaxCharsRef,
@@ -430,6 +432,8 @@ export const registerCommands = (
       setAdvisorHerdrIntegrationRef(settings.herdrIntegration ?? true);
       setAdvisorToolResultMaxLinesRef(settings.toolResultMaxLines ?? 2000);
       setAdvisorToolResultMaxBytesRef(settings.toolResultMaxBytes ?? 50 * 1024);
+      setAdvisorRedactSecretsRef(settings.redactSecrets ?? false);
+      setAdvisorToolPoliciesRef(settings.toolPolicies ?? {});
       const path = saveConfig(ctx);
       ctx.ui.notify(`Saved Advisor settings to ${path}`, "info");
     },

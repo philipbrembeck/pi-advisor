@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   capToolResult,
   recentConversation,
+  redactSecrets,
   textFrom,
 } from "../src/conversation.js";
 
@@ -89,6 +90,201 @@ describe("Conversation Module", () => {
     expect(result).toContain("d");
   });
 
+  test("redacts secrets from messages, tool arguments, and full results", () => {
+    const secret = "AKIAABCDEFGHIJKLMNOP";
+    const ctx = {
+      sessionManager: {
+        getBranch: () => [
+          {
+            message: { content: `token=${secret}`, role: "user" },
+            type: "message",
+          },
+          {
+            message: {
+              content: [
+                {
+                  arguments: { token: secret },
+                  name: "bash",
+                  type: "toolCall",
+                },
+              ],
+              role: "assistant",
+            },
+            type: "message",
+          },
+          {
+            message: {
+              content: `Bearer ${secret}`,
+              role: "toolResult",
+              toolName: "bash",
+            },
+            type: "message",
+          },
+        ],
+      },
+    } as any;
+    const result = recentConversation(
+      ctx,
+      Number.MAX_SAFE_INTEGER,
+      2000,
+      50 * 1024,
+      {},
+      true
+    );
+    expect(result).not.toContain(secret);
+    expect(result).toContain("[REDACTED SECRET]");
+    expect(redactSecrets("password=hunter2")).not.toContain("hunter2");
+    expect(redactSecrets('password="hunter2"')).toBe("[REDACTED SECRET]");
+  });
+
+  test("redacts every documented secret pattern without retaining the match", () => {
+    const secrets = [
+      "-----BEGIN PRIVATE KEY-----\nvery-private\n-----END PRIVATE KEY-----",
+      "Bearer bearer-token-value",
+      "api_key=api-key-value",
+      "https://alice:password@example.test/path",
+      "AKIAABCDEFGHIJKLMNOP",
+      "aws_secret_access_key=cloud-secret-value",
+    ];
+    for (const secret of secrets) {
+      const output = redactSecrets(secret);
+      expect(output).toContain("[REDACTED SECRET]");
+      expect(output).not.toContain("very-private");
+      expect(output).not.toContain("bearer-token-value");
+      expect(output).not.toContain("api-key-value");
+      expect(output).not.toContain("cloud-secret-value");
+      expect(output).not.toContain("alice:password");
+    }
+  });
+
+  test("redacts complete secrets before applying tool-output limits", () => {
+    const secret =
+      "-----BEGIN PRIVATE KEY-----\nvery-private\n-----END PRIVATE KEY-----";
+    const ctx = {
+      sessionManager: {
+        getBranch: () => [
+          {
+            message: { content: secret, role: "toolResult", toolName: "bash" },
+            type: "message",
+          },
+        ],
+      },
+    } as any;
+    const result = recentConversation(
+      ctx,
+      Number.MAX_SAFE_INTEGER,
+      2,
+      100,
+      {},
+      true
+    );
+    expect(result).toContain("[REDACTED SECRET]");
+    expect(result).not.toContain("BEGIN PRIVATE KEY");
+    expect(result).not.toContain("very-private");
+    expect(result).not.toContain("END PRIVATE KEY");
+  });
+
+  test("tool policies default to full and omit protected call arguments and output", () => {
+    const source = "private result bytes";
+    const callArguments = "private call argument";
+    const contextFor = (toolName: string) =>
+      ({
+        sessionManager: {
+          getBranch: () => [
+            {
+              message: {
+                content: [
+                  {
+                    arguments: { credential: callArguments },
+                    name: toolName,
+                    type: "toolCall",
+                  },
+                ],
+                role: "assistant",
+              },
+              type: "message",
+            },
+            {
+              message: { content: source, role: "toolResult", toolName },
+              type: "message",
+            },
+          ],
+        },
+      }) as any;
+    const full = recentConversation(
+      contextFor("custom"),
+      Number.MAX_SAFE_INTEGER,
+      2000,
+      50 * 1024,
+      {}
+    );
+    expect(full).toContain(callArguments);
+    expect(full).toContain(source);
+    const summary = recentConversation(
+      contextFor("bash"),
+      Number.MAX_SAFE_INTEGER,
+      2000,
+      50 * 1024,
+      { bash: "summary" }
+    );
+    expect(summary).toContain(
+      "arguments omitted by Advisor tool policy: summary"
+    );
+    expect(summary).toContain("status: success");
+    expect(summary).not.toContain(callArguments);
+    expect(summary).not.toContain(source);
+    const excluded = recentConversation(
+      contextFor("deploy"),
+      Number.MAX_SAFE_INTEGER,
+      2000,
+      50 * 1024,
+      { deploy: "exclude" }
+    );
+    expect(excluded).toContain("excluded by Advisor tool policy");
+    expect(excluded).not.toContain(callArguments);
+    expect(excluded).not.toContain(source);
+  });
+
+  test("preserves representative conversation bytes with privacy defaults", () => {
+    const ctx = {
+      sessionManager: {
+        getBranch: () => [
+          { message: { content: "first", role: "user" }, type: "message" },
+          {
+            message: {
+              content: [
+                { text: "second", type: "text" },
+                {
+                  arguments: { command: "pwd" },
+                  name: "bash",
+                  type: "toolCall",
+                },
+              ],
+              role: "assistant",
+            },
+            type: "message",
+          },
+          {
+            message: { content: "out", role: "toolResult", toolName: "bash" },
+            type: "message",
+          },
+        ],
+      },
+    } as any;
+    expect(
+      recentConversation(
+        ctx,
+        Number.MAX_SAFE_INTEGER,
+        2000,
+        50 * 1024,
+        {},
+        false
+      )
+    ).toBe(
+      'User: first\n\nExecutor: second\n[Tool Call: bash({"command":"pwd"})]\n\n[Tool Result for bash] (output):\nout'
+    );
+  });
+
   test("ALL preserves the complete semantic branch", () => {
     const ctx = {
       sessionManager: {
@@ -111,7 +307,13 @@ describe("Conversation Module", () => {
         ],
       },
     } as any;
-    const result = recentConversation(ctx, Number.MAX_SAFE_INTEGER);
+    const result = recentConversation(
+      ctx,
+      Number.MAX_SAFE_INTEGER,
+      2000,
+      50 * 1024,
+      {}
+    );
     expect(result).toContain("User: first");
     expect(result).toContain('[Tool Call: bash({"command":"pwd"})]');
   });

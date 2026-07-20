@@ -72,6 +72,10 @@ export const resolveAdvisorRequest = (question?: string) =>
 export const advisorMessageText = (conversation: string, question?: string) =>
   `${conversation ? `<conversation>\n${conversation}\n</conversation>` : ""}${question ? `\n\nTargeted focus:\n${question}` : ""}`;
 
+/** The sole reconstructed-context boundary for outgoing Advisor requests. */
+export const advisorRequestConversation = (ctx: ExtensionContext) =>
+  recentConversation(ctx, contextMaxCharsRef);
+
 export const renderAdvisorCallBox = (
   question: string | undefined,
   theme: Theme
@@ -272,7 +276,7 @@ const collectAdvisorResponse = async (
     throw new Error(`No API key for ${advisorRef}`);
   }
 
-  const conversation = recentConversation(ctx, contextMaxCharsRef);
+  const conversation = advisorRequestConversation(ctx);
   const messages: Message[] = [
     {
       content: [

@@ -8,7 +8,11 @@ import registerExtension, {
   runAdvisorGate,
 } from "../extensions/index.js";
 import { registerCommands } from "../src/commands.js";
-import { setAdvisorCollapseResponsesRef } from "../src/config.js";
+import {
+  setAdvisorCollapseResponsesRef,
+  setAdvisorRedactSecretsRef,
+  setAdvisorToolPoliciesRef,
+} from "../src/config.js";
 import {
   createHerdrNotificationRequest,
   HerdrAdvisorActivity,
@@ -18,6 +22,7 @@ import {
   ADVISOR_SYSTEM,
   adviceForDisplay,
   advisorMessageText,
+  advisorRequestConversation,
   gateFailureEffectForMode,
   parseAutomaticDecision,
   resolveAdvisorRequest,
@@ -487,6 +492,38 @@ describe("Extension Registration", () => {
     ).toContain("Targeted focus:\nCheck the migration");
   });
 
+  test("applies redaction at the Advisor request-context boundary", () => {
+    const secret = "AKIAABCDEFGHIJKLMNOP";
+    const ctx = {
+      sessionManager: {
+        getBranch: () => [
+          {
+            message: { content: `api_key=${secret}`, role: "user" },
+            type: "message",
+          },
+          {
+            message: {
+              content: secret,
+              role: "toolResult",
+              toolName: "custom",
+            },
+            type: "message",
+          },
+        ],
+      },
+    } as any;
+    setAdvisorRedactSecretsRef(true);
+    setAdvisorToolPoliciesRef({});
+    try {
+      const context = advisorRequestConversation(ctx);
+      expect(context).not.toContain(secret);
+      expect(context).toContain("[REDACTED SECRET]");
+    } finally {
+      setAdvisorRedactSecretsRef(false);
+      setAdvisorToolPoliciesRef({});
+    }
+  });
+
   test("injects only the enabled invocation rules into the active prompt", () => {
     const agentDir = mkdtempSync(join(tmpdir(), "pi-advisor-agent-"));
     const previousAgentDir = process.env.PI_CODING_AGENT_DIR;
@@ -573,18 +610,91 @@ describe("Extension Registration", () => {
       },
     });
     selector.handleInput("\u001b[C");
-    for (let index = 0; index < 16; index += 1) {
+    for (let index = 0; index < 18; index += 1) {
       selector.handleInput("\u001b[B");
     }
     selector.handleInput("\r");
-    expect(renderRequests).toBe(17);
+    expect(renderRequests).toBe(19);
     expect(saved.contextMaxChars).toBe(10_000);
     const screen = selector.render(80).join("\n");
     expect(screen).toContain("Advisor reasoning");
     expect(screen).toContain("Custom invocation");
     expect(screen).toContain("Gate failure mode");
     expect(screen).toContain("Herdr integration");
+    expect(screen).toContain("Redact common secrets");
+    expect(screen).toContain("Tool disclosure policies");
     expect(screen).toContain("▲");
+  });
+
+  test("preserves explicit privacy settings through the selector", () => {
+    let saved: any;
+    const selector = new AdvisorSettingsSelector({
+      effortLevels: ["Default (Model Default)"],
+      initial: {
+        collapseResponses: false,
+        completionGate: true,
+        contextMaxChars: 0,
+        failureGate: true,
+        planGate: true,
+        redactSecrets: true,
+        toolPolicies: { bash: "summary", deploy: "exclude" },
+      },
+      onCancel: () => undefined,
+      onSave: (settings) => {
+        saved = settings;
+      },
+      presets: [{ description: "No history", label: "0", value: 0 }],
+      theme: {
+        bold: (text: string) => text,
+        fg: (_color: string, text: string) => text,
+      } as any,
+      tui: { requestRender: () => undefined },
+    });
+    for (let index = 0; index < 18; index += 1) {
+      selector.handleInput("\u001b[B");
+    }
+    selector.handleInput("\r");
+    expect(saved).toMatchObject({
+      redactSecrets: true,
+      toolPolicies: { bash: "summary", deploy: "exclude" },
+    });
+  });
+
+  test("keeps invalid tool disclosure policies open with an actionable error", () => {
+    const selector = new AdvisorSettingsSelector({
+      effortLevels: ["Default (Model Default)"],
+      initial: {
+        collapseResponses: false,
+        completionGate: true,
+        contextMaxChars: 0,
+        failureGate: true,
+        planGate: true,
+      },
+      onCancel: () => undefined,
+      onSave: () => undefined,
+      presets: [{ description: "No history", label: "0", value: 0 }],
+      theme: {
+        bold: (text: string) => text,
+        fg: (_color: string, text: string) => text,
+      } as any,
+      tui: { requestRender: () => undefined },
+    });
+    for (let index = 0; index < 17; index += 1) {
+      selector.handleInput("\u001b[B");
+    }
+    selector.handleInput("\r");
+
+    (selector as any).policiesInput.onSubmit('{"bash":"invalid"}');
+    expect(selector.render(120).join("\n")).toContain(
+      "Use non-empty tool names with full, summary, or exclude values."
+    );
+    expect((selector as any).editingPolicies).toBe(true);
+
+    (selector as any).policiesInput.onSubmit("{");
+    expect(selector.render(120).join("\n")).toContain(
+      "Enter a valid JSON object."
+    );
+    expect((selector as any).editingPolicies).toBe(true);
   });
 
   test("edits the custom invocation rule inline", () => {
@@ -622,7 +732,7 @@ describe("Extension Registration", () => {
     selector.handleInput("o");
     selector.handleInput("y");
     selector.handleInput("\r");
-    for (let index = 0; index < 10; index += 1) {
+    for (let index = 0; index < 12; index += 1) {
       selector.handleInput("\u001b[B");
     }
     selector.handleInput("\r");
@@ -654,7 +764,7 @@ describe("Extension Registration", () => {
           selector.handleInput("\u001b[B");
         }
         selector.handleInput("\u001b[C");
-        for (let index = 0; index < 6; index += 1) {
+        for (let index = 0; index < 8; index += 1) {
           selector.handleInput("\u001b[B");
         }
         selector.handleInput("\r");

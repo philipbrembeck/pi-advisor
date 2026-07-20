@@ -4,6 +4,20 @@ All notable changes to this project are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.2.3
+
+### Added
+
+- Optional local secret redaction for reconstructed Advisor context, including user messages, assistant text and tool arguments, compaction summaries, and full tool results.
+- Exact-name Advisor tool disclosure policies: `full` includes call arguments and capped output; `summary` retains only result status and size metadata; `exclude` omits call details and output. Tools without a policy remain `full` for compatibility.
+- `/advisor-settings` controls for secret redaction and inline JSON editing of tool disclosure policies, with validation errors that keep invalid input open for correction.
+- Configuration validation, loading, and persistence for `advisorRedactSecrets` and `advisorToolPolicies`.
+
+### Changed
+
+- Redact eligible tool output before applying line and byte limits so truncated context cannot retain the beginning or end of a matched secret.
+- Reorganize the README around installation, first use, commands, automatic gate behavior, configuration, privacy boundaries, development, and releases.
+
 ## 0.2.2
 
 ### Fixed

@@ -14,6 +14,13 @@ export const DEFAULT_CONTEXT_MAX_CHARS = 15_000;
 export const MAX_CONTEXT_MAX_CHARS = Number.MAX_SAFE_INTEGER;
 export const DEFAULT_ADVISOR_TOOL_RESULT_MAX_LINES = DEFAULT_MAX_LINES;
 export const DEFAULT_ADVISOR_TOOL_RESULT_MAX_BYTES = DEFAULT_MAX_BYTES;
+export type AdvisorToolPolicy = "full" | "summary" | "exclude";
+export type AdvisorToolPolicies = Record<string, AdvisorToolPolicy>;
+export const ADVISOR_TOOL_POLICIES: AdvisorToolPolicy[] = [
+  "full",
+  "summary",
+  "exclude",
+];
 export type GateFailureMode =
   | "block-session"
   | "block-tool"
@@ -43,6 +50,8 @@ export let advisorFailureModeRef: GateFailureMode = "block-session";
 export let advisorHerdrIntegrationRef = true;
 export let advisorToolResultMaxLinesRef = DEFAULT_ADVISOR_TOOL_RESULT_MAX_LINES;
 export let advisorToolResultMaxBytesRef = DEFAULT_ADVISOR_TOOL_RESULT_MAX_BYTES;
+export let advisorRedactSecretsRef = false;
+export let advisorToolPoliciesRef: AdvisorToolPolicies = {};
 
 export const setExecutorRef = (ref: string) => {
   executorRef = ref;
@@ -119,6 +128,12 @@ export const setAdvisorToolResultMaxLinesRef = (value: number) => {
 export const setAdvisorToolResultMaxBytesRef = (value: number) => {
   advisorToolResultMaxBytesRef = value;
 };
+export const setAdvisorRedactSecretsRef = (enabled: boolean) => {
+  advisorRedactSecretsRef = enabled;
+};
+export const setAdvisorToolPoliciesRef = (policies: AdvisorToolPolicies) => {
+  advisorToolPoliciesRef = { ...policies };
+};
 
 /**
  * Returns the current live settings state. Use this at UI boundaries instead of
@@ -138,7 +153,9 @@ export const getAdvisorSettings = () => ({
   loopThreshold: advisorLoopThresholdRef,
   maxCallsPerSession: advisorMaxCallsPerSessionRef,
   planGate: advisorPlanGateRef,
+  redactSecrets: advisorRedactSecretsRef,
   sessionSummary: advisorSessionSummaryRef,
+  toolPolicies: { ...advisorToolPoliciesRef },
   toolResultMaxBytes: advisorToolResultMaxBytesRef,
   toolResultMaxLines: advisorToolResultMaxLinesRef,
 });
@@ -168,7 +185,9 @@ export interface AdvisorConfig {
   advisorLoopThreshold?: number;
   advisorMaxCallsPerSession?: number;
   advisorPlanGate?: boolean;
+  advisorRedactSecrets?: boolean;
   advisorSessionSummary?: boolean;
+  advisorToolPolicies?: AdvisorToolPolicies;
   advisorToolResultMaxBytes?: number;
   advisorToolResultMaxLines?: number;
   contextMaxChars?: number;
@@ -193,6 +212,8 @@ const CONFIG_KEYS = new Set<keyof AdvisorConfig>([
   "advisorSessionSummary",
   "advisorToolResultMaxBytes",
   "advisorToolResultMaxLines",
+  "advisorRedactSecrets",
+  "advisorToolPolicies",
   "contextMaxChars",
   "executor",
   "executorEffort",
@@ -207,6 +228,7 @@ const BOOLEAN_CONFIG_KEYS = [
   "advisorAutoLoopGate",
   "advisorSessionSummary",
   "advisorHerdrIntegration",
+  "advisorRedactSecrets",
 ] as const;
 const STRING_CONFIG_KEYS = [
   "executor",
@@ -260,6 +282,20 @@ const validateBooleanValues = (config: ConfigRecord, path: string) => {
       invalidConfigValue(path, key, "true or false");
     }
   }
+};
+
+export const isValidAdvisorToolPolicies = (
+  value: unknown
+): value is AdvisorToolPolicies => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  return Object.entries(value).every(
+    ([toolName, policy]) =>
+      toolName.trim().length > 0 &&
+      typeof policy === "string" &&
+      ADVISOR_TOOL_POLICIES.includes(policy as AdvisorToolPolicy)
+  );
 };
 
 const validateNumericValues = (config: ConfigRecord, path: string) => {
@@ -316,6 +352,16 @@ export const validateConfig = (
   validateBooleanValues(config, path);
   validateNumericValues(config, path);
   if (
+    config.advisorToolPolicies !== undefined &&
+    !isValidAdvisorToolPolicies(config.advisorToolPolicies)
+  ) {
+    invalidConfigValue(
+      path,
+      "advisorToolPolicies",
+      "a JSON object with non-empty tool names and full, summary, or exclude values"
+    );
+  }
+  if (
     config.gateFailureMode !== undefined &&
     !isValidGateFailureMode(config.gateFailureMode)
   ) {
@@ -344,6 +390,8 @@ const resetDefaults = () => {
   advisorHerdrIntegrationRef = true;
   advisorToolResultMaxLinesRef = DEFAULT_ADVISOR_TOOL_RESULT_MAX_LINES;
   advisorToolResultMaxBytesRef = DEFAULT_ADVISOR_TOOL_RESULT_MAX_BYTES;
+  advisorRedactSecretsRef = false;
+  advisorToolPoliciesRef = {};
 };
 
 const applyOptionalConfig = <Key extends keyof AdvisorConfig>(
@@ -426,6 +474,12 @@ const applyConfig = (config: AdvisorConfig) => {
     "advisorToolResultMaxBytes",
     setAdvisorToolResultMaxBytesRef
   );
+  applyOptionalConfig(
+    config,
+    "advisorRedactSecrets",
+    setAdvisorRedactSecretsRef
+  );
+  applyOptionalConfig(config, "advisorToolPolicies", setAdvisorToolPoliciesRef);
 };
 
 const readConfig = (path: string): AdvisorConfig => {
@@ -488,7 +542,9 @@ export const saveConfig = (ctx: ExtensionContext) => {
       ? {}
       : { advisorMaxCallsPerSession: advisorMaxCallsPerSessionRef }),
     advisorHerdrIntegration: advisorHerdrIntegrationRef,
+    advisorRedactSecrets: advisorRedactSecretsRef,
     advisorSessionSummary: advisorSessionSummaryRef,
+    advisorToolPolicies: advisorToolPoliciesRef,
     advisorToolResultMaxBytes: advisorToolResultMaxBytesRef,
     advisorToolResultMaxLines: advisorToolResultMaxLinesRef,
     gateFailureMode: advisorFailureModeRef,

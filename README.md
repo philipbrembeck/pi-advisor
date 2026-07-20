@@ -1,84 +1,109 @@
 # pi-advisor
 
 <div align="center">
-<img src="https://raw.githubusercontent.com/philipbrembeck/pi-advisor/refs/heads/main/assets/screenshot.png" alt="Pi Advisor Flow Screenshot" width="600">
+  <img src="https://raw.githubusercontent.com/philipbrembeck/pi-advisor/refs/heads/main/assets/screenshot.png" alt="Pi Advisor consultation in the terminal" width="760">
+
+A configurable second-opinion workflow for <a href="https://github.com/earendil-works/pi">Pi</a> coding agents.
+
 </div>
 
-An on-demand Advisor model flow for autonomous **Pi** coding agents.
+Keep the work to the executor model, while the advisor steers it.
 
 This extension introduces a strategic "Executor/Advisor" workflow, inspired by Claudes [Advisor](https://code.claude.com/docs/en/advisor).
 
-The primary agent (the Executor) acts, writes code, and executes tools. Whenever the Executor encounters high risk, ambiguity, or potential loops, it MUST escalate the scenario to a smarter, second-opinion LLM (the Advisor) for strategic guidance.
+`pi-advisor-flow` keeps one model focused on execution and makes a second, smarter model available for consequential decisions, stalled work, and final reviews. The Executor still owns the work. The Advisor provides a concise review, answers questions and can provide help; it does not take over planning or run tools.
 
-[Read more about it here](https://philipbrembeck.com/writings/2026/07/only-as-much-intelligence-as-you-need).
+[Read more about Advisors here](https://philipbrembeck.com/writings/2026/07/only-as-much-intelligence-as-you-need).
 
-## Installation
+## Install
 
-Install the package directly into your global Pi agent environment:
-
-### From NPM
+Install into your Pi agent environment:
 
 ```bash
+# npm
 pi install npm:pi-advisor-flow
-```
 
-### From Git
-
-```bash
+# GitHub
 pi install git:github.com/philipbrembeck/pi-advisor.git
-```
 
-### From Local Folder (For Development)
-
-```bash
+# local checkout, useful during development
 pi install /path/to/pi-advisor
 ```
 
-## Usage & Commands
+Restart or reload Pi after installation, then run `/advisor` in a session.
 
-Once installed, the following commands are available inside the Pi terminal:
+## Start using it
 
-### `/advisor`
+1. Run `/advisor` to enable the flow and register `ask_advisor`.
+2. Run `/advisor-models` to choose the Executor and Advisor models.
+3. Run `/advisor-settings` to set context, gates, privacy controls, and output limits.
 
-Enables the Advisor flow. Switches the primary model to the configured Executor model and registers the `ask_advisor` tool.
+Enable with models in one command when preferred:
 
-- _Example:_ `/advisor executor=anthropic/claude-sonnet-5 advisor=openai/gpt-5.6-sol`
-- _Context size:_ `/advisor contextMaxChars=30000` uses up to 30,000 characters of the reconstructed conversation for each consultation. `0` disables history; `Number.MAX_SAFE_INTEGER` represents the complete branch. Larger values increase request cost and can exceed the Advisor model's context window.
+```text
+/advisor executor=anthropic/claude-sonnet-5 advisor=openai/gpt-5.6-sol
+```
 
-### `/advisor-manual [focus]`
+`/advisor contextMaxChars=30000` sets the reconstructed-context limit for the current session. Use `0` for no history. The `ALL` option in settings represents the complete current branch and is still subject to the Advisor model's context limit.
 
-Starts an Advisor consultation in parallel without interrupting the Executor's active tool work. An optional `focus` is passed to the Advisor; when it completes, the advice is delivered to the Executor before its next model call. This works while the Executor is mid-turn.
+## Commands
 
-### `/advisor-settings`
-
-Opens a single keyboard-navigable settings screen. It includes a Claude Code-style context slider with `0`, `10k`, `25k`, `100k`, `200k`, and `ALL`; `0` sends no reconstructed history and `ALL` sends the complete current branch, subject to the Advisor model's context limit.
-
-It also configures Advisor reasoning effort, whether long Advisor responses collapse to a short preview (`Ctrl+O` expands them), and each built-in invocation gate independently (consequential plans, repeated failures, and completion review). It includes controls for critical-response blocking, the automatic loop gate and its repeat threshold, a per-session Advisor-call limit, and the local Session Advisor Summary. Response collapsing is off by default. You can add one custom natural-language invocation rule. Settings persist in `advisor.json`.
-
-### `/advisor-models`
-
-Opens an interactive, scrollable fuzzy-search picker in the TUI to choose:
-
-1. Executor Model & Reasoning Effort
-2. Advisor Model & Reasoning Effort
-
-Saves and persists your configuration to `~/.pi/agent/advisor.json`.
+| Command                   | Purpose                                                                                                                                         |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/advisor`                | Enable the flow, select the configured Executor, and register `ask_advisor`. Accepts `executor=`, `advisor=`, and `contextMaxChars=` overrides. |
+| `/advisor-manual [focus]` | Start a parallel Advisor consultation without interrupting the current Executor turn.                                                           |
+| `/advisor-models`         | Choose Executor and Advisor models plus their reasoning effort.                                                                                 |
+| `/advisor-settings`       | Open all Advisor settings in one keyboard-navigable screen.                                                                                     |
+| `/advisor-off`            | Disable the flow and remove `ask_advisor` from the active session.                                                                              |
 
 ### `ask_advisor`
 
-The Executor can call `ask_advisor` with an empty object for a general review of the current task and conversation, or provide `question` for targeted feedback. The Advisor is a brief second opinion: the Executor investigates and forms its own candidate direction first, then uses the Advisor to challenge assumptions and validate a consequential next step. It should not delegate the entire plan or task.
+The Executor calls `ask_advisor({})` for a general review of the current task and reconstructed conversation. It can pass a `question` for a targeted review.
 
-Normal Advisor consultations return the provider's final Markdown unchanged. They never parse JSON, synthesize a verdict, or block Executor work. Only automatic loop gates use machine-readable decisions: the first non-empty line must be `Decision: proceed`, `Decision: revise`, or `Decision: blocked`; malformed, missing, duplicate, or contradictory decisions are explicit gate failures.
+Use the Advisor after the Executor has investigated and formed a candidate direction. It is intended to challenge assumptions, expose risks, and confirm the next verification step—not to replace the Executor's work.
 
-### Automatic loop gate
+Normal consultations preserve the provider's final Markdown. They do not parse a verdict or block execution.
 
-When enabled, the loop gate consults the Advisor after the configured number of consecutive calls with the same normalized tool signature (default: three). A `proceed` decision resets the repetition counter and allows the call. `revise` blocks only the repeated tool action; `blocked` can block the session according to the configured policy. Gate failures default to `block-session` and may be changed to `block-tool` or `warn-and-continue`. Normalization is allowlisted: object keys are deterministic, arrays retain order, and only volatile IDs/timestamps, temporary paths, and safe shell whitespace are normalized.
+## Automatic loop gate
 
-Every manual, Executor-requested, and automatic Advisor invocation consumes one shared session budget. The default is unlimited; a finite budget appears as used/remaining in the Executor instructions and local summary. The optional Session Advisor Summary is local, in-memory only, and appears after a non-blocked settled run; it is never persisted or sent to Herdr. It separates Markdown advice from gate decisions and records trigger, model, usage/cost when available, failure, budget, and execution effect.
+The optional loop gate detects consecutive calls with the same normalized tool signature. By default, it consults the Advisor after three repeats.
 
-### Context configuration
+Unlike ordinary consultations, a loop-gate reply must start with exactly one decision header:
 
-The selected configuration is saved as `advisor.json` in the Pi agent directory (or an existing trusted project configuration). `/advisor-models` and `/advisor-settings` share this file:
+```text
+Decision: proceed
+Decision: revise
+Decision: blocked
+```
+
+| Decision  | Effect                                              |
+| --------- | --------------------------------------------------- |
+| `proceed` | Reset the repeat counter and allow the tool action. |
+| `revise`  | Block the repeated tool action.                     |
+| `blocked` | Apply the configured gate-failure policy.           |
+
+Malformed, missing, duplicate, or contradictory decisions are gate failures. The same policy also applies when the Advisor is unavailable or the shared call budget is exhausted.
+
+| Failure mode              | Effect                              |
+| ------------------------- | ----------------------------------- |
+| `block-session` (default) | Block the session.                  |
+| `block-tool`              | Block only the current tool action. |
+| `warn-and-continue`       | Show a warning and continue.        |
+
+| Condition                                                | `block-session` | `block-tool`      | `warn-and-continue` |
+| -------------------------------------------------------- | --------------- | ----------------- | ------------------- |
+| Advisor unavailable or timed out                         | Block session   | Block tool action | Warn and continue   |
+| Missing, malformed, duplicate, or contradictory decision | Block session   | Block tool action | Warn and continue   |
+| Shared budget exhausted                                  | Block session   | Block tool action | Warn and continue   |
+| `Decision: blocked`                                      | Block session   | Block tool action | Warn and continue   |
+
+`advisorBlockOnBlocked` controls whether a session block immediately aborts the active run. It never turns a session block into a tool-only block.
+
+## Settings and configuration
+
+`/advisor-models` and `/advisor-settings` save to `advisor.json` in the Pi agent directory. If a trusted project already has its own configuration, Pi uses that file instead.
+
+All fields are optional. This example shows the available settings and their normal defaults:
 
 ```json
 {
@@ -87,60 +112,76 @@ The selected configuration is saved as `advisor.json` in the Pi agent directory 
   "executorEffort": "medium",
   "advisorEffort": "xhigh",
   "contextMaxChars": 25000,
+
   "advisorPlanGate": true,
   "advisorFailureGate": true,
   "advisorCompletionGate": true,
-  "advisorCollapseResponses": false,
   "advisorCustomInvocation": "before changing a production deployment",
-  "advisorBlockOnBlocked": true,
+  "advisorCollapseResponses": false,
+
   "advisorAutoLoopGate": true,
   "advisorLoopThreshold": 3,
   "advisorMaxCallsPerSession": 5,
-  "advisorSessionSummary": true,
+  "advisorBlockOnBlocked": true,
   "gateFailureMode": "block-session",
+
+  "advisorSessionSummary": true,
   "advisorHerdrIntegration": true,
   "advisorToolResultMaxLines": 2000,
-  "advisorToolResultMaxBytes": 51200
+  "advisorToolResultMaxBytes": 51200,
+
+  "advisorRedactSecrets": false,
+  "advisorToolPolicies": {
+    "bash": "summary",
+    "deploy": "exclude"
+  }
 }
 ```
 
-All fields are optional. `executor`, `advisor`, and their effort settings are managed by `/advisor-models`. `/advisor-settings` manages `advisorEffort`, `contextMaxChars`, the three invocation-gate booleans, `advisorCollapseResponses`, `advisorCustomInvocation`, `advisorBlockOnBlocked`, `advisorAutoLoopGate`, `advisorLoopThreshold`, `advisorMaxCallsPerSession`, `advisorSessionSummary`, `gateFailureMode`, `advisorHerdrIntegration`, and the tool-result line/byte limits.
+### Context and limits
 
-`contextMaxChars` is a soft character budget: it preserves complete semantic entries and adds an older-context omission marker rather than starting mid-message. Its default is 15,000, `0` omits history, and `9007199254740991` means ALL. Oversized tool results default to Pi's 2,000-line/50 KiB limits and preserve beginning/end sections with an omission marker; `advisorToolResultMaxLines` and `advisorToolResultMaxBytes` override them. `advisorLoopThreshold` must be at least `2` and defaults to `3`. Omit `advisorMaxCallsPerSession` for an unlimited shared budget; otherwise it must be a non-negative safe integer. `gateFailureMode` accepts `block-session`, `block-tool`, or `warn-and-continue`, defaulting to `block-session`. Herdr integration and the notification/activity/blocked metadata paths default to enabled; failure notifications use sanitized `notification.show` requests and can be disabled with `advisorHerdrIntegration`. Critical blocking, the automatic loop gate, and the Session Advisor Summary default to `true`. Unknown or invalid configuration keys fail at startup with the file, key, accepted values, and remediation; save operations preserve unknown fields.
+- `contextMaxChars` defaults to `15000`. It preserves complete semantic entries and adds an omission marker rather than splitting a message.
+- Set `contextMaxChars` to `0` to omit reconstructed history. `9007199254740991` is the persisted value for `ALL`.
+- Tool results default to Pi's `2000` lines and `50 KiB` limits. Oversized results preserve their beginning and end with an omission marker.
+- `advisorLoopThreshold` is an integer of at least `2`; its default is `3`.
+- Omit `advisorMaxCallsPerSession` for an unlimited shared budget. Otherwise it must be a non-negative safe integer.
 
-### `/advisor-off`
+### Privacy controls
 
-Disables the Advisor flow, removing the `ask_advisor` tool from the active session.
+Advisor context can contain user messages, tool calls, and tool results. Configure disclosure deliberately:
 
-## Publishing releases
+- `advisorRedactSecrets` defaults to `false`. When enabled, pi-advisor locally redacts common credential patterns before including context in an Advisor request.
+- `advisorToolPolicies` matches an **exact tool name**. Each tool may use `full`, `summary`, or `exclude`.
+  - `full` includes the call arguments and capped result output.
+  - `summary` omits call arguments and result output but includes result status and size metadata.
+  - `exclude` omits both call details and output.
+- Tools not listed in `advisorToolPolicies`, including custom and newly added tools, use `full` for backward compatibility.
 
-CI manages `vX.Y.Z` release tags from the version in `package.json`; contributors must not create or push release tags manually. The release workflow verifies the version, type-checks, tests, and then publishes:
+Redaction and output limits reduce accidental disclosure; they are not a data-classification system and cannot guarantee every secret is found. Use tool policies for content that must not be sent to the Advisor.
 
-- `pi-advisor-flow` to [npm](https://www.npmjs.com/package/pi-advisor-flow)
-- `@philipbrembeck/pi-advisor-flow` to GitHub Packages, which makes the package appear in this repository’s **Packages** sidebar
+### Session summary and Herdr
 
-## Local Development
+The optional Session Advisor Summary is local and in-memory only. It appears after a non-blocked settled run and is never persisted.
 
-`pi-advisor` uses Bun for rapid testing and TypeScript. Standard commands apply:
+It distinguishes regular Markdown advice from gate decisions and records the trigger, model, usage/cost when available, failures, budget, and execution effect.
 
-### 1. Clone the repository
+[Herdr](https://github.com/ogulcancelik/herdr) integration is enabled by default. It reports Advisor activity and blocked state through Herdr's metadata paths; disable it with `advisorHerdrIntegration`.
+
+## Development
 
 ```bash
 git clone git@github.com:philipbrembeck/pi-advisor.git
 cd pi-advisor
-```
-
-### 2. Install dependencies
-
-```bash
 bun install
+
+bun test
+bun run typecheck
+bun run lint
 ```
 
-### 3. Run type-checks & tests
+## Links
 
-Verify code-splitting correctness and registration logic:
-
-```bash
-bun test            # Run unit tests
-bun run typecheck   # Perform strict TS checks
-```
+- [MIT LICENSE](LICENSE)
+- [Changelog](CHANGELOG.md)
+- [npm package](https://www.npmjs.com/package/pi-advisor-flow)
+- [Why use an Advisor flow?](https://philipbrembeck.com/writings/2026/07/only-as-much-intelligence-as-you-need)

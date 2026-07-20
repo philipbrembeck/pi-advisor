@@ -1,5 +1,8 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
+  type AdvisorToolPolicies,
+  advisorRedactSecretsRef,
+  advisorToolPoliciesRef,
   advisorToolResultMaxBytesRef,
   advisorToolResultMaxLinesRef,
   DEFAULT_ADVISOR_TOOL_RESULT_MAX_BYTES,
@@ -32,6 +35,29 @@ export const textFrom = (content: unknown): string =>
   contentParts(content).map(textFromPart).join("\n").trim();
 
 const byteLength = (value: string) => Buffer.byteLength(value, "utf8");
+
+const REDACTION_MARKER = "[REDACTED SECRET]";
+const SECRET_PATTERNS = [
+  /-----BEGIN(?: [A-Z0-9]+)? PRIVATE KEY-----[\s\S]*?-----END(?: [A-Z0-9]+)? PRIVATE KEY-----/gi,
+  /\bBearer\s+[A-Za-z0-9._~+/=-]{8,}/gi,
+  /\b(?:api[_-]?key|token|secret|password|passwd)\s*[:=]\s*(?:"[^"]*"|'[^']*'|[^\s"'&,;)}\]]+)/gi,
+  /([a-z][a-z0-9+.-]*:\/\/)[^\s/@:]+:[^\s/@]+@/gi,
+  /\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/g,
+  /\b(?:aws_secret_access_key|aws_session_token)\s*[:=]\s*[^\s"'&,;)}\]]+/gi,
+] as const;
+
+/** Redacts common credential forms locally; it is not a data-classification system. */
+export const redactSecrets = (value: string): string => {
+  let redacted = value;
+  for (const pattern of SECRET_PATTERNS) {
+    redacted = redacted.replace(pattern, (_match, scheme) =>
+      typeof scheme === "string"
+        ? `${scheme}${REDACTION_MARKER}@`
+        : REDACTION_MARKER
+    );
+  }
+  return redacted;
+};
 
 export interface ToolResultTruncation {
   content: string;
@@ -122,18 +148,35 @@ export const capToolResult = (
   };
 };
 
-const assistantEntry = (message: RecordValue): string | undefined => {
+const assistantEntry = (
+  message: RecordValue,
+  policies: AdvisorToolPolicies,
+  redact: boolean
+): string | undefined => {
   const parts: string[] = [];
   const text = textFrom(message.content);
   if (text) {
-    parts.push(text);
+    parts.push(redact ? redactSecrets(text) : text);
   }
   for (const part of contentParts(message.content)) {
     if (!isRecord(part) || part.type !== "toolCall") {
       continue;
     }
+    const toolName = typeof part.name === "string" ? part.name : "unknown";
+    const policy = policies[toolName] ?? "full";
+    if (policy === "exclude") {
+      parts.push(`[Tool Call: ${toolName}] (excluded by Advisor tool policy)`);
+      continue;
+    }
+    if (policy === "summary") {
+      parts.push(
+        `[Tool Call: ${toolName}] (arguments omitted by Advisor tool policy: summary)`
+      );
+      continue;
+    }
+    const argumentsText = JSON.stringify(part.arguments) ?? "undefined";
     parts.push(
-      `[Tool Call: ${String(part.name)}(${JSON.stringify(part.arguments)})]`
+      `[Tool Call: ${toolName}(${redact ? redactSecrets(argumentsText) : argumentsText})]`
     );
   }
   return parts.length > 0 ? `Executor: ${parts.join("\n")}` : undefined;
@@ -142,29 +185,47 @@ const assistantEntry = (message: RecordValue): string | undefined => {
 const toolResultEntry = (
   message: RecordValue,
   toolResultMaxLines: number,
-  toolResultMaxBytes: number
+  toolResultMaxBytes: number,
+  policies: AdvisorToolPolicies,
+  redact: boolean
 ): string => {
-  const status = message.isError ? "Error " : "";
+  const status = message.isError ? "error" : "success";
+  const toolName =
+    typeof message.toolName === "string" ? message.toolName : "unknown";
+  const policy = policies[toolName] ?? "full";
+  const source = textFrom(message.content);
+  if (policy === "exclude") {
+    return `[Tool Result for ${toolName}] (excluded by Advisor tool policy)`;
+  }
+  if (policy === "summary") {
+    const capped = capToolResult(
+      source,
+      toolResultMaxLines,
+      toolResultMaxBytes
+    );
+    return `[Tool Result for ${toolName}] (output omitted by Advisor tool policy: summary; status: ${status}; ${capped.totalLines} lines, ${capped.totalBytes} bytes; source output was${capped.truncated ? "" : " not"} truncated)`;
+  }
+  const disclosed = redact ? redactSecrets(source) : source;
   const capped = capToolResult(
-    textFrom(message.content),
+    disclosed,
     toolResultMaxLines,
     toolResultMaxBytes
   );
-  const toolName =
-    typeof message.toolName === "string" ? message.toolName : "unknown";
-  return `[Tool Result for ${toolName}] (${status}output):\n${capped.content}`;
+  return `[Tool Result for ${toolName}] (${message.isError ? "Error " : ""}output):\n${capped.content}`;
 };
 
 const conversationEntry = (
   entry: unknown,
   toolResultMaxLines: number,
-  toolResultMaxBytes: number
+  toolResultMaxBytes: number,
+  policies: AdvisorToolPolicies,
+  redact: boolean
 ): string | undefined => {
   if (!isRecord(entry)) {
     return;
   }
   if (entry.type === "compaction" && typeof entry.summary === "string") {
-    return `[System Compaction Summary]: ${entry.summary}`;
+    return `[System Compaction Summary]: ${redact ? redactSecrets(entry.summary) : entry.summary}`;
   }
   if (entry.type !== "message" || !isRecord(entry.message)) {
     return;
@@ -172,13 +233,19 @@ const conversationEntry = (
   const { message } = entry;
   if (message.role === "user") {
     const text = textFrom(message.content);
-    return text ? `User: ${text}` : undefined;
+    return text ? `User: ${redact ? redactSecrets(text) : text}` : undefined;
   }
   if (message.role === "assistant") {
-    return assistantEntry(message);
+    return assistantEntry(message, policies, redact);
   }
   if (message.role === "toolResult" || message.role === "tool") {
-    return toolResultEntry(message, toolResultMaxLines, toolResultMaxBytes);
+    return toolResultEntry(
+      message,
+      toolResultMaxLines,
+      toolResultMaxBytes,
+      policies,
+      redact
+    );
   }
 };
 
@@ -208,7 +275,9 @@ export const recentConversation = (
   ctx: ExtensionContext,
   maxChars = 15_000,
   toolResultMaxLines = advisorToolResultMaxLinesRef,
-  toolResultMaxBytes = advisorToolResultMaxBytesRef
+  toolResultMaxBytes = advisorToolResultMaxBytesRef,
+  policies = advisorToolPoliciesRef,
+  redact = advisorRedactSecretsRef
 ): string => {
   if (maxChars === 0) {
     return "";
@@ -216,7 +285,13 @@ export const recentConversation = (
   const entries = ctx.sessionManager
     .getBranch()
     .map((entry) =>
-      conversationEntry(entry, toolResultMaxLines, toolResultMaxBytes)
+      conversationEntry(
+        entry,
+        toolResultMaxLines,
+        toolResultMaxBytes,
+        policies,
+        redact
+      )
     )
     .filter((entry): entry is string => entry !== undefined);
   return selectRecentEntries(entries, maxChars);
