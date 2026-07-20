@@ -1,14 +1,16 @@
 {
   "devDependencies": {
+    "@biomejs/biome": "2.5.3",
     "@earendil-works/pi-ai": "^0.80.7",
     "@earendil-works/pi-coding-agent": "^0.80.7",
     "@earendil-works/pi-tui": "^0.80.7",
     "@types/node": "^20.11.0",
     "bun-types": "^1.0.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.1.0",
     "typebox": "^1.1.38",
     "typescript": "^5.3.3",
-    "ultracite": "7.9.4",
-    "@biomejs/biome": "2.5.3"
+    "ultracite": "7.9.4"
   },
   "name": "pi-advisor-flow",
   "peerDependencies": {
@@ -21,7 +23,13 @@
     "test": "bun test",
     "typecheck": "tsc --noEmit",
     "format": "bunx ultracite fix --linter-enabled=false",
-    "package:check": "npm pack --dry-run --json >/dev/null"
+    "lint": "bunx ultracite check",
+    "lint:fix": "bunx ultracite fix",
+    "package:check": "npm pack --dry-run --json >/dev/null",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{json,jsonc,ts}": "bun run lint:fix --"
   },
   "type": "module",
   "version": "0.2.0",

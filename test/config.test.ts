@@ -11,6 +11,10 @@ import { join } from "node:path";
 import { CONFIG_DIR_NAME } from "@earendil-works/pi-coding-agent";
 
 const AGENT_DIR_ENV = "PI_CODING_AGENT_DIR";
+const INVALID_EXECUTOR_PATTERN = /executor.*provider\/model string/;
+const UNKNOWN_CONFIG_KEY_PATTERN = /unknown key.*unexpected/;
+const INVALID_FAILURE_MODE_PATTERN =
+  /block-session.*block-tool.*warn-and-continue/;
 
 import {
   advisorEffortRef,
@@ -25,6 +29,8 @@ import {
   DEFAULT_CONTEXT_MAX_CHARS,
   executorEffortRef,
   executorRef,
+  FALLBACK_ADVISOR,
+  FALLBACK_EXECUTOR,
   loadConfig,
   MAX_CONTEXT_MAX_CHARS,
   parseArgs,
@@ -119,7 +125,7 @@ describe("Config Module", () => {
     try {
       expect(() =>
         loadConfig({ cwd, isProjectTrusted: () => true } as any)
-      ).toThrow(/executor.*provider\/model string/);
+      ).toThrow(INVALID_EXECUTOR_PATTERN);
     } finally {
       if (previousAgentDir === undefined) {
         delete process.env[AGENT_DIR_ENV];
@@ -136,6 +142,36 @@ describe("Config Module", () => {
     }
   });
 
+  test("ignores empty model and effort settings", () => {
+    const agentDir = mkdtempSync(join(tmpdir(), "pi-advisor-agent-"));
+    const previousAgentDir = process.env[AGENT_DIR_ENV];
+    process.env[AGENT_DIR_ENV] = agentDir;
+    writeFileSync(
+      join(agentDir, "advisor.json"),
+      JSON.stringify({
+        advisor: "",
+        advisorEffort: "",
+        executor: "",
+        executorEffort: "",
+      })
+    );
+
+    try {
+      loadConfig({ cwd: tmpdir(), isProjectTrusted: () => false } as any);
+      expect(executorRef).toBe(FALLBACK_EXECUTOR);
+      expect(advisorRef).toBe(FALLBACK_ADVISOR);
+      expect(executorEffortRef).toBeUndefined();
+      expect(advisorEffortRef).toBeUndefined();
+    } finally {
+      if (previousAgentDir === undefined) {
+        delete process.env[AGENT_DIR_ENV];
+      } else {
+        process.env[AGENT_DIR_ENV] = previousAgentDir;
+      }
+      rmSync(agentDir, { force: true, recursive: true });
+    }
+  });
+
   test("uses safe defaults and rejects unknown configuration keys with remediation", () => {
     expect(advisorFailureModeRef).toBe("block-session");
     expect(advisorHerdrIntegrationRef).toBe(true);
@@ -147,10 +183,10 @@ describe("Config Module", () => {
     );
     expect(() =>
       validateConfig({ unexpected: true }, "/tmp/advisor.json")
-    ).toThrow(/unknown key.*unexpected/);
+    ).toThrow(UNKNOWN_CONFIG_KEY_PATTERN);
     expect(() =>
       validateConfig({ gateFailureMode: "bad" }, "/tmp/advisor.json")
-    ).toThrow(/block-session.*block-tool.*warn-and-continue/);
+    ).toThrow(INVALID_FAILURE_MODE_PATTERN);
   });
 
   test("saveConfig preserves unknown fields", () => {

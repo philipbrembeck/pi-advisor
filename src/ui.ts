@@ -5,12 +5,36 @@ import {
   fuzzyFilter,
   Input,
   Key,
+  type Keybindings,
+  type KeybindingsManager,
   matchesKey,
   truncateToWidth,
 } from "@earendil-works/pi-tui";
 
+interface RenderRequester {
+  requestRender: () => void;
+}
+interface SearchableModelSelectorOptions {
+  allOptions: string[];
+  keybindings: KeybindingsManager;
+  onCancel: () => void;
+  onSelect: (value: string) => void;
+  theme: Theme;
+  title: string;
+  tui: RenderRequester;
+}
+interface AdvisorSettingsSelectorOptions {
+  effortLevels: string[];
+  initial: AdvisorSettings;
+  onCancel: () => void;
+  onSave: (settings: AdvisorSettings) => void;
+  presets: ContextPreset[];
+  theme: Theme;
+  tui: RenderRequester;
+}
+
 export class SearchableModelSelector implements Component, Focusable {
-  private readonly tui: any;
+  private readonly tui: RenderRequester;
   private readonly searchInput: Input;
   private readonly allOptions: string[];
   private filteredOptions: string[];
@@ -19,26 +43,18 @@ export class SearchableModelSelector implements Component, Focusable {
   private readonly onSelect: (value: string) => void;
   private readonly onCancel: () => void;
   private readonly theme: Theme;
-  private readonly keybindings: any;
+  private readonly keybindings: KeybindingsManager;
   private _focused = false;
 
-  public get focused(): boolean {
+  get focused(): boolean {
     return this._focused;
   }
-  public set focused(val: boolean) {
+  set focused(val: boolean) {
     this._focused = val;
     this.searchInput.focused = val;
   }
 
-  constructor(options: {
-    tui: any;
-    title: string;
-    allOptions: string[];
-    theme: Theme;
-    keybindings: any;
-    onSelect: (value: string) => void;
-    onCancel: () => void;
-  }) {
+  constructor(options: SearchableModelSelectorOptions) {
     this.tui = options.tui;
     this.title = options.title;
     this.allOptions = options.allOptions;
@@ -85,7 +101,7 @@ export class SearchableModelSelector implements Component, Focusable {
         )
       );
       const endIndex = Math.min(startIndex + maxVisible, total);
-      for (let i = startIndex; i < endIndex; i++) {
+      for (let i = startIndex; i < endIndex; i += 1) {
         const item = this.filteredOptions[i];
         if (i === this.selectedIndex) {
           lines.push(
@@ -111,44 +127,53 @@ export class SearchableModelSelector implements Component, Focusable {
   }
 
   handleInput(keyData: string): void {
-    const kb = this.keybindings;
-    if (kb.matches(keyData, "tui.select.up") || keyData === "\u001b[A") {
-      if (this.filteredOptions.length > 0) {
-        this.selectedIndex =
-          this.selectedIndex === 0
-            ? this.filteredOptions.length - 1
-            : this.selectedIndex - 1;
-      }
-      this.tui.requestRender();
-    } else if (
-      kb.matches(keyData, "tui.select.down") ||
-      keyData === "\u001b[B"
-    ) {
-      if (this.filteredOptions.length > 0) {
-        this.selectedIndex =
-          this.selectedIndex === this.filteredOptions.length - 1
-            ? 0
-            : this.selectedIndex + 1;
-      }
-      this.tui.requestRender();
-    } else if (
-      kb.matches(keyData, "tui.select.confirm") ||
-      keyData === "\n" ||
+    if (this.matchesAction(keyData, "tui.select.up", "\u001b[A")) {
+      this.moveSelection(-1);
+      return;
+    }
+    if (this.matchesAction(keyData, "tui.select.down", "\u001b[B")) {
+      this.moveSelection(1);
+      return;
+    }
+    if (
+      this.matchesAction(keyData, "tui.select.confirm", "\n") ||
       keyData === "\r"
     ) {
       if (this.filteredOptions.length > 0) {
         this.onSelect(this.filteredOptions[this.selectedIndex]);
       }
-    } else if (
-      kb.matches(keyData, "tui.select.cancel") ||
-      keyData === "\u001b"
-    ) {
-      this.onCancel();
-    } else {
-      this.searchInput.handleInput(keyData);
-      this.selectedIndex = 0;
-      this.tui.requestRender();
+      return;
     }
+    if (this.matchesAction(keyData, "tui.select.cancel", "\u001b")) {
+      this.onCancel();
+      return;
+    }
+    this.searchInput.handleInput(keyData);
+    this.selectedIndex = 0;
+    this.tui.requestRender();
+  }
+
+  private matchesAction(
+    keyData: string,
+    action: keyof Keybindings,
+    fallback: string
+  ) {
+    return this.keybindings.matches(keyData, action) || keyData === fallback;
+  }
+
+  private moveSelection(direction: -1 | 1) {
+    if (this.filteredOptions.length > 0) {
+      const lastIndex = this.filteredOptions.length - 1;
+      const nextIndex = this.selectedIndex + direction;
+      if (nextIndex < 0) {
+        this.selectedIndex = lastIndex;
+      } else if (nextIndex > lastIndex) {
+        this.selectedIndex = 0;
+      } else {
+        this.selectedIndex = nextIndex;
+      }
+    }
+    this.tui.requestRender();
   }
 }
 
@@ -178,33 +203,27 @@ export interface AdvisorSettings {
 }
 
 export class AdvisorSettingsSelector implements Component, Focusable {
-  private selectedRow = 0;
+  private selectedRow: number;
   private contextIndex: number;
   private effortIndex: number;
   private readonly settings: AdvisorSettings;
   private readonly customInput = new Input();
-  private editingCustom = false;
+  private editingCustom: boolean;
   private _focused = false;
+  private readonly options: AdvisorSettingsSelectorOptions;
 
-  public get focused() {
+  get focused(): boolean {
     return this._focused;
   }
-  public set focused(value: boolean) {
+  set focused(value: boolean) {
     this._focused = value;
     this.customInput.focused = value && this.editingCustom;
   }
 
-  constructor(
-    private readonly options: {
-      tui: any;
-      theme: Theme;
-      presets: ContextPreset[];
-      effortLevels: string[];
-      initial: AdvisorSettings;
-      onSave: (settings: AdvisorSettings) => void;
-      onCancel: () => void;
-    }
-  ) {
+  constructor(options: AdvisorSettingsSelectorOptions) {
+    this.selectedRow = 0;
+    this.editingCustom = false;
+    this.options = options;
     this.settings = { ...options.initial };
     this.contextIndex = Math.max(
       0,
@@ -256,8 +275,8 @@ export class AdvisorSettingsSelector implements Component, Focusable {
     const track = Array.from({ length: trackWidth }, () => "─");
     track[positions[this.contextIndex]] = "▲";
     const labels = Array.from({ length: trackWidth }, () => " ");
-    for (let index = 0; index < presets.length; index++) {
-      const label = presets[index].label;
+    for (let index = 0; index < presets.length; index += 1) {
+      const { label } = presets[index];
       const start = Math.max(
         0,
         Math.min(
@@ -265,7 +284,7 @@ export class AdvisorSettingsSelector implements Component, Focusable {
           positions[index] - Math.floor(label.length / 2)
         )
       );
-      for (let char = 0; char < label.length; char++) {
+      for (let char = 0; char < label.length; char += 1) {
         labels[start + char] = label[char];
       }
     }
@@ -377,15 +396,17 @@ export class AdvisorSettingsSelector implements Component, Focusable {
         return;
       }
       if (this.selectedRow === 16) {
-        return this.options.onSave({
+        this.options.onSave({
           ...this.settings,
           contextMaxChars: this.currentContext().value,
           effort: this.options.effortLevels[this.effortIndex],
         });
+        return;
       }
       this.adjust(1);
     } else if (matchesKey(keyData, Key.escape)) {
-      return this.options.onCancel();
+      this.options.onCancel();
+      return;
     } else {
       return;
     }
@@ -488,6 +509,8 @@ export class AdvisorSettingsSelector implements Component, Focusable {
           values[Math.max(0, Math.min(values.length - 1, index + direction))];
         break;
       }
+      default:
+        break;
     }
   }
 }

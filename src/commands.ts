@@ -114,6 +114,22 @@ type ManualConsult = (
   question?: string,
   signal?: AbortSignal
 ) => Promise<{ markdown: string; thinkingText: string }>;
+type ThinkingLevel = Parameters<ExtensionAPI["setThinkingLevel"]>[0];
+
+const notify = (
+  ctx: ExtensionContext,
+  message: string,
+  level: "error" | "info" | "warning"
+) => {
+  if (ctx.hasUI) {
+    ctx.ui.notify(message, level);
+  }
+};
+
+const findConfiguredModel = (ctx: ExtensionContext, ref: string) => {
+  const [provider, modelId] = splitRef(ref);
+  return ctx.modelRegistry.find(provider, modelId);
+};
 
 export const registerCommands = (
   pi: ExtensionAPI,
@@ -125,6 +141,92 @@ export const registerCommands = (
     ((ctx, question, signal) =>
       consultAdvisor(ctx, question, signal, undefined, "manual"));
   const manualConsultations = new Set<AbortController>();
+
+  const startManualConsultation = (
+    ctx: ExtensionContext,
+    question: string | undefined,
+    controller: AbortController
+  ) => {
+    herdrAdvisorActivity.start();
+    return requestAdvisor(ctx, question, controller.signal)
+      .then(({ markdown }) => {
+        advisorSessionState.recordInvocation({
+          executionEffect: "continued",
+          kind: "markdown",
+          model: advisorRef,
+          trigger: "manual",
+        });
+        if (controller.signal.aborted) {
+          return;
+        }
+        pi.sendMessage(
+          {
+            content: `Manual Advisor consultation${question ? ` (${question})` : ""}:\n\n${markdown}`,
+            customType: "advisor-manual-result",
+            details: { advisor: advisorRef, question, text: markdown },
+            display: true,
+          },
+          {
+            // Steer lets the current turn finish its active work; the Executor sees
+            // the result before its next model call rather than being interrupted.
+            deliverAs: "steer",
+            triggerTurn: true,
+          }
+        );
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) {
+          return;
+        }
+        const message = error instanceof Error ? error.message : String(error);
+        advisorSessionState.recordInvocation({
+          executionEffect: "continued",
+          failure: "provider-error",
+          kind: "markdown",
+          model: advisorRef,
+          trigger: "manual",
+        });
+        notify(ctx, `Advisor consultation failed: ${message}`, "error");
+        notifyHerdrAdvisorFailure("Advisor consultation failed", message);
+      })
+      .finally(() => {
+        manualConsultations.delete(controller);
+        herdrAdvisorActivity.finish();
+      });
+  };
+
+  const activateAdvisor = async (args: string, ctx: ExtensionContext) => {
+    loadConfig(ctx);
+    const argumentError = parseArgs(args);
+    if (argumentError) {
+      notify(ctx, argumentError, "error");
+      return;
+    }
+    const executor = findConfiguredModel(ctx, executorRef);
+    if (!executor) {
+      notify(ctx, `Executor model not found: ${executorRef}`, "error");
+      return;
+    }
+    if (!findConfiguredModel(ctx, advisorRef)) {
+      notify(ctx, `Advisor model not found: ${advisorRef}`, "error");
+      return;
+    }
+    if (!(await pi.setModel(executor))) {
+      notify(ctx, `No API key for Executor ${executorRef}`, "error");
+      return;
+    }
+    if (executorEffortRef) {
+      pi.setThinkingLevel(executorEffortRef as ThinkingLevel);
+    }
+    if (!flowEnabled()) {
+      pi.setActiveTools([...pi.getActiveTools(), "ask_advisor"]);
+    }
+    notify(
+      ctx,
+      `Advisor flow ready — Executor: ${executorRef} (thinking: ${executorEffortRef || "default"}) · Advisor: ${advisorRef} (thinking: ${advisorEffortRef || "default"})`,
+      "info"
+    );
+  };
 
   pi.registerEntryRenderer?.(
     "advisor-manual-call",
@@ -175,15 +277,13 @@ export const registerCommands = (
   pi.registerCommand("advisor-manual", {
     description:
       "Consult the Advisor in parallel; accepts an optional focused question and fans its response out to the Executor",
-    handler: async (args, ctx) => {
+    handler: (args, ctx) => {
       loadConfig(ctx);
       if (!advisorSessionState.canConsult(advisorMaxCallsPerSessionRef)) {
         const message = "Advisor call budget exhausted for this session.";
-        if (ctx.hasUI) {
-          ctx.ui.notify(message, "warning");
-        }
+        notify(ctx, message, "warning");
         notifyHerdrAdvisorFailure("Advisor budget exhausted", message);
-        return;
+        return Promise.resolve();
       }
       advisorSessionState.consumeCall();
       const question = resolveAdvisorRequest(args);
@@ -196,103 +296,15 @@ export const registerCommands = (
       const controller = new AbortController();
       manualConsultations.add(controller);
       pi.appendEntry?.("advisor-manual-call", { question });
-
-      herdrAdvisorActivity.start();
-      void requestAdvisor(ctx, question, controller.signal)
-        .then(({ markdown }) => {
-          advisorSessionState.recordInvocation({
-            executionEffect: "continued",
-            kind: "markdown",
-            model: advisorRef,
-            trigger: "manual",
-          });
-          const advice = markdown;
-          if (controller.signal.aborted) {
-            return;
-          }
-          pi.sendMessage(
-            {
-              content: `Manual Advisor consultation${question ? ` (${question})` : ""}:\n\n${advice}`,
-              customType: "advisor-manual-result",
-              details: { advisor: advisorRef, question, text: advice },
-              display: true,
-            },
-            {
-              // Steer lets the current turn finish its active work; the Executor sees
-              // the result before its next model call rather than being interrupted.
-              deliverAs: "steer",
-              triggerTurn: true,
-            }
-          );
-        })
-        .catch((error: unknown) => {
-          if (controller.signal.aborted) {
-            return;
-          }
-          const message =
-            error instanceof Error ? error.message : String(error);
-          advisorSessionState.recordInvocation({
-            executionEffect: "continued",
-            failure: "provider-error",
-            kind: "markdown",
-            model: advisorRef,
-            trigger: "manual",
-          });
-          if (ctx.hasUI) {
-            ctx.ui.notify(`Advisor consultation failed: ${message}`, "error");
-          }
-          notifyHerdrAdvisorFailure("Advisor consultation failed", message);
-        })
-        .finally(() => {
-          manualConsultations.delete(controller);
-          herdrAdvisorActivity.finish();
-        });
+      startManualConsultation(ctx, question, controller);
+      return Promise.resolve();
     },
   });
 
   pi.registerCommand("advisor", {
     description:
       "Enable the Executor/Advisor flow and switch to the configured Executor model; accepts contextMaxChars=N",
-    handler: async (args, ctx) => {
-      loadConfig(ctx);
-      const argumentError = parseArgs(args);
-      if (argumentError) {
-        if (ctx.hasUI) {
-          ctx.ui.notify(argumentError, "error");
-        }
-        return;
-      }
-      const [provider, modelId] = splitRef(executorRef);
-      const executor = ctx.modelRegistry.find(provider, modelId);
-      if (!executor) {
-        return ctx.hasUI
-          ? ctx.ui.notify(`Executor model not found: ${executorRef}`, "error")
-          : undefined;
-      }
-      const [ap, am] = splitRef(advisorRef);
-      if (!ctx.modelRegistry.find(ap, am)) {
-        return ctx.hasUI
-          ? ctx.ui.notify(`Advisor model not found: ${advisorRef}`, "error")
-          : undefined;
-      }
-      if (!(await pi.setModel(executor))) {
-        return ctx.hasUI
-          ? ctx.ui.notify(`No API key for Executor ${executorRef}`, "error")
-          : undefined;
-      }
-      if (executorEffortRef) {
-        pi.setThinkingLevel(executorEffortRef as any);
-      }
-      if (!flowEnabled()) {
-        pi.setActiveTools([...pi.getActiveTools(), "ask_advisor"]);
-      }
-      if (ctx.hasUI) {
-        ctx.ui.notify(
-          `Advisor flow ready — Executor: ${executorRef} (thinking: ${executorEffortRef || "default"}) · Advisor: ${advisorRef} (thinking: ${advisorEffortRef || "default"})`,
-          "info"
-        );
-      }
-    },
+    handler: (args, ctx) => activateAdvisor(args, ctx),
   });
 
   pi.registerCommand("advisor-models", {
@@ -442,7 +454,7 @@ export const registerCommands = (
 
   pi.registerCommand("advisor-off", {
     description: "Disable on-demand Advisor calls; keep the current model",
-    handler: async (_args, ctx) => {
+    handler: (_args, ctx) => {
       pi.setActiveTools(
         pi.getActiveTools().filter((name) => name !== "ask_advisor")
       );
@@ -452,6 +464,7 @@ export const registerCommands = (
           "info"
         );
       }
+      return Promise.resolve();
     },
   });
 };

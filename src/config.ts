@@ -154,29 +154,129 @@ export interface AdvisorConfig {
   gateFailureMode?: GateFailureMode;
 }
 
-const CONFIG_KEYS = new Set(
-  Object.keys({
-    advisor: true,
-    advisorAutoLoopGate: true,
-    advisorBlockOnBlocked: true,
-    advisorCollapseResponses: true,
-    advisorCompletionGate: true,
-    advisorCustomInvocation: true,
-    advisorEffort: true,
-    advisorFailureGate: true,
-    advisorHerdrIntegration: true,
-    advisorLoopThreshold: true,
-    advisorMaxCallsPerSession: true,
-    advisorPlanGate: true,
-    advisorSessionSummary: true,
-    advisorToolResultMaxBytes: true,
-    advisorToolResultMaxLines: true,
-    contextMaxChars: true,
-    executor: true,
-    executorEffort: true,
-    gateFailureMode: true,
-  })
-);
+const CONFIG_KEYS = new Set<keyof AdvisorConfig>([
+  "advisor",
+  "advisorAutoLoopGate",
+  "advisorBlockOnBlocked",
+  "advisorCollapseResponses",
+  "advisorCompletionGate",
+  "advisorCustomInvocation",
+  "advisorEffort",
+  "advisorFailureGate",
+  "advisorHerdrIntegration",
+  "advisorLoopThreshold",
+  "advisorMaxCallsPerSession",
+  "advisorPlanGate",
+  "advisorSessionSummary",
+  "advisorToolResultMaxBytes",
+  "advisorToolResultMaxLines",
+  "contextMaxChars",
+  "executor",
+  "executorEffort",
+  "gateFailureMode",
+]);
+const BOOLEAN_CONFIG_KEYS = [
+  "advisorPlanGate",
+  "advisorFailureGate",
+  "advisorCompletionGate",
+  "advisorCollapseResponses",
+  "advisorBlockOnBlocked",
+  "advisorAutoLoopGate",
+  "advisorSessionSummary",
+  "advisorHerdrIntegration",
+] as const;
+const STRING_CONFIG_KEYS = [
+  "executor",
+  "advisor",
+  "executorEffort",
+  "advisorEffort",
+  "advisorCustomInvocation",
+] as const;
+const ARGUMENT_WHITESPACE = /\s+/;
+
+type ConfigRecord = Record<string, unknown>;
+
+const invalidConfigValue = (
+  path: string,
+  key: string,
+  accepted: string
+): never => {
+  throw new TypeError(
+    `Invalid advisor configuration at ${path}, key ${JSON.stringify(key)}: expected ${accepted}.`
+  );
+};
+
+const validateKnownKeys = (config: ConfigRecord, path: string) => {
+  const unknownKeys = Object.keys(config).filter(
+    (key) => !CONFIG_KEYS.has(key as keyof AdvisorConfig)
+  );
+  if (unknownKeys.length > 0) {
+    throw new TypeError(
+      `Invalid advisor configuration at ${path}: unknown key(s) ${unknownKeys.map((key) => JSON.stringify(key)).join(", ")}. Remove them or upgrade pi-advisor.`
+    );
+  }
+};
+
+const validateStringValues = (config: ConfigRecord, path: string) => {
+  for (const key of STRING_CONFIG_KEYS) {
+    if (config[key] !== undefined && typeof config[key] !== "string") {
+      invalidConfigValue(
+        path,
+        key,
+        key === "executor" || key === "advisor"
+          ? "a provider/model string"
+          : "a string"
+      );
+    }
+  }
+};
+
+const validateBooleanValues = (config: ConfigRecord, path: string) => {
+  for (const key of BOOLEAN_CONFIG_KEYS) {
+    if (config[key] !== undefined && typeof config[key] !== "boolean") {
+      invalidConfigValue(path, key, "true or false");
+    }
+  }
+};
+
+const validateNumericValues = (config: ConfigRecord, path: string) => {
+  const numericRules: [
+    keyof AdvisorConfig,
+    (value: unknown) => boolean,
+    string,
+  ][] = [
+    [
+      "contextMaxChars",
+      isValidContextMaxChars,
+      `a safe integer from 0 through ${MAX_CONTEXT_MAX_CHARS}`,
+    ],
+    [
+      "advisorLoopThreshold",
+      isValidLoopThreshold,
+      "a safe integer of at least 2",
+    ],
+    [
+      "advisorMaxCallsPerSession",
+      isValidMaxCallsPerSession,
+      "a non-negative safe integer",
+    ],
+    [
+      "advisorToolResultMaxLines",
+      isValidToolResultMaxLines,
+      "a non-negative safe integer",
+    ],
+    [
+      "advisorToolResultMaxBytes",
+      isValidToolResultMaxBytes,
+      "a non-negative safe integer",
+    ],
+  ];
+  for (const [key, isValid, description] of numericRules) {
+    if (config[key] !== undefined && !isValid(config[key])) {
+      invalidConfigValue(path, key, description);
+    }
+  }
+};
 
 export const validateConfig = (
   value: unknown,
@@ -187,94 +287,16 @@ export const validateConfig = (
       `Invalid advisor configuration at ${path}: expected a JSON object.`
     );
   }
-  const config = value as Record<string, unknown>;
-  const unknown = Object.keys(config).filter((key) => !CONFIG_KEYS.has(key));
-  if (unknown.length) {
-    throw new TypeError(
-      `Invalid advisor configuration at ${path}: unknown key(s) ${unknown.map((key) => JSON.stringify(key)).join(", ")}. Remove them or upgrade pi-advisor.`
-    );
-  }
-  const invalid = (key: string, accepted: string) => {
-    throw new TypeError(
-      `Invalid advisor configuration at ${path}, key ${JSON.stringify(key)}: expected ${accepted}.`
-    );
-  };
-  if (config.executor !== undefined && typeof config.executor !== "string") {
-    invalid("executor", "a provider/model string");
-  }
-  if (config.advisor !== undefined && typeof config.advisor !== "string") {
-    invalid("advisor", "a provider/model string");
-  }
-  if (
-    config.executorEffort !== undefined &&
-    typeof config.executorEffort !== "string"
-  ) {
-    invalid("executorEffort", "a string");
-  }
-  if (
-    config.advisorEffort !== undefined &&
-    typeof config.advisorEffort !== "string"
-  ) {
-    invalid("advisorEffort", "a string");
-  }
-  if (
-    config.contextMaxChars !== undefined &&
-    !isValidContextMaxChars(config.contextMaxChars)
-  ) {
-    invalid(
-      "contextMaxChars",
-      `a safe integer from 0 through ${MAX_CONTEXT_MAX_CHARS}`
-    );
-  }
-  for (const key of [
-    "advisorPlanGate",
-    "advisorFailureGate",
-    "advisorCompletionGate",
-    "advisorCollapseResponses",
-    "advisorBlockOnBlocked",
-    "advisorAutoLoopGate",
-    "advisorSessionSummary",
-    "advisorHerdrIntegration",
-  ]) {
-    if (config[key] !== undefined && typeof config[key] !== "boolean") {
-      invalid(key, "true or false");
-    }
-  }
-  if (
-    config.advisorCustomInvocation !== undefined &&
-    typeof config.advisorCustomInvocation !== "string"
-  ) {
-    invalid("advisorCustomInvocation", "a string");
-  }
-  if (
-    config.advisorLoopThreshold !== undefined &&
-    !isValidLoopThreshold(config.advisorLoopThreshold)
-  ) {
-    invalid("advisorLoopThreshold", "a safe integer of at least 2");
-  }
-  if (
-    config.advisorMaxCallsPerSession !== undefined &&
-    !isValidMaxCallsPerSession(config.advisorMaxCallsPerSession)
-  ) {
-    invalid("advisorMaxCallsPerSession", "a non-negative safe integer");
-  }
+  const config = value as ConfigRecord;
+  validateKnownKeys(config, path);
+  validateStringValues(config, path);
+  validateBooleanValues(config, path);
+  validateNumericValues(config, path);
   if (
     config.gateFailureMode !== undefined &&
     !isValidGateFailureMode(config.gateFailureMode)
   ) {
-    invalid("gateFailureMode", GATE_FAILURE_MODES.join(", "));
-  }
-  if (
-    config.advisorToolResultMaxLines !== undefined &&
-    !isValidToolResultMaxLines(config.advisorToolResultMaxLines)
-  ) {
-    invalid("advisorToolResultMaxLines", "a non-negative safe integer");
-  }
-  if (
-    config.advisorToolResultMaxBytes !== undefined &&
-    !isValidToolResultMaxBytes(config.advisorToolResultMaxBytes)
-  ) {
-    invalid("advisorToolResultMaxBytes", "a non-negative safe integer");
+    invalidConfigValue(path, "gateFailureMode", GATE_FAILURE_MODES.join(", "));
   }
   return true;
 };
@@ -301,79 +323,109 @@ const resetDefaults = () => {
   advisorToolResultMaxBytesRef = DEFAULT_ADVISOR_TOOL_RESULT_MAX_BYTES;
 };
 
+const applyOptionalConfig = <Key extends keyof AdvisorConfig>(
+  config: AdvisorConfig,
+  key: Key,
+  apply: (value: NonNullable<AdvisorConfig[Key]>) => void
+) => {
+  const value = config[key];
+  if (value !== undefined) {
+    apply(value as NonNullable<AdvisorConfig[Key]>);
+  }
+};
+
+const applyNonEmptyStringConfig = (
+  value: string | undefined,
+  apply: (value: string) => void
+) => {
+  if (value) {
+    apply(value);
+  }
+};
+
+const applyConfig = (config: AdvisorConfig) => {
+  applyNonEmptyStringConfig(config.executor, setExecutorRef);
+  applyNonEmptyStringConfig(config.advisor, setAdvisorRef);
+  applyNonEmptyStringConfig(config.executorEffort, setExecutorEffortRef);
+  applyNonEmptyStringConfig(config.advisorEffort, setAdvisorEffortRef);
+  applyOptionalConfig(config, "contextMaxChars", setContextMaxCharsRef);
+  applyOptionalConfig(config, "advisorPlanGate", setAdvisorPlanGateRef);
+  applyOptionalConfig(config, "advisorFailureGate", setAdvisorFailureGateRef);
+  applyOptionalConfig(
+    config,
+    "advisorCompletionGate",
+    setAdvisorCompletionGateRef
+  );
+  applyOptionalConfig(
+    config,
+    "advisorCustomInvocation",
+    setAdvisorCustomInvocationRef
+  );
+  applyOptionalConfig(
+    config,
+    "advisorCollapseResponses",
+    setAdvisorCollapseResponsesRef
+  );
+  applyOptionalConfig(
+    config,
+    "advisorBlockOnBlocked",
+    setAdvisorBlockOnBlockedRef
+  );
+  applyOptionalConfig(config, "advisorAutoLoopGate", setAdvisorAutoLoopGateRef);
+  applyOptionalConfig(
+    config,
+    "advisorLoopThreshold",
+    setAdvisorLoopThresholdRef
+  );
+  applyOptionalConfig(
+    config,
+    "advisorMaxCallsPerSession",
+    setAdvisorMaxCallsPerSessionRef
+  );
+  applyOptionalConfig(
+    config,
+    "advisorSessionSummary",
+    setAdvisorSessionSummaryRef
+  );
+  applyOptionalConfig(config, "gateFailureMode", setAdvisorFailureModeRef);
+  applyOptionalConfig(
+    config,
+    "advisorHerdrIntegration",
+    setAdvisorHerdrIntegrationRef
+  );
+  applyOptionalConfig(
+    config,
+    "advisorToolResultMaxLines",
+    setAdvisorToolResultMaxLinesRef
+  );
+  applyOptionalConfig(
+    config,
+    "advisorToolResultMaxBytes",
+    setAdvisorToolResultMaxBytesRef
+  );
+};
+
+const readConfig = (path: string): AdvisorConfig => {
+  try {
+    const config = JSON.parse(readFileSync(path, "utf8"));
+    validateConfig(config, path);
+    return config;
+  } catch (error) {
+    throw error instanceof Error ? error : new Error(String(error));
+  }
+};
+
 export const loadConfig = (ctx: ExtensionContext) => {
   resetDefaults();
-  for (const path of configPaths(ctx)) {
-    if (!(path && existsSync(path))) {
-      continue;
-    }
-    let config: AdvisorConfig;
-    try {
-      config = JSON.parse(readFileSync(path, "utf8")) as AdvisorConfig;
-      validateConfig(config, path);
-    } catch (error) {
-      throw error instanceof Error ? error : new Error(String(error));
-    }
-    if (config.executor) {
-      executorRef = config.executor;
-    }
-    if (config.advisor) {
-      advisorRef = config.advisor;
-    }
-    if (config.executorEffort) {
-      executorEffortRef = config.executorEffort;
-    }
-    if (config.advisorEffort) {
-      advisorEffortRef = config.advisorEffort;
-    }
-    if (config.contextMaxChars !== undefined) {
-      contextMaxCharsRef = config.contextMaxChars;
-    }
-    if (config.advisorPlanGate !== undefined) {
-      advisorPlanGateRef = config.advisorPlanGate;
-    }
-    if (config.advisorFailureGate !== undefined) {
-      advisorFailureGateRef = config.advisorFailureGate;
-    }
-    if (config.advisorCompletionGate !== undefined) {
-      advisorCompletionGateRef = config.advisorCompletionGate;
-    }
-    if (config.advisorCustomInvocation !== undefined) {
-      advisorCustomInvocationRef = config.advisorCustomInvocation || undefined;
-    }
-    if (config.advisorCollapseResponses !== undefined) {
-      advisorCollapseResponsesRef = config.advisorCollapseResponses;
-    }
-    if (config.advisorBlockOnBlocked !== undefined) {
-      advisorBlockOnBlockedRef = config.advisorBlockOnBlocked;
-    }
-    if (config.advisorAutoLoopGate !== undefined) {
-      advisorAutoLoopGateRef = config.advisorAutoLoopGate;
-    }
-    if (config.advisorLoopThreshold !== undefined) {
-      advisorLoopThresholdRef = config.advisorLoopThreshold;
-    }
-    if (config.advisorMaxCallsPerSession !== undefined) {
-      advisorMaxCallsPerSessionRef = config.advisorMaxCallsPerSession;
-    }
-    if (config.advisorSessionSummary !== undefined) {
-      advisorSessionSummaryRef = config.advisorSessionSummary;
-    }
-    if (config.gateFailureMode !== undefined) {
-      advisorFailureModeRef = config.gateFailureMode;
-    }
-    if (config.advisorHerdrIntegration !== undefined) {
-      advisorHerdrIntegrationRef = config.advisorHerdrIntegration;
-    }
-    if (config.advisorToolResultMaxLines !== undefined) {
-      advisorToolResultMaxLinesRef = config.advisorToolResultMaxLines;
-    }
-    if (config.advisorToolResultMaxBytes !== undefined) {
-      advisorToolResultMaxBytesRef = config.advisorToolResultMaxBytes;
-    }
-    return path;
+  const path = configPaths(ctx).find(
+    (candidate): candidate is string =>
+      candidate !== null && existsSync(candidate)
+  );
+  if (!path) {
+    return null;
   }
-  return null;
+  applyConfig(readConfig(path));
+  return path;
 };
 
 export const saveConfig = (ctx: ExtensionContext) => {
@@ -423,7 +475,7 @@ export const parseArgs = (args: string): string | undefined => {
   let nextExecutor = executorRef;
   let nextAdvisor = advisorRef;
   let nextContextMaxChars = contextMaxCharsRef;
-  for (const token of args.trim().split(/\s+/).filter(Boolean)) {
+  for (const token of args.trim().split(ARGUMENT_WHITESPACE).filter(Boolean)) {
     const [key, value] = token.split("=");
     if (key === "executor" && value) {
       nextExecutor = value;

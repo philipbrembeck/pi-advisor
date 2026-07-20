@@ -171,10 +171,11 @@ export class HerdrAdvisorBlock {
   }
 
   clear() {
-    if (!this.isBlocked()) {
+    const wasBlocked: boolean = this.#blocked;
+    this.#blocked = false;
+    if (!wasBlocked) {
       return;
     }
-    this.#blocked = false;
     if (!this.enabled()) {
       return;
     }
@@ -194,10 +195,6 @@ export class HerdrAdvisorBlock {
     } catch {
       /* Herdr is optional. */
     }
-  }
-
-  private isBlocked() {
-    return this.#blocked;
   }
 
   private safeReport(labels: { blocked: string }) {

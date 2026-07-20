@@ -150,7 +150,7 @@ const conversationEntry = (
   if (entry.type !== "message" || !isRecord(entry.message)) {
     return;
   }
-  const message = entry.message;
+  const { message } = entry;
   if (message.role === "user") {
     const text = textFrom(message.content);
     return text ? `User: ${text}` : undefined;

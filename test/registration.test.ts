@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type ExtensionAPI, initTheme } from "@earendil-works/pi-coding-agent";
@@ -25,6 +25,8 @@ import {
 import { AdvisorSettingsSelector } from "../src/ui.js";
 
 initTheme();
+
+const SPINNER_PATTERN = /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/;
 
 describe("Herdr Advisor activity", () => {
   test("constructs sanitized request notifications within Herdr limits", () => {
@@ -144,10 +146,11 @@ describe("Advisor consultation and gate contracts", () => {
     expect(gateFailureEffectForMode("warn-and-continue")).toBe("continued");
   });
 
-  test("does not retain the legacy JSON parser or synthesize normal verdicts", async () => {
-    const source = await Bun.file(
-      new URL("../src/tools.ts", import.meta.url)
-    ).text();
+  test("does not retain the legacy JSON parser or synthesize normal verdicts", () => {
+    const source = readFileSync(
+      new URL("../src/tools.ts", import.meta.url),
+      "utf8"
+    );
     expect(source).not.toContain("parseAdvice");
     expect(source).not.toContain("JSON.parse");
     expect(
@@ -170,7 +173,7 @@ describe("Extension Registration", () => {
       getActiveTools() {
         return [];
       },
-      on() {},
+      on: () => undefined,
       registerCommand(name: string, _config: any) {
         registeredCommands.push(name);
       },
@@ -200,7 +203,7 @@ describe("Extension Registration", () => {
       getActiveTools() {
         return [];
       },
-      on() {},
+      on: () => undefined,
       registerCommand(name: string, config: any) {
         commands.set(name, config);
       },
@@ -210,9 +213,12 @@ describe("Extension Registration", () => {
     } as unknown as ExtensionAPI;
 
     registerCommands(mockPi, {
-      consult: async (_ctx, question) => {
+      consult: (_ctx, question) => {
         receivedQuestion = question;
-        return { markdown: "Ship the focused fix.", thinkingText: "" };
+        return Promise.resolve({
+          markdown: "Ship the focused fix.",
+          thinkingText: "",
+        });
       },
     });
 
@@ -249,13 +255,15 @@ describe("Extension Registration", () => {
       getActiveTools() {
         return [];
       },
-      on() {},
+      on: () => undefined,
       registerCommand(name: string, config: any) {
         commands.set(name, config);
       },
-      sendMessage() {},
+      sendMessage: () => undefined,
     } as unknown as ExtensionAPI;
-    registerCommands(mockPi, { consult: async () => new Promise(() => {}) });
+    registerCommands(mockPi, {
+      consult: () => new Promise(() => undefined),
+    });
 
     await commands.get("advisor-manual").handler("Check the migration", {
       cwd: tmpdir(),
@@ -321,17 +329,20 @@ describe("Extension Registration", () => {
       getActiveTools() {
         return [];
       },
-      on() {},
+      on: () => undefined,
       registerCommand(name: string, config: any) {
         commands.set(name, config);
       },
-      sendMessage() {},
+      sendMessage: () => undefined,
     } as unknown as ExtensionAPI;
     registerCommands(mockPi, {
-      consult: async (_ctx, _question, signal) => {
-        signals.push(signal!);
-        return await new Promise<{ markdown: string; thinkingText: string }>(
-          () => {}
+      consult: (_ctx, _question, signal) => {
+        if (!signal) {
+          throw new Error("Manual consultation requires an abort signal.");
+        }
+        signals.push(signal);
+        return new Promise<{ markdown: string; thinkingText: string }>(
+          () => undefined
         );
       },
     });
@@ -358,8 +369,8 @@ describe("Extension Registration", () => {
       getActiveTools() {
         return [];
       },
-      on() {},
-      registerCommand() {},
+      on: () => undefined,
+      registerCommand: () => undefined,
       registerTool(tool: any) {
         if (tool.name === "ask_advisor") {
           advisorTool = tool;
@@ -375,7 +386,11 @@ describe("Extension Registration", () => {
       bold: (text: string) => text,
       fg: (_color: string, text: string) => text,
     };
-    const context = { invalidate() {}, lastComponent: undefined, state: {} };
+    const context = {
+      invalidate: () => undefined,
+      lastComponent: undefined,
+      state: {},
+    };
     const request = advisorTool
       .renderCall({ question: "Should we ship this change?" }, theme, context)
       .render(120)
@@ -397,7 +412,7 @@ describe("Extension Registration", () => {
 
     expect(request).toContain("[advisor] Executor → Advisor");
     expect(request).toContain("Should we ship this change?");
-    expect(request).not.toMatch(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/);
+    expect(request).not.toMatch(SPINNER_PATTERN);
     expect(response).toContain("ADVISOR RESPONSE");
     expect(response).toContain("test/model");
     expect(response).toContain("Ship it.");
@@ -426,8 +441,8 @@ describe("Extension Registration", () => {
       getActiveTools() {
         return [];
       },
-      on() {},
-      registerCommand() {},
+      on: () => undefined,
+      registerCommand: () => undefined,
       registerTool(tool: any) {
         if (tool.name === "ask_advisor") {
           advisorTool = tool;
@@ -447,7 +462,11 @@ describe("Extension Registration", () => {
       bold: (text: string) => text,
       fg: (_color: string, text: string) => text,
     };
-    const context = { invalidate() {}, lastComponent: undefined, state: {} };
+    const context = {
+      invalidate: () => undefined,
+      lastComponent: undefined,
+      state: {},
+    };
     const noQuestionCall = advisorTool
       .renderCall({}, theme, context)
       .render(120)
@@ -490,8 +509,8 @@ describe("Extension Registration", () => {
           beforeAgentStart = handler;
         }
       },
-      registerCommand() {},
-      registerTool() {},
+      registerCommand: () => undefined,
+      registerTool: () => undefined,
     } as unknown as ExtensionAPI;
 
     try {
@@ -534,7 +553,7 @@ describe("Extension Registration", () => {
         failureGate: true,
         planGate: true,
       },
-      onCancel: () => {},
+      onCancel: () => undefined,
       onSave: (settings) => {
         saved = settings;
       },
@@ -548,12 +567,12 @@ describe("Extension Registration", () => {
       } as any,
       tui: {
         requestRender: () => {
-          renderRequests++;
+          renderRequests += 1;
         },
       },
     });
     selector.handleInput("\u001b[C");
-    for (let index = 0; index < 16; index++) {
+    for (let index = 0; index < 16; index += 1) {
       selector.handleInput("\u001b[B");
     }
     selector.handleInput("\r");
@@ -578,7 +597,7 @@ describe("Extension Registration", () => {
         failureGate: true,
         planGate: true,
       },
-      onCancel: () => {},
+      onCancel: () => undefined,
       onSave: (settings) => {
         saved = settings;
       },
@@ -587,9 +606,11 @@ describe("Extension Registration", () => {
         bold: (text: string) => text,
         fg: (_color: string, text: string) => text,
       } as any,
-      tui: { requestRender() {} },
+      tui: {
+        requestRender: () => undefined,
+      },
     });
-    for (let index = 0; index < 6; index++) {
+    for (let index = 0; index < 6; index += 1) {
       selector.handleInput("\u001b[B");
     }
     selector.handleInput("\r");
@@ -600,7 +621,7 @@ describe("Extension Registration", () => {
     selector.handleInput("o");
     selector.handleInput("y");
     selector.handleInput("\r");
-    for (let index = 0; index < 10; index++) {
+    for (let index = 0; index < 10; index += 1) {
       selector.handleInput("\u001b[B");
     }
     selector.handleInput("\r");
@@ -626,8 +647,8 @@ describe("Extension Registration", () => {
       getActiveTools() {
         return [];
       },
-      on() {},
-      registerCommand() {},
+      on: () => undefined,
+      registerCommand: () => undefined,
       registerTool(tool: any) {
         if (tool.name === "ask_advisor") {
           advisorTool = tool;
@@ -642,7 +663,7 @@ describe("Extension Registration", () => {
       fg: (_color: string, text: string) => text,
     };
     const context = {
-      invalidate() {},
+      invalidate: () => undefined,
       lastComponent: undefined,
       state: {} as { timerId?: ReturnType<typeof setInterval> },
     };
@@ -655,7 +676,7 @@ describe("Extension Registration", () => {
       )
       .render(120)
       .join("\n");
-    expect(partial).toMatch(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/);
+    expect(partial).toMatch(SPINNER_PATTERN);
     expect(context.state.timerId).toBeDefined();
 
     advisorTool.renderResult(

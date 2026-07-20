@@ -4,10 +4,14 @@ import {
   stream,
 } from "@earendil-works/pi-ai/compat";
 import {
+  type AgentToolResult,
   type ExtensionAPI,
   type ExtensionContext,
   getMarkdownTheme,
   type Theme,
+  type ToolCallEvent,
+  type ToolCallEventResult,
+  type ToolRenderResultOptions,
 } from "@earendil-works/pi-coding-agent";
 import { Box, Markdown, Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
@@ -439,6 +443,251 @@ const failureEffect = (
   return { block: true, effect: "session-blocked" as const, reason };
 };
 
+const reserveAdvisorCall = (
+  event: ToolCallEvent,
+  ctx: ExtensionContext,
+  session: AdvisorSessionState,
+  reservedCalls: Set<string>
+): ToolCallEventResult | undefined => {
+  if (event.toolName !== "ask_advisor") {
+    return;
+  }
+  if (!session.canConsult(advisorMaxCallsPerSessionRef)) {
+    const message = "Advisor call budget exhausted for this session.";
+    if (ctx.hasUI) {
+      ctx.ui.notify(message, "warning");
+    }
+    notifyHerdrAdvisorFailure("Advisor budget exhausted", message);
+    return { block: true, reason: message };
+  }
+  session.consumeCall();
+  reservedCalls.add(event.toolCallId);
+  return {};
+};
+
+const sendAutomaticGateCall = (pi: ExtensionAPI, event: ToolCallEvent) => {
+  pi.sendMessage(
+    {
+      content: "Automatic Advisor loop review",
+      customType: "advisor-loop-call",
+      details: {
+        question: `Loop gate: ${event.toolName} repeated ${advisorLoopThresholdRef} times`,
+      },
+      display: true,
+    },
+    { deliverAs: "steer" }
+  );
+};
+
+const sendAutomaticGateResult = (
+  pi: ExtensionAPI,
+  result: AdvisorGateResult
+) => {
+  pi.sendMessage(
+    {
+      content: adviceForText(result),
+      customType: "advisor-loop-result",
+      details: {
+        advisor: result.model,
+        decision: result.decision,
+        text: result.markdown,
+      },
+      display: true,
+    },
+    { deliverAs: "steer" }
+  );
+};
+
+const handleAutomaticGate = async (
+  pi: ExtensionAPI,
+  event: ToolCallEvent,
+  ctx: ExtensionContext,
+  session: AdvisorSessionState
+): Promise<ToolCallEventResult | undefined> => {
+  if (
+    event.toolName === "ask_advisor" ||
+    !advisorAutoLoopGateRef ||
+    !session.recordToolCall(
+      event.toolName,
+      event.input,
+      advisorLoopThresholdRef
+    )
+  ) {
+    return;
+  }
+  const reason = `Advisor loop gate: normalized signature for ${event.toolName} repeated ${advisorLoopThresholdRef} times without a materially different tool action.`;
+  if (!session.canConsult(advisorMaxCallsPerSessionRef)) {
+    const failure = failureEffect(
+      "budget-exhausted",
+      "Advisor gate call budget is exhausted.",
+      ctx,
+      session
+    );
+    return failure.block ? { block: true, reason: failure.reason } : undefined;
+  }
+  session.consumeCall();
+  herdrAdvisorActivity.start();
+  sendAutomaticGateCall(pi, event);
+  try {
+    const result = await runAdvisorGate(
+      ctx,
+      `${reason} Review the repeated actions and recommend the smallest safe next step.`
+    );
+    if (!result.ok) {
+      session.recordInvocation({
+        executionEffect: gateFailureEffectForMode(advisorFailureModeRef),
+        failure: result.category,
+        kind: "gate",
+        model: advisorRef,
+        trigger: "repeated-tool-call",
+      });
+      const failure = failureEffect(
+        result.category,
+        result.message,
+        ctx,
+        session
+      );
+      return failure.block
+        ? { block: true, reason: `${reason}\n${failure.reason}` }
+        : undefined;
+    }
+    session.recordInvocation({
+      cost: advisorUsageCost(result.usage),
+      decision: result.decision,
+      executionEffect: gateDecisionEffect(result.decision),
+      kind: "gate",
+      model: result.model,
+      trigger: result.trigger,
+      usage: result.usage,
+    });
+    sendAutomaticGateResult(pi, result);
+    if (result.decision === "proceed") {
+      session.resetRepetition();
+      return;
+    }
+    const gateReason = `Advisor loop review: ${result.markdown}`;
+    if (result.decision === "blocked") {
+      session.block(gateReason);
+      herdrAdvisorBlock.set(gateReason);
+      if (advisorBlockOnBlockedRef) {
+        ctx.abort();
+      }
+    }
+    return { block: true, reason: gateReason };
+  } finally {
+    herdrAdvisorActivity.finish();
+  }
+};
+
+interface AdvisorToolDetails {
+  advisor?: string;
+  question?: string;
+  text?: string;
+  thinking?: string;
+}
+interface AdvisorRenderState {
+  timerId?: ReturnType<typeof setInterval>;
+}
+interface AdvisorToolContext {
+  invalidate: () => void;
+  lastComponent: unknown;
+  state: AdvisorRenderState;
+}
+
+const advisorResultDetails = (result: AgentToolResult<AdvisorToolDetails>) =>
+  result.details;
+
+const renderPartialAdvisorResult = (
+  box: Box,
+  result: AgentToolResult<AdvisorToolDetails>,
+  expanded: boolean,
+  theme: Theme,
+  context: AdvisorToolContext
+) => {
+  if (!context.state.timerId) {
+    context.state.timerId = setInterval(() => context.invalidate(), 80);
+  }
+  const frame =
+    SPINNER_FRAMES[Math.floor(Date.now() / 80) % SPINNER_FRAMES.length];
+  const details = advisorResultDetails(result);
+  const lines = [
+    `${theme.fg("warning", theme.bold(`◆ ADVISOR ${frame}`))} ${theme.fg("dim", "· Working…")}`,
+  ];
+  if (details?.thinking) {
+    const thought =
+      details.thinking.length > 200
+        ? details.thinking.slice(-200)
+        : details.thinking;
+    lines.push(theme.fg("thinkingText", `  💭 ${thought.replace(/\n/g, " ")}`));
+  }
+  box.addChild(new Text(lines.join("\n"), 0, 0));
+  if (details?.text) {
+    box.addChild(
+      new Markdown(
+        adviceForDisplay(details.text, expanded),
+        0,
+        0,
+        getMarkdownTheme()
+      )
+    );
+  }
+};
+
+const renderFinalAdvisorResult = (
+  box: Box,
+  result: AgentToolResult<AdvisorToolDetails>,
+  expanded: boolean,
+  theme: Theme,
+  context: AdvisorToolContext
+) => {
+  if (context.state.timerId) {
+    clearInterval(context.state.timerId);
+    context.state.timerId = undefined;
+  }
+  const details = advisorResultDetails(result);
+  const lines = [theme.fg("warning", theme.bold("◆ ADVISOR RESPONSE"))];
+  if (details?.advisor) {
+    lines.push(theme.fg("dim", `  ${details.advisor}`));
+  }
+  if (details?.thinking) {
+    const thought = details.thinking.replace(/\n/g, " ").slice(0, 300);
+    lines.push(
+      theme.fg(
+        "thinkingText",
+        `  💭 ${thought}${details.thinking.length > 300 ? "…" : ""}`
+      )
+    );
+  }
+  const advice =
+    details?.text ||
+    textFrom(result.content) ||
+    "(Advisor returned no advice.)";
+  box.addChild(new Text(lines.join("\n"), 0, 0));
+  box.addChild(
+    new Markdown(adviceForDisplay(advice, expanded), 0, 0, getMarkdownTheme())
+  );
+};
+
+const renderAdvisorResult = (
+  result: AgentToolResult<AdvisorToolDetails>,
+  { isPartial, expanded }: ToolRenderResultOptions,
+  theme: Theme,
+  context: AdvisorToolContext
+) => {
+  const box =
+    context.lastComponent instanceof Box
+      ? context.lastComponent
+      : new Box(1, 1, (text: string) => theme.bg("customMessageBg", text));
+  box.setBgFn((text) => theme.bg("customMessageBg", text));
+  box.clear();
+  if (isPartial) {
+    renderPartialAdvisorResult(box, result, expanded, theme, context);
+  } else {
+    renderFinalAdvisorResult(box, result, expanded, theme, context);
+  }
+  return box;
+};
+
 export const registerAdvisorTool = (pi: ExtensionAPI) => {
   const session = advisorSessionState;
   const reservedCalls = new Set<string>();
@@ -523,122 +772,16 @@ export const registerAdvisorTool = (pi: ExtensionAPI) => {
       : undefined;
   });
 
-  pi.on("tool_call", async (event, ctx) => {
+  pi.on("tool_call", (event, ctx) => {
     if (!pi.getActiveTools().includes("ask_advisor")) {
       return;
     }
     loadConfig(ctx);
+    const reservation = reserveAdvisorCall(event, ctx, session, reservedCalls);
     if (event.toolName === "ask_advisor") {
-      if (!session.canConsult(advisorMaxCallsPerSessionRef)) {
-        const message = "Advisor call budget exhausted for this session.";
-        if (ctx.hasUI) {
-          ctx.ui.notify(message, "warning");
-        }
-        notifyHerdrAdvisorFailure("Advisor budget exhausted", message);
-        return { block: true, reason: message };
-      }
-      session.consumeCall();
-      reservedCalls.add(event.toolCallId);
-      return;
+      return reservation;
     }
-    if (!advisorAutoLoopGateRef) {
-      return;
-    }
-    if (
-      !session.recordToolCall(
-        event.toolName,
-        event.input,
-        advisorLoopThresholdRef
-      )
-    ) {
-      return;
-    }
-    const reason = `Advisor loop gate: normalized signature for ${event.toolName} repeated ${advisorLoopThresholdRef} times without a materially different tool action.`;
-    if (!session.canConsult(advisorMaxCallsPerSessionRef)) {
-      const failure = failureEffect(
-        "budget-exhausted",
-        "Advisor gate call budget is exhausted.",
-        ctx,
-        session
-      );
-      return failure.block
-        ? { block: true, reason: failure.reason }
-        : undefined;
-    }
-    session.consumeCall();
-    herdrAdvisorActivity.start();
-    pi.sendMessage(
-      {
-        content: "Automatic Advisor loop review",
-        customType: "advisor-loop-call",
-        details: {
-          question: `Loop gate: ${event.toolName} repeated ${advisorLoopThresholdRef} times`,
-        },
-        display: true,
-      },
-      { deliverAs: "steer" }
-    );
-    try {
-      const result = await runAdvisorGate(
-        ctx,
-        `${reason} Review the repeated actions and recommend the smallest safe next step.`
-      );
-      if (!result.ok) {
-        session.recordInvocation({
-          executionEffect: gateFailureEffectForMode(advisorFailureModeRef),
-          failure: result.category,
-          kind: "gate",
-          model: advisorRef,
-          trigger: "repeated-tool-call",
-        });
-        const failure = failureEffect(
-          result.category,
-          result.message,
-          ctx,
-          session
-        );
-        return failure.block
-          ? { block: true, reason: `${reason}\n${failure.reason}` }
-          : undefined;
-      }
-      session.recordInvocation({
-        cost: advisorUsageCost(result.usage),
-        decision: result.decision,
-        executionEffect: gateDecisionEffect(result.decision),
-        kind: "gate",
-        model: result.model,
-        trigger: result.trigger,
-        usage: result.usage,
-      });
-      pi.sendMessage(
-        {
-          content: adviceForText(result),
-          customType: "advisor-loop-result",
-          details: {
-            advisor: result.model,
-            decision: result.decision,
-            text: result.markdown,
-          },
-          display: true,
-        },
-        { deliverAs: "steer" }
-      );
-      if (result.decision === "proceed") {
-        session.resetRepetition();
-        return;
-      }
-      const gateReason = `Advisor loop review: ${result.markdown}`;
-      if (result.decision === "blocked") {
-        session.block(gateReason);
-        herdrAdvisorBlock.set(gateReason);
-        if (advisorBlockOnBlockedRef) {
-          ctx.abort();
-        }
-      }
-      return { block: true, reason: gateReason };
-    } finally {
-      herdrAdvisorActivity.finish();
-    }
+    return handleAutomaticGate(pi, event, ctx, session);
   });
 
   pi.on("agent_settled", (_event, ctx) => {
@@ -739,81 +882,13 @@ export const registerAdvisorTool = (pi: ExtensionAPI) => {
     renderCall(args, theme) {
       return renderAdvisorCallBox(args.question?.trim(), theme);
     },
-    renderResult(result, { isPartial, expanded }, theme, context) {
-      const box =
-        context.lastComponent instanceof Box
-          ? context.lastComponent
-          : new Box(1, 1, (text) => theme.bg("customMessageBg", text));
-      box.setBgFn((text) => theme.bg("customMessageBg", text));
-      box.clear();
-      if (isPartial) {
-        if (!context.state.timerId) {
-          context.state.timerId = setInterval(() => context.invalidate(), 80);
-        }
-        const frame =
-          SPINNER_FRAMES[Math.floor(Date.now() / 80) % SPINNER_FRAMES.length];
-        const d = result.details as
-          | { thinking?: string; text?: string }
-          | undefined;
-        const lines: string[] = [
-          `${theme.fg("warning", theme.bold(`◆ ADVISOR ${frame}`))} ${theme.fg("dim", "· Working…")}`,
-        ];
-        if (d?.thinking) {
-          lines.push(
-            theme.fg(
-              "thinkingText",
-              `  💭 ${(d.thinking.length > 200 ? d.thinking.slice(-200) : d.thinking).replace(/\n/g, " ")}`
-            )
-          );
-        }
-        box.addChild(new Text(lines.join("\n"), 0, 0));
-        if (d?.text) {
-          box.addChild(
-            new Markdown(
-              adviceForDisplay(d.text, Boolean(expanded)),
-              0,
-              0,
-              getMarkdownTheme()
-            )
-          );
-        }
-      } else {
-        if (context.state.timerId) {
-          clearInterval(context.state.timerId);
-          context.state.timerId = undefined;
-        }
-        const d = result.details as
-          | { thinking?: string; text?: string; advisor?: string }
-          | undefined;
-        const lines: string[] = [
-          theme.fg("warning", theme.bold("◆ ADVISOR RESPONSE")),
-        ];
-        if (d?.advisor) {
-          lines.push(theme.fg("dim", `  ${d.advisor}`));
-        }
-        if (d?.thinking) {
-          lines.push(
-            theme.fg(
-              "thinkingText",
-              `  💭 ${d.thinking.replace(/\n/g, " ").slice(0, 300)}${d.thinking.length > 300 ? "…" : ""}`
-            )
-          );
-        }
-        const advice =
-          d?.text ||
-          textFrom(result.content) ||
-          "(Advisor returned no advice.)";
-        box.addChild(new Text(lines.join("\n"), 0, 0));
-        box.addChild(
-          new Markdown(
-            adviceForDisplay(advice, Boolean(expanded)),
-            0,
-            0,
-            getMarkdownTheme()
-          )
-        );
-      }
-      return box;
+    renderResult(result, options, theme, context) {
+      return renderAdvisorResult(
+        result as AgentToolResult<AdvisorToolDetails>,
+        options,
+        theme,
+        context as AdvisorToolContext
+      );
     },
     renderShell: "self",
   });

@@ -4,6 +4,20 @@ All notable changes to this project are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Added
+
+- Ultracite lint commands and a Husky pre-commit hook that formats and lints staged TypeScript and JSON files.
+
+### Changed
+
+- Resolved the existing Ultracite lint violations through structural refactors and stronger type boundaries without changing Advisor-flow behavior.
+
+### Fixed
+
+- Empty persisted Executor, Advisor, and reasoning-effort settings now retain their configured defaults.
+
 ## 0.2.0
 
 ### Added
