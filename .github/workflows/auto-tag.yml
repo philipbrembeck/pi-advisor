@@ -33,7 +33,7 @@ jobs:
             echo "package.json version unchanged; skipping."
             exit 0
           fi
-          if ! node -e 'const v = process.argv[1]; if (!/^\\d+\\.\\d+\\.\\d+$/.test(v)) process.exit(1)' "$version"; then
+          if ! node -e 'const v = process.argv[1]; if (!/^\d+\.\d+\.\d+$/.test(v)) process.exit(1)' "$version"; then
             echo "Invalid package version: $version" >&2
             exit 1
           fi
