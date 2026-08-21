@@ -1,0 +1,17 @@
+{
+  "id": "trajectory-architecture-outbox",
+  "category": "reasoning",
+  "fixture": "./fixture",
+  "prompt": "The notification preference change flow has intermittent duplicate webhook deliveries and can lose the relationship between a committed change and its notification. Investigate the API, validation, transaction, outbox, batching, and delivery modules together. Repair the implementation without changing the public factory/service API, disabling batching, or moving notification work into the database transaction. Preserve per-user ordering, transactional rollback, and safe retry behavior when a delivery attempt fails after the receiver accepted a request. Use the repository's interfaces and tests as architectural evidence; validate both the normal path and recovery paths.",
+  "timeoutSeconds": 900,
+  "validation": {
+    "program": "../../validators/trajectory-architecture-outbox.ts",
+    "args": [],
+    "timeoutSeconds": 60
+  },
+  "metadata": {
+    "difficulty": "hard",
+    "shape": "cross-module-architectural-constraint",
+    "tags": ["transactions", "outbox", "ordering", "batching", "idempotency"]
+  }
+}

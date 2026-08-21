@@ -1,0 +1,368 @@
+{
+  "entries": [
+    {
+      "index": 0,
+      "instanceId": "sphinx-doc__sphinx-10451",
+      "mode": "luna",
+      "model": "openai-codex/gpt-5.6-luna",
+      "repetition": 0,
+      "repo": "sphinx-doc/sphinx",
+      "taskId": "sphinx-doc__sphinx-10451"
+    },
+    {
+      "index": 1,
+      "instanceId": "sphinx-doc__sphinx-8474",
+      "mode": "luna",
+      "model": "openai-codex/gpt-5.6-luna",
+      "repetition": 0,
+      "repo": "sphinx-doc/sphinx",
+      "taskId": "sphinx-doc__sphinx-8474"
+    },
+    {
+      "index": 2,
+      "instanceId": "scikit-learn__scikit-learn-25638",
+      "mode": "luna",
+      "model": "openai-codex/gpt-5.6-luna",
+      "repetition": 0,
+      "repo": "scikit-learn/scikit-learn",
+      "taskId": "scikit-learn__scikit-learn-25638"
+    },
+    {
+      "index": 3,
+      "instanceId": "sphinx-doc__sphinx-7686",
+      "mode": "luna",
+      "model": "openai-codex/gpt-5.6-luna",
+      "repetition": 0,
+      "repo": "sphinx-doc/sphinx",
+      "taskId": "sphinx-doc__sphinx-7686"
+    },
+    {
+      "index": 4,
+      "instanceId": "matplotlib__matplotlib-23964",
+      "mode": "luna",
+      "model": "openai-codex/gpt-5.6-luna",
+      "repetition": 0,
+      "repo": "matplotlib/matplotlib",
+      "taskId": "matplotlib__matplotlib-23964"
+    },
+    {
+      "index": 5,
+      "instanceId": "matplotlib__matplotlib-25442",
+      "mode": "luna",
+      "model": "openai-codex/gpt-5.6-luna",
+      "repetition": 0,
+      "repo": "matplotlib/matplotlib",
+      "taskId": "matplotlib__matplotlib-25442"
+    },
+    {
+      "index": 6,
+      "instanceId": "sphinx-doc__sphinx-8713",
+      "mode": "luna",
+      "model": "openai-codex/gpt-5.6-luna",
+      "repetition": 0,
+      "repo": "sphinx-doc/sphinx",
+      "taskId": "sphinx-doc__sphinx-8713"
+    },
+    {
+      "index": 7,
+      "instanceId": "scikit-learn__scikit-learn-14092",
+      "mode": "luna",
+      "model": "openai-codex/gpt-5.6-luna",
+      "repetition": 0,
+      "repo": "scikit-learn/scikit-learn",
+      "taskId": "scikit-learn__scikit-learn-14092"
+    },
+    {
+      "index": 8,
+      "instanceId": "scikit-learn__scikit-learn-15535",
+      "mode": "luna",
+      "model": "openai-codex/gpt-5.6-luna",
+      "repetition": 0,
+      "repo": "scikit-learn/scikit-learn",
+      "taskId": "scikit-learn__scikit-learn-15535"
+    },
+    {
+      "index": 9,
+      "instanceId": "sympy__sympy-21171",
+      "mode": "luna",
+      "model": "openai-codex/gpt-5.6-luna",
+      "repetition": 0,
+      "repo": "sympy/sympy",
+      "taskId": "sympy__sympy-21171"
+    },
+    {
+      "index": 10,
+      "instanceId": "django__django-11019",
+      "mode": "luna",
+      "model": "openai-codex/gpt-5.6-luna",
+      "repetition": 0,
+      "repo": "django/django",
+      "taskId": "django__django-11019"
+    },
+    {
+      "index": 11,
+      "instanceId": "matplotlib__matplotlib-18869",
+      "mode": "luna",
+      "model": "openai-codex/gpt-5.6-luna",
+      "repetition": 0,
+      "repo": "matplotlib/matplotlib",
+      "taskId": "matplotlib__matplotlib-18869"
+    },
+    {
+      "index": 12,
+      "instanceId": "django__django-14997",
+      "mode": "luna",
+      "model": "openai-codex/gpt-5.6-luna",
+      "repetition": 0,
+      "repo": "django/django",
+      "taskId": "django__django-14997"
+    },
+    {
+      "index": 13,
+      "instanceId": "sympy__sympy-20639",
+      "mode": "luna",
+      "model": "openai-codex/gpt-5.6-luna",
+      "repetition": 0,
+      "repo": "sympy/sympy",
+      "taskId": "sympy__sympy-20639"
+    },
+    {
+      "index": 14,
+      "instanceId": "scikit-learn__scikit-learn-25747",
+      "mode": "luna",
+      "model": "openai-codex/gpt-5.6-luna",
+      "repetition": 0,
+      "repo": "scikit-learn/scikit-learn",
+      "taskId": "scikit-learn__scikit-learn-25747"
+    },
+    {
+      "index": 15,
+      "instanceId": "django__django-13265",
+      "mode": "luna",
+      "model": "openai-codex/gpt-5.6-luna",
+      "repetition": 0,
+      "repo": "django/django",
+      "taskId": "django__django-13265"
+    },
+    {
+      "index": 16,
+      "instanceId": "matplotlib__matplotlib-22711",
+      "mode": "luna",
+      "model": "openai-codex/gpt-5.6-luna",
+      "repetition": 0,
+      "repo": "matplotlib/matplotlib",
+      "taskId": "matplotlib__matplotlib-22711"
+    },
+    {
+      "index": 17,
+      "instanceId": "django__django-16820",
+      "mode": "luna",
+      "model": "openai-codex/gpt-5.6-luna",
+      "repetition": 0,
+      "repo": "django/django",
+      "taskId": "django__django-16820"
+    },
+    {
+      "index": 18,
+      "instanceId": "sympy__sympy-16792",
+      "mode": "luna",
+      "model": "openai-codex/gpt-5.6-luna",
+      "repetition": 0,
+      "repo": "sympy/sympy",
+      "taskId": "sympy__sympy-16792"
+    },
+    {
+      "index": 19,
+      "instanceId": "sympy__sympy-20049",
+      "mode": "luna",
+      "model": "openai-codex/gpt-5.6-luna",
+      "repetition": 0,
+      "repo": "sympy/sympy",
+      "taskId": "sympy__sympy-20049"
+    },
+    {
+      "index": 20,
+      "instanceId": "sphinx-doc__sphinx-10451",
+      "mode": "luna-advisor-optional",
+      "model": "openai-codex/gpt-5.6-luna",
+      "repetition": 0,
+      "repo": "sphinx-doc/sphinx",
+      "taskId": "sphinx-doc__sphinx-10451"
+    },
+    {
+      "index": 21,
+      "instanceId": "sphinx-doc__sphinx-8474",
+      "mode": "luna-advisor-optional",
+      "model": "openai-codex/gpt-5.6-luna",
+      "repetition": 0,
+      "repo": "sphinx-doc/sphinx",
+      "taskId": "sphinx-doc__sphinx-8474"
+    },
+    {
+      "index": 22,
+      "instanceId": "scikit-learn__scikit-learn-25638",
+      "mode": "luna-advisor-optional",
+      "model": "openai-codex/gpt-5.6-luna",
+      "repetition": 0,
+      "repo": "scikit-learn/scikit-learn",
+      "taskId": "scikit-learn__scikit-learn-25638"
+    },
+    {
+      "index": 23,
+      "instanceId": "sphinx-doc__sphinx-7686",
+      "mode": "luna-advisor-optional",
+      "model": "openai-codex/gpt-5.6-luna",
+      "repetition": 0,
+      "repo": "sphinx-doc/sphinx",
+      "taskId": "sphinx-doc__sphinx-7686"
+    },
+    {
+      "index": 24,
+      "instanceId": "matplotlib__matplotlib-23964",
+      "mode": "luna-advisor-optional",
+      "model": "openai-codex/gpt-5.6-luna",
+      "repetition": 0,
+      "repo": "matplotlib/matplotlib",
+      "taskId": "matplotlib__matplotlib-23964"
+    },
+    {
+      "index": 25,
+      "instanceId": "matplotlib__matplotlib-25442",
+      "mode": "luna-advisor-optional",
+      "model": "openai-codex/gpt-5.6-luna",
+      "repetition": 0,
+      "repo": "matplotlib/matplotlib",
+      "taskId": "matplotlib__matplotlib-25442"
+    },
+    {
+      "index": 26,
+      "instanceId": "sphinx-doc__sphinx-8713",
+      "mode": "luna-advisor-optional",
+      "model": "openai-codex/gpt-5.6-luna",
+      "repetition": 0,
+      "repo": "sphinx-doc/sphinx",
+      "taskId": "sphinx-doc__sphinx-8713"
+    },
+    {
+      "index": 27,
+      "instanceId": "scikit-learn__scikit-learn-14092",
+      "mode": "luna-advisor-optional",
+      "model": "openai-codex/gpt-5.6-luna",
+      "repetition": 0,
+      "repo": "scikit-learn/scikit-learn",
+      "taskId": "scikit-learn__scikit-learn-14092"
+    },
+    {
+      "index": 28,
+      "instanceId": "scikit-learn__scikit-learn-15535",
+      "mode": "luna-advisor-optional",
+      "model": "openai-codex/gpt-5.6-luna",
+      "repetition": 0,
+      "repo": "scikit-learn/scikit-learn",
+      "taskId": "scikit-learn__scikit-learn-15535"
+    },
+    {
+      "index": 29,
+      "instanceId": "sympy__sympy-21171",
+      "mode": "luna-advisor-optional",
+      "model": "openai-codex/gpt-5.6-luna",
+      "repetition": 0,
+      "repo": "sympy/sympy",
+      "taskId": "sympy__sympy-21171"
+    },
+    {
+      "index": 30,
+      "instanceId": "django__django-11019",
+      "mode": "luna-advisor-optional",
+      "model": "openai-codex/gpt-5.6-luna",
+      "repetition": 0,
+      "repo": "django/django",
+      "taskId": "django__django-11019"
+    },
+    {
+      "index": 31,
+      "instanceId": "matplotlib__matplotlib-18869",
+      "mode": "luna-advisor-optional",
+      "model": "openai-codex/gpt-5.6-luna",
+      "repetition": 0,
+      "repo": "matplotlib/matplotlib",
+      "taskId": "matplotlib__matplotlib-18869"
+    },
+    {
+      "index": 32,
+      "instanceId": "django__django-14997",
+      "mode": "luna-advisor-optional",
+      "model": "openai-codex/gpt-5.6-luna",
+      "repetition": 0,
+      "repo": "django/django",
+      "taskId": "django__django-14997"
+    },
+    {
+      "index": 33,
+      "instanceId": "sympy__sympy-20639",
+      "mode": "luna-advisor-optional",
+      "model": "openai-codex/gpt-5.6-luna",
+      "repetition": 0,
+      "repo": "sympy/sympy",
+      "taskId": "sympy__sympy-20639"
+    },
+    {
+      "index": 34,
+      "instanceId": "scikit-learn__scikit-learn-25747",
+      "mode": "luna-advisor-optional",
+      "model": "openai-codex/gpt-5.6-luna",
+      "repetition": 0,
+      "repo": "scikit-learn/scikit-learn",
+      "taskId": "scikit-learn__scikit-learn-25747"
+    },
+    {
+      "index": 35,
+      "instanceId": "django__django-13265",
+      "mode": "luna-advisor-optional",
+      "model": "openai-codex/gpt-5.6-luna",
+      "repetition": 0,
+      "repo": "django/django",
+      "taskId": "django__django-13265"
+    },
+    {
+      "index": 36,
+      "instanceId": "matplotlib__matplotlib-22711",
+      "mode": "luna-advisor-optional",
+      "model": "openai-codex/gpt-5.6-luna",
+      "repetition": 0,
+      "repo": "matplotlib/matplotlib",
+      "taskId": "matplotlib__matplotlib-22711"
+    },
+    {
+      "index": 37,
+      "instanceId": "django__django-16820",
+      "mode": "luna-advisor-optional",
+      "model": "openai-codex/gpt-5.6-luna",
+      "repetition": 0,
+      "repo": "django/django",
+      "taskId": "django__django-16820"
+    },
+    {
+      "index": 38,
+      "instanceId": "sympy__sympy-16792",
+      "mode": "luna-advisor-optional",
+      "model": "openai-codex/gpt-5.6-luna",
+      "repetition": 0,
+      "repo": "sympy/sympy",
+      "taskId": "sympy__sympy-16792"
+    },
+    {
+      "index": 39,
+      "instanceId": "sympy__sympy-20049",
+      "mode": "luna-advisor-optional",
+      "model": "openai-codex/gpt-5.6-luna",
+      "repetition": 0,
+      "repo": "sympy/sympy",
+      "taskId": "sympy__sympy-20049"
+    }
+  ],
+  "experimentId": "exp-20260820-swebench-hard-optional-advisor-v1",
+  "scheduleSha256": "11b816dbf4b99ca9d13d0d79661a6d78444325633247cefa4302927f64739883",
+  "seed": 20260821,
+  "schemaVersion": 1
+}

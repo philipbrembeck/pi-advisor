@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "mappingVersion": "swebench-lite-v1",
+  "repositories": [
+    {
+      "repository": "django/django",
+      "sourceRoot": ["django"],
+      "ignoredPrefixComponents": ["django"],
+      "logicalModuleComponent": "first component after ignoredPrefixComponents",
+      "testPathRules": [
+        "component named tests or test",
+        "basename starts test_",
+        "basename ends _test.py",
+        "repository test roots: tests"
+      ]
+    },
+    {
+      "repository": "matplotlib/matplotlib",
+      "sourceRoot": ["lib", "matplotlib"],
+      "ignoredPrefixComponents": ["lib", "matplotlib"],
+      "logicalModuleComponent": "first component after ignoredPrefixComponents",
+      "testPathRules": [
+        "component named tests or test",
+        "basename starts test_",
+        "basename ends _test.py",
+        "repository test roots: lib/matplotlib/tests, tests"
+      ]
+    },
+    {
+      "repository": "scikit-learn/scikit-learn",
+      "sourceRoot": ["sklearn"],
+      "ignoredPrefixComponents": ["sklearn"],
+      "logicalModuleComponent": "first component after ignoredPrefixComponents",
+      "testPathRules": [
+        "component named tests or test",
+        "basename starts test_",
+        "basename ends _test.py",
+        "repository test roots: sklearn/*/tests, sklearn/tests, tests"
+      ]
+    },
+    {
+      "repository": "sphinx-doc/sphinx",
+      "sourceRoot": ["sphinx"],
+      "ignoredPrefixComponents": ["sphinx"],
+      "logicalModuleComponent": "first component after ignoredPrefixComponents",
+      "testPathRules": [
+        "component named tests or test",
+        "basename starts test_",
+        "basename ends _test.py",
+        "repository test roots: tests"
+      ]
+    },
+    {
+      "repository": "sympy/sympy",
+      "sourceRoot": ["sympy"],
+      "ignoredPrefixComponents": ["sympy"],
+      "logicalModuleComponent": "first component after ignoredPrefixComponents",
+      "testPathRules": [
+        "component named tests or test",
+        "basename starts test_",
+        "basename ends _test.py",
+        "repository test roots: sympy/*/tests, tests"
+      ]
+    }
+  ]
+}

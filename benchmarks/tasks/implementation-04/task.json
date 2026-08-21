@@ -1,0 +1,17 @@
+{
+  "id": "implementation-04",
+  "category": "implementation",
+  "fixture": "./fixture",
+  "prompt": "Implement groupBy in src/helper.ts. Group values by the callback key, preserve insertion order of keys and values, pass the original index to the callback, and return an empty Map for empty input without mutating the input.",
+  "validation": {
+    "program": "../../validators/implementation-04.ts",
+    "args": [],
+    "timeoutSeconds": 30
+  },
+  "timeoutSeconds": 180,
+  "metadata": {
+    "tags": ["collections", "ordering", "generics"],
+    "difficulty": "medium",
+    "validationType": "hidden-multi-case"
+  }
+}

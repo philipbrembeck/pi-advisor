@@ -1,0 +1,17 @@
+{
+  "id": "implementation-02",
+  "category": "implementation",
+  "fixture": "./fixture",
+  "prompt": "Implement compose in src/helper.ts. Apply the supplied transformation steps left-to-right, return an identity function for an empty list, preserve the caller's readonly array, and keep the generic type-safe API.",
+  "validation": {
+    "program": "../../validators/implementation-02.ts",
+    "args": [],
+    "timeoutSeconds": 30
+  },
+  "timeoutSeconds": 180,
+  "metadata": {
+    "tags": ["composition", "generics", "immutability"],
+    "difficulty": "medium",
+    "validationType": "hidden-multi-case"
+  }
+}

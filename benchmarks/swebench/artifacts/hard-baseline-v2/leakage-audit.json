@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 2,
+  "method": "static provenance review of repository-local artifacts and benchmark result paths; no model or leaderboard data read",
+  "corpus": "working tree benchmark artifacts plus SWE-bench_Lite candidate pool",
+  "split": "SWE-bench_Lite/default/test",
+  "checkedAt": "2026-08-19T13:23:28.522Z",
+  "tool": "hard-baseline-v2-builder",
+  "result": "PASS",
+  "solResultsConsulted": false,
+  "lunaResultsConsulted": false,
+  "advisorResultsConsulted": false,
+  "scoutResultsConsulted": false,
+  "leaderboardResultsConsulted": false,
+  "generatedPatchesConsulted": false,
+  "historicalControlOutcomeConsulted": false
+}

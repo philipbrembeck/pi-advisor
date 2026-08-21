@@ -1,0 +1,17 @@
+{
+  "id": "trajectory-debug-cache",
+  "category": "debugging",
+  "fixture": "./fixture",
+  "prompt": "The order API occasionally returns an older representation immediately after a successful update. Investigate the repository as a system, following the request, service, persistence, event, and cache paths. Fix the root cause while preserving the public API, keeping caching enabled, and avoiding unnecessary reads or invalidation of unrelated orders. Run the existing tests and add or update focused tests for the behavior you repair.",
+  "timeoutSeconds": 900,
+  "validation": {
+    "program": "../../validators/trajectory-debug-cache.ts",
+    "args": [],
+    "timeoutSeconds": 60
+  },
+  "metadata": {
+    "difficulty": "hard",
+    "shape": "multi-file-debugging",
+    "tags": ["cache", "events", "api", "cross-module"]
+  }
+}

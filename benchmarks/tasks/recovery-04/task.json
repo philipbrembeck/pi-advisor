@@ -1,0 +1,17 @@
+{
+  "id": "recovery-04",
+  "category": "recovery",
+  "fixture": "./fixture",
+  "prompt": "Recover parseList in src/parser.ts. Parse comma-separated values with quoted commas and escaped quotes, preserve whitespace and empty fields, and recover a final unterminated quote by returning the accumulated field rather than throwing.",
+  "validation": {
+    "program": "../../validators/recovery-04.ts",
+    "args": [],
+    "timeoutSeconds": 30
+  },
+  "timeoutSeconds": 180,
+  "metadata": {
+    "tags": ["parser", "csv", "partial-input"],
+    "difficulty": "hard",
+    "validationType": "hidden-multi-case"
+  }
+}

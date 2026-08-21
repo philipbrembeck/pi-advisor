@@ -1,0 +1,17 @@
+{
+  "id": "recovery-01",
+  "category": "recovery",
+  "fixture": "./fixture",
+  "prompt": "Complete the interrupted retry helper in src/retry.ts. Support bounded maxAttempts, retry only errors accepted by shouldRetry (default: retry), preserve and rethrow the final error, and call the injected sleep function for delayMs between attempts without real network or timer dependencies. Keep the generic API intact.",
+  "validation": {
+    "program": "../../validators/recovery-01.ts",
+    "args": [],
+    "timeoutSeconds": 30
+  },
+  "timeoutSeconds": 120,
+  "metadata": {
+    "tags": ["retry", "recovery", "error-policy", "backoff"],
+    "difficulty": "hard",
+    "validationType": "hidden-multi-case"
+  }
+}

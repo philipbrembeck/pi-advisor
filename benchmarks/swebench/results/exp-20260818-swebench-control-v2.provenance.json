@@ -1,0 +1,45 @@
+{
+  "experimentId": "exp-20260818-swebench-control-v2",
+  "schemaVersion": 1,
+  "control": true,
+  "dataset": "princeton-nlp/SWE-bench_Lite",
+  "datasetSnapshot": "rows API retrieved 2026-08-18; pinned patch hashes from historical provenance",
+  "manifestPath": "benchmarks/swebench/control-manifest.json",
+  "manifestSha256": "sha256:b664b1022092cfce152a3b081859d2b2f63b77960644cd09f13a3d66ed4e7851",
+  "resultsPath": "benchmarks/swebench/results/exp-20260818-swebench-control-v2.jsonl",
+  "resultsSha256": "sha256:3e0fa8999ce4625bf811380f149e23ef7a9cfb7381330049d514dec8b3c4a429",
+  "preflightPath": "benchmarks/swebench/artifacts/exp-20260818-swebench-control-v2-preflight.json",
+  "runtimeProbePath": "benchmarks/swebench/artifacts/exp-20260818-swebench-control-v2-runtime-probe.json",
+  "tasks": [
+    "django__django-15819",
+    "django__django-15902",
+    "django__django-15996",
+    "django__django-16041",
+    "django__django-16046"
+  ],
+  "models": ["openai-codex/gpt-5.6-sol", "openai-codex/gpt-5.6-luna"],
+  "repetitions": 3,
+  "totalExecutions": 30,
+  "concurrency": 4,
+  "declaredProviderConfiguration": {
+    "temperature": 0,
+    "samplingParams": {}
+  },
+  "effectiveSampling": "provider-controlled",
+  "advisorModesRun": [],
+  "scorable": {
+    "sol": 15,
+    "luna": 15
+  },
+  "environment": {
+    "os": "Darwin",
+    "architecture": "arm64",
+    "python": "3.11.4 (v3.11.4:d2340ef257, Jun  6 2023, 19:15:51) [Clang 13.0.0 (clang-1300.0.29.30)]",
+    "node": "v24.16.0",
+    "bun": "1.3.5"
+  },
+  "lifecycle": "base checkout -> canonical test patch -> prepared commit/hash -> model -> prepared-to-post-model patch -> canonical validation worktree with production-only model patch",
+  "executionIdsUnique": true,
+  "executionIdsBackfilledFromFrozenEntry": true,
+  "executionIdNote": "The initial runner projection omitted the worker UUID; unique IDs in this archived JSONL are deterministic hashes of experiment/task/model/repetition. Future runs persist the random execution ID directly."
+}

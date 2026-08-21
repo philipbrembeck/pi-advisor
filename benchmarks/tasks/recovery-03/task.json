@@ -1,0 +1,17 @@
+{
+  "id": "recovery-03",
+  "category": "recovery",
+  "fixture": "./fixture",
+  "prompt": "Recover parseConfig in src/parser.ts. Parse known keys from line-oriented input, support quoted values and comments, preserve explicit false/zero/empty values, ignore unknown or malformed lines, and let later valid entries repair earlier invalid ones.",
+  "validation": {
+    "program": "../../validators/recovery-03.ts",
+    "args": [],
+    "timeoutSeconds": 30
+  },
+  "timeoutSeconds": 180,
+  "metadata": {
+    "tags": ["configuration", "parser", "repair"],
+    "difficulty": "hard",
+    "validationType": "hidden-multi-case"
+  }
+}

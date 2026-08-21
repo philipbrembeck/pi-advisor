@@ -1,0 +1,7 @@
+{
+  "experimentId": "exp-20260820-swebench-hard-baseline-v2",
+  "manifestSha256": "44872ee3bfef9ad87bf1b9c3449658f9635ff086c328ca18febdb74ae4abe193",
+  "reportSha256": "54213e4b8e86d7b01d5cafb3e0888dd5fe9290667b8041f453106c06c972c948",
+  "resultsPath": "/Users/philipbrembeck/.pi/agent/extensions/pi-advisor/benchmarks/swebench/results/exp-20260820-swebench-hard-baseline-v2.jsonl",
+  "schemaVersion": 1
+}

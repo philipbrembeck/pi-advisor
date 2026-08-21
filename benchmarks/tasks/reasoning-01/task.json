@@ -1,0 +1,17 @@
+{
+  "id": "reasoning-01",
+  "category": "reasoning",
+  "fixture": "./fixture",
+  "prompt": "Update choose in src/policy.ts for a staged compatibility rollout: cached data always wins, version 1 without cache uses legacy, and version 2 or newer without cache uses v2. Preserve the string API and handle boundary values explicitly.",
+  "validation": {
+    "program": "../../validators/reasoning-01.ts",
+    "args": [],
+    "timeoutSeconds": 30
+  },
+  "timeoutSeconds": 180,
+  "metadata": {
+    "tags": ["compatibility", "rollout", "precedence"],
+    "difficulty": "medium",
+    "validationType": "hidden-multi-case"
+  }
+}

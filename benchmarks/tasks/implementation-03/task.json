@@ -1,0 +1,17 @@
+{
+  "id": "implementation-03",
+  "category": "implementation",
+  "fixture": "./fixture",
+  "prompt": "Implement memoize in src/helper.ts. Cache calls by the complete argument list, distinguish argument order, avoid invoking the wrapped function on hits, and enforce maxEntries as an LRU-style limit while preserving the generic API.",
+  "validation": {
+    "program": "../../validators/implementation-03.ts",
+    "args": [],
+    "timeoutSeconds": 30
+  },
+  "timeoutSeconds": 180,
+  "metadata": {
+    "tags": ["memoization", "cache", "generics"],
+    "difficulty": "hard",
+    "validationType": "hidden-multi-case"
+  }
+}

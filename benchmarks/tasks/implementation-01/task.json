@@ -1,0 +1,17 @@
+{
+  "id": "implementation-01",
+  "category": "implementation",
+  "fixture": "./fixture",
+  "prompt": "Implement mergeSettings in src/index.ts. Merge nested headers without mutating either input, preserve explicit zero values, concatenate non-empty tag overrides while removing duplicates in first-seen order, treat an explicitly empty tag list as a reset, and preserve defaults for omitted fields. Keep the exported types and public API unchanged.",
+  "validation": {
+    "program": "../../validators/implementation-01.ts",
+    "args": [],
+    "timeoutSeconds": 30
+  },
+  "timeoutSeconds": 180,
+  "metadata": {
+    "tags": ["configuration", "immutability", "defaults"],
+    "difficulty": "medium",
+    "validationType": "hidden-multi-case"
+  }
+}

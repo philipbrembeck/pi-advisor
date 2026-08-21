@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "status": "blocked-before-dataset-retrieval",
+  "selectionProtocol": {
+    "version": "v1",
+    "path": "benchmarks/SWEBENCH-BASELINE-DESIGN-PROPOSAL.md",
+    "sha256": "713969971fc2588ebf9ee300d66de9ce906dd6b4f5264e72017597912f4e33d1",
+    "frozenAt": "2026-08-19T12:51:59Z",
+    "repositoryCommit": "156d3ca2dd435a4292484d32045068eec184d055"
+  },
+  "dataset": null,
+  "candidatePool": null,
+  "manifest": null,
+  "stopReason": "Material selection-rule ambiguities were identified before candidate dataset retrieval. No interpretation was chosen and no candidate ranking was inspected."
+}

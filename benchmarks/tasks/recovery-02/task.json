@@ -1,0 +1,17 @@
+{
+  "id": "recovery-02",
+  "category": "recovery",
+  "fixture": "./fixture",
+  "prompt": "Recover the numeric parser in src/parser.ts. Accept surrounding whitespace, an optional sign, decimal numbers, and numeric separators between digits; reject empty, partially parsed, and malformed values instead of silently coercing them.",
+  "validation": {
+    "program": "../../validators/recovery-02.ts",
+    "args": [],
+    "timeoutSeconds": 30
+  },
+  "timeoutSeconds": 180,
+  "metadata": {
+    "tags": ["parser", "numeric", "recovery"],
+    "difficulty": "medium",
+    "validationType": "hidden-multi-case"
+  }
+}

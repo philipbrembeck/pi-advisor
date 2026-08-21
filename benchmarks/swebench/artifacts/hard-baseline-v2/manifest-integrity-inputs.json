@@ -1,0 +1,7 @@
+{
+  "originalManifestPath": "benchmarks/swebench/artifacts/hard-baseline-v2/manifest-original-frozen.json",
+  "currentManifestPath": "benchmarks/swebench/artifacts/hard-baseline-v2/manifest-current.json",
+  "expectedSha": "44872ee3bfef9ad87bf1b9c3449658f9635ff086c328ca18febdb74ae4abe193",
+  "observedRawSha": "e6d7f25bd887e8bd59fa1cb76ce768e4da38299687899671ce4e1bd2ccec3e5b",
+  "note": "No distinct pre-audit manifest byte snapshot was available; both immutable copies preserve the frozen file currently present in the workspace."
+}

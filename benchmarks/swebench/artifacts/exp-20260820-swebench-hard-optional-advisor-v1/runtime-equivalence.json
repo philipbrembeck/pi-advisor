@@ -1,0 +1,60 @@
+{
+  "allowedDifferences": [
+    "activeTools adds ask_advisor",
+    "advisor assignment changes from null to Sol",
+    "advisorMaxCallsPerSession changes from 0 to 4",
+    "advisor policy changes from none to optional"
+  ],
+  "baseline": {
+    "activeTools": [
+      "read",
+      "bash",
+      "edit",
+      "write"
+    ],
+    "advisor": null,
+    "advisorMaxCallsPerSession": 0,
+    "advisorOrchestration": {
+      "autoLoopGate": false,
+      "completionGate": false,
+      "failureGate": false,
+      "planGate": false,
+      "scoutEnabled": false
+    },
+    "executor": "openai-codex/gpt-5.6-luna",
+    "promptTreatment": "exact frozen task prompt; no benchmark treatment suffix",
+    "policy": {
+      "advisorCallPolicy": "none",
+      "advisorToolAvailable": false,
+      "advisorTrustPolicy": "current",
+      "scoutAvailable": false
+    }
+  },
+  "optional": {
+    "activeTools": [
+      "read",
+      "bash",
+      "edit",
+      "write",
+      "ask_advisor"
+    ],
+    "advisor": "openai-codex/gpt-5.6-sol",
+    "advisorMaxCallsPerSession": 4,
+    "advisorOrchestration": {
+      "autoLoopGate": false,
+      "completionGate": false,
+      "failureGate": false,
+      "planGate": false,
+      "scoutEnabled": false
+    },
+    "executor": "openai-codex/gpt-5.6-luna",
+    "promptTreatment": "exact frozen task prompt; no benchmark treatment suffix",
+    "policy": {
+      "advisorCallPolicy": "optional",
+      "advisorToolAvailable": true,
+      "advisorTrustPolicy": "current",
+      "scoutAvailable": false
+    }
+  },
+  "unexpectedDifferences": []
+}

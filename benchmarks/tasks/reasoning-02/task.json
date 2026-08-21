@@ -1,0 +1,17 @@
+{
+  "id": "reasoning-02",
+  "category": "reasoning",
+  "fixture": "./fixture",
+  "prompt": "Implement canUseFeature in src/policy.ts. Admins bypass rollout and the global enabled flag, guests never receive the feature, members require enabled plus a bucket strictly below rolloutPercent, and rollout values must be clamped to [0,100]. Preserve the typed API.",
+  "validation": {
+    "program": "../../validators/reasoning-02.ts",
+    "args": [],
+    "timeoutSeconds": 30
+  },
+  "timeoutSeconds": 180,
+  "metadata": {
+    "tags": ["feature-flags", "authorization", "boundaries"],
+    "difficulty": "hard",
+    "validationType": "hidden-multi-case"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "name": "order-cache-service",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "test": "node --test"
+  }
+}

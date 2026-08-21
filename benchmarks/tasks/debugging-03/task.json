@@ -1,0 +1,17 @@
+{
+  "id": "debugging-03",
+  "category": "debugging",
+  "fixture": "./fixture",
+  "prompt": "Fix the subscription bug in src/state.ts. Each listener should receive every subsequent value exactly once, unsubscribe should affect only that listener, and stored values must remain available even when no listeners exist. Keep the API unchanged.",
+  "validation": {
+    "program": "../../validators/debugging-03.ts",
+    "args": [],
+    "timeoutSeconds": 30
+  },
+  "timeoutSeconds": 180,
+  "metadata": {
+    "tags": ["events", "subscriptions", "state"],
+    "difficulty": "hard",
+    "validationType": "hidden-multi-case"
+  }
+}

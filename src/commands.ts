@@ -52,6 +52,7 @@ import {
 import { herdrAdvisorActivity, notifyHerdrAdvisorFailure } from "./herdr.js";
 import type { ScoutLifecycleEvent } from "./scout.js";
 import type { AdvisorSessionState } from "./session-state.js";
+import type { BenchmarkTelemetry } from "./telemetry.js";
 import {
   adviceForDisplay,
   appendScoutLifecycleEntry,
@@ -168,6 +169,7 @@ export const registerCommands = (
     consult?: ManualConsult;
     sessionState?: AdvisorSessionState;
     statusManager?: ScoutStatusManager;
+    telemetry?: BenchmarkTelemetry;
   } = {}
 ) => {
   const advisorSessionState =
@@ -187,7 +189,9 @@ export const registerCommands = (
         undefined,
         undefined,
         undefined,
-        onScout
+        onScout,
+        undefined,
+        dependencies.telemetry
       ));
   const manualConsultations = new Map<AbortController, symbol>();
   const setManualStatus = (

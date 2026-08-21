@@ -1,0 +1,17 @@
+{
+  "id": "debugging-01",
+  "category": "debugging",
+  "fixture": "./fixture",
+  "prompt": "Fix the cache invalidation bug in src/cache.ts. Invalidating one key must hide only that key, a later set must refresh an invalidated key, missing-key invalidation must be harmless, and unrelated cached values must remain available. Keep the public API unchanged.",
+  "validation": {
+    "program": "../../validators/debugging-01.ts",
+    "args": [],
+    "timeoutSeconds": 30
+  },
+  "timeoutSeconds": 120,
+  "metadata": {
+    "tags": ["cache", "invalidation", "state"],
+    "difficulty": "medium",
+    "validationType": "hidden-multi-case"
+  }
+}

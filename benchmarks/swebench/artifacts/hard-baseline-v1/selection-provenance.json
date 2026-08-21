@@ -1,0 +1,474 @@
+{
+  "candidatePoolSha256": "6282101e12dd1d79667de8f04e45554971d329c9be058b864186fb7394eb9dbb",
+  "clarificationSha256": "8c055469c1f505e7faa81f12dbedbf0e2a95e0eaebe1a18e527ee766ff1c2878",
+  "dataset": {
+    "config": "default",
+    "name": "princeton-nlp/SWE-bench_Lite",
+    "revision": "6ec7bb89b9342f664a54a6e0a6ea6501d3437cc2",
+    "rowsSha256": "b4dd348d3151ddec220fe4cc9db8b691fad9c45be73bf4d1daeba20f6f2ba3d8",
+    "sourceRows": 300,
+    "split": "test"
+  },
+  "effectiveProtocolIdentity": "aaf2d5e678aac2ec121c42ed0d1f72b024194bc2fe825748cf1baa1865187443",
+  "eligibleByRepository": {
+    "django/django": 110,
+    "matplotlib/matplotlib": 19,
+    "scikit-learn/scikit-learn": 23,
+    "sphinx-doc/sphinx": 15,
+    "sympy/sympy": 76
+  },
+  "inferenceInvoked": false,
+  "manifestSha256": null,
+  "moduleMappingSha256": "e59d066c06ea521fbf66f70ee20092b423b2c180c4070c8b590d0e6912e8e0d2",
+  "originalProtocolSha256": "713969971fc2588ebf9ee300d66de9ce906dd6b4f5264e72017597912f4e33d1",
+  "scheduleCreated": false,
+  "schemaVersion": 1,
+  "selectedBroadTasks": 11,
+  "selectedDetails": [
+    {
+      "changedFiles": [
+        {
+          "path": "django/db/migrations/autodetector.py",
+          "classification": "production",
+          "classificationRule": "under sourceRoot django"
+        }
+      ],
+      "instanceId": "django__django-13265",
+      "multiModule": false,
+      "productionFilesChanged": 1,
+      "productionLinesChanged": 27,
+      "productionModules": [
+        "db"
+      ],
+      "repository": "django/django"
+    },
+    {
+      "changedFiles": [
+        {
+          "path": "django/forms/widgets.py",
+          "classification": "production",
+          "classificationRule": "under sourceRoot django"
+        }
+      ],
+      "instanceId": "django__django-11019",
+      "multiModule": false,
+      "productionFilesChanged": 1,
+      "productionLinesChanged": 76,
+      "productionModules": [
+        "forms"
+      ],
+      "repository": "django/django"
+    },
+    {
+      "changedFiles": [
+        {
+          "path": "django/db/migrations/operations/models.py",
+          "classification": "production",
+          "classificationRule": "under sourceRoot django"
+        }
+      ],
+      "instanceId": "django__django-16820",
+      "multiModule": false,
+      "productionFilesChanged": 1,
+      "productionLinesChanged": 65,
+      "productionModules": [
+        "db"
+      ],
+      "repository": "django/django"
+    },
+    {
+      "changedFiles": [
+        {
+          "path": "django/db/backends/ddl_references.py",
+          "classification": "production",
+          "classificationRule": "under sourceRoot django"
+        }
+      ],
+      "instanceId": "django__django-14997",
+      "multiModule": false,
+      "productionFilesChanged": 1,
+      "productionLinesChanged": 6,
+      "productionModules": [
+        "db"
+      ],
+      "repository": "django/django"
+    },
+    {
+      "changedFiles": [
+        {
+          "path": "lib/matplotlib/widgets.py",
+          "classification": "production",
+          "classificationRule": "under sourceRoot lib/matplotlib"
+        }
+      ],
+      "instanceId": "matplotlib__matplotlib-22711",
+      "multiModule": false,
+      "productionFilesChanged": 1,
+      "productionLinesChanged": 24,
+      "productionModules": [
+        "__root__"
+      ],
+      "repository": "matplotlib/matplotlib"
+    },
+    {
+      "changedFiles": [
+        {
+          "path": "lib/matplotlib/offsetbox.py",
+          "classification": "production",
+          "classificationRule": "under sourceRoot lib/matplotlib"
+        }
+      ],
+      "instanceId": "matplotlib__matplotlib-25442",
+      "multiModule": false,
+      "productionFilesChanged": 1,
+      "productionLinesChanged": 31,
+      "productionModules": [
+        "__root__"
+      ],
+      "repository": "matplotlib/matplotlib"
+    },
+    {
+      "changedFiles": [
+        {
+          "path": "lib/matplotlib/__init__.py",
+          "classification": "production",
+          "classificationRule": "under sourceRoot lib/matplotlib"
+        }
+      ],
+      "instanceId": "matplotlib__matplotlib-18869",
+      "multiModule": false,
+      "productionFilesChanged": 1,
+      "productionLinesChanged": 67,
+      "productionModules": [
+        "__root__"
+      ],
+      "repository": "matplotlib/matplotlib"
+    },
+    {
+      "changedFiles": [
+        {
+          "path": "lib/matplotlib/backends/backend_ps.py",
+          "classification": "production",
+          "classificationRule": "under sourceRoot lib/matplotlib"
+        }
+      ],
+      "instanceId": "matplotlib__matplotlib-23964",
+      "multiModule": false,
+      "productionFilesChanged": 1,
+      "productionLinesChanged": 5,
+      "productionModules": [
+        "backends"
+      ],
+      "repository": "matplotlib/matplotlib"
+    },
+    {
+      "changedFiles": [
+        {
+          "path": "sklearn/utils/multiclass.py",
+          "classification": "production",
+          "classificationRule": "under sourceRoot sklearn"
+        }
+      ],
+      "instanceId": "scikit-learn__scikit-learn-25638",
+      "multiModule": false,
+      "productionFilesChanged": 1,
+      "productionLinesChanged": 35,
+      "productionModules": [
+        "utils"
+      ],
+      "repository": "scikit-learn/scikit-learn"
+    },
+    {
+      "changedFiles": [
+        {
+          "path": "sklearn/neighbors/nca.py",
+          "classification": "production",
+          "classificationRule": "under sourceRoot sklearn"
+        }
+      ],
+      "instanceId": "scikit-learn__scikit-learn-14092",
+      "multiModule": false,
+      "productionFilesChanged": 1,
+      "productionLinesChanged": 10,
+      "productionModules": [
+        "neighbors"
+      ],
+      "repository": "scikit-learn/scikit-learn"
+    },
+    {
+      "changedFiles": [
+        {
+          "path": "sklearn/metrics/cluster/_supervised.py",
+          "classification": "production",
+          "classificationRule": "under sourceRoot sklearn"
+        }
+      ],
+      "instanceId": "scikit-learn__scikit-learn-15535",
+      "multiModule": false,
+      "productionFilesChanged": 1,
+      "productionLinesChanged": 4,
+      "productionModules": [
+        "metrics"
+      ],
+      "repository": "scikit-learn/scikit-learn"
+    },
+    {
+      "changedFiles": [
+        {
+          "path": "sklearn/utils/_set_output.py",
+          "classification": "production",
+          "classificationRule": "under sourceRoot sklearn"
+        }
+      ],
+      "instanceId": "scikit-learn__scikit-learn-25747",
+      "multiModule": false,
+      "productionFilesChanged": 1,
+      "productionLinesChanged": 4,
+      "productionModules": [
+        "utils"
+      ],
+      "repository": "scikit-learn/scikit-learn"
+    },
+    {
+      "changedFiles": [
+        {
+          "path": "sphinx/ext/autosummary/generate.py",
+          "classification": "production",
+          "classificationRule": "under sourceRoot sphinx"
+        }
+      ],
+      "instanceId": "sphinx-doc__sphinx-7686",
+      "multiModule": false,
+      "productionFilesChanged": 1,
+      "productionLinesChanged": 54,
+      "productionModules": [
+        "ext"
+      ],
+      "repository": "sphinx-doc/sphinx"
+    },
+    {
+      "changedFiles": [
+        {
+          "path": "sphinx/ext/autodoc/typehints.py",
+          "classification": "production",
+          "classificationRule": "under sourceRoot sphinx"
+        }
+      ],
+      "instanceId": "sphinx-doc__sphinx-10451",
+      "multiModule": false,
+      "productionFilesChanged": 1,
+      "productionLinesChanged": 20,
+      "productionModules": [
+        "ext"
+      ],
+      "repository": "sphinx-doc/sphinx"
+    },
+    {
+      "changedFiles": [
+        {
+          "path": "sphinx/domains/std.py",
+          "classification": "production",
+          "classificationRule": "under sourceRoot sphinx"
+        }
+      ],
+      "instanceId": "sphinx-doc__sphinx-8474",
+      "multiModule": false,
+      "productionFilesChanged": 1,
+      "productionLinesChanged": 5,
+      "productionModules": [
+        "domains"
+      ],
+      "repository": "sphinx-doc/sphinx"
+    },
+    {
+      "changedFiles": [
+        {
+          "path": "sphinx/ext/napoleon/docstring.py",
+          "classification": "production",
+          "classificationRule": "under sourceRoot sphinx"
+        }
+      ],
+      "instanceId": "sphinx-doc__sphinx-8713",
+      "multiModule": false,
+      "productionFilesChanged": 1,
+      "productionLinesChanged": 8,
+      "productionModules": [
+        "ext"
+      ],
+      "repository": "sphinx-doc/sphinx"
+    },
+    {
+      "changedFiles": [
+        {
+          "path": "sympy/printing/pretty/pretty.py",
+          "classification": "production",
+          "classificationRule": "under sourceRoot sympy"
+        }
+      ],
+      "instanceId": "sympy__sympy-20639",
+      "multiModule": false,
+      "productionFilesChanged": 1,
+      "productionLinesChanged": 24,
+      "productionModules": [
+        "printing"
+      ],
+      "repository": "sympy/sympy"
+    },
+    {
+      "changedFiles": [
+        {
+          "path": "sympy/utilities/codegen.py",
+          "classification": "production",
+          "classificationRule": "under sourceRoot sympy"
+        }
+      ],
+      "instanceId": "sympy__sympy-16792",
+      "multiModule": false,
+      "productionFilesChanged": 1,
+      "productionLinesChanged": 16,
+      "productionModules": [
+        "utilities"
+      ],
+      "repository": "sympy/sympy"
+    },
+    {
+      "changedFiles": [
+        {
+          "path": "sympy/physics/vector/point.py",
+          "classification": "production",
+          "classificationRule": "under sourceRoot sympy"
+        }
+      ],
+      "instanceId": "sympy__sympy-20049",
+      "multiModule": false,
+      "productionFilesChanged": 1,
+      "productionLinesChanged": 34,
+      "productionModules": [
+        "physics"
+      ],
+      "repository": "sympy/sympy"
+    },
+    {
+      "changedFiles": [
+        {
+          "path": "sympy/printing/latex.py",
+          "classification": "production",
+          "classificationRule": "under sourceRoot sympy"
+        }
+      ],
+      "instanceId": "sympy__sympy-21171",
+      "multiModule": false,
+      "productionFilesChanged": 1,
+      "productionLinesChanged": 4,
+      "productionModules": [
+        "printing"
+      ],
+      "repository": "sympy/sympy"
+    }
+  ],
+  "selectedMultiModuleTasks": 0,
+  "selection": [
+    {
+      "criterion": "intrinsic complexity heuristic",
+      "instanceId": "django__django-13265",
+      "repository": "django/django"
+    },
+    {
+      "criterion": "production-file coverage",
+      "instanceId": "django__django-11019",
+      "repository": "django/django"
+    },
+    {
+      "criterion": "FAIL_TO_PASS coverage",
+      "instanceId": "django__django-16820",
+      "repository": "django/django"
+    },
+    {
+      "criterion": "problem-statement-length coverage",
+      "instanceId": "django__django-14997",
+      "repository": "django/django"
+    },
+    {
+      "criterion": "intrinsic complexity heuristic",
+      "instanceId": "matplotlib__matplotlib-22711",
+      "repository": "matplotlib/matplotlib"
+    },
+    {
+      "criterion": "production-file coverage",
+      "instanceId": "matplotlib__matplotlib-25442",
+      "repository": "matplotlib/matplotlib"
+    },
+    {
+      "criterion": "FAIL_TO_PASS coverage",
+      "instanceId": "matplotlib__matplotlib-18869",
+      "repository": "matplotlib/matplotlib"
+    },
+    {
+      "criterion": "problem-statement-length coverage",
+      "instanceId": "matplotlib__matplotlib-23964",
+      "repository": "matplotlib/matplotlib"
+    },
+    {
+      "criterion": "intrinsic complexity heuristic",
+      "instanceId": "scikit-learn__scikit-learn-25638",
+      "repository": "scikit-learn/scikit-learn"
+    },
+    {
+      "criterion": "production-file coverage",
+      "instanceId": "scikit-learn__scikit-learn-14092",
+      "repository": "scikit-learn/scikit-learn"
+    },
+    {
+      "criterion": "FAIL_TO_PASS coverage",
+      "instanceId": "scikit-learn__scikit-learn-15535",
+      "repository": "scikit-learn/scikit-learn"
+    },
+    {
+      "criterion": "problem-statement-length coverage",
+      "instanceId": "scikit-learn__scikit-learn-25747",
+      "repository": "scikit-learn/scikit-learn"
+    },
+    {
+      "criterion": "intrinsic complexity heuristic",
+      "instanceId": "sphinx-doc__sphinx-7686",
+      "repository": "sphinx-doc/sphinx"
+    },
+    {
+      "criterion": "production-file coverage",
+      "instanceId": "sphinx-doc__sphinx-10451",
+      "repository": "sphinx-doc/sphinx"
+    },
+    {
+      "criterion": "FAIL_TO_PASS coverage",
+      "instanceId": "sphinx-doc__sphinx-8474",
+      "repository": "sphinx-doc/sphinx"
+    },
+    {
+      "criterion": "problem-statement-length coverage",
+      "instanceId": "sphinx-doc__sphinx-8713",
+      "repository": "sphinx-doc/sphinx"
+    },
+    {
+      "criterion": "intrinsic complexity heuristic",
+      "instanceId": "sympy__sympy-20639",
+      "repository": "sympy/sympy"
+    },
+    {
+      "criterion": "production-file coverage",
+      "instanceId": "sympy__sympy-16792",
+      "repository": "sympy/sympy"
+    },
+    {
+      "criterion": "FAIL_TO_PASS coverage",
+      "instanceId": "sympy__sympy-20049",
+      "repository": "sympy/sympy"
+    },
+    {
+      "criterion": "problem-statement-length coverage",
+      "instanceId": "sympy__sympy-21171",
+      "repository": "sympy/sympy"
+    }
+  ],
+  "status": "MANIFEST PREFLIGHT FAILED",
+  "stopReason": "selected multi-module count 0 < 2"
+}

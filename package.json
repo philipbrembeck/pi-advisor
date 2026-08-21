@@ -28,6 +28,8 @@
     "README.md"
   ],
   "scripts": {
+    "benchmark": "bun benchmarks/src/cli.ts",
+    "benchmark:report": "bun benchmarks/src/cli.ts report",
     "format": "bunx ultracite fix --linter-enabled=false",
     "lint": "bunx ultracite check",
     "lint:fix": "bunx ultracite fix",

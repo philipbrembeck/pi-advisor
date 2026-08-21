@@ -1,0 +1,18 @@
+{
+  "id": "reasoning-05",
+  "category": "reasoning",
+  "fixture": "./fixture",
+  "prompt": "Diagnose and fix the idempotency bug in this job-processing fixture. A failed job must be requeued at the front of the queue with the same identity, a later successful retry must report the original id and attempt count, completed duplicate jobs must not execute again, and unrelated queued jobs must remain independent. Trace the behavior across src/queue.ts, src/store.ts, src/worker.ts, and src/index.ts; ignore unrelated modules unless needed. Preserve the public API and error behavior.",
+  "validation": {
+    "program": "../../validators/reasoning-05.ts",
+    "args": [],
+    "timeoutSeconds": 45
+  },
+  "timeoutSeconds": 300,
+  "metadata": {
+    "tags": ["idempotency", "queue", "retry", "large-context", "cross-file"],
+    "difficulty": "hard",
+    "validationType": "hidden-multi-case",
+    "contextProfile": "26 source files / distractor-heavy"
+  }
+}

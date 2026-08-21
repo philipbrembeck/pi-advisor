@@ -1,0 +1,192 @@
+{
+  "experimentId": "exp-swebench-hard-baseline-v2",
+  "rows": [
+    {
+      "base": "PASS",
+      "environmentFingerprint": "COMPLETE",
+      "gold": "FAIL",
+      "initial": "FAIL",
+      "reverted": "FAIL",
+      "taskId": "sympy__sympy-16792",
+      "testPatch": "PASS"
+    },
+    {
+      "base": "PASS",
+      "environmentFingerprint": "COMPLETE",
+      "gold": "FAIL",
+      "initial": "FAIL",
+      "reverted": "FAIL",
+      "taskId": "sphinx-doc__sphinx-8474",
+      "testPatch": "PASS"
+    },
+    {
+      "base": "PASS",
+      "environmentFingerprint": "COMPLETE",
+      "gold": "PASS",
+      "initial": "FAIL",
+      "reverted": "FAIL",
+      "taskId": "django__django-11019",
+      "testPatch": "PASS"
+    },
+    {
+      "base": "PASS",
+      "environmentFingerprint": "COMPLETE",
+      "gold": "FAIL",
+      "initial": "FAIL",
+      "reverted": "FAIL",
+      "taskId": "sphinx-doc__sphinx-7686",
+      "testPatch": "PASS"
+    },
+    {
+      "base": "PASS",
+      "environmentFingerprint": "COMPLETE",
+      "gold": "FAIL",
+      "initial": "FAIL",
+      "reverted": "FAIL",
+      "taskId": "scikit-learn__scikit-learn-15535",
+      "testPatch": "PASS"
+    },
+    {
+      "base": "PASS",
+      "environmentFingerprint": "COMPLETE",
+      "gold": "FAIL",
+      "initial": "FAIL",
+      "reverted": "FAIL",
+      "taskId": "matplotlib__matplotlib-25442",
+      "testPatch": "PASS"
+    },
+    {
+      "base": "PASS",
+      "environmentFingerprint": "COMPLETE",
+      "gold": "FAIL",
+      "initial": "FAIL",
+      "reverted": "FAIL",
+      "taskId": "sympy__sympy-20639",
+      "testPatch": "PASS"
+    },
+    {
+      "base": "PASS",
+      "environmentFingerprint": "COMPLETE",
+      "gold": "FAIL",
+      "initial": "FAIL",
+      "reverted": "FAIL",
+      "taskId": "sympy__sympy-20049",
+      "testPatch": "PASS"
+    },
+    {
+      "base": "FAIL",
+      "environmentFingerprint": "INCOMPLETE",
+      "error": "canonical test file set mismatch for sphinx-doc__sphinx-10451",
+      "gold": "FAIL",
+      "initial": "FAIL",
+      "reverted": "FAIL",
+      "taskId": "sphinx-doc__sphinx-10451",
+      "testPatch": "FAIL"
+    },
+    {
+      "base": "PASS",
+      "environmentFingerprint": "COMPLETE",
+      "gold": "FAIL",
+      "initial": "FAIL",
+      "reverted": "FAIL",
+      "taskId": "scikit-learn__scikit-learn-25747",
+      "testPatch": "PASS"
+    },
+    {
+      "base": "PASS",
+      "environmentFingerprint": "COMPLETE",
+      "gold": "PASS",
+      "initial": "FAIL",
+      "reverted": "FAIL",
+      "taskId": "django__django-16820",
+      "testPatch": "PASS"
+    },
+    {
+      "base": "PASS",
+      "environmentFingerprint": "COMPLETE",
+      "gold": "FAIL",
+      "initial": "FAIL",
+      "reverted": "FAIL",
+      "taskId": "sympy__sympy-21171",
+      "testPatch": "PASS"
+    },
+    {
+      "base": "PASS",
+      "environmentFingerprint": "COMPLETE",
+      "gold": "FAIL",
+      "initial": "FAIL",
+      "reverted": "FAIL",
+      "taskId": "scikit-learn__scikit-learn-14092",
+      "testPatch": "PASS"
+    },
+    {
+      "base": "PASS",
+      "environmentFingerprint": "COMPLETE",
+      "gold": "FAIL",
+      "initial": "FAIL",
+      "reverted": "FAIL",
+      "taskId": "matplotlib__matplotlib-23964",
+      "testPatch": "PASS"
+    },
+    {
+      "base": "PASS",
+      "environmentFingerprint": "COMPLETE",
+      "gold": "PASS",
+      "initial": "FAIL",
+      "reverted": "FAIL",
+      "taskId": "django__django-13265",
+      "testPatch": "PASS"
+    },
+    {
+      "base": "PASS",
+      "environmentFingerprint": "COMPLETE",
+      "gold": "FAIL",
+      "initial": "FAIL",
+      "reverted": "FAIL",
+      "taskId": "matplotlib__matplotlib-18869",
+      "testPatch": "PASS"
+    },
+    {
+      "base": "PASS",
+      "environmentFingerprint": "COMPLETE",
+      "gold": "PASS",
+      "initial": "FAIL",
+      "reverted": "FAIL",
+      "taskId": "django__django-14997",
+      "testPatch": "PASS"
+    },
+    {
+      "base": "PASS",
+      "environmentFingerprint": "COMPLETE",
+      "gold": "FAIL",
+      "initial": "FAIL",
+      "reverted": "FAIL",
+      "taskId": "matplotlib__matplotlib-22711",
+      "testPatch": "PASS"
+    },
+    {
+      "base": "PASS",
+      "environmentFingerprint": "COMPLETE",
+      "gold": "FAIL",
+      "initial": "FAIL",
+      "reverted": "FAIL",
+      "taskId": "scikit-learn__scikit-learn-25638",
+      "testPatch": "PASS"
+    },
+    {
+      "base": "PASS",
+      "environmentFingerprint": "COMPLETE",
+      "gold": "FAIL",
+      "initial": "FAIL",
+      "reverted": "FAIL",
+      "taskId": "sphinx-doc__sphinx-8713",
+      "testPatch": "PASS"
+    }
+  ],
+  "schemaVersion": 2,
+  "status": "MANIFEST PREFLIGHT FAILED",
+  "readyCount": 4,
+  "totalCount": 20,
+  "manifestSha256": "44872ee3bfef9ad87bf1b9c3449658f9635ff086c328ca18febdb74ae4abe193",
+  "reportPath": "benchmarks/SWEBENCH-HARD-BASELINE-V2-MANIFEST-REPORT.md"
+}

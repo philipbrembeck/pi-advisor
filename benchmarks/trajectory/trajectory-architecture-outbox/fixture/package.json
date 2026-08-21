@@ -1,0 +1,8 @@
+{
+  "name": "preference-notifications",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "test": "node --test"
+  }
+}

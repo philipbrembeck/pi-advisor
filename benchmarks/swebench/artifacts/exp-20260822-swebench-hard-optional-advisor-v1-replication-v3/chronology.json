@@ -1,0 +1,17 @@
+{
+  "experimentId": "exp-20260822-swebench-hard-optional-advisor-v1-replication-v3",
+  "events": [
+    {
+      "event": "plan-persisted",
+      "planSha256": "37a90c49754fb39ffbae51739e1de44e5dd0b6dd9397c5fdcab325600e9cefd1",
+      "timestamp": "2026-08-21T06:24:37.137Z"
+    },
+    {
+      "event": "inference-start",
+      "planSha256": "37a90c49754fb39ffbae51739e1de44e5dd0b6dd9397c5fdcab325600e9cefd1",
+      "timestamp": "2026-08-21T06:24:37.141Z"
+    }
+  ],
+  "planSha256": "37a90c49754fb39ffbae51739e1de44e5dd0b6dd9397c5fdcab325600e9cefd1",
+  "scheduleSha256": "1dec3578ce0da02ccf5223a1f5d07cb04d3fb00ebcb78b12fb1bc52ffaa0d4d0"
+}

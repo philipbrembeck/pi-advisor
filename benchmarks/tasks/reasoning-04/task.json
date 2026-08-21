@@ -1,0 +1,17 @@
+{
+  "id": "reasoning-04",
+  "category": "reasoning",
+  "fixture": "./fixture",
+  "prompt": "Implement cachePolicy in src/policy.ts. Fresh cached data always wins; stale data may be used only when offline and non-critical; otherwise use the network when online, and return error when a critical request cannot use fresh cache or reach the network.",
+  "validation": {
+    "program": "../../validators/reasoning-04.ts",
+    "args": [],
+    "timeoutSeconds": 30
+  },
+  "timeoutSeconds": 180,
+  "metadata": {
+    "tags": ["caching", "offline", "critical-path"],
+    "difficulty": "hard",
+    "validationType": "hidden-multi-case"
+  }
+}

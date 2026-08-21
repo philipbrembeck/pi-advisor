@@ -1,0 +1,17 @@
+{
+  "id": "implementation-05",
+  "category": "implementation",
+  "fixture": "./fixture",
+  "prompt": "Implement parseCsvLine in src/helper.ts. Parse commas, quoted fields, escaped double quotes, empty fields, and newlines inside quoted fields without trimming or changing field contents. Keep malformed input handling deterministic and do not use a CSV dependency.",
+  "validation": {
+    "program": "../../validators/implementation-05.ts",
+    "args": [],
+    "timeoutSeconds": 30
+  },
+  "timeoutSeconds": 180,
+  "metadata": {
+    "tags": ["parser", "escaping", "edge-cases"],
+    "difficulty": "hard",
+    "validationType": "hidden-multi-case"
+  }
+}

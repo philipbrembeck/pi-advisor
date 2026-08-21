@@ -916,7 +916,7 @@ describe("Extension Registration", () => {
       },
     } as any;
     await commands.get("advisor-manual").handler("", ctx);
-    expect(statuses.at(-1)).toBe("Scout curating…");
+    expect(statuses.at(-1)).toBe("Advisor Scout curating…");
     events.get("session_shutdown")?.({ reason: "reload" }, ctx);
     expect(statuses.at(-1)).toBeUndefined();
   });

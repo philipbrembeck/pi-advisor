@@ -1,0 +1,17 @@
+{
+  "id": "debugging-02",
+  "category": "debugging",
+  "fixture": "./fixture",
+  "prompt": "Fix the lifecycle state bug in src/state.ts. Only idle→running and running→done are valid transitions; repeated or invalid calls must be no-ops, and reset must clear both state and transition count. Preserve the public API.",
+  "validation": {
+    "program": "../../validators/debugging-02.ts",
+    "args": [],
+    "timeoutSeconds": 30
+  },
+  "timeoutSeconds": 180,
+  "metadata": {
+    "tags": ["state-machine", "invariants", "idempotence"],
+    "difficulty": "medium",
+    "validationType": "hidden-multi-case"
+  }
+}

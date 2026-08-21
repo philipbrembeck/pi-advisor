@@ -1,0 +1,38 @@
+{
+  "adapterHash": "sha256:a7ad9c6803c56e9d7a01db5479e1b0bd91e1064c3ae2659ab6f402a17a428c77",
+  "adapterVersion": "2026-08-19.3",
+  "benchmarkRepositoryCommit": "156d3ca2dd435a4292484d32045068eec184d055",
+  "candidatePoolSha256": "6282101e12dd1d79667de8f04e45554971d329c9be058b864186fb7394eb9dbb",
+  "concurrency": 4,
+  "configHash": "sha256:129aefdfb2160539ff2385416114689a5939a8bbfc3ca3e693d00b6123bacde4",
+  "createdAt": "2026-08-21T06:24:37.137Z",
+  "experimentId": "exp-20260822-swebench-hard-optional-advisor-v1-replication-v3",
+  "identityHash": "91ee0ed2f9d90a7392599441bd4c416b02e316a5f83800f7d975f8cb22855b80",
+  "manifestPath": "benchmarks/swebench/hard-baseline-v2-manifest.json",
+  "manifestSha256": "44872ee3bfef9ad87bf1b9c3449658f9635ff086c328ca18febdb74ae4abe193",
+  "models": [
+    "openai-codex/gpt-5.6-luna",
+    "openai-codex/gpt-5.6-sol"
+  ],
+  "preflightArtifact": "benchmarks/swebench/artifacts/hard-baseline-v2/preflight-baseline-gate-current.json",
+  "preflightArtifactSha256": "sha256:b9147c380ab4e77f0aac40a58db111edc766210eba50b2764b6cf704a9a87c6c",
+  "planSha256": "37a90c49754fb39ffbae51739e1de44e5dd0b6dd9397c5fdcab325600e9cefd1",
+  "runtime": {
+    "architecture": "arm64",
+    "bun": "1.3.5",
+    "node": "24.3.0",
+    "platform": "darwin"
+  },
+  "scheduleSha256": "1dec3578ce0da02ccf5223a1f5d07cb04d3fb00ebcb78b12fb1bc52ffaa0d4d0",
+  "scheduleSeed": 20260822,
+  "semanticManifestSha256": "f47a191590b8a39880a6770023035e812e8cae886b94a0f16e34e7c59dcbd588",
+  "timeoutSeconds": 600,
+  "validatorTimeoutSeconds": 300,
+  "authoritativeTelemetry": {
+    "advisorCallsFromRuntime": 37,
+    "advisorCallsFromUsage": 37
+  },
+  "inferenceStartedAt": "2026-08-21T06:24:37.141Z",
+  "reconciliationPath": "/Users/philipbrembeck/.pi/agent/extensions/pi-advisor/benchmarks/swebench/artifacts/exp-20260822-swebench-hard-optional-advisor-v1-replication-v3/reconciliation.json",
+  "stopReason": null
+}

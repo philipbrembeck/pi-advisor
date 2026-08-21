@@ -1,0 +1,54 @@
+{
+  "adapterHash": "sha256:a7ad9c6803c56e9d7a01db5479e1b0bd91e1064c3ae2659ab6f402a17a428c77",
+  "adapterVersion": "2026-08-19.3",
+  "baselineRunnerHash": "sha256:32fb05741a9e919bfa3c58c2a09d587433faa89c30cd346ea49ea249178dcd33",
+  "benchmarkRepositoryCommit": "156d3ca2dd435a4292484d32045068eec184d055",
+  "candidatePoolSha256": "6282101e12dd1d79667de8f04e45554971d329c9be058b864186fb7394eb9dbb",
+  "concurrency": 4,
+  "configHash": "sha256:129aefdfb2160539ff2385416114689a5939a8bbfc3ca3e693d00b6123bacde4",
+  "configPath": "/Users/philipbrembeck/.pi/agent/extensions/pi-advisor/benchmarks/config/benchmark.local.json",
+  "createdAt": "2026-08-20T19:29:58.133Z",
+  "determinismRepeat": {
+    "artifact": "benchmarks/swebench/artifacts/hard-baseline-v2/preflight-determinism-sample-final.json",
+    "ready": 5,
+    "rows": 5
+  },
+  "experimentId": "exp-20260820-swebench-hard-baseline-v2",
+  "manifestPath": "/Users/philipbrembeck/.pi/agent/extensions/pi-advisor/benchmarks/swebench/hard-baseline-v2-manifest.json",
+  "manifestSha256": "44872ee3bfef9ad87bf1b9c3449658f9635ff086c328ca18febdb74ae4abe193",
+  "modelIds": [
+    "openai-codex/gpt-5.6-sol",
+    "openai-codex/gpt-5.6-luna"
+  ],
+  "planSha256": "6ccafe35b9f6ac25313f5d9458eeee6ccfe013df8270536b01a237dafec70ad3",
+  "preflight": {
+    "byRepository": {
+      "sympy/sympy": 4,
+      "sphinx-doc/sphinx": 4,
+      "django/django": 4,
+      "scikit-learn/scikit-learn": 4,
+      "matplotlib/matplotlib": 4
+    },
+    "ready": 20,
+    "rows": 20
+  },
+  "runnerHash": "sha256:b709c97b4f944c53cb1f6e2744ecf2edd74ceb008a9acb0fe330c30b1307253d",
+  "runtime": {
+    "architecture": "arm64",
+    "bun": "1.3.5",
+    "node": "24.3.0",
+    "platform": "darwin"
+  },
+  "scheduleSha256": "a153b8e1f0f6acf41bd81fd5e33030221ab86d5bc719ac302b55fdeedf8b64b8",
+  "schemaVersion": 1,
+  "seed": 20260820,
+  "semanticManifestSha256": "f47a191590b8a39880a6770023035e812e8cae886b94a0f16e34e7c59dcbd588",
+  "sourceTree": {
+    "commit": "156d3ca2dd435a4292484d32045068eec184d055",
+    "diffSha256": "sha256:b0d746d102e82bace6ce62a7a6951d2b1da266406cfdfc70d813c04a5ff55b34",
+    "dirty": true,
+    "statusSha256": "sha256:29464a54c513bba18463329651c05ca39e3c6e309551d5b0c761ade13ea62083"
+  },
+  "timeoutSeconds": 600,
+  "validatorTimeoutSeconds": 300
+}

@@ -1,0 +1,17 @@
+{
+  "id": "debugging-04",
+  "category": "debugging",
+  "fixture": "./fixture",
+  "prompt": "Fix the queue drain bug in src/state.ts. Drain every item that existed when draining began exactly once, leave items enqueued by a handler for the next drain, prevent re-entrant drains from corrupting state, and always clear the draining guard.",
+  "validation": {
+    "program": "../../validators/debugging-04.ts",
+    "args": [],
+    "timeoutSeconds": 30
+  },
+  "timeoutSeconds": 180,
+  "metadata": {
+    "tags": ["queue", "reentrancy", "mutation"],
+    "difficulty": "hard",
+    "validationType": "hidden-multi-case"
+  }
+}

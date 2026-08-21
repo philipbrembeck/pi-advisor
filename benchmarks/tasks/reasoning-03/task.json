@@ -1,0 +1,17 @@
+{
+  "id": "reasoning-03",
+  "category": "reasoning",
+  "fixture": "./fixture",
+  "prompt": "Implement selectTransport in src/policy.ts. Offline mode has highest priority; otherwise prefer websocket only for realtime requests when available, use HTTP/2 when available, and fall back to HTTP/1. Make the precedence explicit and preserve the union return type.",
+  "validation": {
+    "program": "../../validators/reasoning-03.ts",
+    "args": [],
+    "timeoutSeconds": 30
+  },
+  "timeoutSeconds": 180,
+  "metadata": {
+    "tags": ["fallback", "precedence", "transport"],
+    "difficulty": "medium",
+    "validationType": "hidden-multi-case"
+  }
+}

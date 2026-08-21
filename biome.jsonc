@@ -1,4 +1,12 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
-  "extends": ["ultracite/biome/core"]
+  "extends": ["ultracite/biome/core"],
+  "files": {
+    "includes": [
+      "!benchmarks/swebench/artifacts",
+      "!benchmarks/swebench/cache",
+      "!benchmarks/swebench/results",
+      "!benchmarks/swebench/*manifest*.json"
+    ]
+  }
 }

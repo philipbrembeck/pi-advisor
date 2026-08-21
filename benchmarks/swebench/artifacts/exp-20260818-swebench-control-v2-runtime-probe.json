@@ -1,0 +1,80 @@
+{
+  "fingerprints": {
+    "sol": {
+      "architecture": "arm64",
+      "apiType": "openai-codex-responses",
+      "baseCommit": "877c800f255ccaa7abde1fb944de45d1616f5cc9",
+      "effectiveProviderSettings": {
+        "parallel_tool_calls": true,
+        "tool_choice": "auto"
+      },
+      "os": "darwin",
+      "piModel": "gpt-5.6-sol",
+      "preparedWorkspaceHash": "sha256:f8d63f1be49d91dc8ca51e9fb0c5aac7935fa3d9f1098aeb3411234b245a4a75",
+      "pristineWorkspaceHash": "sha256:069175c6dfc6b9d2b18dc4d002f85ff5cb33783e73481e2cf32889a439bb9dd7",
+      "provider": "openai-codex",
+      "reasoningConfiguration": "medium",
+      "repository": "django/django",
+      "resolvedModel": "openai-codex/gpt-5.6-sol",
+      "runtime": {
+        "bun": "1.3.5",
+        "node": "24.3.0",
+        "python": "python3 (validator-reported)"
+      },
+      "systemPromptHash": "sha256:357faa57190317c02ed7c9a62142b3a6a57a3a64bda69e9e695d7e78102bba5c",
+      "testPatchHash": "sha256:2e7a782b2dce4af4188bffd770b5042aa926db9021e67f03bedc95c3acd6559f",
+      "timeoutSeconds": 600,
+      "toolDefinitionsHash": "sha256:239d84777f025b276eedb52b704f7b67f95c9d6a05f1a2ac452950f1341acd5e"
+    },
+    "luna": {
+      "architecture": "arm64",
+      "apiType": "openai-codex-responses",
+      "baseCommit": "877c800f255ccaa7abde1fb944de45d1616f5cc9",
+      "effectiveProviderSettings": {
+        "parallel_tool_calls": true,
+        "tool_choice": "auto"
+      },
+      "os": "darwin",
+      "piModel": "gpt-5.6-luna",
+      "preparedWorkspaceHash": "sha256:f8d63f1be49d91dc8ca51e9fb0c5aac7935fa3d9f1098aeb3411234b245a4a75",
+      "pristineWorkspaceHash": "sha256:069175c6dfc6b9d2b18dc4d002f85ff5cb33783e73481e2cf32889a439bb9dd7",
+      "provider": "openai-codex",
+      "reasoningConfiguration": "medium",
+      "repository": "django/django",
+      "resolvedModel": "openai-codex/gpt-5.6-luna",
+      "runtime": {
+        "bun": "1.3.5",
+        "node": "24.3.0",
+        "python": "python3 (validator-reported)"
+      },
+      "systemPromptHash": "sha256:357faa57190317c02ed7c9a62142b3a6a57a3a64bda69e9e695d7e78102bba5c",
+      "testPatchHash": "sha256:2e7a782b2dce4af4188bffd770b5042aa926db9021e67f03bedc95c3acd6559f",
+      "timeoutSeconds": 600,
+      "toolDefinitionsHash": "sha256:239d84777f025b276eedb52b704f7b67f95c9d6a05f1a2ac452950f1341acd5e"
+    }
+  },
+  "equivalent": true,
+  "normalized": {
+    "architecture": "arm64",
+    "apiType": "openai-codex-responses",
+    "baseCommit": "877c800f255ccaa7abde1fb944de45d1616f5cc9",
+    "effectiveProviderSettings": {
+      "parallel_tool_calls": true,
+      "tool_choice": "auto"
+    },
+    "os": "darwin",
+    "preparedWorkspaceHash": "sha256:f8d63f1be49d91dc8ca51e9fb0c5aac7935fa3d9f1098aeb3411234b245a4a75",
+    "pristineWorkspaceHash": "sha256:069175c6dfc6b9d2b18dc4d002f85ff5cb33783e73481e2cf32889a439bb9dd7",
+    "reasoningConfiguration": "medium",
+    "repository": "django/django",
+    "runtime": {
+      "bun": "1.3.5",
+      "node": "24.3.0",
+      "python": "python3 (validator-reported)"
+    },
+    "systemPromptHash": "sha256:357faa57190317c02ed7c9a62142b3a6a57a3a64bda69e9e695d7e78102bba5c",
+    "testPatchHash": "sha256:2e7a782b2dce4af4188bffd770b5042aa926db9021e67f03bedc95c3acd6559f",
+    "timeoutSeconds": 600,
+    "toolDefinitionsHash": "sha256:239d84777f025b276eedb52b704f7b67f95c9d6a05f1a2ac452950f1341acd5e"
+  }
+}

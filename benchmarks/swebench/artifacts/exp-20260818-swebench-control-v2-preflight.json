@@ -1,0 +1,50 @@
+{
+  "experimentId": "exp-20260818-swebench-control-v2",
+  "rows": [
+    {
+      "taskId": "django__django-15819",
+      "base": "PASS",
+      "testPatch": "PASS",
+      "initial": "FAIL",
+      "gold": "PASS",
+      "reverted": "FAIL",
+      "environmentFingerprint": "COMPLETE"
+    },
+    {
+      "taskId": "django__django-15902",
+      "base": "PASS",
+      "testPatch": "PASS",
+      "initial": "FAIL",
+      "gold": "PASS",
+      "reverted": "FAIL",
+      "environmentFingerprint": "COMPLETE"
+    },
+    {
+      "taskId": "django__django-15996",
+      "base": "PASS",
+      "testPatch": "PASS",
+      "initial": "FAIL",
+      "gold": "PASS",
+      "reverted": "FAIL",
+      "environmentFingerprint": "COMPLETE"
+    },
+    {
+      "taskId": "django__django-16041",
+      "base": "PASS",
+      "testPatch": "PASS",
+      "initial": "FAIL",
+      "gold": "PASS",
+      "reverted": "FAIL",
+      "environmentFingerprint": "COMPLETE"
+    },
+    {
+      "taskId": "django__django-16046",
+      "base": "PASS",
+      "testPatch": "PASS",
+      "initial": "FAIL",
+      "gold": "PASS",
+      "reverted": "FAIL",
+      "environmentFingerprint": "COMPLETE"
+    }
+  ]
+}

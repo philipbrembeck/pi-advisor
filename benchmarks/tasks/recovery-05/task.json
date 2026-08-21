@@ -1,0 +1,17 @@
+{
+  "id": "recovery-05",
+  "category": "recovery",
+  "fixture": "./fixture",
+  "prompt": "Recover parseItems in src/parser.ts from partially corrupted line input. Parse name=value pairs, trim names, ignore malformed/non-numeric lines, and replace earlier values when a later valid duplicate repairs the record while preserving input order for distinct names.",
+  "validation": {
+    "program": "../../validators/recovery-05.ts",
+    "args": [],
+    "timeoutSeconds": 30
+  },
+  "timeoutSeconds": 180,
+  "metadata": {
+    "tags": ["parser", "repair", "deduplication"],
+    "difficulty": "medium",
+    "validationType": "hidden-multi-case"
+  }
+}

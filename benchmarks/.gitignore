@@ -1,0 +1,11 @@
+config/benchmark.local.json
+results/
+swebench/cache/
+swebench/artifacts/**/*.patch
+!swebench/results/
+!swebench/results/*.jsonl
+!swebench/results/*.json
+!swebench/results/*.md
+!swebench/results/*.provenance.json
+**/*.log
+audit/**

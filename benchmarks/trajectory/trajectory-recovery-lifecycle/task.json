@@ -1,0 +1,17 @@
+{
+  "id": "trajectory-recovery-lifecycle",
+  "category": "recovery",
+  "fixture": "./fixture",
+  "prompt": "Repair the job runner's recovery behavior. A handler may fail after performing an external side effect, jobs may be retried, and workers may be interrupted while holding a lease. Trace the queue, claim/release, state persistence, retry policy, and effect ledger rather than patching only the visible error. Preserve the public JobRunner API and existing successful-job behavior. The repaired system must not leave terminal jobs runnable, must clean up leases after failures, and must not duplicate an idempotent side effect when a retry observes the same job. Validate the behavior with the existing tests and additional focused tests.",
+  "timeoutSeconds": 900,
+  "validation": {
+    "program": "../../validators/trajectory-recovery-lifecycle.ts",
+    "args": [],
+    "timeoutSeconds": 60
+  },
+  "metadata": {
+    "difficulty": "hard",
+    "shape": "recovery-state-lifecycle",
+    "tags": ["retries", "leases", "idempotency", "exceptions"]
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "id": "debugging-05",
+  "category": "debugging",
+  "fixture": "./fixture",
+  "prompt": "Fix the state transition bug in src/state.ts. A running operation finishes as done, failure enters error and preserves its message, finish must not clear an error, and reset must clear all state. Preserve the exported API.",
+  "validation": {
+    "program": "../../validators/debugging-05.ts",
+    "args": [],
+    "timeoutSeconds": 30
+  },
+  "timeoutSeconds": 180,
+  "metadata": {
+    "tags": ["state", "errors", "transitions"],
+    "difficulty": "medium",
+    "validationType": "hidden-multi-case"
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "models": {
+    "frontier": { "ref": "provider/frontier-model" },
+    "small": { "ref": "provider/small-model" }
+  },
+  "pricing": {
+    "provider/frontier-model": {
+      "inputPerMillion": 0,
+      "outputPerMillion": 0,
+      "cacheReadPerMillion": 0,
+      "cacheWritePerMillion": 0
+    },
+    "provider/small-model": {
+      "inputPerMillion": 0,
+      "outputPerMillion": 0,
+      "cacheReadPerMillion": 0,
+      "cacheWritePerMillion": 0
+    }
+  },
+  "execution": {
+    "runs": 5,
+    "seed": 1,
+    "timeoutSeconds": 600,
+    "validatorTimeoutSeconds": 60,
+    "tools": ["read", "bash", "edit", "write"],
+    "compactionEnabled": false,
+    "agentRetries": 0,
+    "temperature": 0
+  },
+  "output": {
+    "resultsPath": "benchmarks/results/runs.jsonl",
+    "reportMarkdownPath": "benchmarks/results/report.md",
+    "reportJsonPath": "benchmarks/results/report.json"
+  },
+  "provenance": { "name": "pi-advisor-flow", "version": "0.1" }
+}
