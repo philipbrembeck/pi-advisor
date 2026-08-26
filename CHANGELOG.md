@@ -4,6 +4,12 @@ All notable changes to this project are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.3.6
+
+### Fixed
+
+- Limited `/advisor-models` to models available through the user's configured Pi providers, preventing unavailable defaults from being displayed or selected and ensuring new selections are used immediately by `/advisor` in the same session.
+
 ## 0.3.5
 
 ### Changed
