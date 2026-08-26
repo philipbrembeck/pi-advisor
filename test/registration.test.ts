@@ -1936,6 +1936,7 @@ describe("Advisor activation and mode regressions", () => {
                 for (const character of "advisor") {
                   selector.handleInput(character);
                 }
+                selector.render(100);
               }
               customCall += 1;
               selector.handleInput("\r");
