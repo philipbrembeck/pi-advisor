@@ -105,7 +105,7 @@ describe("Searchable model selector", () => {
     );
   });
 
-  test("keeps a configured model selectable when it is absent from the catalog", () => {
+  test("does not show a configured model that is unavailable", () => {
     let selected: string | undefined;
     const selector = new SearchableModelSelector({
       allOptions: ["provider/available"],
@@ -121,9 +121,9 @@ describe("Searchable model selector", () => {
     });
 
     const screen = selector.render(100).join("\n");
-    expect(screen).toContain("→ ✓ provider/unavailable");
+    expect(screen).not.toContain("provider/unavailable");
     selector.handleInput("\r");
-    expect(selected).toBe("provider/unavailable");
+    expect(selected).toBe("provider/available");
   });
 
   test("keeps the current model when Enter is pressed immediately", () => {
@@ -1878,6 +1878,87 @@ describe("Advisor activation and mode regressions", () => {
         expect(savedConfig(agentDir).executor).toBe("vendor/chosen");
       }
     );
+  });
+
+  test("uses models selected in advisor-models when activating in the same session", async () => {
+    await withAgentDir({}, async (agentDir) => {
+      const commands = new Map<string, any>();
+      let activeTools: string[] = [];
+      let selectedModel: unknown;
+      let customCall = 0;
+      const pi = {
+        getActiveTools: () => activeTools,
+        on: () => undefined,
+        registerCommand(name: string, config: any) {
+          commands.set(name, config);
+        },
+        setActiveTools(tools: string[]) {
+          activeTools = tools;
+        },
+        setModel(model: unknown) {
+          selectedModel = model;
+          return Promise.resolve(true);
+        },
+        setThinkingLevel: () => undefined,
+      } as unknown as ExtensionAPI;
+      const models = [
+        { id: "executor", provider: "provider" },
+        { id: "advisor", provider: "provider" },
+      ];
+      const theme = {
+        bold: (value: string) => value,
+        fg: (_color: string, value: string) => value,
+      } as any;
+      const ctx = {
+        cwd: agentDir,
+        hasUI: true,
+        isProjectTrusted: () => false,
+        modelRegistry: {
+          find: (provider: string, id: string) =>
+            models.find(
+              (model) => model.provider === provider && model.id === id
+            ),
+          getApiKeyAndHeaders: () =>
+            Promise.resolve({ apiKey: "key", ok: true }),
+          getAvailable: () => models,
+        },
+        ui: {
+          custom: (factory: any) =>
+            new Promise((resolve) => {
+              const selector = factory(
+                { requestRender: () => undefined },
+                theme,
+                { matches: () => false },
+                resolve
+              );
+              selector.render(100);
+              if (customCall === 1) {
+                for (const character of "advisor") {
+                  selector.handleInput(character);
+                }
+              }
+              customCall += 1;
+              selector.handleInput("\r");
+            }),
+          notify: () => undefined,
+          select: () => Promise.resolve("✓ Default (Model Default)"),
+        },
+      } as any;
+
+      registerCommands(pi);
+      await commands.get("advisor-models").handler("", ctx);
+      expect(savedConfig(agentDir)).toMatchObject({
+        advisor: "provider/advisor",
+        executor: "provider/executor",
+      });
+
+      await commands.get("advisor").handler("", ctx);
+      expect(selectedModel).toMatchObject({
+        id: "executor",
+        provider: "provider",
+      });
+      expect(activeTools).toContain("ask_advisor");
+    });
   });
 
   test("ignores model selection while the Advisor flow is inactive", async () => {

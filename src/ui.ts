@@ -72,7 +72,11 @@ export class SearchableModelSelector implements Component, Focusable {
   constructor(options: SearchableModelSelectorOptions) {
     this.tui = options.tui;
     this.title = options.title;
-    this.currentOption = options.currentOption || undefined;
+    this.currentOption =
+      options.currentOption &&
+      options.allOptions.includes(options.currentOption)
+        ? options.currentOption
+        : undefined;
     this.allOptions = this.currentOption
       ? [
           this.currentOption,
