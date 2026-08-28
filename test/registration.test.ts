@@ -2309,7 +2309,10 @@ describe("Advisor settings navigation and gate parsing regressions", () => {
           hasUI: true,
           isProjectTrusted: () => false,
           signal: new AbortController().signal,
-          ui: { notify: () => undefined },
+          ui: {
+            notify: () => undefined,
+            setStatus: () => undefined,
+          },
         } as any;
         // The modes share the process-global configuration refs, so each case
         // must finish before the next one rewrites its configuration.
