@@ -56,6 +56,129 @@ export interface CollectedTextStream {
   usage?: unknown;
 }
 
+export const ADVISOR_STREAM_UPDATE_INTERVAL_MS = 90;
+
+export interface CoalescedUpdateResult {
+  error?: unknown;
+  failed: boolean;
+}
+
+export interface CoalescedUpdate<T> {
+  cancel: () => void;
+  flush: () => CoalescedUpdateResult;
+  update: (value: T) => void;
+}
+
+export interface CoalescedUpdateScheduler {
+  clearTimeout: (timer: ReturnType<typeof setTimeout>) => void;
+  now: () => number;
+  setTimeout: (
+    callback: () => void,
+    delay: number
+  ) => ReturnType<typeof setTimeout>;
+}
+
+/**
+ * Keep stream updates responsive without forwarding every provider delta to
+ * the UI. The first update in a burst is immediate; later updates are kept as
+ * the latest value and published at most once per interval. `flush()` closes
+ * the publisher and is intended for terminal success/error paths.
+ */
+export const createCoalescedUpdate = <T>(
+  publish: (value: T) => void,
+  intervalMs = ADVISOR_STREAM_UPDATE_INTERVAL_MS,
+  scheduler: CoalescedUpdateScheduler = {
+    clearTimeout,
+    now: Date.now,
+    setTimeout: (callback, delay) => setTimeout(callback, delay),
+  }
+): CoalescedUpdate<T> => {
+  if (!Number.isFinite(intervalMs) || intervalMs <= 0) {
+    throw new Error("Coalesced update interval must be positive and finite.");
+  }
+
+  let closed = false;
+  let hasPending = false;
+  let pending: T | undefined;
+  let lastPublishedAt: number | undefined;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let publishError: unknown;
+  let publishFailed = false;
+
+  const clearTimer = () => {
+    if (timer !== undefined) {
+      scheduler.clearTimeout(timer);
+      timer = undefined;
+    }
+  };
+
+  const publishPending = () => {
+    timer = undefined;
+    if (!hasPending) {
+      return;
+    }
+    const value = pending as T;
+    pending = undefined;
+    hasPending = false;
+    lastPublishedAt = scheduler.now();
+    try {
+      publish(value);
+    } catch (error) {
+      publishFailed = true;
+      publishError = error;
+      closed = true;
+      clearTimer();
+    }
+  };
+
+  const schedule = () => {
+    const elapsed =
+      lastPublishedAt === undefined
+        ? intervalMs
+        : scheduler.now() - lastPublishedAt;
+    const delay = Math.max(0, intervalMs - elapsed);
+    if (delay === 0) {
+      publishPending();
+      return;
+    }
+    timer = scheduler.setTimeout(publishPending, delay);
+    timer.unref?.();
+  };
+
+  return {
+    cancel: () => {
+      closed = true;
+      clearTimer();
+      pending = undefined;
+      hasPending = false;
+    },
+    flush: () => {
+      if (!closed) {
+        closed = true;
+        clearTimer();
+        publishPending();
+      }
+      return { error: publishError, failed: publishFailed };
+    },
+    update: (value) => {
+      if (closed) {
+        return;
+      }
+      if (publishFailed) {
+        throw publishError;
+      }
+      pending = value;
+      hasPending = true;
+      if (timer === undefined) {
+        schedule();
+      }
+      if (publishFailed) {
+        throw publishError;
+      }
+    },
+  };
+};
+
 export const collectTextStream = async (
   resolved: ResolvedConfiguredModel,
   options: CollectTextStreamOptions,

@@ -584,6 +584,84 @@ describe("Extension Registration", () => {
     expect(registeredCommands).toContain("advisor-off");
   });
 
+  test("coalesces Advisor tool updates and flushes on completion", async () => {
+    let advisorTool: any;
+    const updates: any[] = [];
+    const mockPi = {
+      getActiveTools: () => [],
+      on: () => undefined,
+      registerCommand: () => undefined,
+      registerTool(tool: any) {
+        if (tool.name === "ask_advisor") {
+          advisorTool = tool;
+        }
+      },
+    } as unknown as ExtensionAPI;
+    registerAdvisorTool(mockPi, new AdvisorSessionState(), {
+      consult: (_ctx, _question, _signal, onChunk) => {
+        onChunk?.("thinking", "one");
+        onChunk?.("thinking", "two");
+        onChunk?.("thinking", "three");
+        return Promise.resolve({
+          adviceId: "advice-1",
+          markdown: "Done.",
+          model: "provider/advisor",
+          thinkingText: "thinking",
+          trigger: "executor-requested" as const,
+        });
+      },
+    });
+
+    await advisorTool.execute(
+      "call-1",
+      {},
+      new AbortController().signal,
+      (update: any) => updates.push(update),
+      { cwd: tmpdir(), hasUI: false, isProjectTrusted: () => false }
+    );
+
+    expect(updates).toHaveLength(2);
+    expect(updates[0].details.text).toBe("one");
+    expect(updates[1].details.text).toBe("three");
+    await new Promise((resolve) => setTimeout(resolve, 110));
+    expect(updates).toHaveLength(2);
+  });
+
+  test("flushes the latest Advisor update before surfacing an error", async () => {
+    let advisorTool: any;
+    const updates: any[] = [];
+    const mockPi = {
+      getActiveTools: () => [],
+      on: () => undefined,
+      registerCommand: () => undefined,
+      registerTool(tool: any) {
+        if (tool.name === "ask_advisor") {
+          advisorTool = tool;
+        }
+      },
+    } as unknown as ExtensionAPI;
+    registerAdvisorTool(mockPi, new AdvisorSessionState(), {
+      consult: (_ctx, _question, _signal, onChunk) => {
+        onChunk?.("thinking", "one");
+        onChunk?.("thinking", "two");
+        return Promise.reject(new Error("provider failed"));
+      },
+    });
+
+    await expect(
+      advisorTool.execute(
+        "call-2",
+        {},
+        new AbortController().signal,
+        (update: any) => updates.push(update),
+        { cwd: tmpdir(), hasUI: false, isProjectTrusted: () => false }
+      )
+    ).rejects.toThrow("provider failed");
+
+    expect(updates).toHaveLength(2);
+    expect(updates[1].details.text).toBe("two");
+  });
+
   test("fans a manual Advisor response out to the Executor without waiting for the command", async () => {
     const commands = new Map<string, any>();
     const sent: Array<{ message: any; options: any }> = [];

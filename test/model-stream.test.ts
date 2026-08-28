@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   collectTextStream,
+  createCoalescedUpdate,
   resolveConfiguredModel,
 } from "../src/model-stream.js";
 
@@ -47,6 +48,87 @@ const fakeStream = (
   }) as any;
 
 describe("model stream", () => {
+  test("coalesces bursts and publishes the latest value at the interval", () => {
+    const updates: string[] = [];
+    let now = 0;
+    let nextTimer = 0;
+    const timers = new Map<number, () => void>();
+    const scheduler = {
+      clearTimeout: (timer: ReturnType<typeof setTimeout>) => {
+        timers.delete(timer as unknown as number);
+      },
+      now: () => now,
+      setTimeout: (callback: () => void) => {
+        const timer = nextTimer;
+        nextTimer += 1;
+        timers.set(timer, callback);
+        return timer as unknown as ReturnType<typeof setTimeout>;
+      },
+    };
+    const runTimer = (timer: number) => {
+      const callback = timers.get(timer);
+      timers.delete(timer);
+      callback?.();
+    };
+    const coalesced = createCoalescedUpdate(
+      (value: string) => updates.push(value),
+      100,
+      scheduler
+    );
+
+    coalesced.update("first");
+    coalesced.update("second");
+    coalesced.update("third");
+    expect(updates).toEqual(["first"]);
+    expect(timers.size).toBe(1);
+
+    now = 99;
+    expect(updates).toEqual(["first"]);
+    now = 100;
+    runTimer(0);
+    expect(updates).toEqual(["first", "third"]);
+
+    coalesced.update("fourth");
+    now = 199;
+    expect(updates).toEqual(["first", "third"]);
+    now = 200;
+    runTimer(1);
+    expect(updates).toEqual(["first", "third", "fourth"]);
+
+    coalesced.update("late");
+    expect(coalesced.flush()).toEqual({ failed: false });
+    expect(updates).toEqual(["first", "third", "fourth", "late"]);
+    expect(timers.size).toBe(0);
+
+    coalesced.update("ignored");
+    expect(updates).toEqual(["first", "third", "fourth", "late"]);
+
+    const cancelledUpdates: string[] = [];
+    const cancelled = createCoalescedUpdate(
+      (value: string) => cancelledUpdates.push(value),
+      100,
+      scheduler
+    );
+    cancelled.update("cancelled");
+    cancelled.update("pending");
+    expect(cancelledUpdates).toEqual(["cancelled"]);
+    expect(timers.size).toBe(1);
+    cancelled.cancel();
+    runTimer(3);
+    expect(cancelledUpdates).toEqual(["cancelled"]);
+    expect(timers.size).toBe(0);
+  });
+
+  test("captures update callback errors without losing terminal control", () => {
+    const error = new Error("render failed");
+    const coalesced = createCoalescedUpdate(() => {
+      throw error;
+    }, 100);
+
+    expect(() => coalesced.update("first")).toThrow(error);
+    expect(coalesced.flush()).toEqual({ error, failed: true });
+  });
+
   test("resolves the exact configured model and provider auth", async () => {
     const seen: unknown[] = [];
     const ctx = {

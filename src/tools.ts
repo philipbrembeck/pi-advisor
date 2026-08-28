@@ -58,7 +58,12 @@ import {
   herdrAdvisorBlock,
   notifyHerdrAdvisorFailure,
 } from "./herdr.js";
-import { collectTextStream, resolveConfiguredModel } from "./model-stream.js";
+import {
+  ADVISOR_STREAM_UPDATE_INTERVAL_MS,
+  collectTextStream,
+  createCoalescedUpdate,
+  resolveConfiguredModel,
+} from "./model-stream.js";
 import { ADOPTIONS, appendOutcome, VALIDATIONS } from "./outcomes.js";
 import { readProjectPreferences } from "./preferences.js";
 import {
@@ -1388,11 +1393,13 @@ export const registerAdvisorTool = (
   session: AdvisorSessionState = advisorSessionState,
   dependencies: {
     appendOutcome?: typeof appendOutcome;
+    consult?: typeof consultAdvisor;
     runGate?: typeof runAdvisorGate;
     statusManager?: ScoutStatusManager;
   } = {}
 ) => {
   const appendAdvisorOutcome = dependencies.appendOutcome ?? appendOutcome;
+  const requestAdvisor = dependencies.consult ?? consultAdvisor;
   const reservedCalls = new Set<string>();
   const scoutStatus = dependencies.statusManager ?? new ScoutStatusManager();
 
@@ -1570,13 +1577,24 @@ export const registerAdvisorTool = (
       }
       herdrAdvisorActivity.start();
       let scoutDetails: ScoutToolDetails | undefined;
+      const coalescedUpdate = createCoalescedUpdate(
+        (update: Parameters<NonNullable<typeof onUpdate>>[0]) =>
+          onUpdate?.(update),
+        ADVISOR_STREAM_UPDATE_INTERVAL_MS
+      );
+      const flushUpdate = () => {
+        const result = coalescedUpdate.flush();
+        if (result.failed) {
+          throw result.error;
+        }
+      };
       try {
-        const result = await consultAdvisor(
+        const result = await requestAdvisor(
           ctx,
           resolveAdvisorRequest(params.question),
           signal,
           (t, tx) =>
-            onUpdate?.({
+            coalescedUpdate.update({
               content: [{ text: tx, type: "text" }],
               details: {
                 advisor: advisorRef,
@@ -1594,7 +1612,7 @@ export const registerAdvisorTool = (
           params.includeTrackedFiles,
           (event) => {
             scoutDetails = scoutDetailsFromEvent(event, scoutDetails);
-            onUpdate?.({
+            coalescedUpdate.update({
               content: [{ text: scoutDetails.text ?? "", type: "text" }],
               details: {
                 advisor: advisorRef,
@@ -1605,6 +1623,7 @@ export const registerAdvisorTool = (
           },
           _id
         );
+        flushUpdate();
         session.issueAdvice(
           result.adviceId,
           result.markdown,
@@ -1645,6 +1664,10 @@ export const registerAdvisorTool = (
           ...(piUsage ? { usage: piUsage } : {}),
         };
       } catch (error) {
+        // Publish the latest partial state before surfacing a provider or
+        // execution error. A failure from the UI sink must not replace the
+        // original error because this path is also used for provider failures.
+        coalescedUpdate.flush();
         const message = error instanceof Error ? error.message : String(error);
         session.recordInvocation({
           executionEffect: "continued",
@@ -1658,6 +1681,7 @@ export const registerAdvisorTool = (
         notifyHerdrAdvisorFailure("Advisor consultation failed", message);
         throw error;
       } finally {
+        coalescedUpdate.cancel();
         herdrAdvisorActivity.finish();
       }
     },
