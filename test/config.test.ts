@@ -89,7 +89,7 @@ describe("Config Module", () => {
 
   test("splitRef should use default provider if none provided", () => {
     const [provider, model] = splitRef("gpt-4");
-    expect(provider).toBe("aikeys");
+    expect(provider).toBe("openai-codex");
     expect(model).toBe("gpt-4");
   });
 

@@ -13,8 +13,8 @@ import {
   isValidGitContextLevel,
 } from "./git.js";
 
-export const FALLBACK_EXECUTOR = "aikeys/claude-sonnet-5";
-export const FALLBACK_ADVISOR = "aikeys/claude-fable-5";
+export const FALLBACK_EXECUTOR = "openai-codex/gpt-5.6-luna";
+export const FALLBACK_ADVISOR = "openai-codex/gpt-5.6-sol";
 export const DEFAULT_CONTEXT_MAX_CHARS = 15_000;
 export const MAX_CONTEXT_MAX_CHARS = Number.MAX_SAFE_INTEGER;
 export const DEFAULT_ADVISOR_TOOL_RESULT_MAX_LINES = DEFAULT_MAX_LINES;
@@ -214,7 +214,7 @@ export const getAdvisorMaxCallsPerSession = () =>
 
 export const splitRef = (ref: string): [string, string] => {
   const i = ref.indexOf("/");
-  return i === -1 ? ["aikeys", ref] : [ref.slice(0, i), ref.slice(i + 1)];
+  return i === -1 ? ["openai-codex", ref] : [ref.slice(0, i), ref.slice(i + 1)];
 };
 
 export const configPaths = (ctx: ExtensionContext) => [

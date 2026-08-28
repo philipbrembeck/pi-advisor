@@ -1,3 +1,11 @@
+import {
+  type AdvisorUsageTotals,
+  addAdvisorUsage,
+  emptyAdvisorUsageTotals,
+  formatAdvisorUsageStatus,
+  formatAdvisorUsageTotals,
+} from "./usage.js";
+
 export type GateDecision = "proceed" | "revise" | "blocked";
 export type ConsultationTrigger = "manual" | "executor-requested";
 export type GateTrigger =
@@ -120,6 +128,7 @@ export class AdvisorSessionState {
   #draftConsultations = 0;
   #outcomes = 0;
   #lastAdvice?: string;
+  #usage = emptyAdvisorUsageTotals();
 
   resetTask() {
     this.#previousSignature = undefined;
@@ -133,6 +142,7 @@ export class AdvisorSessionState {
     this.#draftConsultations = 0;
     this.#outcomes = 0;
     this.#lastAdvice = undefined;
+    this.#usage = emptyAdvisorUsageTotals();
   }
 
   clearBlocked() {
@@ -182,8 +192,19 @@ export class AdvisorSessionState {
     return this.#consumedCalls;
   }
 
+  /** Returns a copy of cumulative direct Advisor usage for this session. */
+  get usageTotals(): AdvisorUsageTotals {
+    return { ...this.#usage };
+  }
+
+  /** Returns the footer-ready direct Advisor usage status for this session. */
+  usageStatus() {
+    return formatAdvisorUsageStatus(this.#usage);
+  }
+
   recordInvocation(record: AdvisorInvocationRecord) {
     this.#invocations.push(record);
+    addAdvisorUsage(this.#usage, record.usage);
   }
   issueAdvice(
     id: string,
@@ -271,6 +292,7 @@ export class AdvisorSessionState {
       `Triggers: ${["manual", "executor-requested", "repeated-tool-call", "completion-review", "custom-rule"].filter((trigger) => countTrigger(trigger as AdvisorTrigger) > 0).join(", ") || "none"}`,
       `Models: ${models}`,
       `Budget: ${budget}`,
+      `Usage: ${formatAdvisorUsageTotals(this.#usage)}`,
       `Markdown advice: ${markdown.length} responses (${this.#draftConsultations} with drafts)`,
       `Outcome reports: ${this.#outcomes}`,
       `Gate decisions: ${decisions}`,

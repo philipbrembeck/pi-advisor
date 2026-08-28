@@ -73,6 +73,47 @@ describe("AdvisorSessionState", () => {
     expect(session.claimTrackedFiles(["other.md"])).toBe(false);
   });
 
+  test("aggregates direct usage and resets it for a new session", () => {
+    const state = new AdvisorSessionState();
+    state.recordInvocation({
+      executionEffect: "continued",
+      kind: "markdown",
+      model: "test/model",
+      trigger: "executor-requested",
+      usage: {
+        cacheRead: 3,
+        cost: { total: 0.01 },
+        input: 100,
+        output: 20,
+      },
+    });
+    state.recordInvocation({
+      executionEffect: "continued",
+      kind: "gate",
+      model: "test/model",
+      trigger: "repeated-tool-call",
+      usage: { totalCost: 0.02, totalTokens: 5 },
+    });
+    expect(state.usageStatus()).toContain("2 calls");
+    expect(state.usageStatus()).toContain("$0.0300");
+    expect(state.usageTotals).toMatchObject({
+      calls: 2,
+      cost: 0.03,
+      input: 100,
+      knownCalls: 2,
+      output: 20,
+      totalTokens: 5,
+    });
+
+    state.resetTask();
+    expect(state.usageTotals).toEqual({
+      calls: 0,
+      costCalls: 0,
+      knownCalls: 0,
+    });
+    expect(state.usageStatus()).toBeUndefined();
+  });
+
   test("does not generate a summary without Advisor activity", () => {
     const state = new AdvisorSessionState();
     expect(state.summary(undefined)).toBeUndefined();

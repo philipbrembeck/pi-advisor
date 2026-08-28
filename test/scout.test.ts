@@ -165,7 +165,7 @@ describe("Advisor Scout", () => {
     expect(outcome.model).toBe("provider/executor");
     expect(outcome.conversation).toContain("useful failure");
     expect(outcome.conversation).toContain("non-authoritative inference");
-    expect(outcome.metrics.usage).toEqual({ cost: { total: 0.01 } });
+    expect(outcome.metrics.usage).toEqual({ cost: 0.01 });
     expect(options.reasoning).toBe("high");
     expect(options.systemPrompt).toBe(SCOUT_SYSTEM);
     const input = JSON.stringify(options.messages);

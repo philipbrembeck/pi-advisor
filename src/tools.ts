@@ -77,6 +77,12 @@ import {
   type GateTrigger,
 } from "./session-state.js";
 import { readTrackedFiles, readUntrackedFiles } from "./untracked.js";
+import {
+  advisorUsageCost,
+  advisorUsageForPi,
+  formatAdvisorUsage,
+  snapshotAdvisorUsage,
+} from "./usage.js";
 
 export type {
   AdvisorInvocationRecord,
@@ -302,6 +308,7 @@ export interface AdvisorGateFailure {
   markdown?: string;
   message: string;
   ok: false;
+  usage?: unknown;
 }
 export interface AdvisorConsultationResult {
   adviceId: string;
@@ -326,14 +333,6 @@ export interface AdvisorGateResult {
   usage?: unknown;
 }
 export type AdvisorGateOutcome = AdvisorGateResult | AdvisorGateFailure;
-
-export const advisorUsageCost = (usage: unknown): number | undefined => {
-  const value = usage as
-    | { cost?: { total?: unknown }; totalCost?: unknown }
-    | undefined;
-  const cost = value?.cost?.total ?? value?.totalCost;
-  return typeof cost === "number" ? cost : undefined;
-};
 
 const DECISION_LINE = /^Decision\s*:\s*(proceed|revise|blocked)\s*$/i;
 const CODE_FENCE = /^(?:```|~~~)/;
@@ -683,7 +682,7 @@ export const runAdvisorGate = async (
     );
     const parsed = parseAutomaticDecision(result.markdown);
     if (!parsed.ok) {
-      return parsed;
+      return { ...parsed, usage: result.usage };
     }
     return {
       ...parsed,
@@ -705,6 +704,15 @@ export const runAdvisorGate = async (
       message,
       ok: false,
     };
+  }
+};
+
+const updateAdvisorUsageStatus = (
+  ctx: ExtensionContext,
+  session: AdvisorSessionState
+) => {
+  if (ctx.hasUI) {
+    ctx.ui.setStatus("advisor-usage", session.usageStatus());
   }
 };
 
@@ -799,12 +807,20 @@ const sendAutomaticGateCall = (pi: ExtensionAPI, event: ToolCallEvent) => {
   );
 };
 
-const sendAutomaticGateFailure = (pi: ExtensionAPI, markdown: string) => {
+const sendAutomaticGateFailure = (
+  pi: ExtensionAPI,
+  markdown: string,
+  usage?: unknown
+) => {
+  const normalizedUsage = snapshotAdvisorUsage(usage);
   pi.sendMessage(
     {
       content: markdown,
       customType: "advisor-loop-result",
-      details: { text: markdown },
+      details: {
+        text: markdown,
+        ...(normalizedUsage ? { usage: normalizedUsage } : {}),
+      },
       display: true,
     },
     { deliverAs: "steer" }
@@ -823,6 +839,9 @@ const sendAutomaticGateResult = (
         advisor: result.model,
         decision: result.decision,
         text: result.markdown,
+        ...(snapshotAdvisorUsage(result.usage)
+          ? { usage: snapshotAdvisorUsage(result.usage) }
+          : {}),
       },
       display: true,
     },
@@ -899,7 +918,9 @@ const handleAutomaticGate = async (
         kind: "gate",
         model: advisorRef,
         trigger: "repeated-tool-call",
+        usage: result.usage,
       });
+      updateAdvisorUsageStatus(ctx, session);
       const failure = failureEffect(
         result.category,
         result.message,
@@ -908,7 +929,8 @@ const handleAutomaticGate = async (
       );
       sendAutomaticGateFailure(
         pi,
-        `**Advisor gate failure (${result.category}):** ${result.message}`
+        `**Advisor gate failure (${result.category}):** ${result.message}`,
+        result.usage
       );
       return failure.block
         ? { block: true, reason: `${reason}\n${failure.reason}` }
@@ -923,6 +945,7 @@ const handleAutomaticGate = async (
       trigger: result.trigger,
       usage: result.usage,
     });
+    updateAdvisorUsageStatus(ctx, session);
     sendAutomaticGateResult(pi, result);
     if (result.decision === "proceed") {
       session.resetRepetition();
@@ -968,6 +991,7 @@ interface AdvisorToolDetails {
   thinking?: string;
   trackedBytes?: number;
   untrackedBytes?: number;
+  usage?: unknown;
 }
 interface AdvisorRenderState {
   phase?: string;
@@ -1016,7 +1040,7 @@ export const scoutDetailsFromEvent = (
         selectedLabels: outcome.selectedLabels,
         status: "curated",
         synthesis: outcome.selection.synthesis,
-        usage: outcome.metrics.usage,
+        usage: snapshotAdvisorUsage(outcome.metrics.usage),
       }
     : {
         availableCount: outcome.metrics.availableCount,
@@ -1026,7 +1050,7 @@ export const scoutDetailsFromEvent = (
         omittedBeforeScout: outcome.metrics.omittedBeforeScout,
         selectedCount: 0,
         status: "fallback",
-        usage: outcome.metrics.usage,
+        usage: snapshotAdvisorUsage(outcome.metrics.usage),
       };
 };
 
@@ -1130,6 +1154,10 @@ export const renderScoutDetails = (
       `  ${scout.model}${scout.selectedCount === undefined ? "" : ` · ${scout.selectedCount} kept / ${Math.max(0, (scout.availableCount ?? 0) - scout.selectedCount)} omitted`}${scout.latencyMs === undefined ? "" : ` · ${(scout.latencyMs / 1000).toFixed(1)}s`}`
     ),
   ];
+  const usage = formatAdvisorUsage(scout.usage);
+  if (usage) {
+    lines.push(theme.fg("dim", `  Usage: ${usage}`));
+  }
   if (scout.fallbackReason) {
     lines.push(theme.fg("warning", `  ${scout.fallbackReason}`));
   }
@@ -1250,6 +1278,10 @@ const renderFinalAdvisorResult = (
   if (details?.advisor) {
     lines.push(theme.fg("dim", `  ${details.advisor}`));
   }
+  const usage = formatAdvisorUsage(details?.usage);
+  if (usage) {
+    lines.push(theme.fg("dim", `  Usage: ${usage}`));
+  }
   const attachments = [
     details?.draftBytes
       ? `Draft attached · ${details.draftBytes} B`
@@ -1341,7 +1373,12 @@ export const registerAdvisorTool = (
     "advisor-loop-result",
     (message, { expanded }, theme) => {
       const details = message.details as
-        | { decision?: GateDecision; text?: string; advisor?: string }
+        | {
+            advisor?: string;
+            decision?: GateDecision;
+            text?: string;
+            usage?: unknown;
+          }
         | undefined;
       const box = new Box(1, 1, (text) => theme.bg("customMessageBg", text));
       box.addChild(
@@ -1356,6 +1393,10 @@ export const registerAdvisorTool = (
       );
       if (details?.advisor) {
         box.addChild(new Text(theme.fg("dim", `  ${details.advisor}`), 0, 0));
+      }
+      const usage = formatAdvisorUsage(details?.usage);
+      if (usage) {
+        box.addChild(new Text(theme.fg("dim", `  Usage: ${usage}`), 0, 0));
       }
       if (details?.text) {
         box.addChild(
@@ -1384,10 +1425,13 @@ export const registerAdvisorTool = (
     }
   );
 
-  pi.on("session_start", () => {
+  pi.on("session_start", (_event, ctx) => {
     session.resetTask();
     reservedCalls.clear();
     herdrAdvisorBlock.clear();
+    if (ctx?.hasUI) {
+      ctx.ui.setStatus("advisor-usage", undefined);
+    }
   });
 
   pi.on("before_agent_start", (_event, ctx) => {
@@ -1453,11 +1497,15 @@ export const registerAdvisorTool = (
     reservedCalls.clear();
     scoutStatus.clear(ctx);
     herdrAdvisorBlock.clear();
+    if (ctx?.hasUI) {
+      ctx.ui.setStatus("advisor-usage", undefined);
+    }
   });
 
   pi.registerTool({
     description:
       "Consult the on-demand Advisor model for strategic guidance. Call with an empty object for a contextual review; attach an optional draft for concrete plan or completion review. If the Advisor explicitly names a missing file, you may make a sequential follow-up call with includeTrackedFiles when enabled and relevant.",
+    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: usage and consent paths remain explicit at the tool boundary.
     async execute(_id, params, signal, onUpdate, ctx) {
       reservedCalls.delete(_id);
       if (
@@ -1525,6 +1573,11 @@ export const registerAdvisorTool = (
           trigger: "executor-requested",
           usage: result.usage,
         });
+        const usage = snapshotAdvisorUsage(result.usage);
+        const piUsage = advisorUsageForPi(result.usage);
+        if (ctx.hasUI) {
+          ctx.ui.setStatus("advisor-usage", session.usageStatus());
+        }
         return {
           content: [
             {
@@ -1543,7 +1596,9 @@ export const registerAdvisorTool = (
             thinking: result.thinkingText,
             trackedBytes: result.trackedBytes,
             untrackedBytes: result.untrackedBytes,
+            ...(usage ? { usage } : {}),
           },
+          ...(piUsage ? { usage: piUsage } : {}),
         };
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -1554,6 +1609,9 @@ export const registerAdvisorTool = (
           model: advisorRef,
           trigger: "executor-requested",
         });
+        if (ctx.hasUI) {
+          ctx.ui.setStatus("advisor-usage", session.usageStatus());
+        }
         notifyLocalFailure(ctx, message);
         notifyHerdrAdvisorFailure("Advisor consultation failed", message);
         throw error;

@@ -10,8 +10,8 @@ All fields are optional. This example shows the available settings and their nor
 
 ```json
 {
-  "executor": "openai/gpt-5.6-luna",
-  "advisor": "anthropic/claude-fable-5",
+  "executor": "openai-codex/gpt-5.6-luna",
+  "advisor": "openai-codex/gpt-5.6-sol",
   "executorEffort": "medium",
   "advisorEffort": "xhigh",
   "contextMaxChars": 25000,

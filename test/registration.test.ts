@@ -1001,7 +1001,11 @@ describe("Extension Registration", () => {
           content: [
             { text: "Advisor (test/model)\n\n**Ship it.**", type: "text" },
           ],
-          details: { advisor: "test/model", text: "**Ship it.**" },
+          details: {
+            advisor: "test/model",
+            text: "**Ship it.**",
+            usage: { cacheRead: 20, cost: 0.0123, input: 1200, output: 456 },
+          },
         },
         { isPartial: false },
         theme,
@@ -1015,6 +1019,7 @@ describe("Extension Registration", () => {
     expect(request).not.toMatch(SPINNER_PATTERN);
     expect(response).toContain("ADVISOR RESPONSE");
     expect(response).toContain("test/model");
+    expect(response).toContain("Usage: ↑1.2k · ↓456 · cr:20 · $0.0123");
     expect(response).toContain("Ship it.");
     expect(response).not.toContain("**Ship it.**");
     expect(response).not.toContain("Advisor (test/model)");
@@ -1475,6 +1480,7 @@ describe("Extension Registration", () => {
             omittedBeforeScout: 2,
             selectedCount: 0,
             status: "fallback",
+            usage: { cacheRead: 2, cost: 0.003, input: 80, output: 10 },
           },
         },
         { expanded: true },
@@ -1484,6 +1490,7 @@ describe("Extension Registration", () => {
       .join("\n");
     expect(fallback).toContain("SCOUT · FALLBACK");
     expect(fallback).toContain("timeout: Scout timed out");
+    expect(fallback).toContain("Usage: ↑80 · ↓10 · cr:2 · $0.0030");
     expect(fallback).toContain("2 group(s) omitted before Scout");
   });
 
@@ -1583,6 +1590,7 @@ describe("Extension Registration", () => {
     resetConfigCache();
     const events = new Map<string, any>();
     const timeline: string[] = [];
+    const sentMessages: any[] = [];
     const invocationIds: unknown[] = [];
     const mockPi = {
       appendEntry(type: string) {
@@ -1596,6 +1604,7 @@ describe("Extension Registration", () => {
       registerMessageRenderer: () => undefined,
       registerTool: () => undefined,
       sendMessage(message: any) {
+        sentMessages.push(message);
         timeline.push(`message:${message.customType}`);
       },
     } as unknown as ExtensionAPI;
@@ -1636,6 +1645,12 @@ describe("Extension Registration", () => {
           ok: true,
           thinkingText: "",
           trigger: "repeated-tool-call",
+          usage: {
+            cacheRead: 4,
+            cost: { total: 0.02 },
+            input: 100,
+            output: 20,
+          },
         };
       }) as any,
     });
@@ -1661,6 +1676,13 @@ describe("Extension Registration", () => {
       ]);
       expect(session.blocked).toBe(false);
       expect(invocationIds).toEqual(["two"]);
+      expect(sentMessages.at(-1).details.usage).toEqual({
+        cacheRead: 4,
+        cost: 0.02,
+        input: 100,
+        output: 20,
+      });
+      expect(session.usageStatus()).toContain("$0.0200");
     } finally {
       if (previousAgentDir === undefined) {
         delete process.env.PI_CODING_AGENT_DIR;
@@ -2044,7 +2066,14 @@ describe("Advisor activation and mode regressions", () => {
       const render = (text: string) =>
         renderers
           .get("advisor-manual-result")(
-            { content: text, details: { advisor: "test/model", text } },
+            {
+              content: text,
+              details: {
+                advisor: "test/model",
+                text,
+                usage: { cacheWrite: 3, cost: 0.01, input: 100, output: 20 },
+              },
+            },
             { expanded: true },
             plainTheme
           )
@@ -2052,6 +2081,9 @@ describe("Advisor activation and mode regressions", () => {
           .join("\n");
       expect(render("Verdict: sound\n\nNothing to change.")).toContain(
         "◆ ADVISOR · SOUND"
+      );
+      expect(render("Verdict: sound\n\nNothing to change.")).toContain(
+        "Usage: ↑100 · ↓20 · cw:3 · $0.0100"
       );
       expect(render("Consider reverting the migration.")).toContain(
         "◆ ADVISOR RESPONSE"

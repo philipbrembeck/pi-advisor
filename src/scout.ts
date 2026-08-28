@@ -13,6 +13,7 @@ import {
   SCOUT_SYNTHESIS_MAX_BYTES,
   type ScoutManifest,
 } from "./scout-context.js";
+import { snapshotAdvisorUsage } from "./usage.js";
 
 export const SCOUT_TIMEOUT_MS = 30_000;
 
@@ -330,7 +331,10 @@ export const runAdvisorScout = async (
         ? ("invalid-selection" as const)
         : ("empty-response" as const),
       message,
-      metrics: { ...baseMetrics(manifest, startedAt), usage: streamed.usage },
+      metrics: {
+        ...baseMetrics(manifest, startedAt),
+        usage: snapshotAdvisorUsage(streamed.usage),
+      },
       model: executorRef,
       ok: false as const,
     };
@@ -352,7 +356,7 @@ export const runAdvisorScout = async (
           .filter((group) => group.required)
           .map((group) => group.id),
       ]).size,
-      usage: streamed.usage,
+      usage: snapshotAdvisorUsage(streamed.usage),
     },
     model: executorRef,
     ok: true as const,

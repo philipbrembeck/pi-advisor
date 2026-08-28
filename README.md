@@ -21,6 +21,7 @@ The idea is simple: keep implementation on a fast model and borrow frontier reas
 - **Configurable review gates** before plans, after repeated failures, and before declaring completion.
 - **Automatic loop detection** for repeated tool calls, with explicit proceed, revise, or blocked decisions.
 - **Separate model and reasoning controls** for the Executor and Advisor.
+- **Advisor usage accounting** with per-response token/cost details and cumulative direct usage in the Pi footer and session summary.
 - **Privacy controls** for conversation history, repository context, explicit tracked/untracked file handoff, tool results, secret redaction, and outcome logging.
 - **Optional persistent activation, Simple mode, session summaries, and Herdr integration.**
 - **EXPERIMENTAL Advisor Scout** that uses the configured Executor model to curate conversation evidence before every Advisor call.
@@ -55,7 +56,7 @@ Unknown fields in `advisor.json` are preserved for forward compatibility and rep
 You can also enable the flow and select both models at once:
 
 ```text
-/advisor executor=anthropic/claude-sonnet-5 advisor=openai/gpt-5.6-sol
+/advisor executor=openai-codex/gpt-5.6-luna advisor=openai-codex/gpt-5.6-sol
 ```
 
 ## How it works
@@ -67,6 +68,8 @@ You can also enable the flow and select both models at once:
 5. The Executor decides what to adopt, performs the work, and validates the result.
 
 A normal consultation never blocks execution. The optional automatic loop gate is different: it evaluates repeated tool calls and applies the configured failure policy when the Advisor says to revise, reports a block, is unavailable, or returns an invalid decision.
+
+Advisor responses show provider-reported input, output, cache, and cost details when available. Successful `ask_advisor` tool results also carry normalized usage into Pi's built-in `Tools/summaries` and `/cost` totals. Manual consultations and automatic gates remain in the separate session-local direct Advisor accounting because they are custom messages, so they are not double-counted in Pi's Executor totals. Missing or partial provider usage is shown as unavailable rather than fabricated as zero usage.
 
 Successful calls return an opaque `adviceId`. If global outcome logging is enabled, the Executor can call `record_advisor_outcome` once to record whether the advice was adopted and whether final validation passed.
 

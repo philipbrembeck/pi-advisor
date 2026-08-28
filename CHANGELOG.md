@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## Unreleased
 
+### Added
+
+- Exposed provider-reported Advisor and Scout token/cache/cost details per result, tracked cumulative direct Advisor usage in the session footer and optional summary, and attached normalized `ask_advisor` usage to Pi's built-in cost totals without double-counting manual consultations or automatic gates.
+
 ### Removed
 
 - Removed the repository-only Benchmark suite and its benchmark-specific telemetry instrumentation.
