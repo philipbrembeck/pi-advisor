@@ -251,6 +251,50 @@ describe("Scout context", () => {
     expect(pending?.content).not.toContain("scratch.txt");
   });
 
+  test("keeps manifest transport and Advisor conversation budgets separate", () => {
+    const entries = [
+      user("u1", "current request ".repeat(40)),
+      assistant("a1", [
+        {
+          arguments: { question: "review this ".repeat(40) },
+          id: "advisor-call",
+          name: "ask_advisor",
+          type: "toolCall",
+        },
+      ]),
+    ];
+    const wide = buildScoutManifest(context(entries), {
+      currentInvocationId: "advisor-call",
+      maxConversationChars: 2000,
+      maxManifestBytes: 10_000,
+    });
+    expect(wide.ok).toBe(true);
+    if (!wide.ok) {
+      return;
+    }
+    const manifestBytes = Buffer.byteLength(
+      JSON.stringify(
+        wide.manifest.groups.map((group) => ({
+          bytes: group.bytes,
+          content: group.content,
+          id: group.id,
+          kind: group.kind,
+          label: group.label,
+          required: group.required,
+        }))
+      ),
+      "utf8"
+    );
+    expect(manifestBytes).toBeGreaterThan(1000);
+
+    const separate = buildScoutManifest(context(entries), {
+      currentInvocationId: "advisor-call",
+      maxConversationChars: 2000,
+      maxManifestBytes: manifestBytes + 1,
+    });
+    expect(separate.ok).toBe(true);
+  });
+
   test("zero Scout budget produces no history groups", () => {
     const built = buildScoutManifest(context([user("u1", "current request")]), {
       maxBytes: 0,

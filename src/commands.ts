@@ -6,12 +6,12 @@ import {
 import { Box, Markdown, Text } from "@earendil-works/pi-tui";
 import {
   advisorEffortRef,
-  advisorMaxCallsPerSessionRef,
   advisorRef,
   alwaysOnRef,
   contextMaxCharsRef,
   executorEffortRef,
   executorRef,
+  getAdvisorMaxCallsPerSession,
   getAdvisorSettings,
   isSimpleMode,
   loadConfig,
@@ -503,7 +503,7 @@ export const registerCommands = (
       if (
         !(
           isSimpleMode() ||
-          advisorSessionState.canConsult(advisorMaxCallsPerSessionRef)
+          advisorSessionState.canConsult(getAdvisorMaxCallsPerSession())
         )
       ) {
         const message = "Advisor call budget exhausted for this session.";

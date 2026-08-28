@@ -10,6 +10,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 - Removed the repository-only Benchmark suite and its benchmark-specific telemetry instrumentation.
 
+### Fixed
+
+- Kept Scout's serialized manifest limit separate from the Advisor conversation budget so required context does not fall back solely because of manifest metadata overhead.
+- Made unlimited Advisor call budgets live at every enforcement boundary, preventing stale finite limits from triggering false Herdr budget notifications after switching to unlimited.
+
 ## 0.3.6
 
 ### Fixed

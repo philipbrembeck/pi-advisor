@@ -208,6 +208,10 @@ export const getAdvisorSettings = () => ({
   untrackedContent: advisorUntrackedContentRef,
 });
 
+/** Reads the live session budget at each enforcement boundary. */
+export const getAdvisorMaxCallsPerSession = () =>
+  getAdvisorSettings().maxCallsPerSession;
+
 export const splitRef = (ref: string): [string, string] => {
   const i = ref.indexOf("/");
   return i === -1 ? ["aikeys", ref] : [ref.slice(0, i), ref.slice(i + 1)];

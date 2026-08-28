@@ -24,7 +24,6 @@ import {
   advisorGitContextMaxCharsRef,
   advisorGitContextRef,
   advisorLoopThresholdRef,
-  advisorMaxCallsPerSessionRef,
   advisorOutcomeLoggingRef,
   advisorPlanGateRef,
   advisorRedactSecretsRef,
@@ -35,6 +34,7 @@ import {
   advisorUntrackedContentRef,
   contextMaxCharsRef,
   executorRef,
+  getAdvisorMaxCallsPerSession,
   isSimpleMode,
   loadConfig,
 } from "./config.js";
@@ -68,6 +68,7 @@ import {
 import {
   buildScoutManifest,
   reconstructScoutConversation,
+  SCOUT_MANIFEST_MAX_BYTES,
 } from "./scout-context.js";
 import {
   AdvisorSessionState,
@@ -443,7 +444,8 @@ export const curateAdvisorConversation = async (
   }
   const built = buildScoutManifest(ctx, {
     currentInvocationId,
-    maxBytes: maxChars,
+    maxConversationChars: maxChars,
+    maxManifestBytes: SCOUT_MANIFEST_MAX_BYTES,
   });
   if (!built.ok) {
     const scout: Exclude<ScoutOutcome, { cancelled: true }> = {
@@ -771,7 +773,7 @@ const reserveAdvisorCall = (
   if (event.toolName !== "ask_advisor" || isSimpleMode()) {
     return;
   }
-  if (!session.canConsult(advisorMaxCallsPerSessionRef)) {
+  if (!session.canConsult(getAdvisorMaxCallsPerSession())) {
     const message = "Advisor call budget exhausted for this session.";
     if (ctx.hasUI) {
       ctx.ui.notify(message, "warning");
@@ -849,7 +851,7 @@ const handleAutomaticGate = async (
     return;
   }
   const reason = `Advisor loop gate: normalized signature for ${event.toolName} repeated ${advisorLoopThresholdRef} times without a materially different tool action.`;
-  if (!session.canConsult(advisorMaxCallsPerSessionRef)) {
+  if (!session.canConsult(getAdvisorMaxCallsPerSession())) {
     const failure = failureEffect(
       "budget-exhausted",
       "Advisor gate call budget is exhausted.",
@@ -1396,7 +1398,7 @@ export const registerAdvisorTool = (
     const guidelines = advisorInvocationGuidelines();
     const budget = isSimpleMode()
       ? undefined
-      : session.remainingCalls(advisorMaxCallsPerSessionRef);
+      : session.remainingCalls(getAdvisorMaxCallsPerSession());
     if (budget !== undefined) {
       guidelines.push(
         `Advisor calls remaining this session: ${budget}.\nReserve calls for material decisions, repeated failures, or final review.`
@@ -1441,7 +1443,7 @@ export const registerAdvisorTool = (
     if (isSimpleMode() || session.blocked || !advisorSessionSummaryRef) {
       return;
     }
-    const summary = session.summary(advisorMaxCallsPerSessionRef);
+    const summary = session.summary(getAdvisorMaxCallsPerSession());
     if (summary && ctx.hasUI) {
       ctx.ui.notify(summary, "info");
     }
@@ -1467,7 +1469,7 @@ export const registerAdvisorTool = (
         );
       }
       if (!isSimpleMode()) {
-        if (!session.canConsult(advisorMaxCallsPerSessionRef)) {
+        if (!session.canConsult(getAdvisorMaxCallsPerSession())) {
           throw new Error("Advisor call budget exhausted for this session.");
         }
         session.consumeCall();

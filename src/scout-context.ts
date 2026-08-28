@@ -169,9 +169,14 @@ const pendingInvocationDisclosure = (
 
 export interface BuildScoutManifestOptions {
   currentInvocationId?: string;
+  /** @deprecated Use maxManifestBytes for the Scout transport budget. */
   maxBytes?: number;
+  /** Maximum reconstructed Advisor conversation characters. */
+  maxConversationChars?: number;
   maxGroupBytes?: number;
   maxGroups?: number;
+  /** Maximum serialized group-manifest bytes sent to Scout. */
+  maxManifestBytes?: number;
   policies?: AdvisorToolPolicies;
   redact?: boolean;
   toolResultMaxBytes?: number;
@@ -191,9 +196,13 @@ export const buildScoutManifest = (
     options.toolResultMaxLines ?? advisorToolResultMaxLinesRef;
   const toolResultMaxBytes =
     options.toolResultMaxBytes ?? advisorToolResultMaxBytesRef;
-  const maxBytes = options.maxBytes ?? SCOUT_MANIFEST_MAX_BYTES;
-  const maxGroups = options.maxGroups ?? SCOUT_MANIFEST_MAX_GROUPS;
-  const maxGroupBytes = options.maxGroupBytes ?? SCOUT_GROUP_MAX_BYTES;
+  const {
+    maxBytes,
+    maxConversationChars,
+    maxGroupBytes = SCOUT_GROUP_MAX_BYTES,
+    maxGroups = SCOUT_MANIFEST_MAX_GROUPS,
+    maxManifestBytes = maxBytes ?? SCOUT_MANIFEST_MAX_BYTES,
+  } = options;
 
   let latestUserIndex = -1;
   const callOwners = new Map<string, { index: number; name: string }>();
@@ -423,7 +432,7 @@ export const buildScoutManifest = (
   const availableBytes =
     groups.reduce((sum, group) => sum + groupWireBytes(group), 0) +
     protocolOmittedBytes;
-  if (maxBytes <= 0) {
+  if (maxManifestBytes <= 0) {
     return {
       manifest: {
         availableBytes: 0,
@@ -439,22 +448,39 @@ export const buildScoutManifest = (
   if (
     required.some((group) => group.bytes > maxGroupBytes) ||
     required.length > maxGroups ||
-    required.reduce((sum, group) => sum + groupWireBytes(group), 0) > maxBytes
+    required.reduce((sum, group) => sum + groupWireBytes(group), 0) >
+      maxManifestBytes
   ) {
     return {
       message:
-        "Required Scout context exceeds a fixed manifest or per-group limit.",
+        "Required Scout context exceeds the Scout manifest transport limit.",
       ok: false,
       reason: "required-group-overflow",
     };
   }
-
+  const contentChars = (items: ScoutContextGroup[]) =>
+    items.reduce((sum, group) => sum + group.content.length, 0) +
+    Math.max(0, items.length - 1) * 2;
+  if (
+    maxConversationChars !== undefined &&
+    contentChars(required) > maxConversationChars
+  ) {
+    return {
+      message:
+        "Required Scout context exceeds the Advisor conversation budget.",
+      ok: false,
+      reason: "required-group-overflow",
+    };
+  }
   const selected = groups.filter(
     (group) => group.required || group.bytes <= maxGroupBytes
   );
   const fits = () =>
     selected.length <= maxGroups &&
-    selected.reduce((sum, group) => sum + groupWireBytes(group), 0) <= maxBytes;
+    selected.reduce((sum, group) => sum + groupWireBytes(group), 0) <=
+      maxManifestBytes &&
+    (maxConversationChars === undefined ||
+      contentChars(selected) <= maxConversationChars);
   while (!fits()) {
     const optionalIndex = selected.findIndex((group) => !group.required);
     if (optionalIndex < 0) {

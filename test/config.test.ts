@@ -45,6 +45,7 @@ import {
   executorRef,
   FALLBACK_ADVISOR,
   FALLBACK_EXECUTOR,
+  getAdvisorMaxCallsPerSession,
   loadConfig,
   MAX_CONTEXT_MAX_CHARS,
   parseArgs,
@@ -365,6 +366,16 @@ describe("Config Module", () => {
       resetConfigCache();
       rmSync(agentDir, { force: true, recursive: true });
     }
+  });
+
+  test("reads live finite and unlimited budget transitions", () => {
+    setAdvisorMaxCallsPerSessionRef(5);
+    expect(getAdvisorMaxCallsPerSession()).toBe(5);
+    setAdvisorMaxCallsPerSessionRef(undefined);
+    expect(getAdvisorMaxCallsPerSession()).toBeUndefined();
+    setAdvisorMaxCallsPerSessionRef(2);
+    expect(getAdvisorMaxCallsPerSession()).toBe(2);
+    setAdvisorMaxCallsPerSessionRef(undefined);
   });
 
   test("saveConfig removes a previous finite budget when unlimited", () => {

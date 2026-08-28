@@ -2279,6 +2279,112 @@ describe("Advisor settings navigation and gate parsing regressions", () => {
     }
   });
 
+  test("uses the live unlimited budget after a finite config reload", () => {
+    const agentDir = mkdtempSync(join(tmpdir(), "pi-advisor-agent-"));
+    const previousAgentDir = process.env.PI_CODING_AGENT_DIR;
+    process.env.PI_CODING_AGENT_DIR = agentDir;
+    writeFileSync(
+      join(agentDir, "advisor.json"),
+      JSON.stringify({ advisorMaxCallsPerSession: 1 })
+    );
+    resetConfigCache();
+    let toolCall: any;
+    const mockPi = {
+      getActiveTools: () => ["ask_advisor"],
+      on(event: string, handler: any) {
+        if (event === "tool_call") {
+          toolCall = handler;
+        }
+      },
+      registerEntryRenderer: () => undefined,
+      registerMessageRenderer: () => undefined,
+      registerTool: () => undefined,
+    } as unknown as ExtensionAPI;
+    const state = new AdvisorSessionState();
+
+    try {
+      registerAdvisorTool(mockPi, state);
+      state.consumeCall();
+      expect(
+        toolCall(
+          { input: {}, toolCallId: "finite", toolName: "ask_advisor" },
+          { cwd: agentDir, hasUI: false, isProjectTrusted: () => false }
+        )
+      ).toMatchObject({ block: true });
+
+      writeFileSync(join(agentDir, "advisor.json"), JSON.stringify({}));
+      resetConfigCache();
+      expect(
+        toolCall(
+          { input: {}, toolCallId: "unlimited", toolName: "ask_advisor" },
+          { cwd: agentDir, hasUI: false, isProjectTrusted: () => false }
+        )
+      ).toEqual({});
+    } finally {
+      if (previousAgentDir === undefined) {
+        delete process.env.PI_CODING_AGENT_DIR;
+      } else {
+        process.env.PI_CODING_AGENT_DIR = previousAgentDir;
+      }
+      resetConfigCache();
+      rmSync(agentDir, { force: true, recursive: true });
+    }
+  });
+
+  test("manual consultations use the live unlimited budget", async () => {
+    const agentDir = mkdtempSync(join(tmpdir(), "pi-advisor-agent-"));
+    const previousAgentDir = process.env.PI_CODING_AGENT_DIR;
+    process.env.PI_CODING_AGENT_DIR = agentDir;
+    writeFileSync(
+      join(agentDir, "advisor.json"),
+      JSON.stringify({ advisorMaxCallsPerSession: 1 })
+    );
+    resetConfigCache();
+    const commands = new Map<string, any>();
+    let consultations = 0;
+    const mockPi = {
+      getActiveTools: () => [],
+      on: () => undefined,
+      registerCommand(name: string, config: any) {
+        commands.set(name, config);
+      },
+      sendMessage: () => undefined,
+    } as unknown as ExtensionAPI;
+    const state = new AdvisorSessionState();
+    state.consumeCall();
+
+    try {
+      registerCommands(mockPi, {
+        consult: () => {
+          consultations += 1;
+          return Promise.resolve({ markdown: "ok", thinkingText: "" });
+        },
+        sessionState: state,
+      });
+      const ctx = {
+        cwd: agentDir,
+        hasUI: false,
+        isProjectTrusted: () => false,
+      } as any;
+      await commands.get("advisor-manual").handler("", ctx);
+      expect(consultations).toBe(0);
+
+      writeFileSync(join(agentDir, "advisor.json"), JSON.stringify({}));
+      resetConfigCache();
+      await commands.get("advisor-manual").handler("", ctx);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(consultations).toBe(1);
+    } finally {
+      if (previousAgentDir === undefined) {
+        delete process.env.PI_CODING_AGENT_DIR;
+      } else {
+        process.env.PI_CODING_AGENT_DIR = previousAgentDir;
+      }
+      resetConfigCache();
+      rmSync(agentDir, { force: true, recursive: true });
+    }
+  });
+
   test("reserves ask_advisor without consuming its budget", () => {
     let toolCall: any;
     const mockPi = {
