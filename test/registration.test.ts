@@ -1310,7 +1310,7 @@ describe("Extension Registration", () => {
     expect(saved.alwaysOn).toBe(true);
   });
 
-  test("renders a context pyramid at the selected depth", () => {
+  test("renders a context depth meter", () => {
     const selector = new AdvisorSettingsSelector({
       effortLevels: ["Default (Model Default)"],
       initial: {
@@ -1336,7 +1336,17 @@ describe("Extension Registration", () => {
       } as any,
       tui: { requestRender: () => undefined },
     });
-    expect(selector.render(100).join("\n")).toContain("█████████");
+    const screen = selector.render(100).join("\n").replace(SGR_CODE, "");
+    const lines = screen.split("\n");
+    const meterLine = lines.find((line) => line.includes("none"));
+    const labelLine = lines.find((line) => line.trim() === "ALL");
+    if (!(meterLine && labelLine)) {
+      throw new Error("Context meter did not render its marker and label");
+    }
+    expect(meterLine).toContain("full");
+    expect(meterLine).toContain("●");
+    expect(labelLine.indexOf("ALL")).toBe(meterLine.indexOf("●") - 1);
+    expect(screen).not.toContain("████");
   });
 
   test("restores Simple mode animation", () => {

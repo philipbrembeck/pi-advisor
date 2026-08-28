@@ -793,29 +793,52 @@ export class AdvisorSettingsSelector implements Component, Focusable {
   }
 
   private contextDescription(): string {
-    const selectedIndex = Math.max(
-      0,
-      this.presets.findIndex(
-        (preset) => preset.value === this.settings.contextMaxChars
-      )
+    const exactIndex = this.presets.findIndex(
+      (preset) => preset.value === this.settings.contextMaxChars
     );
-    const pyramidRows = 5;
+    const selectedIndex =
+      exactIndex >= 0
+        ? exactIndex
+        : this.presets.reduce(
+            (closestIndex, preset, index) =>
+              Math.abs(preset.value - this.settings.contextMaxChars) <
+              Math.abs(
+                this.presets[closestIndex].value - this.settings.contextMaxChars
+              )
+                ? index
+                : closestIndex,
+            0
+          );
     const selectedPreset = this.presets[selectedIndex];
     const isFullContext =
       selectedPreset?.value === Number.MAX_SAFE_INTEGER ||
       selectedPreset?.label.toUpperCase() === "FULL" ||
       selectedPreset?.label.toUpperCase() === "ALL";
-    const builtRows = isFullContext
-      ? pyramidRows
-      : Math.round(
-          (selectedIndex / Math.max(1, this.presets.length - 1)) * pyramidRows
-        );
-    const pyramid = Array.from({ length: pyramidRows }, (_, row) => {
-      const width = row * 2 + 1;
-      const blocks = row >= pyramidRows - builtRows ? "█" : "·";
-      return `${" ".repeat(pyramidRows - row - 1)}${blocks.repeat(width)}`;
-    }).join("\n");
-    return `${selectedPreset?.description ?? "Custom context limit."}\n${pyramid}\n  ${this.currentContextLabel()} context`;
+    const progress = isFullContext
+      ? 1
+      : selectedIndex / Math.max(1, this.presets.length - 1);
+    const meterWidth = 20;
+    const marker = Math.round(progress * meterWidth);
+    const meter = Array.from({ length: meterWidth + 1 }, (_, index) => {
+      if (index === marker) {
+        return "●";
+      }
+      return index < marker ? "━" : "─";
+    }).join("");
+    const label = this.currentContextLabel();
+    const meterPrefix = "none    ";
+    const markerColumn = meterPrefix.length + marker;
+    const labelStart = Math.max(
+      0,
+      Math.min(
+        meterPrefix.length + meter.length - label.length,
+        markerColumn - Math.floor(label.length / 2)
+      )
+    );
+    const markerLabel = `${" ".repeat(labelStart)}${label}`;
+    const description =
+      exactIndex >= 0 ? selectedPreset?.description : "Custom context limit.";
+    return `${description ?? "Custom context limit."}\n${meterPrefix}${meter}  full\n${markerLabel}`;
   }
 
   private currentEffort(): string {

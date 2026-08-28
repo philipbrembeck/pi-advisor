@@ -9,7 +9,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ### Added
 
 - Reworked `/advisor-settings` into a compact Pi-style searchable settings list with fuzzy search, arrow-key value adjustment, and immediate persistence for every valid change.
-- Restored the animated Simple mode indicator and added a context-depth pyramid that fills to a complete branch at `ALL`.
+- Restored the animated Simple mode indicator and added a context-depth meter spanning recent history to the complete branch at `ALL`.
 - Added enabled-by-default per-response usage detail display plus an independent, opt-in `showUsageFooter` setting for cumulative Advisor footer usage; both are presentation-only and do not change usage accounting.
 
 ### Fixed
