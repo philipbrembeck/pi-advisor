@@ -22,6 +22,7 @@ import {
   setAdvisorCollapseResponsesRef,
   setAdvisorRedactSecretsRef,
   setAdvisorToolPoliciesRef,
+  setShowUsageDetailsRef,
 } from "../src/config.js";
 import {
   createHerdrNotificationRequest,
@@ -963,6 +964,7 @@ describe("Extension Registration", () => {
   });
 
   test("distinguishes the executor request from the advisor response", () => {
+    setShowUsageDetailsRef(true);
     let advisorTool: any;
     const mockPi = {
       getActiveTools() {
@@ -1023,6 +1025,36 @@ describe("Extension Registration", () => {
     expect(response).toContain("Ship it.");
     expect(response).not.toContain("**Ship it.**");
     expect(response).not.toContain("Advisor (test/model)");
+
+    setShowUsageDetailsRef(false);
+    try {
+      const hiddenUsage = advisorTool
+        .renderResult(
+          {
+            content: [
+              { text: "Advisor (test/model)\n\n**Ship it.**", type: "text" },
+            ],
+            details: {
+              advisor: "test/model",
+              text: "**Ship it.**",
+              usage: {
+                cacheRead: 20,
+                cost: 0.0123,
+                input: 1200,
+                output: 456,
+              },
+            },
+          },
+          { isPartial: false },
+          theme,
+          context
+        )
+        .render(120)
+        .join("\n");
+      expect(hiddenUsage).not.toContain("Usage:");
+    } finally {
+      setShowUsageDetailsRef(true);
+    }
 
     const markdownPartial = advisorTool
       .renderResult(
@@ -1213,14 +1245,25 @@ describe("Extension Registration", () => {
     });
     // Context is the first advanced row because the slider appears above it.
     selector.handleInput("\u001b[C");
-    const downsToSave = saveViaKeyboard(selector);
-    // One right plus the downs to Save; Enter saves without a render.
-    expect(renderRequests).toBe(1 + downsToSave);
-    expect(saved.contextMaxChars).toBe(10_000);
     const screen = selector.render(80).join("\n");
     expect(screen).toContain("Advisor reasoning");
     expect(screen).toContain("Experimental Advisor Scout");
+    expect(screen).toContain("Show usage and cost details");
+    expect(screen).toContain("Show usage in footer");
     expect(screen).toContain("Custom invocation");
+    const downsToUsage = focusSettingsRow(
+      selector,
+      "Show usage and cost details"
+    );
+    selector.handleInput("\u001b[C");
+    const downsToFooter = focusSettingsRow(selector, "Show usage in footer");
+    selector.handleInput("\u001b[C");
+    const downsToSave = saveViaKeyboard(selector);
+    // One right per changed setting plus every cursor movement; Enter saves without a render.
+    expect(renderRequests).toBe(3 + downsToUsage + downsToFooter + downsToSave);
+    expect(saved.contextMaxChars).toBe(10_000);
+    expect(saved.showUsageDetails).toBe(false);
+    expect(saved.showUsageFooter).toBe(true);
     expect(screen).toContain("Gate failure mode");
     expect(screen).toContain("Herdr integration");
     expect(screen).toContain("Redact common secrets");
@@ -1415,7 +1458,7 @@ describe("Extension Registration", () => {
       cwd: tmpdir(),
       hasUI: true,
       isProjectTrusted: () => false,
-      ui: { custom, notify: () => undefined },
+      ui: { custom, notify: () => undefined, setStatus: () => undefined },
     } as any;
 
     try {
@@ -1454,6 +1497,7 @@ describe("Extension Registration", () => {
   });
 
   test("renders the shared expanded Scout fallback entry", () => {
+    setShowUsageDetailsRef(true);
     const renderers = new Map<string, any>();
     const mockPi = {
       getActiveTools: () => [],
@@ -1492,6 +1536,29 @@ describe("Extension Registration", () => {
     expect(fallback).toContain("timeout: Scout timed out");
     expect(fallback).toContain("Usage: ↑80 · ↓10 · cr:2 · $0.0030");
     expect(fallback).toContain("2 group(s) omitted before Scout");
+
+    setShowUsageDetailsRef(false);
+    try {
+      const hiddenUsage = renderers
+        .get("advisor-scout-result")(
+          {
+            data: {
+              availableCount: 4,
+              model: "provider/executor",
+              selectedCount: 0,
+              status: "fallback",
+              usage: { cacheRead: 2, cost: 0.003, input: 80, output: 10 },
+            },
+          },
+          { expanded: false },
+          theme
+        )
+        .render(120)
+        .join("\n");
+      expect(hiddenUsage).not.toContain("Usage:");
+    } finally {
+      setShowUsageDetailsRef(true);
+    }
   });
 
   test("renders Scout phases before Advisor and clears timers at transitions", () => {
@@ -1843,6 +1910,7 @@ describe("Advisor activation and mode regressions", () => {
       registerMessageRenderer(type: string, renderer: any) {
         renderers.set(type, renderer);
       },
+      registerTool: () => undefined,
       sendMessage: () => undefined,
       setActiveTools(tools: string[]) {
         activeTools = tools;
@@ -2031,6 +2099,37 @@ describe("Advisor activation and mode regressions", () => {
     });
   });
 
+  test("hides usage details from automatic gate results when disabled", () => {
+    setShowUsageDetailsRef(true);
+    const { pi, renderers } = harness();
+    registerAdvisorTool(pi);
+    const render = () =>
+      renderers
+        .get("advisor-loop-result")(
+          {
+            content: [{ text: "Decision: proceed", type: "text" }],
+            details: {
+              advisor: "test/model",
+              decision: "proceed",
+              text: "Decision: proceed",
+              usage: { cost: 0.0042, input: 50, output: 10 },
+            },
+          },
+          { expanded: false },
+          plainTheme
+        )
+        .render(120)
+        .join("\n");
+
+    expect(render()).toContain("Usage: ↑50 · ↓10 · $0.0042");
+    setShowUsageDetailsRef(false);
+    try {
+      expect(render()).not.toContain("Usage:");
+    } finally {
+      setShowUsageDetailsRef(true);
+    }
+  });
+
   test("turning the Advisor off also clears persistent activation", async () => {
     await withAgentDir({ alwaysOn: true }, async (agentDir) => {
       const { commands, events, pi } = harness();
@@ -2085,6 +2184,14 @@ describe("Advisor activation and mode regressions", () => {
       expect(render("Verdict: sound\n\nNothing to change.")).toContain(
         "Usage: ↑100 · ↓20 · cw:3 · $0.0100"
       );
+      setShowUsageDetailsRef(false);
+      try {
+        expect(render("Verdict: sound\n\nNothing to change.")).not.toContain(
+          "Usage:"
+        );
+      } finally {
+        setShowUsageDetailsRef(true);
+      }
       expect(render("Consider reverting the migration.")).toContain(
         "◆ ADVISOR RESPONSE"
       );

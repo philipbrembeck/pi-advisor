@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## Unreleased
 
+### Added
+
+- Added enabled-by-default per-response usage detail display plus an independent, opt-in `showUsageFooter` setting for cumulative Advisor footer usage; both are presentation-only and do not change usage accounting.
+
 ### Fixed
 
 - Made blocked automatic-gate decisions honor the configured session, tool, or warning behavior.

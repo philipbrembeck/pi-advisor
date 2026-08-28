@@ -46,6 +46,8 @@ import {
   setContextMaxCharsRef,
   setExecutorEffortRef,
   setExecutorRef,
+  setShowUsageDetailsRef,
+  setShowUsageFooterRef,
   setSimpleModeRef,
   splitRef,
 } from "./config.js";
@@ -199,7 +201,12 @@ export const registerCommands = (
   const manualConsultations = new Map<AbortController, symbol>();
   const updateAdvisorUsageStatus = (ctx: ExtensionContext) => {
     if (ctx.hasUI) {
-      ctx.ui.setStatus("advisor-usage", advisorSessionState.usageStatus());
+      ctx.ui.setStatus(
+        "advisor-usage",
+        getAdvisorSettings().showUsageFooter
+          ? advisorSessionState.usageStatus()
+          : undefined
+      );
     }
   };
   const setManualStatus = (
@@ -461,9 +468,11 @@ export const registerCommands = (
       if (details?.advisor) {
         box.addChild(new Text(theme.fg("dim", `  ${details.advisor}`), 0, 0));
       }
-      const usage = formatAdvisorUsage(details?.usage);
-      if (usage) {
-        box.addChild(new Text(theme.fg("dim", `  Usage: ${usage}`), 0, 0));
+      if (getAdvisorSettings().showUsageDetails) {
+        const usage = formatAdvisorUsage(details?.usage);
+        if (usage) {
+          box.addChild(new Text(theme.fg("dim", `  Usage: ${usage}`), 0, 0));
+        }
       }
       box.addChild(
         new Markdown(
@@ -680,6 +689,8 @@ export const registerCommands = (
       setAdvisorMaxCallsPerSessionRef(settings.maxCallsPerSession);
       setAdvisorSessionSummaryRef(settings.sessionSummary ?? false);
       setAdvisorScoutEnabledRef(settings.scoutEnabled ?? false);
+      setShowUsageDetailsRef(settings.showUsageDetails ?? true);
+      setShowUsageFooterRef(settings.showUsageFooter ?? false);
       setSimpleModeRef(settings.simpleMode ?? false);
       setAlwaysOnRef(settings.alwaysOn ?? false);
       setAdvisorFailureModeRef(settings.failureMode ?? "block-session");
@@ -693,6 +704,7 @@ export const registerCommands = (
       setAdvisorTrackedFileContentRef(settings.trackedFileContent ?? false);
       setAdvisorUntrackedContentRef(settings.untrackedContent ?? false);
       setAdvisorOutcomeLoggingRef(settings.outcomeLogging ?? false);
+      updateAdvisorUsageStatus(ctx);
       const path = saveConfig(ctx);
       const globalPath = saveGlobalOutcomeLogging(
         settings.outcomeLogging ?? false

@@ -230,6 +230,8 @@ export interface AdvisorSettings {
   redactSecrets?: boolean;
   scoutEnabled?: boolean;
   sessionSummary?: boolean;
+  showUsageDetails?: boolean;
+  showUsageFooter?: boolean;
   simpleMode?: boolean;
   toolPolicies?: Record<string, "full" | "summary" | "exclude">;
   toolResultMaxBytes?: number;
@@ -244,6 +246,8 @@ type AdvisorSettingsRow =
   | "context"
   | "effort"
   | "scoutEnabled"
+  | "showUsageDetails"
+  | "showUsageFooter"
   | "planGate"
   | "failureGate"
   | "completionGate"
@@ -271,6 +275,8 @@ const ADVANCED_ROWS: AdvisorSettingsRow[] = [
   "context",
   "effort",
   "scoutEnabled",
+  "showUsageDetails",
+  "showUsageFooter",
   "planGate",
   "failureGate",
   "completionGate",
@@ -516,6 +522,7 @@ export class AdvisorSettingsSelector implements Component, Focusable {
       ...this.settings,
       contextMaxChars: this.currentContext().value,
       effort: this.currentEffort(),
+      showUsageDetails: this.settings.showUsageDetails ?? true,
     });
   }
 
@@ -586,6 +593,16 @@ export class AdvisorSettingsSelector implements Component, Focusable {
         "Experimental Advisor Scout",
         onOff(this.settings.scoutEnabled ?? false),
         "scoutEnabled"
+      ),
+      this.row(
+        "Show usage and cost details",
+        onOff(this.settings.showUsageDetails ?? true),
+        "showUsageDetails"
+      ),
+      this.row(
+        "Show usage in footer",
+        onOff(this.settings.showUsageFooter ?? false),
+        "showUsageFooter"
       ),
       this.row("Plan gate", onOff(this.settings.planGate), "planGate"),
       this.row("Failure gate", onOff(this.settings.failureGate), "failureGate"),
@@ -837,6 +854,16 @@ export class AdvisorSettingsSelector implements Component, Focusable {
         break;
       case "scoutEnabled":
         this.settings.scoutEnabled = !(this.settings.scoutEnabled ?? false);
+        break;
+      case "showUsageDetails":
+        this.settings.showUsageDetails = !(
+          this.settings.showUsageDetails ?? true
+        );
+        break;
+      case "showUsageFooter":
+        this.settings.showUsageFooter = !(
+          this.settings.showUsageFooter ?? false
+        );
         break;
       case "planGate":
         this.settings.planGate = !this.settings.planGate;

@@ -18,6 +18,8 @@ const INVALID_FAILURE_MODE_PATTERN =
 const INVALID_TOOL_POLICIES_PATTERN = /advisorToolPolicies/;
 const INVALID_GIT_CONTEXT_PATTERN = /off.*summary.*full/;
 const INVALID_SCOUT_ENABLED_PATTERN = /advisorScoutEnabled/;
+const INVALID_SHOW_USAGE_DETAILS_PATTERN = /showUsageDetails/;
+const INVALID_SHOW_USAGE_FOOTER_PATTERN = /showUsageFooter/;
 
 import {
   advisorCollapseResponsesRef,
@@ -74,7 +76,11 @@ import {
   setContextMaxCharsRef,
   setExecutorEffortRef,
   setExecutorRef,
+  setShowUsageDetailsRef,
+  setShowUsageFooterRef,
   setSimpleModeRef,
+  showUsageDetailsRef,
+  showUsageFooterRef,
   simpleModeRef,
   splitRef,
   validateConfig,
@@ -332,8 +338,18 @@ describe("Config Module", () => {
       expect(alwaysOnRef).toBe(false);
       expect(advisorSessionSummaryRef).toBe(false);
       expect(advisorScoutEnabledRef).toBe(false);
+      expect(showUsageDetailsRef).toBe(true);
+      expect(showUsageFooterRef).toBe(false);
       expect(advisorHerdrIntegrationRef).toBe(true);
       expect(validateConfig({ advisorScoutEnabled: true })).toBe(true);
+      expect(validateConfig({ showUsageDetails: false })).toBe(true);
+      expect(validateConfig({ showUsageFooter: true })).toBe(true);
+      expect(() => validateConfig({ showUsageDetails: "yes" })).toThrow(
+        INVALID_SHOW_USAGE_DETAILS_PATTERN
+      );
+      expect(() => validateConfig({ showUsageFooter: "yes" })).toThrow(
+        INVALID_SHOW_USAGE_FOOTER_PATTERN
+      );
       expect(() => validateConfig({ advisorScoutEnabled: "yes" })).toThrow(
         INVALID_SCOUT_ENABLED_PATTERN
       );
@@ -498,6 +514,8 @@ describe("Config Module", () => {
       setAdvisorMaxCallsPerSessionRef(2);
       setAdvisorSessionSummaryRef(false);
       setAdvisorScoutEnabledRef(true);
+      setShowUsageDetailsRef(false);
+      setShowUsageFooterRef(true);
       setSimpleModeRef(true);
       setAlwaysOnRef(true);
       setAdvisorFailureModeRef("warn-and-continue");
@@ -529,6 +547,8 @@ describe("Config Module", () => {
         contextMaxChars: Number.MAX_SAFE_INTEGER,
         futureSetting: true,
         gateFailureMode: "warn-and-continue",
+        showUsageDetails: false,
+        showUsageFooter: true,
         simpleMode: true,
       });
 
@@ -544,6 +564,8 @@ describe("Config Module", () => {
       expect(warnings).toHaveLength(1);
       expect(warnings[0]).toContain("futureSetting");
       expect(contextMaxCharsRef).toBe(Number.MAX_SAFE_INTEGER);
+      expect(showUsageDetailsRef).toBe(false);
+      expect(showUsageFooterRef).toBe(true);
     } finally {
       if (previousAgentDir === undefined) {
         delete process.env[AGENT_DIR_ENV];

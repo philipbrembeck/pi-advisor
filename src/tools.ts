@@ -35,6 +35,7 @@ import {
   contextMaxCharsRef,
   executorRef,
   getAdvisorMaxCallsPerSession,
+  getAdvisorSettings,
   isSimpleMode,
   loadConfig,
 } from "./config.js";
@@ -712,7 +713,10 @@ const updateAdvisorUsageStatus = (
   session: AdvisorSessionState
 ) => {
   if (ctx.hasUI) {
-    ctx.ui.setStatus("advisor-usage", session.usageStatus());
+    ctx.ui.setStatus(
+      "advisor-usage",
+      getAdvisorSettings().showUsageFooter ? session.usageStatus() : undefined
+    );
   }
 };
 
@@ -1189,9 +1193,11 @@ export const renderScoutDetails = (
       `  ${scout.model}${scout.selectedCount === undefined ? "" : ` · ${scout.selectedCount} kept / ${Math.max(0, (scout.availableCount ?? 0) - scout.selectedCount)} omitted`}${scout.latencyMs === undefined ? "" : ` · ${(scout.latencyMs / 1000).toFixed(1)}s`}`
     ),
   ];
-  const usage = formatAdvisorUsage(scout.usage);
-  if (usage) {
-    lines.push(theme.fg("dim", `  Usage: ${usage}`));
+  if (getAdvisorSettings().showUsageDetails) {
+    const usage = formatAdvisorUsage(scout.usage);
+    if (usage) {
+      lines.push(theme.fg("dim", `  Usage: ${usage}`));
+    }
   }
   if (scout.fallbackReason) {
     lines.push(theme.fg("warning", `  ${scout.fallbackReason}`));
@@ -1313,9 +1319,11 @@ const renderFinalAdvisorResult = (
   if (details?.advisor) {
     lines.push(theme.fg("dim", `  ${details.advisor}`));
   }
-  const usage = formatAdvisorUsage(details?.usage);
-  if (usage) {
-    lines.push(theme.fg("dim", `  Usage: ${usage}`));
+  if (getAdvisorSettings().showUsageDetails) {
+    const usage = formatAdvisorUsage(details?.usage);
+    if (usage) {
+      lines.push(theme.fg("dim", `  Usage: ${usage}`));
+    }
   }
   const attachments = [
     details?.draftBytes
@@ -1431,9 +1439,11 @@ export const registerAdvisorTool = (
       if (details?.advisor) {
         box.addChild(new Text(theme.fg("dim", `  ${details.advisor}`), 0, 0));
       }
-      const usage = formatAdvisorUsage(details?.usage);
-      if (usage) {
-        box.addChild(new Text(theme.fg("dim", `  Usage: ${usage}`), 0, 0));
+      if (getAdvisorSettings().showUsageDetails) {
+        const usage = formatAdvisorUsage(details?.usage);
+        if (usage) {
+          box.addChild(new Text(theme.fg("dim", `  Usage: ${usage}`), 0, 0));
+        }
       }
       if (details?.text) {
         box.addChild(
@@ -1542,7 +1552,6 @@ export const registerAdvisorTool = (
   pi.registerTool({
     description:
       "Consult the on-demand Advisor model for strategic guidance. Call with an empty object for a contextual review; attach an optional draft for concrete plan or completion review. If the Advisor explicitly names a missing file, you may make a sequential follow-up call with includeTrackedFiles when enabled and relevant.",
-    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: usage and consent paths remain explicit at the tool boundary.
     async execute(_id, params, signal, onUpdate, ctx) {
       reservedCalls.delete(_id);
       if (
@@ -1612,9 +1621,7 @@ export const registerAdvisorTool = (
         });
         const usage = snapshotAdvisorUsage(result.usage);
         const piUsage = advisorUsageForPi(result.usage);
-        if (ctx.hasUI) {
-          ctx.ui.setStatus("advisor-usage", session.usageStatus());
-        }
+        updateAdvisorUsageStatus(ctx, session);
         return {
           content: [
             {
@@ -1646,9 +1653,7 @@ export const registerAdvisorTool = (
           model: advisorRef,
           trigger: "executor-requested",
         });
-        if (ctx.hasUI) {
-          ctx.ui.setStatus("advisor-usage", session.usageStatus());
-        }
+        updateAdvisorUsageStatus(ctx, session);
         notifyLocalFailure(ctx, message);
         notifyHerdrAdvisorFailure("Advisor consultation failed", message);
         throw error;

@@ -21,7 +21,7 @@ The idea is simple: keep implementation on a fast model and borrow frontier reas
 - **Configurable review gates** before plans, after repeated failures, and before declaring completion.
 - **Automatic loop detection** for repeated tool calls, with explicit proceed, revise, or blocked decisions.
 - **Separate model and reasoning controls** for the Executor and Advisor.
-- **Advisor usage accounting** with per-response token/cost details and cumulative direct usage in the Pi footer and session summary.
+- **Advisor usage accounting** with per-response token/cost details and optional cumulative direct usage in the Pi footer and session summary. Per-response usage and cost details are shown by default and can be hidden independently from the footer in `/advisor-settings`.
 - **Privacy controls** for conversation history, repository context, explicit tracked/untracked file handoff, tool results, secret redaction, and outcome logging.
 - **Optional persistent activation, Simple mode, session summaries, and Herdr integration.**
 - **EXPERIMENTAL Advisor Scout** that uses the configured Executor model to curate conversation evidence before every Advisor call.
@@ -69,7 +69,7 @@ You can also enable the flow and select both models at once:
 
 A normal consultation never blocks execution. The optional automatic loop gate is different: it evaluates repeated tool calls and applies the configured failure policy when the Advisor says to revise, reports a block, is unavailable, or returns an invalid decision.
 
-Advisor responses show provider-reported input, output, cache, and cost details when available. Successful `ask_advisor` tool results also carry normalized usage into Pi's built-in `Tools/summaries` and `/cost` totals. Manual consultations and automatic gates remain in the separate session-local direct Advisor accounting because they are custom messages, so they are not double-counted in Pi's Executor totals. Missing or partial provider usage is shown as unavailable rather than fabricated as zero usage.
+Advisor responses show provider-reported input, output, cache, and cost details when available. Successful `ask_advisor` tool results also carry normalized usage into Pi's built-in `Tools/summaries` and `/cost` totals. Manual consultations and automatic gates remain in the separate session-local direct Advisor accounting because they are custom messages, so they are not double-counted in Pi's Executor totals. Missing or partial provider usage is shown as unavailable rather than fabricated as zero usage. `/advisor-settings` independently controls per-response usage details and the cumulative Advisor footer without disabling this accounting; the footer is off by default.
 
 Successful calls return an opaque `adviceId`. If global outcome logging is enabled, the Executor can call `record_advisor_outcome` once to record whether the advice was adopted and whether final validation passed.
 
@@ -77,7 +77,7 @@ Successful calls return an opaque `adviceId`. If global outcome logging is enabl
 
 Experimental Advisor Scout is off by default. Enable `Experimental Advisor Scout` in the advanced `/advisor-settings` screen or set `"advisorScoutEnabled": true` in the global `advisor.json`.
 
-Scout runs before `ask_advisor`, `/advisor-manual`, and automatic Advisor gates. It uses the configured Executor model and Executor reasoning effort in a separate model call. This adds cost and latency, but can reduce cost in the Advisor call. The compact result shows the model, selection counts, and elapsed time; `Ctrl+O` shows bounded selected labels and the synthesis.
+Scout runs before `ask_advisor`, `/advisor-manual`, and automatic Advisor gates. It uses the configured Executor model and Executor reasoning effort in a separate model call. This adds cost and latency, but can reduce cost in the Advisor call. The compact result shows the model, selection counts, elapsed time, and usage/cost details; `Ctrl+O` shows bounded selected labels and the synthesis. Usage and cost details can be hidden in `/advisor-settings`.
 
 Scout receives a bounded manifest of conversation and tool-history groups after the normal tool disclosure, result-cap, and redaction policies are applied. The Scout manifest has its own fixed transport limit, while the reconstructed conversation remains bounded by the Advisor's remaining context budget after repository context; manifest metadata no longer consumes that Advisor conversation budget. A zero remaining budget produces no history groups. For a pending `ask_advisor` call, Scout receives only the allowlisted question and Git-context preference, never the draft or explicit attachment paths. Scout does not receive the deterministic Git context, draft, project preferences, or explicit tracked and untracked attachments. Those regions are appended later through their existing consent and cap rules.
 
