@@ -1,13 +1,16 @@
-import type { Theme } from "@earendil-works/pi-coding-agent";
+import {
+  getSettingsListTheme,
+  type Theme,
+} from "@earendil-works/pi-coding-agent";
 import {
   type Component,
   type Focusable,
   fuzzyFilter,
   Input,
-  Key,
   type Keybindings,
   type KeybindingsManager,
-  matchesKey,
+  type SettingItem,
+  SettingsList,
   truncateToWidth,
 } from "@earendil-works/pi-tui";
 import { isValidAdvisorToolPolicies } from "./config.js";
@@ -25,28 +28,6 @@ interface SearchableModelSelectorOptions {
   title: string;
   tui: RenderRequester;
 }
-const stepNumericPreset = (
-  current: number,
-  presets: number[],
-  direction: number
-) => {
-  const values = presets.includes(current)
-    ? presets
-    : [...presets, current].sort((a, b) => a - b);
-  const index = values.indexOf(current);
-  return values[Math.max(0, Math.min(values.length - 1, index + direction))];
-};
-
-interface AdvisorSettingsSelectorOptions {
-  effortLevels: string[];
-  initial: AdvisorSettings;
-  onCancel: () => void;
-  onSave: (settings: AdvisorSettings) => void;
-  presets: ContextPreset[];
-  theme: Theme;
-  tui: RenderRequester;
-}
-
 export class SearchableModelSelector implements Component, Focusable {
   private readonly tui: RenderRequester;
   private readonly searchInput: Input;
@@ -240,40 +221,92 @@ export interface AdvisorSettings {
   untrackedContent?: boolean;
 }
 
-type AdvisorSettingsRow =
-  | "simpleMode"
-  | "alwaysOn"
-  | "context"
-  | "effort"
-  | "scoutEnabled"
-  | "showUsageDetails"
-  | "showUsageFooter"
-  | "planGate"
-  | "failureGate"
-  | "completionGate"
-  | "collapseResponses"
-  | "customRule"
-  | "blockOnBlocked"
-  | "autoLoopGate"
-  | "loopThreshold"
-  | "maxCallsPerSession"
-  | "sessionSummary"
-  | "failureMode"
-  | "herdrIntegration"
-  | "toolResultMaxLines"
-  | "toolResultMaxBytes"
-  | "redactSecrets"
-  | "gitContext"
-  | "gitContextMaxChars"
-  | "toolPolicies"
-  | "outcomeLogging"
-  | "trackedFileContent"
-  | "untrackedContent"
-  | "save";
+type SettingValue = string | undefined;
 
-const ADVANCED_ROWS: AdvisorSettingsRow[] = [
-  "context",
-  "effort",
+interface AdvisorSettingsSelectorOptions {
+  effortLevels: string[];
+  initial: AdvisorSettings;
+  onCancel: () => void;
+  onChange?: (settings: AdvisorSettings) => void;
+  /** @deprecated Use onChange; retained for extensions embedding this component. */
+  onSave?: (settings: AdvisorSettings) => void;
+  presets: ContextPreset[];
+  theme: Theme;
+  tui: RenderRequester;
+}
+
+interface TextSettingSubmenuOptions {
+  description: string;
+  initial: string;
+  onCancel: (value?: string) => void;
+  onSubmit: (value: string) => { error?: string; value?: string };
+  theme: Theme;
+  title: string;
+  tui: RenderRequester;
+}
+
+/** Small inline editor used by SettingsList for the two free-form settings. */
+class TextSettingSubmenu implements Component, Focusable {
+  private readonly input = new Input();
+  private readonly options: TextSettingSubmenuOptions;
+  private _focused = true;
+  private error: string | undefined;
+
+  get focused(): boolean {
+    return this._focused;
+  }
+
+  set focused(value: boolean) {
+    this._focused = value;
+    this.input.focused = value;
+  }
+
+  constructor(options: TextSettingSubmenuOptions) {
+    this.options = options;
+    this.input.setValue(options.initial);
+    this.input.focused = true;
+    this.input.onSubmit = (value) => {
+      const result = options.onSubmit(value);
+      if (result.error) {
+        this.error = result.error;
+        options.tui.requestRender();
+        return;
+      }
+      this.error = undefined;
+      options.onCancel(result.value);
+    };
+    this.input.onEscape = () => options.onCancel();
+  }
+
+  invalidate(): void {
+    this.input.invalidate();
+  }
+
+  render(width: number): string[] {
+    const { theme } = this.options;
+    const input = this.input.render(Math.max(10, width - 4))[0] || "";
+    const lines = [
+      theme.fg("accent", theme.bold(`  ${this.options.title}`)),
+      "",
+      theme.fg("muted", `  ${this.options.description}`),
+      "",
+      `  ${input}`,
+    ];
+    if (this.error) {
+      lines.push(theme.fg("error", `  ${this.error}`));
+    }
+    lines.push("", theme.fg("dim", "  Enter: apply · Esc: cancel"));
+    return lines.map((line) => truncateToWidth(line, width));
+  }
+
+  handleInput(keyData: string): void {
+    this.input.handleInput(keyData);
+  }
+}
+
+const DEFAULT_EFFORT_LEVEL = "Default (Model Default)";
+const TOGGLE_VALUES = ["On", "Off"];
+const BOOLEAN_SETTING_IDS = new Set([
   "scoutEnabled",
   "showUsageDetails",
   "showUsageFooter",
@@ -281,705 +314,472 @@ const ADVANCED_ROWS: AdvisorSettingsRow[] = [
   "failureGate",
   "completionGate",
   "collapseResponses",
-  "customRule",
   "blockOnBlocked",
   "autoLoopGate",
-  "loopThreshold",
-  "maxCallsPerSession",
   "sessionSummary",
-  "failureMode",
   "herdrIntegration",
-  "toolResultMaxLines",
-  "toolResultMaxBytes",
   "redactSecrets",
-  "gitContext",
-  "gitContextMaxChars",
-  "toolPolicies",
   "trackedFileContent",
   "untrackedContent",
   "outcomeLogging",
-];
+]);
 
-const SIMPLE_MODE_GRADIENT_INTERVAL_MS = 100;
-// #763FCD and nearby lighter/darker purple steps; white is the moving shine.
-const SIMPLE_MODE_GRADIENT_COLORS = [
-  [125, 79, 205],
-  [143, 96, 218],
-  [160, 114, 230],
-  [178, 135, 238],
-  [195, 157, 245],
-  [168, 120, 230],
-  [143, 89, 215],
-] as const;
+const withCurrentValue = (current: string, values: string[]) =>
+  values.includes(current) ? values : [current, ...values];
+
+const numericValues = (current: number, values: number[]) => {
+  const all = values.includes(current) ? values : [...values, current];
+  return all.sort((a, b) => a - b).map(String);
+};
+
+const settingValue = (value: boolean | undefined, defaultValue: boolean) =>
+  (value ?? defaultValue) ? "On" : "Off";
 
 export class AdvisorSettingsSelector implements Component, Focusable {
-  private selectedRow: number;
-  private contextIndex: number;
-  private effortIndex: number;
-  private readonly settings: AdvisorSettings;
-  private readonly customInput = new Input();
-  private readonly policiesInput = new Input();
-  private editingCustom: boolean;
-  private editingPolicies: boolean;
-  private policiesError: string | undefined;
-  private simpleModeGradientStartedAt: number | undefined;
-  private simpleModeGradientTimer: ReturnType<typeof setInterval> | undefined;
-  private _focused = false;
   private readonly options: AdvisorSettingsSelectorOptions;
+  private readonly settings: AdvisorSettings;
+  private readonly presets: ContextPreset[];
+  private settingsList: SettingsList;
+  private _focused = false;
 
   get focused(): boolean {
     return this._focused;
   }
+
   set focused(value: boolean) {
     this._focused = value;
-    this.customInput.focused = value && this.editingCustom;
-    this.policiesInput.focused = value && this.editingPolicies;
+    const submenu = this.settingsList as unknown as {
+      submenuComponent?: Focusable;
+    };
+    if (submenu.submenuComponent) {
+      submenu.submenuComponent.focused = value;
+    }
   }
 
   constructor(options: AdvisorSettingsSelectorOptions) {
-    this.selectedRow = 0;
-    this.editingCustom = false;
-    this.editingPolicies = false;
-    this.policiesError = undefined;
-    // Retain every advanced value even when Simple mode hides its controls.
+    this.options = options;
     this.settings = { ...options.initial };
     const configuredContext = this.settings.contextMaxChars;
-    const presets = options.presets.some(
+    this.presets = options.presets.some(
       (preset) => preset.value === configuredContext
     )
       ? [...options.presets]
       : [
           ...options.presets,
           {
-            description: "Custom configured value",
+            description: "Current custom context limit",
             label: String(configuredContext),
             value: configuredContext,
           },
         ].sort((a, b) => a.value - b.value);
-    this.options = { ...options, presets };
-    this.contextIndex = presets.findIndex(
-      (preset) => preset.value === configuredContext
-    );
-    this.effortIndex = Math.max(
-      0,
-      options.effortLevels.indexOf(
-        this.settings.effort || "Default (Model Default)"
-      )
-    );
-    if (this.settings.simpleMode) {
-      this.startSimpleModeGradient();
-    }
-    this.customInput.onSubmit = (value) => {
-      this.settings.customRule = value.trim() || undefined;
-      this.editingCustom = false;
-      this.customInput.focused = false;
-      this.options.tui.requestRender();
-    };
-    this.customInput.onEscape = () => {
-      this.editingCustom = false;
-      this.customInput.focused = false;
-      this.options.tui.requestRender();
-    };
-    this.policiesInput.onSubmit = (value) => {
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(value || "{}");
-      } catch {
-        this.policiesError = "Enter a valid JSON object.";
-        this.options.tui.requestRender();
-        return;
-      }
-      if (!isValidAdvisorToolPolicies(parsed)) {
-        this.policiesError =
-          "Use non-empty tool names with full, summary, or exclude values.";
-        this.options.tui.requestRender();
-        return;
-      }
-      this.settings.toolPolicies = parsed;
-      this.policiesError = undefined;
-      this.editingPolicies = false;
-      this.policiesInput.focused = false;
-      this.options.tui.requestRender();
-    };
-    this.policiesInput.onEscape = () => {
-      this.editingPolicies = false;
-      this.policiesInput.focused = false;
-      this.options.tui.requestRender();
-    };
+    this.settingsList = this.createSettingsList();
   }
 
   invalidate(): void {
-    this.options.tui.requestRender();
+    this.settingsList.invalidate();
   }
 
-  /** Called by TUI teardown when it supports component disposal. */
   dispose(): void {
-    this.stopSimpleModeGradient();
-  }
-
-  private visibleRows(): AdvisorSettingsRow[] {
-    return this.settings.simpleMode
-      ? ["context", "simpleMode", "alwaysOn", "save"]
-      : [
-          "context",
-          "simpleMode",
-          "alwaysOn",
-          ...ADVANCED_ROWS.slice(1),
-          "save",
-        ];
-  }
-
-  private selectedRowId(): AdvisorSettingsRow {
-    return this.visibleRows()[this.selectedRow] ?? "simpleMode";
-  }
-
-  private focusRow(rowId: AdvisorSettingsRow): void {
-    this.selectedRow = Math.max(0, this.visibleRows().indexOf(rowId));
-  }
-
-  private currentContext(): ContextPreset {
-    const preset = this.options.presets.find(
-      (item) => item.value === this.settings.contextMaxChars
-    );
-    return (
-      preset ?? {
-        description: "Current custom context limit",
-        label: String(this.settings.contextMaxChars),
-        value: this.settings.contextMaxChars,
-      }
-    );
-  }
-
-  private currentEffort() {
-    return this.settings.effort || "Default (Model Default)";
-  }
-
-  private row(label: string, value: string, rowId: AdvisorSettingsRow): string {
-    const { theme } = this.options;
-    const selected = rowId === this.selectedRowId();
-    const prefix = selected ? theme.fg("accent", "›") : " ";
-    const text = `${prefix} ${label.padEnd(28)} ${value}`;
-    if (
-      rowId === "simpleMode" &&
-      this.settings.simpleMode &&
-      this.simpleModeGradientStartedAt !== undefined
-    ) {
-      return `${prefix} ${this.rainbowGradient(label)}${" ".repeat(Math.max(0, 28 - label.length))} ${value}`;
-    }
-    return selected
-      ? theme.fg("accent", theme.bold(text))
-      : theme.fg("text", text);
-  }
-
-  private rainbowGradient(text: string): string {
-    const frame = Math.floor(
-      (Date.now() - (this.simpleModeGradientStartedAt ?? 0)) /
-        SIMPLE_MODE_GRADIENT_INTERVAL_MS
-    );
-    const shinePosition = frame % (text.length * 2);
-    return [...text]
-      .map((character, index) => {
-        const [baseRed, baseGreen, baseBlue] =
-          SIMPLE_MODE_GRADIENT_COLORS[
-            index % SIMPLE_MODE_GRADIENT_COLORS.length
-          ];
-        const distance = Math.abs(index - shinePosition);
-        let brightness = 0;
-        if (distance === 0) {
-          brightness = 0.7;
-        } else if (distance === 1) {
-          brightness = 0.35;
-        }
-        const red = Math.round(baseRed + (255 - baseRed) * brightness);
-        const green = Math.round(baseGreen + (255 - baseGreen) * brightness);
-        const blue = Math.round(baseBlue + (255 - baseBlue) * brightness);
-        return `\x1b[38;2;${red};${green};${blue}m${character}`;
-      })
-      .join("")
-      .concat("\x1b[0m");
-  }
-
-  private startSimpleModeGradient(): void {
-    this.stopSimpleModeGradient();
-    this.simpleModeGradientStartedAt = Date.now();
-    this.simpleModeGradientTimer = setInterval(() => {
-      this.options.tui.requestRender();
-    }, SIMPLE_MODE_GRADIENT_INTERVAL_MS);
-    this.simpleModeGradientTimer.unref?.();
-  }
-
-  private stopSimpleModeGradient(): void {
-    if (this.simpleModeGradientTimer) {
-      clearInterval(this.simpleModeGradientTimer);
-      this.simpleModeGradientTimer = undefined;
-    }
-    this.simpleModeGradientStartedAt = undefined;
-  }
-
-  private save(): void {
-    this.stopSimpleModeGradient();
-    this.options.onSave({
-      ...this.settings,
-      contextMaxChars: this.currentContext().value,
-      effort: this.currentEffort(),
-      showUsageDetails: this.settings.showUsageDetails ?? true,
-    });
-  }
-
-  private cancel(): void {
-    this.stopSimpleModeGradient();
-    this.options.onCancel();
-  }
-
-  /** Disclosure and output-limit rows, split out to keep each builder simple. */
-  private disclosureRows(): string[] {
-    const onOff = (value: boolean) => (value ? "On" : "Off");
-    return [
-      this.row(
-        "Tool result lines",
-        String(this.settings.toolResultMaxLines ?? 2000),
-        "toolResultMaxLines"
-      ),
-      this.row(
-        "Tool result bytes",
-        String(this.settings.toolResultMaxBytes ?? 50 * 1024),
-        "toolResultMaxBytes"
-      ),
-      this.row(
-        "Redact common secrets",
-        onOff(this.settings.redactSecrets ?? false),
-        "redactSecrets"
-      ),
-      this.row(
-        "Repository context",
-        this.settings.gitContext ?? "summary",
-        "gitContext"
-      ),
-      this.row(
-        "Repository context chars",
-        String(this.settings.gitContextMaxChars ?? 20_000),
-        "gitContextMaxChars"
-      ),
-      this.row(
-        "Tool disclosure policies",
-        Object.keys(this.settings.toolPolicies ?? {}).length
-          ? "Exact names configured"
-          : "All tools: full",
-        "toolPolicies"
-      ),
-      this.row(
-        "Tracked file content",
-        onOff(this.settings.trackedFileContent ?? false),
-        "trackedFileContent"
-      ),
-      this.row(
-        "Untracked file content",
-        onOff(this.settings.untrackedContent ?? false),
-        "untrackedContent"
-      ),
-      this.row(
-        "Outcome logging (global)",
-        onOff(this.settings.outcomeLogging ?? false),
-        "outcomeLogging"
-      ),
-    ];
-  }
-
-  private advancedRows(width: number): string[] {
-    const onOff = (value: boolean) => (value ? "On" : "Off");
-    const rows = [
-      this.row("Advisor reasoning", this.currentEffort(), "effort"),
-      this.row(
-        "Experimental Advisor Scout",
-        onOff(this.settings.scoutEnabled ?? false),
-        "scoutEnabled"
-      ),
-      this.row(
-        "Show usage and cost details",
-        onOff(this.settings.showUsageDetails ?? true),
-        "showUsageDetails"
-      ),
-      this.row(
-        "Show usage in footer",
-        onOff(this.settings.showUsageFooter ?? false),
-        "showUsageFooter"
-      ),
-      this.row("Plan gate", onOff(this.settings.planGate), "planGate"),
-      this.row("Failure gate", onOff(this.settings.failureGate), "failureGate"),
-      this.row(
-        "Completion gate",
-        onOff(this.settings.completionGate),
-        "completionGate"
-      ),
-      this.row(
-        "Collapse long responses",
-        onOff(this.settings.collapseResponses),
-        "collapseResponses"
-      ),
-      this.row(
-        "Custom invocation",
-        this.settings.customRule || "None",
-        "customRule"
-      ),
-      this.row(
-        "Block on critical advice",
-        onOff(this.settings.blockOnBlocked ?? true),
-        "blockOnBlocked"
-      ),
-      this.row(
-        "Automatic loop gate",
-        onOff(this.settings.autoLoopGate ?? true),
-        "autoLoopGate"
-      ),
-      this.row(
-        "Loop threshold",
-        `After ${this.settings.loopThreshold ?? 3} repeats`,
-        "loopThreshold"
-      ),
-      this.row(
-        "Max Advisor calls/session",
-        this.settings.maxCallsPerSession === undefined
-          ? "∞"
-          : String(this.settings.maxCallsPerSession),
-        "maxCallsPerSession"
-      ),
-      this.row(
-        "Session Advisor Summary",
-        onOff(this.settings.sessionSummary ?? false),
-        "sessionSummary"
-      ),
-      this.row(
-        "Gate failure mode",
-        this.settings.failureMode ?? "block-session",
-        "failureMode"
-      ),
-      this.row(
-        "Herdr integration",
-        onOff(this.settings.herdrIntegration ?? true),
-        "herdrIntegration"
-      ),
-      ...this.disclosureRows(),
-    ];
-    if (this.editingCustom) {
-      rows.push(
-        `    ${this.customInput.render(Math.max(10, width - 6))[0] || ""}`
-      );
-    }
-    if (this.editingPolicies) {
-      rows.push(
-        `    ${this.policiesInput.render(Math.max(10, width - 6))[0] || ""}`
-      );
-      if (this.policiesError) {
-        rows.push(`    ${this.options.theme.fg("error", this.policiesError)}`);
-      }
-    }
-    rows.push(this.row("Save changes", "", "save"));
-    return rows;
+    this.settingsList.invalidate();
   }
 
   render(width: number): string[] {
-    const { theme, presets } = this.options;
-    const simpleMode = this.settings.simpleMode ?? false;
-    const modeRows = [
-      this.row("Simple mode", simpleMode ? "On" : "Off", "simpleMode"),
-      this.row("Always on", this.settings.alwaysOn ? "On" : "Off", "alwaysOn"),
-    ];
-    const lines = [theme.fg("accent", theme.bold("  Advisor settings")), ""];
-    if (simpleMode) {
-      const trackWidth = Math.max(24, Math.min(60, width - 4));
-      const positions = presets.map((_, index) =>
-        Math.round((index * (trackWidth - 1)) / Math.max(1, presets.length - 1))
-      );
-      const track = Array.from({ length: trackWidth }, () => "─");
-      track[positions[this.contextIndex]] = "▲";
-      const labels = Array.from({ length: trackWidth }, () => " ");
-      for (let index = 0; index < presets.length; index += 1) {
-        const { label } = presets[index];
-        const start = Math.max(
-          0,
-          Math.min(
-            trackWidth - label.length,
-            positions[index] - Math.floor(label.length / 2)
-          )
-        );
-        for (let char = 0; char < label.length; char += 1) {
-          labels[start + char] = label[char];
-        }
-      }
-      lines.push(
-        `  ${this.row("Context window", this.currentContext().label, "context")}`
-      );
-      lines.push(`  ${theme.fg("muted", "Recent history")}`);
-      lines.push(`  ${theme.fg("muted", track.join(""))}`);
-      lines.push(`  ${theme.fg("text", labels.join(""))}`);
-      lines.push("");
-      lines.push(...modeRows.map((line) => `  ${line}`));
-      lines.push(`  ${this.row("Save changes", "", "save")}`);
-      lines.push("");
-      lines.push(
-        `  ${theme.fg("muted", "↑/↓ select · ←/→ adjust · Enter saves · Esc cancels")}`
-      );
-      return lines.map((line) => truncateToWidth(line, width));
-    }
-
-    const trackWidth = Math.max(24, Math.min(60, width - 4));
-    const positions = presets.map((_, index) =>
-      Math.round((index * (trackWidth - 1)) / Math.max(1, presets.length - 1))
+    const title = this.options.theme.fg(
+      "accent",
+      this.options.theme.bold("  Advisor settings")
     );
-    const track = Array.from({ length: trackWidth }, () => "─");
-    track[positions[this.contextIndex]] = "▲";
-    const labels = Array.from({ length: trackWidth }, () => " ");
-    for (let index = 0; index < presets.length; index += 1) {
-      const { label } = presets[index];
-      const start = Math.max(
-        0,
-        Math.min(
-          trackWidth - label.length,
-          positions[index] - Math.floor(label.length / 2)
-        )
-      );
-      for (let char = 0; char < label.length; char += 1) {
-        labels[start + char] = label[char];
-      }
-    }
-    const heading = `Recent history${" ".repeat(Math.max(1, trackWidth - "Recent history".length - "Full branch".length))}Full branch`;
-    lines.push(
-      `  ${this.row("Context window", this.currentContext().label, "context")}`
+    return [title, "", ...this.settingsList.render(width)].map((line) =>
+      truncateToWidth(line, width)
     );
-    lines.push(`  ${theme.fg("muted", heading)}`);
-    lines.push(`  ${theme.fg("muted", track.join(""))}`);
-    lines.push(`  ${theme.fg("text", labels.join(""))}`);
-    lines.push("");
-    lines.push(
-      ...[...modeRows, ...this.advancedRows(width)].map((line) => `  ${line}`)
-    );
-    lines.push("");
-    lines.push(
-      `  ${theme.fg("muted", "↑/↓ select · ←/→ adjust · Enter edits or saves · Esc cancels")}`
-    );
-    return lines.map((line) => truncateToWidth(line, width));
   }
 
   handleInput(keyData: string): void {
-    const { tui } = this.options;
-    if (this.editingCustom) {
-      this.customInput.handleInput(keyData);
-      return;
-    }
-    if (this.editingPolicies) {
-      this.policiesInput.handleInput(keyData);
-      return;
-    }
-    if (matchesKey(keyData, Key.up)) {
-      this.selectedRow = Math.max(0, this.selectedRow - 1);
-    } else if (matchesKey(keyData, Key.down)) {
-      this.selectedRow = Math.min(
-        this.visibleRows().length - 1,
-        this.selectedRow + 1
-      );
-    } else if (matchesKey(keyData, Key.left)) {
-      this.adjust(-1);
-    } else if (matchesKey(keyData, Key.right)) {
-      this.adjust(1);
-    } else if (matchesKey(keyData, Key.enter)) {
-      const row = this.selectedRowId();
-      if (row === "customRule") {
-        this.editingCustom = true;
-        this.customInput.setValue(this.settings.customRule || "");
-        this.customInput.focused = this.focused;
-        tui.requestRender();
-        return;
-      }
-      if (row === "toolPolicies") {
-        this.editingPolicies = true;
-        this.policiesError = undefined;
-        this.policiesInput.setValue(
-          JSON.stringify(this.settings.toolPolicies ?? {})
-        );
-        this.policiesInput.focused = this.focused;
-        tui.requestRender();
-        return;
-      }
-      if (row === "save") {
-        this.save();
-        return;
-      }
-      this.adjust(1);
-    } else if (matchesKey(keyData, Key.escape)) {
-      this.cancel();
-      return;
-    } else {
-      return;
-    }
-    tui.requestRender();
+    this.settingsList.handleInput(keyData);
+    this.options.tui.requestRender();
   }
 
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: one keyboard dispatcher maps each settings row to its bounded adjustment.
-  private adjust(direction: number): void {
-    switch (this.selectedRowId()) {
-      case "simpleMode":
-        this.settings.simpleMode = !(this.settings.simpleMode ?? false);
-        if (this.settings.simpleMode) {
-          this.startSimpleModeGradient();
-        } else {
-          this.stopSimpleModeGradient();
-        }
-        // The visible row set changes with the mode, so keep the cursor on the
-        // row the user is actually operating rather than on its old index.
-        this.focusRow("simpleMode");
-        break;
-      case "alwaysOn":
-        this.settings.alwaysOn = !(this.settings.alwaysOn ?? false);
-        break;
-      case "context":
-        this.contextIndex = Math.max(
-          0,
-          Math.min(
-            this.options.presets.length - 1,
-            this.contextIndex + direction
-          )
-        );
-        this.settings.contextMaxChars =
-          this.options.presets[this.contextIndex].value;
-        break;
-      case "effort":
-        this.effortIndex = Math.max(
-          0,
-          Math.min(
-            this.options.effortLevels.length - 1,
-            this.effortIndex + direction
-          )
-        );
-        this.settings.effort = this.options.effortLevels[this.effortIndex];
-        break;
-      case "scoutEnabled":
-        this.settings.scoutEnabled = !(this.settings.scoutEnabled ?? false);
-        break;
-      case "showUsageDetails":
-        this.settings.showUsageDetails = !(
-          this.settings.showUsageDetails ?? true
-        );
-        break;
-      case "showUsageFooter":
-        this.settings.showUsageFooter = !(
-          this.settings.showUsageFooter ?? false
-        );
-        break;
-      case "planGate":
-        this.settings.planGate = !this.settings.planGate;
-        break;
-      case "failureGate":
-        this.settings.failureGate = !this.settings.failureGate;
-        break;
-      case "completionGate":
-        this.settings.completionGate = !this.settings.completionGate;
-        break;
-      case "collapseResponses":
-        this.settings.collapseResponses = !this.settings.collapseResponses;
-        break;
-      case "blockOnBlocked":
-        this.settings.blockOnBlocked = !(this.settings.blockOnBlocked ?? true);
-        break;
-      case "autoLoopGate":
-        this.settings.autoLoopGate = !(this.settings.autoLoopGate ?? true);
-        break;
-      case "loopThreshold":
-        this.settings.loopThreshold = Math.max(
-          2,
-          (this.settings.loopThreshold ?? 3) + direction
-        );
-        break;
-      case "maxCallsPerSession": {
-        const current = this.settings.maxCallsPerSession;
-        const numeric = [0, 1, 2, 3, 5, 10, 25, 50];
-        const sorted =
-          current === undefined || numeric.includes(current)
-            ? numeric
-            : [...numeric, current].sort((a, b) => a - b);
-        const values: (number | undefined)[] = [undefined, ...sorted];
-        const index = values.indexOf(current);
-        this.settings.maxCallsPerSession =
-          values[Math.max(0, Math.min(values.length - 1, index + direction))];
-        break;
-      }
-      case "sessionSummary":
-        this.settings.sessionSummary = !(this.settings.sessionSummary ?? false);
-        break;
-      case "failureMode": {
-        const modes: AdvisorSettings["failureMode"][] = [
+  private createSettingsList(): SettingsList {
+    return new SettingsList(
+      this.items(),
+      10,
+      getSettingsListTheme(),
+      (id, value) => this.change(id, value),
+      this.options.onCancel,
+      { enableSearch: true }
+    );
+  }
+
+  private items(): SettingItem[] {
+    const items: SettingItem[] = [
+      {
+        currentValue: this.currentContextLabel(),
+        description: "How much conversation history the Advisor receives.",
+        id: "context",
+        label: "Context window",
+        values: this.presets.map((preset) => preset.label),
+      },
+      {
+        currentValue: settingValue(this.settings.simpleMode, false),
+        description:
+          "Keep the Advisor available on demand without automatic gates or blocks.",
+        id: "simpleMode",
+        label: "Simple mode",
+        values: TOGGLE_VALUES,
+      },
+      {
+        currentValue: settingValue(this.settings.alwaysOn, false),
+        description:
+          "Run the Advisor flow automatically for supported agent turns.",
+        id: "alwaysOn",
+        label: "Always on",
+        values: TOGGLE_VALUES,
+      },
+    ];
+    if (this.settings.simpleMode) {
+      return items;
+    }
+
+    items.push(
+      {
+        currentValue: this.currentEffort(),
+        description: "Reasoning level used for Advisor calls.",
+        id: "effort",
+        label: "Advisor reasoning",
+        values: withCurrentValue(
+          this.currentEffort(),
+          this.options.effortLevels
+        ),
+      },
+      this.toggle(
+        "scoutEnabled",
+        "Experimental Advisor Scout",
+        "Enable the experimental Scout before Advisor calls.",
+        this.settings.scoutEnabled,
+        false
+      ),
+      this.toggle(
+        "showUsageDetails",
+        "Show usage and cost details",
+        "Show token usage and cost details in Advisor responses.",
+        this.settings.showUsageDetails,
+        true
+      ),
+      this.toggle(
+        "showUsageFooter",
+        "Show usage in footer",
+        "Show the current Advisor usage summary in the footer.",
+        this.settings.showUsageFooter,
+        false
+      ),
+      this.toggle(
+        "planGate",
+        "Plan gate",
+        "Ask the Advisor to review implementation plans.",
+        this.settings.planGate,
+        true
+      ),
+      this.toggle(
+        "failureGate",
+        "Failure gate",
+        "Ask the Advisor to review repeated failures.",
+        this.settings.failureGate,
+        true
+      ),
+      this.toggle(
+        "completionGate",
+        "Completion gate",
+        "Ask the Advisor to review work before declaring success.",
+        this.settings.completionGate,
+        true
+      ),
+      this.toggle(
+        "collapseResponses",
+        "Collapse long responses",
+        "Collapse long Advisor responses in the transcript.",
+        this.settings.collapseResponses,
+        false
+      ),
+      {
+        currentValue: this.settings.customRule || "None",
+        description: "Add a rule that triggers Advisor involvement.",
+        id: "customRule",
+        label: "Custom invocation",
+        submenu: (_currentValue, done) =>
+          new TextSettingSubmenu({
+            description: "Enter a custom invocation rule.",
+            initial: this.settings.customRule || "",
+            onCancel: done,
+            onSubmit: (value) => ({ value: value.trim() }),
+            theme: this.options.theme,
+            title: "Custom invocation",
+            tui: this.options.tui,
+          }),
+      },
+      this.toggle(
+        "blockOnBlocked",
+        "Block on critical advice",
+        "Block the agent when the Advisor returns a critical decision.",
+        this.settings.blockOnBlocked,
+        true
+      ),
+      this.toggle(
+        "autoLoopGate",
+        "Automatic loop gate",
+        "Ask the Advisor to review repeated equivalent attempts.",
+        this.settings.autoLoopGate,
+        true
+      ),
+      {
+        currentValue: `After ${this.settings.loopThreshold ?? 3} repeats`,
+        description: "Number of equivalent attempts before automatic review.",
+        id: "loopThreshold",
+        label: "Loop threshold",
+        values: numericValues(
+          this.settings.loopThreshold ?? 3,
+          Array.from({ length: 99 }, (_, index) => index + 2)
+        ).map((value) => `After ${value} repeats`),
+      },
+      {
+        currentValue:
+          this.settings.maxCallsPerSession === undefined
+            ? "∞"
+            : String(this.settings.maxCallsPerSession),
+        description: "Limit automatic Advisor calls in one session.",
+        id: "maxCallsPerSession",
+        label: "Max Advisor calls/session",
+        values: withCurrentValue(
+          this.settings.maxCallsPerSession === undefined
+            ? "∞"
+            : String(this.settings.maxCallsPerSession),
+          ["∞", "0", "1", "2", "3", "5", "10", "25", "50"]
+        ),
+      },
+      this.toggle(
+        "sessionSummary",
+        "Session Advisor Summary",
+        "Show a local summary when the session ends.",
+        this.settings.sessionSummary,
+        false
+      ),
+      {
+        currentValue: this.settings.failureMode ?? "block-session",
+        description: "Choose what happens when an Advisor gate fails.",
+        id: "failureMode",
+        label: "Gate failure mode",
+        values: withCurrentValue(this.settings.failureMode ?? "block-session", [
           "block-session",
           "block-tool",
           "warn-and-continue",
-        ];
-        const index = Math.max(
+        ]),
+      },
+      this.toggle(
+        "herdrIntegration",
+        "Herdr integration",
+        "Send Advisor activity to the optional Herdr integration.",
+        this.settings.herdrIntegration,
+        true
+      ),
+      {
+        currentValue: String(this.settings.toolResultMaxLines ?? 2000),
+        description: "Maximum lines included from a tool result.",
+        id: "toolResultMaxLines",
+        label: "Tool result lines",
+        values: numericValues(
+          this.settings.toolResultMaxLines ?? 2000,
+          [0, 500, 1000, 2000, 5000, 10_000]
+        ),
+      },
+      {
+        currentValue: String(this.settings.toolResultMaxBytes ?? 50 * 1024),
+        description: "Maximum bytes included from a tool result.",
+        id: "toolResultMaxBytes",
+        label: "Tool result bytes",
+        values: numericValues(this.settings.toolResultMaxBytes ?? 50 * 1024, [
           0,
-          modes.indexOf(this.settings.failureMode ?? "block-session")
-        );
-        this.settings.failureMode =
-          modes[Math.max(0, Math.min(modes.length - 1, index + direction))];
-        break;
-      }
-      case "herdrIntegration":
-        this.settings.herdrIntegration = !(
-          this.settings.herdrIntegration ?? true
-        );
-        break;
-      case "redactSecrets":
-        this.settings.redactSecrets = !(this.settings.redactSecrets ?? false);
-        break;
-      case "trackedFileContent":
-        this.settings.trackedFileContent = !(
-          this.settings.trackedFileContent ?? false
-        );
-        break;
-      case "untrackedContent":
-        this.settings.untrackedContent = !(
-          this.settings.untrackedContent ?? false
-        );
-        break;
-      case "outcomeLogging":
-        this.settings.outcomeLogging = !(this.settings.outcomeLogging ?? false);
-        break;
-      case "gitContext": {
-        const levels: AdvisorSettings["gitContext"][] = [
+          10 * 1024,
+          50 * 1024,
+          100 * 1024,
+          500 * 1024,
+        ]),
+      },
+      this.toggle(
+        "redactSecrets",
+        "Redact common secrets",
+        "Redact common credential patterns before Advisor calls.",
+        this.settings.redactSecrets,
+        false
+      ),
+      {
+        currentValue: this.settings.gitContext ?? "summary",
+        description: "How much repository context is shared with the Advisor.",
+        id: "gitContext",
+        label: "Repository context",
+        values: withCurrentValue(this.settings.gitContext ?? "summary", [
           "off",
           "summary",
           "full",
-        ];
-        const index = Math.max(
-          0,
-          levels.indexOf(this.settings.gitContext ?? "summary")
-        );
-        this.settings.gitContext =
-          levels[Math.max(0, Math.min(levels.length - 1, index + direction))];
-        break;
-      }
-      case "gitContextMaxChars": {
-        this.settings.gitContextMaxChars = stepNumericPreset(
+        ]),
+      },
+      {
+        currentValue: String(this.settings.gitContextMaxChars ?? 20_000),
+        description: "Maximum repository context characters included.",
+        id: "gitContextMaxChars",
+        label: "Repository context chars",
+        values: numericValues(
           this.settings.gitContextMaxChars ?? 20_000,
-          [0, 5000, 10_000, 20_000, 50_000, 100_000],
-          direction
+          [0, 5000, 10_000, 20_000, 50_000, 100_000]
+        ),
+      },
+      {
+        currentValue: Object.keys(this.settings.toolPolicies ?? {}).length
+          ? "Configured"
+          : "All tools: full",
+        description:
+          "Choose which tools are shared in full, summarized, or excluded.",
+        id: "toolPolicies",
+        label: "Tool disclosure policies",
+        submenu: (_currentValue, done) =>
+          new TextSettingSubmenu({
+            description:
+              'Enter a JSON object with "full", "summary", or "exclude" values.',
+            initial: JSON.stringify(this.settings.toolPolicies ?? {}),
+            onCancel: done,
+            onSubmit: (value) => {
+              let parsed: unknown;
+              try {
+                parsed = JSON.parse(value || "{}");
+              } catch {
+                return { error: "Enter a valid JSON object." };
+              }
+              if (!isValidAdvisorToolPolicies(parsed)) {
+                return {
+                  error:
+                    "Use non-empty tool names with full, summary, or exclude values.",
+                };
+              }
+              return { value: JSON.stringify(parsed) };
+            },
+            theme: this.options.theme,
+            title: "Tool disclosure policies",
+            tui: this.options.tui,
+          }),
+      },
+      this.toggle(
+        "trackedFileContent",
+        "Tracked file content",
+        "Allow tracked file contents to be sent with Advisor context.",
+        this.settings.trackedFileContent,
+        false
+      ),
+      this.toggle(
+        "untrackedContent",
+        "Untracked file content",
+        "Allow untracked file contents to be sent with Advisor context.",
+        this.settings.untrackedContent,
+        false
+      ),
+      this.toggle(
+        "outcomeLogging",
+        "Outcome logging (global)",
+        "Allow anonymized Advisor outcomes to be logged globally.",
+        this.settings.outcomeLogging,
+        false
+      )
+    );
+    return items;
+  }
+
+  private toggle(
+    id: string,
+    label: string,
+    description: string,
+    value: boolean | undefined,
+    defaultValue: boolean
+  ): SettingItem {
+    return {
+      currentValue: settingValue(value, defaultValue),
+      description,
+      id,
+      label,
+      values: TOGGLE_VALUES,
+    };
+  }
+
+  private currentContextLabel(): string {
+    return (
+      this.presets.find(
+        (preset) => preset.value === this.settings.contextMaxChars
+      )?.label ?? String(this.settings.contextMaxChars)
+    );
+  }
+
+  private currentEffort(): string {
+    return this.settings.effort || DEFAULT_EFFORT_LEVEL;
+  }
+
+  private change(id: string, value: string): void {
+    switch (id) {
+      case "context":
+        this.settings.contextMaxChars =
+          this.presets.find((preset) => preset.label === value)?.value ??
+          this.settings.contextMaxChars;
+        break;
+      case "simpleMode":
+        this.settings.simpleMode = value === "On";
+        break;
+      case "alwaysOn":
+        this.settings.alwaysOn = value === "On";
+        break;
+      case "effort":
+        this.settings.effort = value;
+        break;
+      case "customRule":
+        this.settings.customRule = value.trim() || undefined;
+        break;
+      case "toolPolicies":
+        this.settings.toolPolicies = JSON.parse(
+          value
+        ) as AdvisorSettings["toolPolicies"];
+        break;
+      case "loopThreshold":
+        this.settings.loopThreshold = Number(
+          value.replace("After ", "").replace(" repeats", "")
         );
         break;
-      }
-      case "toolResultMaxLines": {
-        this.settings.toolResultMaxLines = stepNumericPreset(
-          this.settings.toolResultMaxLines ?? 2000,
-          [0, 500, 1000, 2000, 5000, 10_000],
-          direction
-        );
+      case "maxCallsPerSession":
+        this.settings.maxCallsPerSession =
+          value === "∞" ? undefined : Number(value);
         break;
-      }
-      case "toolResultMaxBytes": {
-        this.settings.toolResultMaxBytes = stepNumericPreset(
-          this.settings.toolResultMaxBytes ?? 50 * 1024,
-          [0, 10 * 1024, 50 * 1024, 100 * 1024, 500 * 1024],
-          direction
-        );
+      case "failureMode":
+        this.settings.failureMode = value as AdvisorSettings["failureMode"];
         break;
-      }
+      case "gitContext":
+        this.settings.gitContext = value as AdvisorSettings["gitContext"];
+        break;
+      case "toolResultMaxLines":
+        this.settings.toolResultMaxLines = Number(value);
+        break;
+      case "toolResultMaxBytes":
+        this.settings.toolResultMaxBytes = Number(value);
+        break;
+      case "gitContextMaxChars":
+        this.settings.gitContextMaxChars = Number(value);
+        break;
       default:
+        if (BOOLEAN_SETTING_IDS.has(id)) {
+          (this.settings as unknown as Record<string, SettingValue | boolean>)[
+            id
+          ] = value === "On";
+        }
         break;
+    }
+    (this.options.onChange ?? this.options.onSave)?.({
+      ...this.settings,
+      showUsageDetails: this.settings.showUsageDetails ?? true,
+      toolPolicies: { ...(this.settings.toolPolicies ?? {}) },
+    });
+    if (id === "simpleMode" || id === "customRule" || id === "toolPolicies") {
+      this.settingsList = this.createSettingsList();
     }
   }
 }

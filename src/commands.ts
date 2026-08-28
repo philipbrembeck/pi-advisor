@@ -170,6 +170,49 @@ const findConfiguredModel = (ctx: ExtensionContext, ref: string) => {
   return ctx.modelRegistry.find(provider, modelId);
 };
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: one settings form maps every persisted control.
+const applyAdvisorSettings = (settings: AdvisorSettings) => {
+  setAdvisorEffortRef(
+    settings.effort === "Default (Model Default)" ? undefined : settings.effort
+  );
+  setContextMaxCharsRef(settings.contextMaxChars);
+  setAdvisorPlanGateRef(settings.planGate);
+  setAdvisorFailureGateRef(settings.failureGate);
+  setAdvisorCompletionGateRef(settings.completionGate);
+  setAdvisorCollapseResponsesRef(settings.collapseResponses);
+  setAdvisorCustomInvocationRef(settings.customRule);
+  setAdvisorBlockOnBlockedRef(settings.blockOnBlocked ?? true);
+  setAdvisorAutoLoopGateRef(settings.autoLoopGate ?? true);
+  setAdvisorLoopThresholdRef(settings.loopThreshold ?? 3);
+  setAdvisorMaxCallsPerSessionRef(settings.maxCallsPerSession);
+  setAdvisorSessionSummaryRef(settings.sessionSummary ?? false);
+  setAdvisorScoutEnabledRef(settings.scoutEnabled ?? false);
+  setShowUsageDetailsRef(settings.showUsageDetails ?? true);
+  setShowUsageFooterRef(settings.showUsageFooter ?? false);
+  setSimpleModeRef(settings.simpleMode ?? false);
+  setAlwaysOnRef(settings.alwaysOn ?? false);
+  setAdvisorFailureModeRef(settings.failureMode ?? "block-session");
+  setAdvisorHerdrIntegrationRef(settings.herdrIntegration ?? true);
+  setAdvisorToolResultMaxLinesRef(settings.toolResultMaxLines ?? 2000);
+  setAdvisorToolResultMaxBytesRef(settings.toolResultMaxBytes ?? 50 * 1024);
+  setAdvisorRedactSecretsRef(settings.redactSecrets ?? false);
+  setAdvisorGitContextRef(settings.gitContext ?? "summary");
+  setAdvisorGitContextMaxCharsRef(settings.gitContextMaxChars ?? 20_000);
+  setAdvisorToolPoliciesRef(settings.toolPolicies ?? {});
+  setAdvisorTrackedFileContentRef(settings.trackedFileContent ?? false);
+  setAdvisorUntrackedContentRef(settings.untrackedContent ?? false);
+  setAdvisorOutcomeLoggingRef(settings.outcomeLogging ?? false);
+};
+
+const saveAdvisorSettings = (
+  ctx: ExtensionContext,
+  settings: AdvisorSettings
+) => {
+  applyAdvisorSettings(settings);
+  saveConfig(ctx);
+  saveGlobalOutcomeLogging(settings.outcomeLogging ?? false);
+};
+
 export const registerCommands = (
   pi: ExtensionAPI,
   dependencies: {
@@ -648,70 +691,36 @@ export const registerCommands = (
   });
 
   pi.registerCommand("advisor-settings", {
-    description: "Configure Advisor context and reasoning effort",
-    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: one settings form maps every persisted control.
+    description: "Configure Advisor settings",
     handler: async (_args, ctx) => {
       if (!(loadCommandConfig(ctx) && ctx.hasUI)) {
         return;
       }
 
       const initial: AdvisorSettings = getAdvisorSettings();
-      const settings = await ctx.ui.custom<AdvisorSettings | undefined>(
+      await ctx.ui.custom<void>(
         (tui, theme, _keybindings, done) =>
           new AdvisorSettingsSelector({
             effortLevels: EFFORT_LEVELS,
             initial,
-            onCancel: () => done(undefined),
-            onSave: done,
+            onCancel: () => done(),
+            onChange: (settings) => {
+              try {
+                saveAdvisorSettings(ctx, settings);
+                updateAdvisorUsageStatus(ctx);
+              } catch (error) {
+                const message =
+                  error instanceof Error ? error.message : String(error);
+                ctx.ui.notify(
+                  `Could not save Advisor settings: ${message}`,
+                  "error"
+                );
+              }
+            },
             presets: CONTEXT_PRESETS,
             theme,
             tui,
           })
-      );
-      if (!settings) {
-        return;
-      }
-
-      setAdvisorEffortRef(
-        settings.effort === "Default (Model Default)"
-          ? undefined
-          : settings.effort
-      );
-      setContextMaxCharsRef(settings.contextMaxChars);
-      setAdvisorPlanGateRef(settings.planGate);
-      setAdvisorFailureGateRef(settings.failureGate);
-      setAdvisorCompletionGateRef(settings.completionGate);
-      setAdvisorCollapseResponsesRef(settings.collapseResponses);
-      setAdvisorCustomInvocationRef(settings.customRule);
-      setAdvisorBlockOnBlockedRef(settings.blockOnBlocked ?? true);
-      setAdvisorAutoLoopGateRef(settings.autoLoopGate ?? true);
-      setAdvisorLoopThresholdRef(settings.loopThreshold ?? 3);
-      setAdvisorMaxCallsPerSessionRef(settings.maxCallsPerSession);
-      setAdvisorSessionSummaryRef(settings.sessionSummary ?? false);
-      setAdvisorScoutEnabledRef(settings.scoutEnabled ?? false);
-      setShowUsageDetailsRef(settings.showUsageDetails ?? true);
-      setShowUsageFooterRef(settings.showUsageFooter ?? false);
-      setSimpleModeRef(settings.simpleMode ?? false);
-      setAlwaysOnRef(settings.alwaysOn ?? false);
-      setAdvisorFailureModeRef(settings.failureMode ?? "block-session");
-      setAdvisorHerdrIntegrationRef(settings.herdrIntegration ?? true);
-      setAdvisorToolResultMaxLinesRef(settings.toolResultMaxLines ?? 2000);
-      setAdvisorToolResultMaxBytesRef(settings.toolResultMaxBytes ?? 50 * 1024);
-      setAdvisorRedactSecretsRef(settings.redactSecrets ?? false);
-      setAdvisorGitContextRef(settings.gitContext ?? "summary");
-      setAdvisorGitContextMaxCharsRef(settings.gitContextMaxChars ?? 20_000);
-      setAdvisorToolPoliciesRef(settings.toolPolicies ?? {});
-      setAdvisorTrackedFileContentRef(settings.trackedFileContent ?? false);
-      setAdvisorUntrackedContentRef(settings.untrackedContent ?? false);
-      setAdvisorOutcomeLoggingRef(settings.outcomeLogging ?? false);
-      updateAdvisorUsageStatus(ctx);
-      const path = saveConfig(ctx);
-      const globalPath = saveGlobalOutcomeLogging(
-        settings.outcomeLogging ?? false
-      );
-      ctx.ui.notify(
-        `Saved Advisor settings to ${path}; outcome logging globally to ${globalPath}`,
-        "info"
       );
     },
   });

@@ -8,6 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Reworked `/advisor-settings` into a compact Pi-style searchable settings list with fuzzy search and immediate persistence for every valid change.
 - Added enabled-by-default per-response usage detail display plus an independent, opt-in `showUsageFooter` setting for cumulative Advisor footer usage; both are presentation-only and do not change usage accounting.
 
 ### Fixed

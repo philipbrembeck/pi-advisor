@@ -54,11 +54,7 @@ const MAX_CALLS_ROW_PATTERN = /Max Advisor calls\/session\s+10/;
 const SCOUT_ON_PATTERN = /Experimental Advisor Scout\s+On/;
 const SIMPLE_MODE_ON = /› Simple mode\s+On/;
 const SIMPLE_MODE_OFF = /› Simple mode\s+Off/;
-const CONTEXT_10K = /Context window\s+10k/;
-const SELECTED_CONTEXT_10K = /› Context window\s+10k/;
-const SELECTED_CONTEXT_15K = /› Context window\s+15k/;
 const CONTEXT_WINDOW = /Context window/g;
-const ALWAYS_ON_OFF = /Always on\s+Off/;
 // biome-ignore lint/suspicious/noControlCharactersInRegex: strips terminal SGR codes
 const SGR_CODE = /\u001b\[[0-9;]*m/g;
 
@@ -67,7 +63,7 @@ const SGR_CODE = /\u001b\[[0-9;]*m/g;
 const focusSettingsRow = (selector: any, label: string): number => {
   for (let presses = 0; presses < 60; presses += 1) {
     const screen = selector.render(120).join("\n").replace(SGR_CODE, "");
-    if (screen.includes(`› ${label}`)) {
+    if (screen.includes(`→ ${label}`)) {
       return presses;
     }
     selector.handleInput("\u001b[B");
@@ -75,8 +71,8 @@ const focusSettingsRow = (selector: any, label: string): number => {
   throw new Error(`Settings row not reachable: ${label}`);
 };
 
-const saveViaKeyboard = (selector: any): number => {
-  const presses = focusSettingsRow(selector, "Save changes");
+const changeSetting = (selector: any, label: string): number => {
+  const presses = focusSettingsRow(selector, label);
   selector.handleInput("\r");
   return presses;
 };
@@ -1213,9 +1209,8 @@ describe("Extension Registration", () => {
     }
   });
 
-  test("keeps Advisor settings on one screen and saves keyboard changes", () => {
-    let saved: any;
-    let renderRequests = 0;
+  test("uses a compact searchable settings list and saves each change", () => {
+    const saved: any[] = [];
     const selector = new AdvisorSettingsSelector({
       effortLevels: ["Default (Model Default)", "high"],
       initial: {
@@ -1226,9 +1221,7 @@ describe("Extension Registration", () => {
         planGate: true,
       },
       onCancel: () => undefined,
-      onSave: (settings) => {
-        saved = settings;
-      },
+      onChange: (settings) => saved.push(settings),
       presets: [
         { description: "No history", label: "0", value: 0 },
         { description: "Recent history", label: "10k", value: 10_000 },
@@ -1237,38 +1230,53 @@ describe("Extension Registration", () => {
         bold: (text: string) => text,
         fg: (_color: string, text: string) => text,
       } as any,
-      tui: {
-        requestRender: () => {
-          renderRequests += 1;
-        },
-      },
+      tui: { requestRender: () => undefined },
     });
-    // Context is the first advanced row because the slider appears above it.
-    selector.handleInput("\u001b[C");
     const screen = selector.render(80).join("\n");
     expect(screen).toContain("Advisor reasoning");
     expect(screen).toContain("Experimental Advisor Scout");
     expect(screen).toContain("Show usage and cost details");
-    expect(screen).toContain("Show usage in footer");
-    expect(screen).toContain("Custom invocation");
-    const downsToUsage = focusSettingsRow(
-      selector,
-      "Show usage and cost details"
-    );
-    selector.handleInput("\u001b[C");
-    const downsToFooter = focusSettingsRow(selector, "Show usage in footer");
-    selector.handleInput("\u001b[C");
-    const downsToSave = saveViaKeyboard(selector);
-    // One right per changed setting plus every cursor movement; Enter saves without a render.
-    expect(renderRequests).toBe(3 + downsToUsage + downsToFooter + downsToSave);
-    expect(saved.contextMaxChars).toBe(10_000);
-    expect(saved.showUsageDetails).toBe(false);
-    expect(saved.showUsageFooter).toBe(true);
-    expect(screen).toContain("Gate failure mode");
-    expect(screen).toContain("Herdr integration");
-    expect(screen).toContain("Redact common secrets");
-    expect(screen).toContain("Tool disclosure policies");
-    expect(screen).toContain("▲");
+    expect(screen).not.toContain("Save changes");
+    expect(screen).toContain("Type to search");
+
+    changeSetting(selector, "Context window");
+    changeSetting(selector, "Show usage and cost details");
+    expect(saved.at(-1)).toMatchObject({
+      contextMaxChars: 10_000,
+      showUsageDetails: false,
+    });
+
+    for (const key of ["s", "e", "c", "r", "e", "t"]) {
+      selector.handleInput(key);
+    }
+    expect(selector.render(100).join("\n")).toContain("Redact common secrets");
+  });
+
+  test("uses Space to toggle and auto-save a setting", () => {
+    let saved: any;
+    const selector = new AdvisorSettingsSelector({
+      effortLevels: ["Default (Model Default)"],
+      initial: {
+        collapseResponses: false,
+        completionGate: true,
+        contextMaxChars: 0,
+        failureGate: true,
+        planGate: true,
+      },
+      onCancel: () => undefined,
+      onChange: (settings) => {
+        saved = settings;
+      },
+      presets: [{ description: "No history", label: "0", value: 0 }],
+      theme: {
+        bold: (text: string) => text,
+        fg: (_color: string, text: string) => text,
+      } as any,
+      tui: { requestRender: () => undefined },
+    });
+    focusSettingsRow(selector, "Always on");
+    selector.handleInput(" ");
+    expect(saved.alwaysOn).toBe(true);
   });
 
   test("hides Scout in Simple mode without losing its saved value", () => {
@@ -1298,10 +1306,8 @@ describe("Extension Registration", () => {
     expect(selector.render(100).join("\n")).not.toContain(
       "Experimental Advisor Scout"
     );
-    focusSettingsRow(selector, "Simple mode");
-    selector.handleInput("\u001b[C");
+    changeSetting(selector, "Simple mode");
     expect(selector.render(100).join("\n")).toMatch(SCOUT_ON_PATTERN);
-    saveViaKeyboard(selector);
     expect(saved.scoutEnabled).toBe(true);
   });
 
@@ -1329,7 +1335,7 @@ describe("Extension Registration", () => {
       } as any,
       tui: { requestRender: () => undefined },
     });
-    saveViaKeyboard(selector);
+    changeSetting(selector, "Simple mode");
     expect(saved).toMatchObject({
       redactSecrets: true,
       toolPolicies: { bash: "summary", deploy: "exclude" },
@@ -1357,18 +1363,15 @@ describe("Extension Registration", () => {
     });
     focusSettingsRow(selector, "Tool disclosure policies");
     selector.handleInput("\r");
-
-    (selector as any).policiesInput.onSubmit('{"bash":"invalid"}');
+    const editor = (selector as any).settingsList.submenuComponent;
+    editor.input.onSubmit('{"bash":"invalid"}');
     expect(selector.render(120).join("\n")).toContain(
       "Use non-empty tool names with full, summary, or exclude values."
     );
-    expect((selector as any).editingPolicies).toBe(true);
-
-    (selector as any).policiesInput.onSubmit("{");
+    editor.input.onSubmit("{");
     expect(selector.render(120).join("\n")).toContain(
       "Enter a valid JSON object."
     );
-    expect((selector as any).editingPolicies).toBe(true);
   });
 
   test("edits the custom invocation rule inline", () => {
@@ -1404,7 +1407,6 @@ describe("Extension Registration", () => {
     selector.handleInput("o");
     selector.handleInput("y");
     selector.handleInput("\r");
-    saveViaKeyboard(selector);
     expect(saved.customRule).toBe("deploy");
   });
 
@@ -1430,10 +1432,9 @@ describe("Extension Registration", () => {
           resolve
         );
         focusSettingsRow(selector, "Experimental Advisor Scout");
-        selector.handleInput("\u001b[C");
-        focusSettingsRow(selector, "Max Advisor calls/session");
-        selector.handleInput("\u001b[C");
-        saveViaKeyboard(selector);
+        changeSetting(selector, "Experimental Advisor Scout");
+        changeSetting(selector, "Max Advisor calls/session");
+        selector.handleInput("\u001b");
       });
     const reopened = async (factory: any) =>
       new Promise<any>((resolve) => {
@@ -1443,6 +1444,9 @@ describe("Extension Registration", () => {
           {},
           resolve
         );
+        for (const key of ["m", "a", "x"]) {
+          selector.handleInput(key);
+        }
         const screen = selector.render(100).join("\n");
         expect(screen).toMatch(MAX_CALLS_ROW_PATTERN);
         expect(screen).toMatch(SCOUT_ON_PATTERN);
@@ -2223,7 +2227,7 @@ describe("Advisor settings navigation and gate parsing regressions", () => {
         ...initial,
       },
       onCancel: () => undefined,
-      onSave: (value: any) => saved.push(value),
+      onChange: (value: any) => saved.push(value),
       presets: [
         { description: "none", label: "0", value: 0 },
         { description: "10k", label: "10k", value: 10_000 },
@@ -2252,11 +2256,9 @@ describe("Advisor settings navigation and gate parsing regressions", () => {
       "Tool result bytes",
       "Repository context chars",
     ]) {
-      focusSettingsRow(selector, row);
-      selector.handleInput("\u001b[C");
+      changeSetting(selector, row);
     }
-    saveViaKeyboard(selector);
-    expect(saved[0]).toMatchObject({
+    expect(saved.at(-1)).toMatchObject({
       contextMaxChars: 15_000,
       gitContextMaxChars: 50_000,
       loopThreshold: 8,
@@ -2266,19 +2268,16 @@ describe("Advisor settings navigation and gate parsing regressions", () => {
     });
   });
 
-  test("steps custom numeric values down to the adjacent preset", () => {
+  test("cycles custom numeric values to the next available value", () => {
     const { saved, selector } = openSelector({
       contextMaxChars: 12_000,
       maxCallsPerSession: 7,
     });
-    focusSettingsRow(selector, "Context window");
-    selector.handleInput("\u001b[D");
-    focusSettingsRow(selector, "Max Advisor calls/session");
-    selector.handleInput("\u001b[D");
-    saveViaKeyboard(selector);
-    expect(saved[0]).toMatchObject({
-      contextMaxChars: 10_000,
-      maxCallsPerSession: 5,
+    changeSetting(selector, "Context window");
+    changeSetting(selector, "Max Advisor calls/session");
+    expect(saved.at(-1)).toMatchObject({
+      contextMaxChars: 15_000,
+      maxCallsPerSession: 10,
     });
   });
 
@@ -2287,47 +2286,37 @@ describe("Advisor settings navigation and gate parsing regressions", () => {
       contextMaxChars: 10_000,
       simpleMode: false,
     });
-    // The top slider is the first keyboard-selectable advanced row, with no
-    // duplicate Context row after the mode controls.
     const before = plain(selector);
-    expect(before).toMatch(SELECTED_CONTEXT_10K);
-    expect(before.indexOf("Context window")).toBeLessThan(
-      before.indexOf("Simple mode")
-    );
+    expect(before).toContain("→ Context window");
+    expect(before).toContain("10k");
     expect(before.match(CONTEXT_WINDOW)).toHaveLength(1);
-    selector.handleInput("\u001b[C");
-    expect(plain(selector)).toMatch(SELECTED_CONTEXT_15K);
+    changeSetting(selector, "Context window");
+    expect(plain(selector)).toContain("15k");
   });
 
-  test("keeps the cursor on Simple mode across a mode toggle", () => {
+  test("filters advanced controls while Simple mode is enabled", () => {
     const { selector } = openSelector({
       contextMaxChars: 10_000,
       simpleMode: false,
     });
-    selector.handleInput("\u001b[B");
-    selector.handleInput("\u001b[C");
+    changeSetting(selector, "Simple mode");
     expect(plain(selector)).toMatch(SIMPLE_MODE_ON);
-    // The second toggle must return to advanced rather than move the slider.
-    selector.handleInput("\u001b[C");
-    const screen = plain(selector);
-    expect(screen).toMatch(SIMPLE_MODE_OFF);
-    expect(screen).toMatch(CONTEXT_10K);
+    expect(plain(selector)).not.toContain("Plan gate");
+    changeSetting(selector, "Simple mode");
+    expect(plain(selector)).toMatch(SIMPLE_MODE_OFF);
+    expect(plain(selector)).toContain("Plan gate");
   });
 
-  test("keeps the cursor on Simple mode when leaving Simple mode", () => {
+  test("keeps simple-mode settings visible after reopening", () => {
     const { selector } = openSelector({
       alwaysOn: false,
       simpleMode: true,
     });
-    // Simple mode is the second row while Simple mode is on.
-    selector.handleInput("\u001b[B");
-    selector.handleInput("\u001b[C");
-    expect(plain(selector)).toMatch(SIMPLE_MODE_OFF);
-    // The cursor must not have landed on Always on.
-    selector.handleInput("\u001b[C");
     const screen = plain(selector);
-    expect(screen).toMatch(SIMPLE_MODE_ON);
-    expect(screen).toMatch(ALWAYS_ON_OFF);
+    expect(screen).toContain("Context window");
+    expect(screen).toContain("Simple mode");
+    expect(screen).toContain("Always on");
+    expect(screen).not.toContain("Plan gate");
   });
 
   test("treats a quoted decision inside a fenced example as illustrative", () => {

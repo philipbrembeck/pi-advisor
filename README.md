@@ -24,6 +24,7 @@ The idea is simple: keep implementation on a fast model and borrow frontier reas
 - **Advisor usage accounting** with per-response token/cost details and optional cumulative direct usage in the Pi footer and session summary. Per-response usage and cost details are shown by default and can be hidden independently from the footer in `/advisor-settings`.
 - **Privacy controls** for conversation history, repository context, explicit tracked/untracked file handoff, tool results, secret redaction, and outcome logging.
 - **Optional persistent activation, Simple mode, session summaries, and Herdr integration.**
+- **Compact searchable `/advisor-settings` controls** that match Pi's settings list and save changes immediately.
 - **EXPERIMENTAL Advisor Scout** that uses the configured Executor model to curate conversation evidence before every Advisor call.
 
 ## Install
@@ -47,7 +48,7 @@ Restart or reload Pi after installation.
 
 1. Run `/advisor` to enable the flow and register `ask_advisor`.
 2. Run `/advisor-models` to choose the Executor and Advisor models. Current model and thinking-level selections appear first and ticked, so pressing Enter keeps them.
-3. Run `/advisor-settings` to configure review gates, context, privacy, and limits.
+3. Run `/advisor-settings` to configure review gates, context, privacy, and limits. Type to fuzzy-search settings; changes save immediately.
 
 ![Advisor Settings](https://raw.githubusercontent.com/philipbrembeck/pi-advisor/refs/heads/main/assets/settings.png)
 

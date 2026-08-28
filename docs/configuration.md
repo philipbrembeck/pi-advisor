@@ -1,6 +1,6 @@
 # Configuration
 
-Use `/advisor-models` and `/advisor-settings` to configure pi-advisor. Both commands save to the global `advisor.json` in the Pi agent directory.
+Use `/advisor-models` and `/advisor-settings` to configure pi-advisor. Both commands save to the global `advisor.json` in the Pi agent directory. `/advisor-settings` uses Pi's compact searchable settings list: type to fuzzy-search a control, press Enter or Space to change it, and every valid change is saved immediately.
 
 Repository-controlled project `advisor.json` files are not applied. Models, prompts, gates, budgets, disclosure, redaction, integrations, and consent remain under the user's global configuration.
 
@@ -57,7 +57,8 @@ All fields are optional. This example shows the available settings and their nor
 - `alwaysOn` defaults to `false`. When enabled, Pi restores the configured Executor and activates `ask_advisor` for new, resumed, forked, and reloaded sessions.
 - While the Advisor flow is active, an explicit `/model` selection becomes the persisted Executor for the next activation. A model restored with a session does not change the saved Executor.
 - `/advisor-off` turns `alwaysOn` off so the flow stays disabled in later sessions.
-- In Simple mode, settings keeps the Context window/history slider alongside Simple mode and Always on. Advanced values remain saved and take effect when Simple mode is disabled.
+- In Simple mode, settings keeps the Context window/history control alongside Simple mode and Always on. Advanced values remain saved and take effect when Simple mode is disabled.
+- Settings changes are applied and persisted as they happen; Escape closes the screen without a separate Save action.
 
 ## Experimental Advisor Scout
 
