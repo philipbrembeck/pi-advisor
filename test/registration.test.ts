@@ -2251,6 +2251,195 @@ describe("Advisor settings navigation and gate parsing regressions", () => {
     );
   });
 
+  test("applies the configured policy to a blocked automatic gate decision", async () => {
+    const agentDir = mkdtempSync(join(tmpdir(), "pi-advisor-agent-"));
+    const previousAgentDir = process.env.PI_CODING_AGENT_DIR;
+    process.env.PI_CODING_AGENT_DIR = agentDir;
+    const configPath = join(agentDir, "advisor.json");
+    const results: Record<
+      string,
+      { aborted: boolean; blocked: boolean; result: unknown }
+    > = {};
+
+    try {
+      for (const mode of [
+        "block-session",
+        "block-tool",
+        "warn-and-continue",
+      ] as const) {
+        writeFileSync(
+          configPath,
+          JSON.stringify({
+            advisorFailureMode: mode,
+            advisorHerdrIntegration: false,
+            advisorLoopThreshold: 2,
+          })
+        );
+        resetConfigCache();
+        const state = new AdvisorSessionState();
+        let toolCall: any;
+        let aborted = false;
+        const mockPi = {
+          getActiveTools: () => ["ask_advisor"],
+          on(event: string, handler: any) {
+            if (event === "tool_call") {
+              toolCall = handler;
+            }
+          },
+          registerEntryRenderer: () => undefined,
+          registerMessageRenderer: () => undefined,
+          registerTool: () => undefined,
+          sendMessage: () => undefined,
+        } as unknown as ExtensionAPI;
+        registerAdvisorTool(mockPi, state, {
+          runGate: async () => ({
+            decision: "blocked",
+            markdown: "Decision: blocked\nStop here.",
+            model: "provider/advisor",
+            ok: true as const,
+            thinkingText: "",
+            trigger: "repeated-tool-call" as const,
+          }),
+        });
+        const ctx = {
+          abort: () => {
+            aborted = true;
+          },
+          cwd: agentDir,
+          hasUI: true,
+          isProjectTrusted: () => false,
+          signal: new AbortController().signal,
+          ui: { notify: () => undefined },
+        } as any;
+        // The modes share the process-global configuration refs, so each case
+        // must finish before the next one rewrites its configuration.
+        // biome-ignore lint/performance/noAwaitInLoops: table-driven cases intentionally run sequentially.
+        await toolCall(
+          {
+            input: { command: "pwd" },
+            toolCallId: `${mode}-1`,
+            toolName: "bash",
+          },
+          ctx
+        );
+        const result = await toolCall(
+          {
+            input: { command: "pwd" },
+            toolCallId: `${mode}-2`,
+            toolName: "bash",
+          },
+          ctx
+        );
+        results[mode] = { aborted, blocked: state.blocked, result };
+      }
+
+      expect(results["block-session"]).toMatchObject({
+        aborted: true,
+        blocked: true,
+        result: { block: true },
+      });
+      expect(results["block-tool"]).toMatchObject({
+        aborted: false,
+        blocked: false,
+        result: { block: true },
+      });
+      expect(results["warn-and-continue"]).toMatchObject({
+        aborted: false,
+        blocked: false,
+      });
+      expect(results["warn-and-continue"].result).toBeUndefined();
+    } finally {
+      if (previousAgentDir === undefined) {
+        delete process.env.PI_CODING_AGENT_DIR;
+      } else {
+        process.env.PI_CODING_AGENT_DIR = previousAgentDir;
+      }
+      resetConfigCache();
+      rmSync(agentDir, { force: true, recursive: true });
+    }
+  });
+
+  test("allows an outcome persistence failure to be retried", async () => {
+    const agentDir = mkdtempSync(join(tmpdir(), "pi-advisor-agent-"));
+    const previousAgentDir = process.env.PI_CODING_AGENT_DIR;
+    process.env.PI_CODING_AGENT_DIR = agentDir;
+    writeFileSync(
+      join(agentDir, "advisor.json"),
+      JSON.stringify({ advisorOutcomeLogging: true })
+    );
+    resetConfigCache();
+    const state = new AdvisorSessionState();
+    const tools = new Map<string, any>();
+    let fail = true;
+    const mockPi = {
+      getActiveTools: () => [],
+      on: () => undefined,
+      registerEntryRenderer: () => undefined,
+      registerMessageRenderer: () => undefined,
+      registerTool(tool: any) {
+        tools.set(tool.name, tool);
+      },
+    } as unknown as ExtensionAPI;
+
+    state.issueAdvice(
+      "advice-1",
+      "Review the migration.",
+      "executor-requested"
+    );
+    try {
+      registerAdvisorTool(mockPi, state, {
+        appendOutcome: (() =>
+          fail
+            ? Promise.reject(new Error("disk full"))
+            : Promise.resolve()) as any,
+      });
+      const recordOutcome = tools.get("record_advisor_outcome");
+      const params = {
+        adoption: "followed",
+        adviceId: "advice-1",
+        validationStatus: "passed",
+      };
+
+      const first = await recordOutcome.execute(
+        "outcome-1",
+        params,
+        undefined,
+        undefined,
+        { cwd: agentDir, hasUI: false, isProjectTrusted: () => false }
+      );
+      expect(first.details).toEqual({ recorded: false });
+      expect(state.reserveAdvice("advice-1")).toBeDefined();
+      state.releaseAdvice("advice-1");
+
+      fail = false;
+      const second = await recordOutcome.execute(
+        "outcome-2",
+        params,
+        undefined,
+        undefined,
+        { cwd: agentDir, hasUI: false, isProjectTrusted: () => false }
+      );
+      expect(second.details).toEqual({ recorded: true });
+      expect(state.reserveAdvice("advice-1")).toBeUndefined();
+
+      await expect(
+        recordOutcome.execute("outcome-3", params, undefined, undefined, {
+          cwd: agentDir,
+          hasUI: false,
+          isProjectTrusted: () => false,
+        })
+      ).rejects.toThrow("Unknown, already recorded, or pending adviceId.");
+    } finally {
+      if (previousAgentDir === undefined) {
+        delete process.env.PI_CODING_AGENT_DIR;
+      } else {
+        process.env.PI_CODING_AGENT_DIR = previousAgentDir;
+      }
+      resetConfigCache();
+      rmSync(agentDir, { force: true, recursive: true });
+    }
+  });
+
   test("keeps concurrent registrations' safety state isolated", () => {
     const firstState = new AdvisorSessionState();
     const secondState = new AdvisorSessionState();

@@ -124,6 +124,7 @@ export class AdvisorSessionState {
     string,
     { advice: string; trigger: ConsultationTrigger }
   >();
+  readonly #pendingAdvice = new Set<string>();
   readonly #reportedAdvice = new Set<string>();
   #draftConsultations = 0;
   #outcomes = 0;
@@ -138,6 +139,7 @@ export class AdvisorSessionState {
     this.#loopInterventions = 0;
     this.#consumedCalls = 0;
     this.#issuedAdvice.clear();
+    this.#pendingAdvice.clear();
     this.#reportedAdvice.clear();
     this.#draftConsultations = 0;
     this.#outcomes = 0;
@@ -237,16 +239,38 @@ export class AdvisorSessionState {
     return true;
   }
 
-  claimAdvice(id: string) {
-    if (this.#reportedAdvice.has(id)) {
+  reserveAdvice(id: string) {
+    if (this.#reportedAdvice.has(id) || this.#pendingAdvice.has(id)) {
       return;
     }
     const advice = this.#issuedAdvice.get(id);
     if (!advice) {
       return;
     }
+    this.#pendingAdvice.add(id);
+    return advice;
+  }
+
+  commitAdvice(id: string) {
+    if (!this.#pendingAdvice.delete(id)) {
+      return false;
+    }
     this.#reportedAdvice.add(id);
     this.#outcomes += 1;
+    return true;
+  }
+
+  releaseAdvice(id: string) {
+    this.#pendingAdvice.delete(id);
+  }
+
+  /** Compatibility helper for synchronous callers that can commit immediately. */
+  claimAdvice(id: string) {
+    const advice = this.reserveAdvice(id);
+    if (!advice) {
+      return;
+    }
+    this.commitAdvice(id);
     return advice;
   }
 

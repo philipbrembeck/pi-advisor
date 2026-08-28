@@ -740,12 +740,15 @@ export const gateFailureEffectForMode = (
     : ("session-blocked" as const);
 };
 
-const gateDecisionEffect = (decision: GateDecision) => {
+const gateDecisionEffect = (
+  decision: GateDecision,
+  failureMode: "block-session" | "block-tool" | "warn-and-continue"
+) => {
   if (decision === "proceed") {
     return "continued" as const;
   }
   return decision === "blocked"
-    ? ("session-blocked" as const)
+    ? gateFailureEffectForMode(failureMode)
     : ("tool-blocked" as const);
 };
 
@@ -753,15 +756,42 @@ const failureEffect = (
   category: GateFailureCategory,
   message: string,
   ctx: ExtensionContext,
-  session: AdvisorSessionState
+  session: AdvisorSessionState,
+  failureMode: "block-session" | "block-tool" | "warn-and-continue"
 ) => {
   const reason = `Advisor gate ${category}: ${message}`;
-  notifyLocalFailure(ctx, message, advisorFailureModeRef === "block-session");
+  notifyLocalFailure(ctx, message, failureMode === "block-session");
   notifyHerdrAdvisorFailure("Advisor gate failure", reason);
-  if (advisorFailureModeRef === "warn-and-continue") {
+  if (failureMode === "warn-and-continue") {
     return { block: false, effect: "continued" as const, reason };
   }
-  if (advisorFailureModeRef === "block-tool") {
+  if (failureMode === "block-tool") {
+    return { block: true, effect: "tool-blocked" as const, reason };
+  }
+  session.block(reason);
+  herdrAdvisorBlock.set(reason);
+  if (advisorBlockOnBlockedRef) {
+    ctx.abort();
+  }
+  return { block: true, effect: "session-blocked" as const, reason };
+};
+
+const blockedDecisionEffect = (
+  reason: string,
+  ctx: ExtensionContext,
+  session: AdvisorSessionState,
+  failureMode: "block-session" | "block-tool" | "warn-and-continue"
+) => {
+  if (failureMode === "warn-and-continue") {
+    if (ctx.hasUI) {
+      ctx.ui.notify(
+        "Advisor gate returned blocked; continuing by configuration.",
+        "warning"
+      );
+    }
+    return { block: false, effect: "continued" as const, reason };
+  }
+  if (failureMode === "block-tool") {
     return { block: true, effect: "tool-blocked" as const, reason };
   }
   session.block(reason);
@@ -870,12 +900,14 @@ const handleAutomaticGate = async (
     return;
   }
   const reason = `Advisor loop gate: normalized signature for ${event.toolName} repeated ${advisorLoopThresholdRef} times without a materially different tool action.`;
+  const failureMode = advisorFailureModeRef;
   if (!session.canConsult(getAdvisorMaxCallsPerSession())) {
     const failure = failureEffect(
       "budget-exhausted",
       "Advisor gate call budget is exhausted.",
       ctx,
-      session
+      session,
+      failureMode
     );
     return failure.block ? { block: true, reason: failure.reason } : undefined;
   }
@@ -913,7 +945,7 @@ const handleAutomaticGate = async (
     ensureGateCall();
     if (!result.ok) {
       session.recordInvocation({
-        executionEffect: gateFailureEffectForMode(advisorFailureModeRef),
+        executionEffect: gateFailureEffectForMode(failureMode),
         failure: result.category,
         kind: "gate",
         model: advisorRef,
@@ -925,7 +957,8 @@ const handleAutomaticGate = async (
         result.category,
         result.message,
         ctx,
-        session
+        session,
+        failureMode
       );
       sendAutomaticGateFailure(
         pi,
@@ -939,7 +972,7 @@ const handleAutomaticGate = async (
     session.recordInvocation({
       cost: advisorUsageCost(result.usage),
       decision: result.decision,
-      executionEffect: gateDecisionEffect(result.decision),
+      executionEffect: gateDecisionEffect(result.decision, failureMode),
       kind: "gate",
       model: result.model,
       trigger: result.trigger,
@@ -953,11 +986,13 @@ const handleAutomaticGate = async (
     }
     const gateReason = `Advisor loop review: ${result.markdown}`;
     if (result.decision === "blocked") {
-      session.block(gateReason);
-      herdrAdvisorBlock.set(gateReason);
-      if (advisorBlockOnBlockedRef) {
-        ctx.abort();
-      }
+      const effect = blockedDecisionEffect(
+        gateReason,
+        ctx,
+        session,
+        failureMode
+      );
+      return effect.block ? { block: true, reason: effect.reason } : undefined;
     }
     return { block: true, reason: gateReason };
   } finally {
@@ -1344,10 +1379,12 @@ export const registerAdvisorTool = (
   pi: ExtensionAPI,
   session: AdvisorSessionState = advisorSessionState,
   dependencies: {
+    appendOutcome?: typeof appendOutcome;
     runGate?: typeof runAdvisorGate;
     statusManager?: ScoutStatusManager;
   } = {}
 ) => {
+  const appendAdvisorOutcome = dependencies.appendOutcome ?? appendOutcome;
   const reservedCalls = new Set<string>();
   const scoutStatus = dependencies.statusManager ?? new ScoutStatusManager();
 
@@ -1692,18 +1729,19 @@ export const registerAdvisorTool = (
           details: { recorded: false },
         };
       }
-      const advice = session.claimAdvice(params.adviceId);
+      const advice = session.reserveAdvice(params.adviceId);
       if (!advice) {
-        throw new Error("Unknown or already recorded adviceId.");
+        throw new Error("Unknown, already recorded, or pending adviceId.");
       }
       try {
-        await appendOutcome({
+        await appendAdvisorOutcome({
           adoption: params.adoption as (typeof ADOPTIONS)[number],
           advice: advice.advice,
           trigger: advice.trigger,
           validationStatus:
             params.validationStatus as (typeof VALIDATIONS)[number],
         });
+        session.commitAdvice(params.adviceId);
         return {
           content: [
             { text: "Advisor outcome recorded locally.", type: "text" },
@@ -1711,6 +1749,7 @@ export const registerAdvisorTool = (
           details: { recorded: true },
         };
       } catch {
+        session.releaseAdvice(params.adviceId);
         if (ctx.hasUI) {
           ctx.ui.notify(
             "Advisor outcome could not be recorded locally.",
