@@ -52,8 +52,8 @@ initTheme();
 const SPINNER_PATTERN = /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/;
 const MAX_CALLS_ROW_PATTERN = /Max Advisor calls\/session\s+10/;
 const SCOUT_ON_PATTERN = /Experimental Advisor Scout\s+On/;
-const SIMPLE_MODE_ON = /› Simple mode\s+On/;
-const SIMPLE_MODE_OFF = /› Simple mode\s+Off/;
+const SIMPLE_MODE_ON = /→ Simple mode\s+On/;
+const SIMPLE_MODE_OFF = /→ Simple mode\s+Off/;
 const CONTEXT_WINDOW = /Context window/g;
 // biome-ignore lint/suspicious/noControlCharactersInRegex: strips terminal SGR codes
 const SGR_CODE = /\u001b\[[0-9;]*m/g;
@@ -1252,6 +1252,37 @@ describe("Extension Registration", () => {
     expect(selector.render(100).join("\n")).toContain("Redact common secrets");
   });
 
+  test("uses arrow keys to change the selected setting", () => {
+    let saved: any;
+    const selector = new AdvisorSettingsSelector({
+      effortLevels: ["Default (Model Default)"],
+      initial: {
+        collapseResponses: false,
+        completionGate: true,
+        contextMaxChars: 0,
+        failureGate: true,
+        planGate: true,
+      },
+      onCancel: () => undefined,
+      onChange: (settings) => {
+        saved = settings;
+      },
+      presets: [
+        { description: "No history", label: "0", value: 0 },
+        { description: "Recent history", label: "10k", value: 10_000 },
+      ],
+      theme: {
+        bold: (text: string) => text,
+        fg: (_color: string, text: string) => text,
+      } as any,
+      tui: { requestRender: () => undefined },
+    });
+    selector.handleInput("\u001b[C");
+    expect(saved.contextMaxChars).toBe(10_000);
+    selector.handleInput("\u001b[D");
+    expect(saved.contextMaxChars).toBe(0);
+  });
+
   test("uses Space to toggle and auto-save a setting", () => {
     let saved: any;
     const selector = new AdvisorSettingsSelector({
@@ -1277,6 +1308,59 @@ describe("Extension Registration", () => {
     focusSettingsRow(selector, "Always on");
     selector.handleInput(" ");
     expect(saved.alwaysOn).toBe(true);
+  });
+
+  test("renders a context pyramid at the selected depth", () => {
+    const selector = new AdvisorSettingsSelector({
+      effortLevels: ["Default (Model Default)"],
+      initial: {
+        collapseResponses: false,
+        completionGate: true,
+        contextMaxChars: Number.MAX_SAFE_INTEGER,
+        failureGate: true,
+        planGate: true,
+      },
+      onCancel: () => undefined,
+      onChange: () => undefined,
+      presets: [
+        { description: "No history", label: "0", value: 0 },
+        {
+          description: "Full branch",
+          label: "ALL",
+          value: Number.MAX_SAFE_INTEGER,
+        },
+      ],
+      theme: {
+        bold: (text: string) => text,
+        fg: (_color: string, text: string) => text,
+      } as any,
+      tui: { requestRender: () => undefined },
+    });
+    expect(selector.render(100).join("\n")).toContain("█████████");
+  });
+
+  test("restores Simple mode animation", () => {
+    const selector = new AdvisorSettingsSelector({
+      effortLevels: ["Default (Model Default)"],
+      initial: {
+        collapseResponses: false,
+        completionGate: true,
+        contextMaxChars: 0,
+        failureGate: true,
+        planGate: true,
+        simpleMode: true,
+      },
+      onCancel: () => undefined,
+      onChange: () => undefined,
+      presets: [{ description: "No history", label: "0", value: 0 }],
+      theme: {
+        bold: (text: string) => text,
+        fg: (_color: string, text: string) => text,
+      } as any,
+      tui: { requestRender: () => undefined },
+    });
+    expect(selector.render(100).join("\n")).toContain("\u001b[38;2;");
+    selector.dispose();
   });
 
   test("hides Scout in Simple mode without losing its saved value", () => {
@@ -1309,6 +1393,7 @@ describe("Extension Registration", () => {
     changeSetting(selector, "Simple mode");
     expect(selector.render(100).join("\n")).toMatch(SCOUT_ON_PATTERN);
     expect(saved.scoutEnabled).toBe(true);
+    selector.dispose();
   });
 
   test("preserves explicit privacy settings through the selector", () => {
@@ -2317,6 +2402,7 @@ describe("Advisor settings navigation and gate parsing regressions", () => {
     expect(screen).toContain("Simple mode");
     expect(screen).toContain("Always on");
     expect(screen).not.toContain("Plan gate");
+    selector.dispose();
   });
 
   test("treats a quoted decision inside a fenced example as illustrative", () => {

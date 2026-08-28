@@ -7,8 +7,10 @@ import {
   type Focusable,
   fuzzyFilter,
   Input,
+  Key,
   type Keybindings,
   type KeybindingsManager,
+  matchesKey,
   type SettingItem,
   SettingsList,
   truncateToWidth,
@@ -306,6 +308,17 @@ class TextSettingSubmenu implements Component, Focusable {
 
 const DEFAULT_EFFORT_LEVEL = "Default (Model Default)";
 const TOGGLE_VALUES = ["On", "Off"];
+const SIMPLE_MODE_GRADIENT_INTERVAL_MS = 100;
+// Purple steps with a moving light highlight, retained from the original UI.
+const SIMPLE_MODE_GRADIENT_COLORS = [
+  [125, 79, 205],
+  [143, 96, 218],
+  [160, 114, 230],
+  [178, 135, 238],
+  [195, 157, 245],
+  [168, 120, 230],
+  [143, 89, 215],
+] as const;
 const BOOLEAN_SETTING_IDS = new Set([
   "scoutEnabled",
   "showUsageDetails",
@@ -340,6 +353,8 @@ export class AdvisorSettingsSelector implements Component, Focusable {
   private readonly settings: AdvisorSettings;
   private readonly presets: ContextPreset[];
   private settingsList: SettingsList;
+  private simpleModeGradientStartedAt: number | undefined;
+  private simpleModeGradientTimer: ReturnType<typeof setInterval> | undefined;
   private _focused = false;
 
   get focused(): boolean {
@@ -372,6 +387,9 @@ export class AdvisorSettingsSelector implements Component, Focusable {
             value: configuredContext,
           },
         ].sort((a, b) => a.value - b.value);
+    if (this.settings.simpleMode) {
+      this.startSimpleModeGradient();
+    }
     this.settingsList = this.createSettingsList();
   }
 
@@ -380,40 +398,101 @@ export class AdvisorSettingsSelector implements Component, Focusable {
   }
 
   dispose(): void {
-    this.settingsList.invalidate();
+    this.stopSimpleModeGradient();
   }
 
   render(width: number): string[] {
-    const title = this.options.theme.fg(
-      "accent",
-      this.options.theme.bold("  Advisor settings")
+    const border = this.options.theme.fg(
+      "border",
+      "─".repeat(Math.max(1, width))
     );
-    return [title, "", ...this.settingsList.render(width)].map((line) =>
+    return [border, ...this.settingsList.render(width), border].map((line) =>
       truncateToWidth(line, width)
     );
   }
 
   handleInput(keyData: string): void {
-    this.settingsList.handleInput(keyData);
+    if (!this.changeWithArrow(keyData)) {
+      this.settingsList.handleInput(keyData);
+    }
     this.options.tui.requestRender();
   }
 
-  private createSettingsList(): SettingsList {
-    return new SettingsList(
-      this.items(),
+  private changeWithArrow(keyData: string): boolean {
+    let direction = 0;
+    if (matchesKey(keyData, Key.left) || keyData === "\u001b[D") {
+      direction = -1;
+    } else if (matchesKey(keyData, Key.right) || keyData === "\u001b[C") {
+      direction = 1;
+    }
+    if (direction === 0) {
+      return false;
+    }
+    // SettingsList has no public selection/value-adjustment API. Keep this
+    // compatibility shim isolated to the native component's current fields.
+    const list = this.settingsList as unknown as {
+      filteredItems: SettingItem[];
+      searchInput?: Input;
+      selectedIndex: number;
+      submenuComponent?: Component | null;
+    };
+    if (list.submenuComponent || list.searchInput?.getValue()) {
+      return false;
+    }
+    const item = list.filteredItems[list.selectedIndex];
+    if (!item?.values?.length) {
+      return false;
+    }
+    const currentIndex = item.values.indexOf(item.currentValue);
+    let nextIndex: number;
+    if (currentIndex === -1) {
+      nextIndex = direction > 0 ? 0 : item.values.length - 1;
+    } else {
+      nextIndex =
+        (currentIndex + direction + item.values.length) % item.values.length;
+    }
+    const nextValue = item.values[nextIndex];
+    if (nextValue === undefined) {
+      return false;
+    }
+    item.currentValue = nextValue;
+    this.change(item.id, nextValue);
+    return true;
+  }
+
+  private createSettingsList(selectedId?: string): SettingsList {
+    const listTheme = getSettingsListTheme();
+    const defaultLabel = listTheme.label;
+    listTheme.label = (text, selected) => {
+      if (this.settings.simpleMode && text.startsWith("Simple mode")) {
+        return `${this.rainbowGradient("Simple mode")}${text.slice("Simple mode".length)}`;
+      }
+      return defaultLabel(text, selected);
+    };
+    const items = this.items();
+    const list = new SettingsList(
+      items,
       10,
-      getSettingsListTheme(),
+      listTheme,
       (id, value) => this.change(id, value),
       this.options.onCancel,
       { enableSearch: true }
     );
+    if (selectedId) {
+      const selectedIndex = items.findIndex((item) => item.id === selectedId);
+      if (selectedIndex >= 0) {
+        (list as unknown as { selectedIndex: number }).selectedIndex =
+          selectedIndex;
+      }
+    }
+    return list;
   }
 
   private items(): SettingItem[] {
     const items: SettingItem[] = [
       {
         currentValue: this.currentContextLabel(),
-        description: "How much conversation history the Advisor receives.",
+        description: this.contextDescription(),
         id: "context",
         label: "Context window",
         values: this.presets.map((preset) => preset.label),
@@ -713,8 +792,79 @@ export class AdvisorSettingsSelector implements Component, Focusable {
     );
   }
 
+  private contextDescription(): string {
+    const selectedIndex = Math.max(
+      0,
+      this.presets.findIndex(
+        (preset) => preset.value === this.settings.contextMaxChars
+      )
+    );
+    const pyramidRows = 5;
+    const selectedPreset = this.presets[selectedIndex];
+    const isFullContext =
+      selectedPreset?.value === Number.MAX_SAFE_INTEGER ||
+      selectedPreset?.label.toUpperCase() === "FULL" ||
+      selectedPreset?.label.toUpperCase() === "ALL";
+    const builtRows = isFullContext
+      ? pyramidRows
+      : Math.round(
+          (selectedIndex / Math.max(1, this.presets.length - 1)) * pyramidRows
+        );
+    const pyramid = Array.from({ length: pyramidRows }, (_, row) => {
+      const width = row * 2 + 1;
+      const blocks = row >= pyramidRows - builtRows ? "█" : "·";
+      return `${" ".repeat(pyramidRows - row - 1)}${blocks.repeat(width)}`;
+    }).join("\n");
+    return `${selectedPreset?.description ?? "Custom context limit."}\n${pyramid}\n  ${this.currentContextLabel()} context`;
+  }
+
   private currentEffort(): string {
     return this.settings.effort || DEFAULT_EFFORT_LEVEL;
+  }
+
+  private rainbowGradient(text: string): string {
+    const frame = Math.floor(
+      (Date.now() - (this.simpleModeGradientStartedAt ?? 0)) /
+        SIMPLE_MODE_GRADIENT_INTERVAL_MS
+    );
+    const shinePosition = frame % (text.length * 2);
+    return [...text]
+      .map((character, index) => {
+        const [baseRed, baseGreen, baseBlue] =
+          SIMPLE_MODE_GRADIENT_COLORS[
+            index % SIMPLE_MODE_GRADIENT_COLORS.length
+          ];
+        const distance = Math.abs(index - shinePosition);
+        let brightness = 0;
+        if (distance === 0) {
+          brightness = 0.7;
+        } else if (distance === 1) {
+          brightness = 0.35;
+        }
+        const red = Math.round(baseRed + (255 - baseRed) * brightness);
+        const green = Math.round(baseGreen + (255 - baseGreen) * brightness);
+        const blue = Math.round(baseBlue + (255 - baseBlue) * brightness);
+        return `\x1b[38;2;${red};${green};${blue}m${character}`;
+      })
+      .join("")
+      .concat("\x1b[0m");
+  }
+
+  private startSimpleModeGradient(): void {
+    this.stopSimpleModeGradient();
+    this.simpleModeGradientStartedAt = Date.now();
+    this.simpleModeGradientTimer = setInterval(() => {
+      this.options.tui.requestRender();
+    }, SIMPLE_MODE_GRADIENT_INTERVAL_MS);
+    this.simpleModeGradientTimer.unref?.();
+  }
+
+  private stopSimpleModeGradient(): void {
+    if (this.simpleModeGradientTimer) {
+      clearInterval(this.simpleModeGradientTimer);
+      this.simpleModeGradientTimer = undefined;
+    }
+    this.simpleModeGradientStartedAt = undefined;
   }
 
   private change(id: string, value: string): void {
@@ -726,6 +876,11 @@ export class AdvisorSettingsSelector implements Component, Focusable {
         break;
       case "simpleMode":
         this.settings.simpleMode = value === "On";
+        if (this.settings.simpleMode) {
+          this.startSimpleModeGradient();
+        } else {
+          this.stopSimpleModeGradient();
+        }
         break;
       case "alwaysOn":
         this.settings.alwaysOn = value === "On";
@@ -778,8 +933,13 @@ export class AdvisorSettingsSelector implements Component, Focusable {
       showUsageDetails: this.settings.showUsageDetails ?? true,
       toolPolicies: { ...(this.settings.toolPolicies ?? {}) },
     });
-    if (id === "simpleMode" || id === "customRule" || id === "toolPolicies") {
-      this.settingsList = this.createSettingsList();
+    if (
+      id === "context" ||
+      id === "simpleMode" ||
+      id === "customRule" ||
+      id === "toolPolicies"
+    ) {
+      this.settingsList = this.createSettingsList(id);
     }
   }
 }
