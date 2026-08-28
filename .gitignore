@@ -4,5 +4,3 @@ dist/
 .DS_Store
 *.log
 docs/agents/
-benchmarks/AUDIT.md
-benchmarks/AUDIT-2026-08-18.md

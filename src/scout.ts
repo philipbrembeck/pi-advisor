@@ -13,7 +13,6 @@ import {
   SCOUT_SYNTHESIS_MAX_BYTES,
   type ScoutManifest,
 } from "./scout-context.js";
-import type { BenchmarkTelemetry } from "./telemetry.js";
 
 export const SCOUT_TIMEOUT_MS = 30_000;
 
@@ -224,42 +223,12 @@ export const runAdvisorScout = async (
   parentSignal?: AbortSignal,
   onEvent?: (event: ScoutLifecycleEvent) => void,
   timeoutMs = SCOUT_TIMEOUT_MS,
-  dependencies: ScoutDependencies = defaultDependencies,
-  telemetry?: BenchmarkTelemetry
+  dependencies: ScoutDependencies = defaultDependencies
   // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: cancellation, timeout, provider, and schema outcomes remain explicitly distinct.
 ): Promise<ScoutOutcome> => {
   const startedAt = Date.now();
   const publish = (event: ScoutLifecycleEvent) => {
     onEvent?.(event);
-    if (event.type === "chunk") {
-      return;
-    }
-    if (event.type === "call" || event.type === "cancelled") {
-      telemetry?.scout(event);
-    } else if (event.type === "success") {
-      telemetry?.scout({
-        availableCount: event.outcome.metrics.availableCount,
-        latencyMs: event.outcome.metrics.latencyMs,
-        model: event.outcome.model,
-        omittedBeforeScout: event.outcome.metrics.omittedBeforeScout,
-        selectedCount: event.outcome.metrics.selectedCount,
-        selectedLabels: event.outcome.selectedLabels,
-        synthesis: event.outcome.selection.synthesis,
-        type: "success",
-        usage: event.outcome.metrics.usage,
-      });
-    } else {
-      telemetry?.scout({
-        availableCount: event.outcome.metrics.availableCount,
-        fallback: `${event.outcome.category}: ${event.outcome.message}`,
-        latencyMs: event.outcome.metrics.latencyMs,
-        model: event.outcome.model,
-        omittedBeforeScout: event.outcome.metrics.omittedBeforeScout,
-        selectedCount: event.outcome.metrics.selectedCount,
-        type: "fallback",
-        usage: event.outcome.metrics.usage,
-      });
-    }
   };
   if (parentSignal?.aborted) {
     publish({ type: "cancelled" });

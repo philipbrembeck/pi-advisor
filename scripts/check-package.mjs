@@ -26,7 +26,6 @@ const expectedFiles = [
   "src/scout-context.ts",
   "src/scout.ts",
   "src/session-state.ts",
-  "src/telemetry.ts",
   "src/tools.ts",
   "src/ui.ts",
   "src/untracked.ts",

@@ -1,7 +1,0 @@
-{
-  "manifestSha256": null,
-  "reason": "selected multi-module count 0 < 2",
-  "rows": [],
-  "schemaVersion": 1,
-  "status": "MANIFEST PREFLIGHT FAILED"
-}

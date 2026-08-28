@@ -75,7 +75,6 @@ import {
   type GateDecision,
   type GateTrigger,
 } from "./session-state.js";
-import type { BenchmarkTelemetry } from "./telemetry.js";
 import { readTrackedFiles, readUntrackedFiles } from "./untracked.js";
 
 export type {
@@ -431,8 +430,7 @@ export const curateAdvisorConversation = async (
   enabled = advisorScoutEnabledRef,
   runScout: typeof runAdvisorScout = runAdvisorScout,
   currentInvocationId?: string,
-  maxChars?: number,
-  telemetry?: BenchmarkTelemetry
+  maxChars?: number
 ): Promise<{
   conversation: string;
   scout?: Exclude<ScoutOutcome, { cancelled: true }>;
@@ -470,8 +468,7 @@ export const curateAdvisorConversation = async (
     signal,
     onScout,
     undefined,
-    undefined,
-    telemetry
+    undefined
   );
   if (!outcome.ok && outcome.cancelled) {
     throw signal?.reason instanceof Error
@@ -504,8 +501,7 @@ const collectAdvisorResponse = async (
   includeUntracked?: string[],
   includeTracked?: string[],
   onScout?: (event: ScoutLifecycleEvent) => void,
-  currentInvocationId?: string,
-  telemetry?: BenchmarkTelemetry
+  currentInvocationId?: string
 ) => {
   loadConfig(ctx);
   const resolved = await resolveConfiguredModel(ctx, advisorRef, "Advisor");
@@ -551,8 +547,7 @@ const collectAdvisorResponse = async (
     advisorScoutEnabledRef,
     runAdvisorScout,
     currentInvocationId,
-    conversationBudget,
-    telemetry
+    conversationBudget
   );
   const { conversation, scout } = curated;
   const preferences = await readProjectPreferences(
@@ -643,43 +638,22 @@ export const consultAdvisor = async (
   includeUntracked?: string[],
   includeTracked?: string[],
   onScout?: (event: ScoutLifecycleEvent) => void,
-  currentInvocationId?: string,
-  telemetry?: BenchmarkTelemetry
+  currentInvocationId?: string
 ): Promise<AdvisorConsultationResult> => {
-  telemetry?.advisorStart({ model: advisorRef, question, trigger });
-  try {
-    const result = await collectAdvisorResponse(
-      ctx,
-      ADVISOR_SYSTEM,
-      question,
-      signal,
-      onChunk,
-      gitContext,
-      draft,
-      includeUntracked,
-      includeTracked,
-      onScout,
-      currentInvocationId,
-      telemetry
-    );
-    telemetry?.advisorEnd({
-      model: result.model,
-      outcome: "completed",
-      question,
-      response: result.markdown,
-      trigger,
-      usage: result.usage,
-    });
-    return { ...result, adviceId: randomUUID(), trigger };
-  } catch (error) {
-    telemetry?.advisorError({
-      category: signal?.aborted ? "cancelled" : "provider-error",
-      model: advisorRef,
-      question,
-      trigger,
-    });
-    throw error;
-  }
+  const result = await collectAdvisorResponse(
+    ctx,
+    ADVISOR_SYSTEM,
+    question,
+    signal,
+    onChunk,
+    gitContext,
+    draft,
+    includeUntracked,
+    includeTracked,
+    onScout,
+    currentInvocationId
+  );
+  return { ...result, adviceId: randomUUID(), trigger };
 };
 
 export const runAdvisorGate = async (
@@ -689,10 +663,8 @@ export const runAdvisorGate = async (
   signal?: AbortSignal,
   onChunk?: (thinking: string, text: string) => void,
   onScout?: (event: ScoutLifecycleEvent) => void,
-  currentInvocationId?: string,
-  telemetry?: BenchmarkTelemetry
+  currentInvocationId?: string
 ): Promise<AdvisorGateOutcome> => {
-  telemetry?.advisorStart({ model: advisorRef, question, trigger });
   try {
     const result = await collectAdvisorResponse(
       ctx,
@@ -705,18 +677,9 @@ export const runAdvisorGate = async (
       undefined,
       undefined,
       onScout,
-      currentInvocationId,
-      telemetry
+      currentInvocationId
     );
     const parsed = parseAutomaticDecision(result.markdown);
-    telemetry?.advisorEnd({
-      model: result.model,
-      outcome: parsed.ok ? `decision:${parsed.decision}` : parsed.category,
-      question,
-      response: result.markdown,
-      trigger,
-      usage: result.usage,
-    });
     if (!parsed.ok) {
       return parsed;
     }
@@ -728,12 +691,6 @@ export const runAdvisorGate = async (
       usage: result.usage,
     };
   } catch (error) {
-    telemetry?.advisorError({
-      category: signal?.aborted ? "cancelled" : "provider-error",
-      model: advisorRef,
-      question,
-      trigger,
-    });
     if (signal?.aborted) {
       throw error;
     }
@@ -877,8 +834,7 @@ const handleAutomaticGate = async (
   ctx: ExtensionContext,
   session: AdvisorSessionState,
   runGate: typeof runAdvisorGate,
-  scoutStatus: ScoutStatusManager,
-  telemetry?: BenchmarkTelemetry
+  scoutStatus: ScoutStatusManager
 ): Promise<ToolCallEventResult | undefined> => {
   if (
     isSimpleMode() ||
@@ -931,8 +887,7 @@ const handleAutomaticGate = async (
           ensureGateCall();
         }
       },
-      event.toolCallId,
-      telemetry
+      event.toolCallId
     );
     ensureGateCall();
     if (!result.ok) {
@@ -1357,7 +1312,6 @@ export const registerAdvisorTool = (
   dependencies: {
     runGate?: typeof runAdvisorGate;
     statusManager?: ScoutStatusManager;
-    telemetry?: BenchmarkTelemetry;
   } = {}
 ) => {
   const reservedCalls = new Set<string>();
@@ -1476,8 +1430,7 @@ export const registerAdvisorTool = (
       ctx,
       session,
       dependencies.runGate ?? runAdvisorGate,
-      scoutStatus,
-      dependencies.telemetry
+      scoutStatus
     );
   });
 
@@ -1554,8 +1507,7 @@ export const registerAdvisorTool = (
               },
             });
           },
-          _id,
-          dependencies.telemetry
+          _id
         );
         session.issueAdvice(
           result.adviceId,

@@ -1,8 +1,0 @@
-{
-  "name": "job-runner",
-  "private": true,
-  "type": "commonjs",
-  "scripts": {
-    "test": "node --test"
-  }
-}
