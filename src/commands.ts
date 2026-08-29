@@ -2,8 +2,9 @@ import {
   type ExtensionAPI,
   type ExtensionContext,
   getMarkdownTheme,
+  type Theme,
 } from "@earendil-works/pi-coding-agent";
-import { Box, Markdown, Text } from "@earendil-works/pi-tui";
+import { Box, type Component, Markdown, Text } from "@earendil-works/pi-tui";
 import {
   advisorEffortRef,
   advisorRef,
@@ -63,8 +64,11 @@ import {
   hasSoundVerdict,
   renderAdvisorCallBox,
   renderAdvisorResponseHeader,
+  renderScoutDetails,
   resolveAdvisorRequest,
   ScoutStatusManager,
+  type ScoutToolDetails,
+  SPINNER_FRAMES,
 } from "./tools.js";
 import {
   type AdvisorSettings,
@@ -169,6 +173,109 @@ const notify = (
   }
 };
 
+type ManualAdvisorProgressPhase =
+  | "preparing"
+  | "active"
+  | "complete"
+  | "cancelled"
+  | "error";
+interface ManualAdvisorProgressState {
+  phase: ManualAdvisorProgressPhase;
+  scout?: ScoutToolDetails;
+  text?: string;
+  thinking?: string;
+}
+
+class ManualAdvisorProgressComponent implements Component {
+  private readonly question: string | undefined;
+  private readonly state: ManualAdvisorProgressState;
+  private readonly expanded: boolean;
+  private readonly theme: Theme;
+
+  constructor(
+    question: string | undefined,
+    state: ManualAdvisorProgressState,
+    expanded: boolean,
+    theme: Theme
+  ) {
+    this.question = question;
+    this.state = state;
+    this.expanded = expanded;
+    this.theme = theme;
+  }
+
+  render(width: number): string[] {
+    const box = renderAdvisorCallBox(this.question, this.theme);
+    if (this.state.phase === "complete" || this.state.phase === "cancelled") {
+      return box.render(width);
+    }
+
+    const { scout } = this.state;
+    const scoutActive =
+      scout?.status === "calling" || scout?.status === "streaming";
+    if (scoutActive) {
+      renderScoutDetails(box, scout, this.expanded, this.theme);
+      return box.render(width);
+    }
+    if (scout?.status === "cancelled") {
+      return box.render(width);
+    }
+    if (this.state.phase === "error") {
+      box.addChild(
+        new Text(
+          this.theme.fg("error", this.theme.bold("◆ ADVISOR · FAILED")),
+          0,
+          0
+        )
+      );
+      return box.render(width);
+    }
+
+    const frame =
+      SPINNER_FRAMES[Math.floor(Date.now() / 80) % SPINNER_FRAMES.length];
+    let status = "Working…";
+    if (this.state.phase === "preparing") {
+      status = "Preparing…";
+    } else if (this.state.text?.trim()) {
+      status = "Responding…";
+    }
+    box.addChild(
+      new Text(
+        `${this.theme.fg("warning", this.theme.bold(`◆ ADVISOR ${frame}`))} ${this.theme.fg("dim", `· ${status}`)}`,
+        0,
+        0
+      )
+    );
+    if (this.state.thinking) {
+      box.addChild(
+        new Text(
+          this.theme.fg(
+            "thinkingText",
+            `  💭 ${this.state.thinking.replace(/\n/g, " ").slice(-200)}`
+          ),
+          0,
+          0
+        )
+      );
+    }
+    if (this.state.text) {
+      box.addChild(
+        new Markdown(
+          adviceForDisplay(this.state.text, this.expanded),
+          0,
+          0,
+          getMarkdownTheme()
+        )
+      );
+    }
+    return box.render(width);
+  }
+
+  invalidate(): void {
+    // The live progress state is read during each render.
+  }
+}
+
 const findConfiguredModel = (ctx: ExtensionContext, ref: string) => {
   const [provider, modelId] = splitRef(ref);
   return ctx.modelRegistry.find(provider, modelId);
@@ -246,6 +353,12 @@ export const registerCommands = (
         undefined
       ));
   const manualConsultations = new Map<AbortController, symbol>();
+  const manualProgressTimers = new Map<
+    AbortController,
+    ReturnType<typeof setInterval>
+  >();
+  const manualProgress = new Map<string, ManualAdvisorProgressState>();
+  let manualProgressSequence = 0;
   const updateAdvisorUsageStatus = (ctx: ExtensionContext) => {
     if (ctx.hasUI) {
       ctx.ui.setStatus(
@@ -282,10 +395,30 @@ export const registerCommands = (
     question: string | undefined,
     controller: AbortController,
     scoutStatusToken: symbol,
+    progress: ManualAdvisorProgressState,
     gitContext?: GitContextLevel
   ) => {
     herdrAdvisorActivity.start();
-    setManualStatus(ctx, controller, scoutStatusToken, "Advisor preparing…");
+    progress.phase = "preparing";
+    let currentStatus = "Advisor preparing…";
+    const updateStatus = (status: string) => {
+      currentStatus = status;
+      setManualStatus(ctx, controller, scoutStatusToken, status);
+    };
+    updateStatus(currentStatus);
+    if (ctx.hasUI) {
+      const timer = setInterval(() => {
+        if (
+          controller.signal.aborted ||
+          manualConsultations.get(controller) !== scoutStatusToken
+        ) {
+          clearInterval(timer);
+          return;
+        }
+        ctx.ui.setStatus("advisor-manual", currentStatus);
+      }, 80);
+      manualProgressTimers.set(controller, timer);
+    }
     let scoutDetails: Parameters<typeof appendScoutLifecycleEntry>[2];
     return requestAdvisor(
       ctx,
@@ -295,6 +428,9 @@ export const registerCommands = (
         if (controller.signal.aborted) {
           return;
         }
+        progress.phase = "active";
+        progress.thinking = thinking;
+        progress.text = text;
         let status = "Advisor working…";
         if (thinking.trim()) {
           status = "Advisor thinking…";
@@ -302,27 +438,19 @@ export const registerCommands = (
         if (text.trim()) {
           status = "Advisor responding…";
         }
-        setManualStatus(ctx, controller, scoutStatusToken, status);
+        updateStatus(status);
       },
       (event) => {
         if (!controller.signal.aborted) {
           scoutStatus.update(ctx, scoutStatusToken, event);
-          if (event.type === "call" || event.type === "chunk") {
-            setManualStatus(
-              ctx,
-              controller,
-              scoutStatusToken,
-              "Advisor Scout curating…"
-            );
-          } else if (event.type === "success" || event.type === "fallback") {
-            setManualStatus(
-              ctx,
-              controller,
-              scoutStatusToken,
-              "Advisor working…"
-            );
-          }
           scoutDetails = appendScoutLifecycleEntry(pi, event, scoutDetails);
+          progress.scout = scoutDetails;
+          progress.phase = "active";
+          if (event.type === "call" || event.type === "chunk") {
+            updateStatus("Advisor Scout curating…");
+          } else if (event.type === "success" || event.type === "fallback") {
+            updateStatus("Advisor working…");
+          }
         }
       },
       gitContext
@@ -331,6 +459,7 @@ export const registerCommands = (
         if (controller.signal.aborted) {
           return;
         }
+        progress.phase = "complete";
         advisorSessionState.recordInvocation({
           cost: advisorUsageCost(usage),
           executionEffect: "continued",
@@ -365,6 +494,7 @@ export const registerCommands = (
         if (controller.signal.aborted) {
           return;
         }
+        progress.phase = "error";
         const message = error instanceof Error ? error.message : String(error);
         advisorSessionState.recordInvocation({
           executionEffect: "continued",
@@ -390,6 +520,14 @@ export const registerCommands = (
         notifyHerdrAdvisorFailure("Advisor consultation failed", message);
       })
       .finally(() => {
+        if (controller.signal.aborted) {
+          progress.phase = "cancelled";
+        }
+        const timer = manualProgressTimers.get(controller);
+        if (timer) {
+          clearInterval(timer);
+          manualProgressTimers.delete(controller);
+        }
         if (
           ctx.hasUI &&
           manualConsultations.get(controller) === scoutStatusToken
@@ -494,9 +632,20 @@ export const registerCommands = (
 
   pi.registerEntryRenderer?.(
     "advisor-manual-call",
-    (entry, _options, theme) => {
-      const { question } = (entry.data ?? {}) as { question?: string };
-      return renderAdvisorCallBox(question, theme);
+    (entry, { expanded }, theme) => {
+      const { progressId, question } = (entry.data ?? {}) as {
+        progressId?: string;
+        question?: string;
+      };
+      const progress = progressId ? manualProgress.get(progressId) : undefined;
+      return progress
+        ? new ManualAdvisorProgressComponent(
+            question,
+            progress,
+            Boolean(expanded),
+            theme
+          )
+        : renderAdvisorCallBox(question, theme);
     }
   );
 
@@ -576,10 +725,17 @@ export const registerCommands = (
     }
     for (const [controller, token] of manualConsultations) {
       controller.abort();
+      const timer = manualProgressTimers.get(controller);
+      if (timer) {
+        clearInterval(timer);
+        manualProgressTimers.delete(controller);
+      }
       scoutStatus.release(ctx, token);
     }
     scoutStatus.clear(ctx);
     manualConsultations.clear();
+    manualProgressTimers.clear();
+    manualProgress.clear();
     herdrAdvisorActivity.clear();
   });
 
@@ -656,14 +812,19 @@ export const registerCommands = (
       manualConsultations.clear();
       const controller = new AbortController();
       const scoutStatusToken = Symbol("manual-scout");
+      manualProgressSequence += 1;
+      const progressId = `manual-${manualProgressSequence}`;
+      const progress: ManualAdvisorProgressState = { phase: "preparing" };
+      manualProgress.set(progressId, progress);
       scoutStatus.register(scoutStatusToken);
       manualConsultations.set(controller, scoutStatusToken);
-      pi.appendEntry?.("advisor-manual-call", { question });
+      pi.appendEntry?.("advisor-manual-call", { progressId, question });
       startManualConsultation(
         ctx,
         question,
         controller,
         scoutStatusToken,
+        progress,
         gitContext
       );
     },

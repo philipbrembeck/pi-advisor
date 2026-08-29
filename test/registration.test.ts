@@ -829,12 +829,12 @@ describe("Extension Registration", () => {
       isProjectTrusted: () => false,
     });
 
-    expect(entries).toEqual([
-      {
-        data: { question: "Check the migration" },
-        type: "advisor-manual-call",
-      },
-    ]);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.type).toBe("advisor-manual-call");
+    expect(entries[0]?.data).toMatchObject({
+      progressId: expect.any(String),
+      question: "Check the migration",
+    });
   });
 
   test("renders one terminal manual Scout entry before the Advisor response", async () => {
@@ -1064,6 +1064,7 @@ describe("Extension Registration", () => {
 
   describe("Manual Advisor TUI modal", () => {
     const modalTheme = {
+      bg: (_color: string, value: string) => value,
       bold: (value: string) => value,
       fg: (_color: string, value: string) => value,
     } as any;
@@ -1078,6 +1079,7 @@ describe("Extension Registration", () => {
       const commands = new Map<string, any>();
       const events = new Map<string, any>();
       const entries: Array<{ data: unknown; type: string }> = [];
+      const entryRenderers = new Map<string, any>();
       const modalOptions: any[] = [];
       const notices: string[] = [];
       const sent: Array<{ message: any; options: any }> = [];
@@ -1092,6 +1094,9 @@ describe("Extension Registration", () => {
         },
         registerCommand(name: string, config: any) {
           commands.set(name, config);
+        },
+        registerEntryRenderer(name: string, renderer: any) {
+          entryRenderers.set(name, renderer);
         },
         sendMessage(message: any, options: any) {
           sent.push({ message, options });
@@ -1128,6 +1133,7 @@ describe("Extension Registration", () => {
         commands,
         ctx,
         entries,
+        entryRenderers,
         events,
         modalOptions,
         notices,
@@ -1179,16 +1185,89 @@ describe("Extension Registration", () => {
             { gitContext: "full", question: "Check migration" },
           ]);
           expect(state.consumedCalls).toBe(1);
-          expect(harness.entries).toEqual([
-            {
-              data: { question: "Check migration" },
-              type: "advisor-manual-call",
-            },
-          ]);
+          expect(harness.entries).toHaveLength(1);
+          expect(harness.entries[0]?.type).toBe("advisor-manual-call");
+          expect(harness.entries[0]?.data).toMatchObject({
+            progressId: expect.any(String),
+            question: "Check migration",
+          });
           expect(harness.sent[0]?.message).toMatchObject({
             customType: "advisor-manual-result",
             details: { question: "Check migration" },
           });
+        }
+      );
+    });
+
+    test("renders the manual call and loading spinner before completion", async () => {
+      await withManualConfig(
+        { advisorGitContext: "summary", advisorHerdrIntegration: false },
+        async (agentDir) => {
+          const state = new AdvisorSessionState();
+          let resolveConsult!: (result: {
+            markdown: string;
+            thinkingText: string;
+          }) => void;
+          const pending = new Promise<{
+            markdown: string;
+            thinkingText: string;
+          }>((resolve) => {
+            resolveConsult = resolve;
+          });
+          let onChunk: ((thinking: string, text: string) => void) | undefined;
+          let onScout: ((event: any) => void) | undefined;
+          const harness = makeHarness(
+            agentDir,
+            state,
+            (dialog) => dialog.handleInput(String.fromCharCode(13)),
+            (_ctx, _question, _signal, chunk, scout) => {
+              onChunk = chunk;
+              onScout = scout;
+              return pending;
+            }
+          );
+
+          await harness.commands.get("advisor-manual").handler("", harness.ctx);
+
+          const [entry] = harness.entries;
+          const renderer = harness.entryRenderers.get("advisor-manual-call");
+          expect(entry).toBeDefined();
+          expect(renderer).toBeDefined();
+          const component = renderer(entry, { expanded: false }, modalTheme);
+          const rendered = component.render(100).join("\\n");
+          expect(rendered).toContain("Executor → Advisor");
+          expect(rendered).toContain("◆ ADVISOR");
+          expect(rendered).toContain("Preparing");
+
+          onScout?.({ model: "provider/executor", type: "call" });
+          const scoutRendered = component.render(100).join("\\n");
+          expect(scoutRendered).toContain("◆ SCOUT");
+          expect(scoutRendered).toContain("CURATING");
+          onScout?.({
+            outcome: {
+              conversation: "selected evidence",
+              metrics: {
+                availableCount: 1,
+                inputBytes: 1,
+                latencyMs: 1,
+                omittedBeforeScout: 0,
+                selectedCount: 1,
+              },
+              model: "provider/executor",
+              ok: true,
+              selectedLabels: [],
+              selection: { selectedIds: [], synthesis: "" },
+            },
+            type: "success",
+          });
+          onChunk?.("Thinking", "Partial answer");
+          const advisorRendered = component.render(100).join("\\n");
+          expect(advisorRendered).toContain("◆ ADVISOR");
+          expect(advisorRendered).toContain("Partial answer");
+
+          harness.events.get("session_shutdown")?.(undefined, harness.ctx);
+          resolveConsult({ markdown: "Done.", thinkingText: "" });
+          await new Promise((resolve) => setTimeout(resolve, 0));
         }
       );
     });
@@ -1228,7 +1307,10 @@ describe("Extension Registration", () => {
 
           expect(received).toEqual({ gitContext: "off", question: undefined });
           expect(harness.entries).toHaveLength(1);
-          expect(harness.entries[0]?.data).toEqual({ question: undefined });
+          expect(harness.entries[0]?.data).toMatchObject({
+            progressId: expect.any(String),
+            question: undefined,
+          });
         }
       );
     });
