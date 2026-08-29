@@ -9,7 +9,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type ExtensionAPI, initTheme } from "@earendil-works/pi-coding-agent";
-import { getKeybindings } from "@earendil-works/pi-tui";
+import { getKeybindings, stripTerminalSequences } from "@earendil-works/pi-tui";
 import registerExtension, {
   consultAdvisor,
   runAdvisorGate,
@@ -1995,7 +1995,9 @@ describe("Extension Registration", () => {
       "Experimental Advisor Scout"
     );
     changeSetting(selector, "Simple mode");
-    expect(selector.render(100).join("\n")).toMatch(SCOUT_ON_PATTERN);
+    expect(stripTerminalSequences(selector.render(100).join("\n"))).toMatch(
+      SCOUT_ON_PATTERN
+    );
     expect(saved.scoutEnabled).toBe(true);
     selector.dispose();
   });
@@ -2133,12 +2135,15 @@ describe("Extension Registration", () => {
           {},
           resolve
         );
+        const initialScreen = stripTerminalSequences(
+          selector.render(100).join("\n")
+        );
+        expect(initialScreen).toMatch(SCOUT_ON_PATTERN);
         for (const key of ["m", "a", "x"]) {
           selector.handleInput(key);
         }
-        const screen = selector.render(100).join("\n");
+        const screen = stripTerminalSequences(selector.render(100).join("\n"));
         expect(screen).toMatch(MAX_CALLS_ROW_PATTERN);
-        expect(screen).toMatch(SCOUT_ON_PATTERN);
         selector.handleInput("\u001b");
       });
     const mockPi = {
@@ -3056,9 +3061,9 @@ describe("Advisor settings navigation and gate parsing regressions", () => {
         writeFileSync(
           configPath,
           JSON.stringify({
-            advisorFailureMode: mode,
             advisorHerdrIntegration: false,
             advisorLoopThreshold: 2,
+            gateFailureMode: mode,
           })
         );
         resetConfigCache();

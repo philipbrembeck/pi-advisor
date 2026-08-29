@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## Unreleased
 
+### Changed
+
+- Updated the development toolchain and Pi compatibility packages, including TypeScript 7, Node.js 26 type definitions, Pi 0.84.4 packages, and Bun 1.3.14 validation.
+
 ### Added
 
 - Added a centered TUI overlay for `/advisor-manual` with an editable prefilled focus message, optional general review, a Git context selector bounded by the configured disclosure ceiling, and live Scout/Advisor progress without duplicate footer status text; non-TUI invocations remain immediate.
@@ -19,6 +23,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- Fixed `/advisor-settings` context-meter alignment and numeric controls so custom max-call limits advance to the next numeric option.
 - Made blocked automatic-gate decisions honor the configured session, tool, or warning behavior.
 - Allowed failed local Advisor outcome writes to be retried without consuming the advice.
 

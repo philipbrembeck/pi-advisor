@@ -3,6 +3,7 @@ import {
   getKeybindings,
   Key,
   matchesKey,
+  stripTerminalSequences,
   type TUI,
   visibleWidth,
 } from "@earendil-works/pi-tui";
@@ -57,7 +58,9 @@ describe("ManualAdvisorDialog", () => {
       gitContext: "full",
       initialMessage: "Check the migration",
     });
-    const screen = dialog.render(90).join("\n");
+    const screen = stripTerminalSequences(dialog.render(90).join("\n"))
+      .replace(/[│]/g, " ")
+      .replace(/\s+/g, " ");
 
     expect(screen).toContain("Ask Advisor");
     expect(screen).toContain("▸ Message for Advisor (optional)");
@@ -142,24 +145,26 @@ describe("ManualAdvisorDialog", () => {
   test("uses arrows and Space within Git choices, then leaves at the edges", () => {
     const summary = makeDialog({ gitContext: "summary" });
     summary.dialog.handleInput("\u001b[B");
-    expect(summary.dialog.render(90).join("\n")).toContain(
-      "▸ ● Summary — changed paths and status"
-    );
+    expect(
+      stripTerminalSequences(summary.dialog.render(90).join("\n"))
+    ).toContain("▸ ● Summary — changed paths and status");
     summary.dialog.handleInput("\u001b[B");
-    expect(summary.dialog.render(90).join("\n")).toContain(
-      "▸ ● None — no Git data"
-    );
+    expect(
+      stripTerminalSequences(summary.dialog.render(90).join("\n"))
+    ).toContain("▸ ● None — no Git data");
     summary.dialog.handleInput(" ");
-    expect(summary.dialog.render(90).join("\n")).toContain("● Summary");
+    expect(
+      stripTerminalSequences(summary.dialog.render(90).join("\n"))
+    ).toContain("● Summary");
 
     const git = makeDialog({ gitContext: "full" });
     git.dialog.handleInput("\u001b[B");
     git.dialog.handleInput("\u001b[B");
-    expect(git.dialog.render(90).join("\n")).toContain(
+    expect(stripTerminalSequences(git.dialog.render(90).join("\n"))).toContain(
       "● Summary — changed paths and status"
     );
     git.dialog.handleInput("\u001b[A");
-    expect(git.dialog.render(90).join("\n")).toContain(
+    expect(stripTerminalSequences(git.dialog.render(90).join("\n"))).toContain(
       "● Full — summary plus patch"
     );
 
@@ -167,13 +172,18 @@ describe("ManualAdvisorDialog", () => {
     editor.dialog.handleInput("\u001b[B");
     editor.dialog.handleInput("\u001b[A");
     editor.dialog.handleInput("x");
-    expect(editor.dialog.render(90).join("\n")).toContain("> x");
+    expect(
+      stripTerminalSequences(editor.dialog.render(90).join("\n"))
+    ).toContain("│ x");
 
     const actions = makeDialog({ gitContext: "full" });
     actions.dialog.handleInput("\u001b[B");
     actions.dialog.handleInput("\u001b[B");
     actions.dialog.handleInput("\u001b[B");
+    actions.dialog.handleInput("\u001b[A");
+    actions.dialog.handleInput("\u001b[A");
     expect(actions.dialog.render(90).join("\n")).toContain("▸");
+    actions.dialog.handleInput("\r");
     actions.dialog.handleInput("\r");
     expect(actions.submitted).toEqual([{ gitContext: "full" }]);
   });

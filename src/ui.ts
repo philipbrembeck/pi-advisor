@@ -777,6 +777,24 @@ const numericValues = (current: number, values: number[]) => {
   return all.sort((a, b) => a - b).map(String);
 };
 
+const maxCallValues = (current: string) => {
+  const values = ["0", "1", "2", "3", "5", "10", "25", "50", "∞"];
+  if (values.includes(current)) {
+    return values;
+  }
+  const numeric = Number(current);
+  const insertionIndex = values.findIndex(
+    (value) => value !== "∞" && Number(value) > numeric
+  );
+  return insertionIndex === -1
+    ? [...values.slice(0, -1), current, "∞"]
+    : [
+        ...values.slice(0, insertionIndex),
+        current,
+        ...values.slice(insertionIndex),
+      ];
+};
+
 const settingValue = (value: boolean | undefined, defaultValue: boolean) =>
   (value ?? defaultValue) ? "On" : "Off";
 
@@ -1058,11 +1076,10 @@ export class AdvisorSettingsSelector implements Component, Focusable {
         description: "Limit automatic Advisor calls in one session.",
         id: "maxCallsPerSession",
         label: "Max Advisor calls/session",
-        values: withCurrentValue(
+        values: maxCallValues(
           this.settings.maxCallsPerSession === undefined
             ? "∞"
-            : String(this.settings.maxCallsPerSession),
-          ["∞", "0", "1", "2", "3", "5", "10", "25", "50"]
+            : String(this.settings.maxCallsPerSession)
         ),
       },
       this.toggle(
@@ -1258,13 +1275,14 @@ export class AdvisorSettingsSelector implements Component, Focusable {
       return index < marker ? "━" : "─";
     }).join("");
     const label = this.currentContextLabel();
+    const labelWidth = visibleWidth(label);
     const meterPrefix = "none    ";
     const markerColumn = meterPrefix.length + marker;
     const labelStart = Math.max(
       0,
       Math.min(
-        meterPrefix.length + meter.length - label.length,
-        markerColumn - Math.floor(label.length / 2)
+        meterPrefix.length + meter.length + 2 - labelWidth,
+        markerColumn - Math.floor((labelWidth - 1) / 2)
       )
     );
     const markerLabel = `${" ".repeat(labelStart)}${label}`;
