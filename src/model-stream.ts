@@ -193,7 +193,13 @@ export const collectTextStream = async (
       apiKey: resolved.apiKey,
       env: resolved.env,
       headers: resolved.headers,
+      // `stream()` uses the provider-facing name while the extension's public
+      // option keeps the Pi-facing `reasoning` name. Preserve both so the
+      // configured effort reaches providers that serialize reasoning_effort.
       reasoning: options.reasoning as never,
+      ...(options.reasoning === undefined
+        ? {}
+        : { reasoningEffort: options.reasoning as never }),
       signal: options.signal,
     }
   );

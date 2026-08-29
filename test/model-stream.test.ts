@@ -227,8 +227,21 @@ describe("model stream", () => {
       env: { REGION: "test" },
       headers: { header: "value" },
       reasoning: "high",
+      reasoningEffort: "high",
       signal,
     });
+  });
+
+  test("omits provider effort when it is not configured", async () => {
+    let optionsSeen: Record<string, unknown> | undefined;
+    await collectTextStream(
+      { apiKey: "key", model, ref: "provider/model" },
+      { messages: [], systemPrompt: "system" },
+      fakeStream([], assistant("ok"), (options) => {
+        optionsSeen = options as Record<string, unknown>;
+      })
+    );
+    expect(optionsSeen).not.toHaveProperty("reasoningEffort");
   });
 
   test("falls back to streamed text and preserves an empty response", async () => {
