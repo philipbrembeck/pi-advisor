@@ -4,18 +4,29 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import {
   type Component,
+  Editor,
+  type EditorTheme,
   type Focusable,
   fuzzyFilter,
   Input,
   Key,
   type Keybindings,
   type KeybindingsManager,
+  type KeyId,
   matchesKey,
   type SettingItem,
   SettingsList,
+  type TUI,
   truncateToWidth,
+  visibleWidth,
+  wrapTextWithAnsi,
 } from "@earendil-works/pi-tui";
 import { isValidAdvisorToolPolicies } from "./config.js";
+import {
+  clampGitContextLevel,
+  GIT_CONTEXT_LEVELS,
+  type GitContextLevel,
+} from "./git.js";
 
 interface RenderRequester {
   requestRender: () => void;
@@ -183,6 +194,427 @@ export class SearchableModelSelector implements Component, Focusable {
       }
     }
     this.tui.requestRender();
+  }
+}
+
+export interface ManualAdvisorRequest {
+  /** The repository disclosure level selected for this consultation. */
+  gitContext: GitContextLevel;
+  /** The unnormalized message entered in the dialog, when one was supplied. */
+  message?: string;
+}
+
+interface ManualAdvisorDialogOptions {
+  gitContext: GitContextLevel;
+  initialMessage?: string;
+  keybindings: KeybindingsManager;
+  onCancel: () => void;
+  onSubmit: (request: ManualAdvisorRequest) => void;
+  theme: Theme;
+  tui: TUI;
+}
+
+type ManualAdvisorFocus = "editor" | "git" | "actions";
+
+const MANUAL_GIT_CONTEXT_COPY: Record<
+  GitContextLevel,
+  { description: string; label: string }
+> = {
+  full: { description: "summary plus patch", label: "Full" },
+  off: { description: "no Git data", label: "None" },
+  summary: { description: "changed paths and status", label: "Summary" },
+};
+
+/**
+ * The small, deliberately non-persistent form used by `/advisor-manual`.
+ *
+ * The dialog owns only local input state. Callers decide when to consume a
+ * budget or start a consultation after the submitted request is returned.
+ */
+export class ManualAdvisorDialog implements Component, Focusable {
+  private readonly options: ManualAdvisorDialogOptions;
+  private readonly editor: Editor;
+  private readonly gitLevels: GitContextLevel[];
+  private gitIndex: number;
+  private actionIndex = 0;
+  private focusTarget: ManualAdvisorFocus = "editor";
+  private readonly state: { completed: boolean; focused: boolean } = {
+    completed: false,
+    focused: false,
+  };
+
+  get focused(): boolean {
+    return this.state.focused;
+  }
+
+  set focused(value: boolean) {
+    this.state.focused = value;
+    this.updateEditorFocus();
+    this.options.tui.requestRender();
+  }
+
+  constructor(options: ManualAdvisorDialogOptions) {
+    this.options = options;
+    // Show the configured default first, followed by progressively narrower
+    // choices. That makes Down do the useful thing from the initial selection
+    // while the configured level remains the hard ceiling.
+    this.gitLevels = GIT_CONTEXT_LEVELS.filter(
+      (level) => clampGitContextLevel(level, options.gitContext) === level
+    ).reverse();
+    this.gitIndex = Math.max(0, this.gitLevels.indexOf(options.gitContext));
+
+    const editorTheme: EditorTheme = {
+      borderColor: (text) => options.theme.fg("border", text),
+      selectList: {
+        description: (text) => options.theme.fg("muted", text),
+        noMatch: (text) => options.theme.fg("warning", text),
+        scrollInfo: (text) => options.theme.fg("dim", text),
+        selectedPrefix: (text) => options.theme.fg("accent", text),
+        selectedText: (text) => options.theme.fg("accent", text),
+      },
+    };
+    this.editor = new Editor(options.tui, editorTheme);
+    this.editor.setText(options.initialMessage ?? "");
+    this.editor.onChange = () => options.tui.requestRender();
+    this.editor.onSubmit = (message) => this.submit(message);
+    this.updateEditorFocus();
+  }
+
+  invalidate(): void {
+    this.editor.invalidate();
+  }
+
+  dispose(): void {
+    this.state.completed = true;
+  }
+
+  handleInput(keyData: string): void {
+    if (this.state.completed) {
+      return;
+    }
+    if (this.isCancel(keyData)) {
+      this.cancel();
+      return;
+    }
+    if (this.isShiftTab(keyData)) {
+      this.changeFocus(-1);
+      return;
+    }
+    if (this.isTab(keyData)) {
+      this.changeFocus(1);
+      return;
+    }
+
+    switch (this.focusTarget) {
+      case "editor":
+        // Editor owns Enter/Shift+Enter and all cursor/editing semantics. Its
+        // onSubmit callback above is the sole editor submission path. At the
+        // edge of the message, a directional key also moves to the adjacent
+        // form control so the Git selector is reachable without Tab.
+        this.handleEditorInput(keyData);
+        return;
+      case "git":
+        this.handleGitInput(keyData);
+        return;
+      case "actions":
+        this.handleActionInput(keyData);
+        return;
+      default:
+        return;
+    }
+  }
+
+  render(width: number): string[] {
+    const renderWidth = Math.max(1, Math.floor(width));
+    const innerWidth = Math.max(0, renderWidth - 2);
+    const horizontalPadding = renderWidth >= 4 ? 1 : 0;
+    const contentWidth = Math.max(0, innerWidth - horizontalPadding * 2);
+    const lines: string[] = [];
+
+    const focusMarker = (target: ManualAdvisorFocus) =>
+      this.focusTarget === target
+        ? this.options.theme.fg("accent", "▸ ")
+        : "  ";
+    const addLine = (text: string) => {
+      if (renderWidth < 2) {
+        lines.push(truncateToWidth(text, renderWidth, ""));
+        return;
+      }
+      lines.push(
+        `${this.options.theme.fg("border", "│")}${" ".repeat(
+          horizontalPadding
+        )}${truncateToWidth(text, contentWidth, "", true)}${" ".repeat(
+          horizontalPadding
+        )}${this.options.theme.fg("border", "│")}`
+      );
+    };
+    const addWrapped = (
+      text: string,
+      color: "accent" | "text" | "muted" | "dim" = "text"
+    ) => {
+      const content = this.options.theme.fg(color, text);
+      const wrapped = wrapTextWithAnsi(content, Math.max(1, contentWidth - 2));
+      for (const line of wrapped.length > 0 ? wrapped : [""]) {
+        addLine(`  ${line}`);
+      }
+    };
+
+    if (renderWidth >= 2) {
+      const title = truncateToWidth(
+        " Ask Advisor ",
+        Math.max(0, innerWidth),
+        "",
+        false
+      );
+      const titleWidth = visibleWidth(title);
+      const remaining = Math.max(0, innerWidth - titleWidth);
+      const left = Math.floor(remaining / 2);
+      const right = remaining - left;
+      lines.push(
+        this.options.theme.fg("border", `╭${"─".repeat(left)}`) +
+          this.options.theme.fg("accent", title) +
+          this.options.theme.fg("border", `${"─".repeat(right)}╮`)
+      );
+      addLine("");
+    }
+
+    addLine(
+      `${focusMarker("editor")}${this.options.theme.bold(
+        "Message for Advisor (optional)"
+      )}`
+    );
+    const editorWidth = Math.max(1, contentWidth);
+    for (const editorLine of this.editor.render(editorWidth)) {
+      addLine(editorLine);
+    }
+    addLine("");
+    addWrapped(
+      "Automatic context follows your settings: conversation history, tool disclosure, project preferences, redaction, and configured limits remain unchanged.",
+      "muted"
+    );
+    addWrapped(
+      "This dialog does not expose drafts or explicit file handoff controls.",
+      "dim"
+    );
+    addWrapped(
+      "Git None only withholds repository data; it does not remove configured conversation history.",
+      "dim"
+    );
+    addLine("");
+    const gitCeiling = MANUAL_GIT_CONTEXT_COPY[this.options.gitContext].label;
+    addLine(
+      `${focusMarker("git")}${this.options.theme.bold(
+        `Git repository context (max: ${gitCeiling}; ↑/↓ or Space to choose)`
+      )}`
+    );
+    for (let index = 0; index < this.gitLevels.length; index += 1) {
+      const level = this.gitLevels[index];
+      const copy = MANUAL_GIT_CONTEXT_COPY[level];
+      const selected = index === this.gitIndex;
+      const marker = selected ? "●" : "○";
+      const optionFocus = this.focusTarget === "git" && selected ? "▸ " : "  ";
+      const color = selected ? "accent" : "text";
+      addWrapped(
+        `${optionFocus}${marker} ${copy.label} — ${copy.description}`,
+        color
+      );
+    }
+    addLine("");
+
+    let interactionHint =
+      "Enter submit · Shift+Enter newline · Tab/Shift+Tab focus · Esc cancel";
+    if (this.focusTarget === "git") {
+      interactionHint =
+        "↑/↓ or Space choose · Enter next · Tab/Shift+Tab focus · Esc cancel";
+    } else if (this.focusTarget === "actions") {
+      interactionHint =
+        "←/→ choose · Enter/Space activate · Tab/Shift+Tab focus · Esc cancel";
+    }
+    const submit = this.focusTarget === "actions" && this.actionIndex === 0;
+    const submitLabel = submit
+      ? this.options.theme.fg("accent", "[Submit]")
+      : this.options.theme.fg("text", "[Submit]");
+    const cancel = this.focusTarget === "actions" && this.actionIndex === 1;
+    const cancelLabel = cancel
+      ? this.options.theme.fg("accent", "[Cancel]")
+      : this.options.theme.fg("text", "[Cancel]");
+    addLine(
+      `${focusMarker("actions")}                 ${submitLabel}  ${cancelLabel}`
+    );
+    addWrapped(interactionHint, "dim");
+    addLine("");
+
+    if (renderWidth >= 2) {
+      lines.push(
+        this.options.theme.fg(
+          "border",
+          `╰${"─".repeat(Math.max(0, renderWidth - 2))}╯`
+        )
+      );
+    }
+    return lines.map((line) => truncateToWidth(line, renderWidth, ""));
+  }
+
+  private handleEditorInput(keyData: string): void {
+    let direction: -1 | 1 | undefined;
+    if (this.matches(keyData, "tui.editor.cursorDown", Key.down)) {
+      direction = 1;
+    } else if (this.matches(keyData, "tui.editor.cursorUp", Key.up)) {
+      direction = -1;
+    }
+
+    const beforeCursor =
+      direction === undefined ? undefined : this.editor.getCursor();
+    const beforeText =
+      direction === undefined ? undefined : this.editor.getText();
+    this.editor.handleInput(keyData);
+
+    if (direction !== undefined) {
+      const afterCursor = this.editor.getCursor();
+      if (
+        beforeCursor?.line === afterCursor.line &&
+        beforeCursor.col === afterCursor.col &&
+        beforeText === this.editor.getText()
+      ) {
+        this.changeFocus(direction);
+        return;
+      }
+    }
+    this.options.tui.requestRender();
+  }
+
+  private handleGitInput(keyData: string): void {
+    // Accept both the selector bindings and the editor arrow bindings. The
+    // latter keeps the form usable with user keymaps that customize selector
+    // actions, while the raw-key fallback keeps terminal arrow sequences
+    // working across Pi/pi-tui versions.
+    const up =
+      this.matches(keyData, "tui.select.up", Key.up) ||
+      this.matches(keyData, "tui.editor.cursorUp", Key.up);
+    const down =
+      this.matches(keyData, "tui.select.down", Key.down) ||
+      this.matches(keyData, "tui.editor.cursorDown", Key.down);
+    if (up) {
+      if (this.gitIndex === 0) {
+        this.changeFocus(-1);
+      } else {
+        this.moveGit(-1);
+      }
+      return;
+    }
+    if (down) {
+      if (this.gitIndex === this.gitLevels.length - 1) {
+        this.changeFocus(1);
+      } else {
+        this.moveGit(1);
+      }
+      return;
+    }
+    if (matchesKey(keyData, Key.space)) {
+      this.moveGit(1);
+      return;
+    }
+    if (this.matches(keyData, "tui.input.submit", Key.enter)) {
+      this.changeFocus(1);
+      return;
+    }
+    this.options.tui.requestRender();
+  }
+
+  private handleActionInput(keyData: string): void {
+    if (this.matches(keyData, "tui.editor.cursorUp", Key.up)) {
+      this.changeFocus(-1);
+      return;
+    }
+    if (this.matches(keyData, "tui.editor.cursorDown", Key.down)) {
+      this.changeFocus(1);
+      return;
+    }
+    if (matchesKey(keyData, Key.left) || matchesKey(keyData, Key.right)) {
+      this.actionIndex = this.actionIndex === 0 ? 1 : 0;
+      this.options.tui.requestRender();
+      return;
+    }
+    if (
+      this.matches(keyData, "tui.input.submit", Key.enter) ||
+      matchesKey(keyData, Key.space)
+    ) {
+      if (this.actionIndex === 0) {
+        this.submit();
+      } else {
+        this.cancel();
+      }
+    }
+  }
+
+  private changeFocus(direction: -1 | 1): void {
+    const targets: ManualAdvisorFocus[] = ["editor", "git", "actions"];
+    const current = targets.indexOf(this.focusTarget);
+    this.focusTarget =
+      targets[(current + direction + targets.length) % targets.length];
+    this.updateEditorFocus();
+    this.options.tui.requestRender();
+  }
+
+  private moveGit(direction: -1 | 1): void {
+    if (this.gitLevels.length > 0) {
+      this.gitIndex =
+        (this.gitIndex + direction + this.gitLevels.length) %
+        this.gitLevels.length;
+    }
+    this.options.tui.requestRender();
+  }
+
+  private updateEditorFocus(): void {
+    this.editor.focused = this.state.focused && this.focusTarget === "editor";
+  }
+
+  private isTab(keyData: string): boolean {
+    return (
+      this.matches(keyData, "tui.input.tab", Key.tab) &&
+      !matchesKey(keyData, Key.shift("tab"))
+    );
+  }
+
+  private isShiftTab(keyData: string): boolean {
+    return matchesKey(keyData, Key.shift("tab"));
+  }
+
+  private isCancel(keyData: string): boolean {
+    return (
+      matchesKey(keyData, Key.escape) ||
+      this.options.keybindings.matches(keyData, "tui.select.cancel")
+    );
+  }
+
+  private matches(
+    keyData: string,
+    action: keyof Keybindings,
+    fallback: KeyId
+  ): boolean {
+    return (
+      this.options.keybindings.matches(keyData, action) ||
+      matchesKey(keyData, fallback)
+    );
+  }
+
+  private submit(message = this.editor.getText()): void {
+    if (this.state.completed) {
+      return;
+    }
+    this.state.completed = true;
+    this.options.onSubmit({
+      gitContext: this.gitLevels[this.gitIndex] ?? "off",
+      ...(message ? { message } : {}),
+    });
+  }
+
+  private cancel(): void {
+    if (this.state.completed) {
+      return;
+    }
+    this.state.completed = true;
+    this.options.onCancel();
   }
 }
 
