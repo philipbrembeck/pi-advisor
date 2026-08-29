@@ -8,7 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
-- Added a centered TUI overlay for `/advisor-manual` with an editable prefilled focus message, optional general review, a Git context selector bounded by the configured disclosure ceiling, and live Scout/Advisor progress; non-TUI invocations remain immediate.
+- Added a centered TUI overlay for `/advisor-manual` with an editable prefilled focus message, optional general review, a Git context selector bounded by the configured disclosure ceiling, and live Scout/Advisor progress without duplicate footer status text; non-TUI invocations remain immediate.
 - Reworked `/advisor-settings` into a compact Pi-style searchable settings list with fuzzy search, arrow-key value adjustment, and immediate persistence for every valid change.
 - Restored the animated Simple mode indicator and added a context-depth meter spanning recent history to the complete branch at `ALL`.
 - Added enabled-by-default per-response usage detail display plus an independent, opt-in `showUsageFooter` setting for cumulative Advisor footer usage; both are presentation-only and do not change usage accounting.

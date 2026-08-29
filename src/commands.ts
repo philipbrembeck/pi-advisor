@@ -334,7 +334,8 @@ export const registerCommands = (
 ) => {
   const advisorSessionState =
     dependencies.sessionState ?? defaultAdvisorSessionState;
-  const scoutStatus = dependencies.statusManager ?? new ScoutStatusManager();
+  const scoutStatus =
+    dependencies.statusManager ?? new ScoutStatusManager(false);
   const flowEnabled = () => pi.getActiveTools().includes("ask_advisor");
   const requestAdvisor =
     dependencies.consult ??
@@ -375,18 +376,12 @@ export const registerCommands = (
     notifyHerdrAdvisorFailure("Advisor budget exhausted", message);
   };
 
-  const setManualStatus = (
-    ctx: ExtensionContext,
-    controller: AbortController,
-    token: symbol,
-    status: string | undefined
-  ) => {
-    if (
-      ctx.hasUI &&
-      manualConsultations.get(controller) === token &&
-      !controller.signal.aborted
-    ) {
-      ctx.ui.setStatus("advisor-manual", status);
+  // A status update with an undefined value is an invisible render pulse. The
+  // transcript owns manual progress now, so no consultation text is kept in the
+  // footer while this pulse still drives the live spinner.
+  const requestManualRender = (ctx: ExtensionContext) => {
+    if (ctx.hasUI) {
+      ctx.ui.setStatus("advisor-manual", undefined);
     }
   };
 
@@ -400,12 +395,7 @@ export const registerCommands = (
   ) => {
     herdrAdvisorActivity.start();
     progress.phase = "preparing";
-    let currentStatus = "Advisor preparing…";
-    const updateStatus = (status: string) => {
-      currentStatus = status;
-      setManualStatus(ctx, controller, scoutStatusToken, status);
-    };
-    updateStatus(currentStatus);
+    requestManualRender(ctx);
     if (ctx.hasUI) {
       const timer = setInterval(() => {
         if (
@@ -415,7 +405,7 @@ export const registerCommands = (
           clearInterval(timer);
           return;
         }
-        ctx.ui.setStatus("advisor-manual", currentStatus);
+        requestManualRender(ctx);
       }, 80);
       manualProgressTimers.set(controller, timer);
     }
@@ -431,14 +421,7 @@ export const registerCommands = (
         progress.phase = "active";
         progress.thinking = thinking;
         progress.text = text;
-        let status = "Advisor working…";
-        if (thinking.trim()) {
-          status = "Advisor thinking…";
-        }
-        if (text.trim()) {
-          status = "Advisor responding…";
-        }
-        updateStatus(status);
+        requestManualRender(ctx);
       },
       (event) => {
         if (!controller.signal.aborted) {
@@ -446,11 +429,7 @@ export const registerCommands = (
           scoutDetails = appendScoutLifecycleEntry(pi, event, scoutDetails);
           progress.scout = scoutDetails;
           progress.phase = "active";
-          if (event.type === "call" || event.type === "chunk") {
-            updateStatus("Advisor Scout curating…");
-          } else if (event.type === "success" || event.type === "fallback") {
-            updateStatus("Advisor working…");
-          }
+          requestManualRender(ctx);
         }
       },
       gitContext
@@ -528,12 +507,7 @@ export const registerCommands = (
           clearInterval(timer);
           manualProgressTimers.delete(controller);
         }
-        if (
-          ctx.hasUI &&
-          manualConsultations.get(controller) === scoutStatusToken
-        ) {
-          ctx.ui.setStatus("advisor-manual", undefined);
-        }
+        requestManualRender(ctx);
         scoutStatus.release(ctx, scoutStatusToken);
         manualConsultations.delete(controller);
         herdrAdvisorActivity.finish();
@@ -720,7 +694,6 @@ export const registerCommands = (
 
   pi.on("session_shutdown", (_event, ctx) => {
     if (ctx.hasUI) {
-      ctx.ui.setStatus("advisor-manual", undefined);
       ctx.ui.setStatus("advisor-usage", undefined);
     }
     for (const [controller, token] of manualConsultations) {

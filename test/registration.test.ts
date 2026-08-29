@@ -793,14 +793,7 @@ describe("Extension Registration", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(chunks).toEqual(["thinking", "response"]);
-    expect(statuses).toEqual([
-      "Advisor preparing…",
-      "Advisor Scout curating…",
-      "Advisor working…",
-      "Advisor thinking…",
-      "Advisor responding…",
-      undefined,
-    ]);
+    expect(statuses.every((status) => status === undefined)).toBe(true);
   });
 
   test("adds an immediate Advisor call entry to the transcript", async () => {
@@ -985,7 +978,7 @@ describe("Extension Registration", () => {
     expect(entries).toEqual(["advisor-manual-call"]);
   });
 
-  test("clears Scout status on shutdown when consultation never settles", async () => {
+  test("keeps manual Scout progress out of the footer", async () => {
     const commands = new Map<string, any>();
     const events = new Map<string, any>();
     const statuses: Array<string | undefined> = [];
@@ -1016,9 +1009,9 @@ describe("Extension Registration", () => {
       },
     } as any;
     await commands.get("advisor-manual").handler("", ctx);
-    expect(statuses.at(-1)).toBe("Advisor Scout curating…");
+    expect(statuses.every((status) => status === undefined)).toBe(true);
     events.get("session_shutdown")?.({ reason: "reload" }, ctx);
-    expect(statuses.at(-1)).toBeUndefined();
+    expect(statuses.every((status) => status === undefined)).toBe(true);
   });
 
   test("replaces an in-flight manual consultation with a newer request", async () => {

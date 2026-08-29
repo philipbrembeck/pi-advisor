@@ -1118,6 +1118,11 @@ export class ScoutStatusManager {
   readonly #active = new Set<symbol>();
   readonly #known = new Set<symbol>();
   readonly #retired = new Set<symbol>();
+  private readonly showStatus: boolean;
+
+  constructor(showStatus = true) {
+    this.showStatus = showStatus;
+  }
 
   register(token: symbol) {
     if (!this.#retired.has(token)) {
@@ -1132,7 +1137,9 @@ export class ScoutStatusManager {
     this.#known.add(token);
     if (event.type === "call" || event.type === "chunk") {
       this.#active.add(token);
-      ctx.ui.setStatus("advisor-scout", "Scout curating…");
+      if (this.showStatus) {
+        ctx.ui.setStatus("advisor-scout", "Scout curating…");
+      }
       return;
     }
     this.release(ctx, token);
@@ -1142,7 +1149,7 @@ export class ScoutStatusManager {
     this.#active.delete(token);
     this.#known.delete(token);
     this.#retired.add(token);
-    if (!ctx.hasUI) {
+    if (!(ctx.hasUI && this.showStatus)) {
       return;
     }
     ctx.ui.setStatus(
@@ -1157,7 +1164,7 @@ export class ScoutStatusManager {
     }
     this.#known.clear();
     this.#active.clear();
-    if (ctx.hasUI) {
+    if (ctx.hasUI && this.showStatus) {
       ctx.ui.setStatus("advisor-scout", undefined);
     }
   }
