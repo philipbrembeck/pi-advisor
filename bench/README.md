@@ -79,23 +79,36 @@ part of the repository:
 
 ```bash
 export BENCH_REACTBENCH_ROOT=/path/to/reactbench
-export BENCH_PI_ADAPTER=/path/to/pi-reactbench-adapter
+export BENCH_PI_ADVISOR_ADAPTER=/path/to/pi-advisor-harbor-adapter
+export BENCH_PI_ADVISOR_EXTENSION=/path/to/pi-advisor/extensions/index.ts
+export BENCH_PI_ADVISOR_VERSION=0.5.0
+export BENCH_BASE_URL=https://provider.example/v1
+export BENCH_API_KEY=replace-with-a-secret
 
 BENCH_LIVE=1 bun run bench:screen \
   --config /tmp/pi-advisor-benchmark.json
 ```
 
 The adapter receives one isolated trial at a time with the task path, seed,
-arm, pinned model/effort values, and artifact directory. It must print one
-structured result line:
+arm, pinned model/effort values, and artifact directory. It must load the
+pinned `pi-advisor` extension, refuse plain Pi, and print both records:
 
 ```text
+BENCH_ADVISOR_ATTESTATION={"adapter":"pi-advisor-harbor","extension":"pi-advisor-flow","extensionVersion":"0.5.0","loaded":true,"mode":"advisor","advisorCalls":1}
 BENCH_RESULT={"passed":true,"cost":0.12,"consultations":1,"taskId":"...","requests":[...]}
 ```
+
+The `E+A` result must attest at least one Advisor consultation. The `E`, `F`,
+and optional `F′` results must attest the extension in executor mode. A result
+without the attestation is rejected as plain-Pi output. The current repository
+contains the fail-closed boundary and protocol tests; a credentialed executable
+adapter still has to be supplied and reviewed before screening.
 
 Run Stage 2 only after Stage 1 has produced a screening report and the
 corresponding preregistration section was committed. If `BENCH_SCREEN_REPORT`
 is omitted, the newest `*-screen.json` report under `bench/reports/` is used.
+`BENCH_PI_ADVISOR_CREDENTIAL_ENV` may name a different credential variable;
+it defaults to `BENCH_API_KEY`.
 
 ```bash
 export BENCH_SCREEN_REPORT=/path/to/screen-report.json

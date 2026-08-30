@@ -9,7 +9,7 @@ import {
 import { DEFAULT_CONFIG, defaultPricingFor, modelPin } from "./config.js";
 import { defaultControlAdvice, runControls } from "./controls.js";
 import { hashTree } from "./fixture.js";
-import { createPiReactBenchAdapter } from "./pi-adapter.js";
+import { createPiAdvisorHarborAdapter } from "./pi-advisor-adapter.js";
 import { requireCommittedPreregistration } from "./preregistration.js";
 import {
   discoverReactBenchTasks,
@@ -128,7 +128,9 @@ export const runScreening = async ({
   }
   if (!runner) {
     const command =
-      process.env.BENCH_PI_ADAPTER ?? process.env.BENCH_REACTBENCH_RUNNER;
+      process.env.BENCH_PI_ADVISOR_ADAPTER ??
+      process.env.BENCH_PI_ADAPTER ??
+      process.env.BENCH_REACTBENCH_RUNNER;
     if (!command) {
       const report = unavailable(
         config,
@@ -140,7 +142,7 @@ export const runScreening = async ({
       }
       return report;
     }
-    runner = createPiReactBenchAdapter(command);
+    runner = createPiAdvisorHarborAdapter(command);
     if (!runner) {
       throw new Error("Pi ReactBench adapter could not be initialized.");
     }

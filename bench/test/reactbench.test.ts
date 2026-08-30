@@ -41,6 +41,17 @@ describe("ReactBench adapter boundary", () => {
     }
   });
 
+  test("preserves a separate Advisor attestation record", () => {
+    const result = parseReactBenchResult(
+      [
+        `BENCH_ADVISOR_ATTESTATION=${JSON.stringify({ loaded: true })}`,
+        'BENCH_RESULT={"passed":true}',
+      ].join("\n"),
+      "task"
+    );
+    expect(result.attestation).toEqual({ loaded: true });
+  });
+
   test("rejects malformed adapter output", () => {
     expect(() => parseReactBenchResult("BENCH_RESULT={}", "task")).toThrow(
       "boolean passed"

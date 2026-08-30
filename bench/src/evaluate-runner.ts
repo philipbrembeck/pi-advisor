@@ -21,7 +21,7 @@ import {
   reweightCostQuality,
 } from "./evaluate.js";
 import { hashFile, hashTree } from "./fixture.js";
-import { createPiReactBenchAdapter } from "./pi-adapter.js";
+import { createPiAdvisorHarborAdapter } from "./pi-advisor-adapter.js";
 import { requireCommittedPreregistration } from "./preregistration.js";
 import {
   discoverReactBenchTasks,
@@ -394,7 +394,9 @@ export const runEvaluation = async ({
   if (!runner) {
     const sourceRoot = process.env.BENCH_REACTBENCH_ROOT;
     const command =
-      process.env.BENCH_PI_ADAPTER ?? process.env.BENCH_REACTBENCH_RUNNER;
+      process.env.BENCH_PI_ADVISOR_ADAPTER ??
+      process.env.BENCH_PI_ADAPTER ??
+      process.env.BENCH_REACTBENCH_RUNNER;
     if (!(sourceRoot && command)) {
       const report = unavailable(
         config,
@@ -406,7 +408,7 @@ export const runEvaluation = async ({
       }
       return report;
     }
-    runner = createPiReactBenchAdapter(command);
+    runner = createPiAdvisorHarborAdapter(command);
     if (!runner) {
       throw new Error("Pi ReactBench adapter could not be initialized.");
     }

@@ -19,6 +19,7 @@ export interface ReactBenchTrialRequest {
 }
 
 export interface ReactBenchTrialResult {
+  attestation?: unknown;
   consultations: number;
   cost: CostValue;
   passed: boolean;
@@ -34,24 +35,37 @@ export interface ReactBenchTrialRunner {
 
 const RESULT_LINE_BREAK = /\r?\n/;
 const REACT_BENCH_TASK = /fix-react|write-react/;
+const ADVISOR_ATTESTATION_PREFIX = "BENCH_ADVISOR_ATTESTATION=";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === "object" && !Array.isArray(value);
 
-export const parseReactBenchResult = (
-  output: string,
-  fallbackTaskId: string
-): ReactBenchTrialResult => {
-  const line = output
-    .split(RESULT_LINE_BREAK)
-    .map((value) => value.trim())
+const lastLineWithPrefix = (lines: string[], prefix: string) =>
+  lines
+    .slice()
     .reverse()
-    .find((value) => value.startsWith("BENCH_RESULT="));
+    .find((value) => value.startsWith(prefix));
+
+const parseAttestationLine = (lines: string[]) => {
+  const line = lastLineWithPrefix(lines, ADVISOR_ATTESTATION_PREFIX);
   if (!line) {
-    throw new Error(
-      "ReactBench adapter did not emit a BENCH_RESULT=<json> record."
+    return;
+  }
+  try {
+    return JSON.parse(line.slice(ADVISOR_ATTESTATION_PREFIX.length)) as unknown;
+  } catch (error) {
+    throw new TypeError(
+      "ReactBench adapter emitted invalid Advisor attestation.",
+      {
+        cause: error,
+      }
     );
   }
+};
+
+const parseResultObject = (
+  line: string
+): Record<string, unknown> & { passed: boolean } => {
   let parsed: unknown;
   try {
     parsed = JSON.parse(line.slice("BENCH_RESULT=".length));
@@ -63,7 +77,11 @@ export const parseReactBenchResult = (
   if (!isRecord(parsed) || typeof parsed.passed !== "boolean") {
     throw new TypeError("ReactBench result must contain boolean passed.");
   }
-  const consultations = parsed.consultations ?? 0;
+  return { ...parsed, passed: parsed.passed };
+};
+
+const parseConsultations = (value: Record<string, unknown>) => {
+  const consultations = value.consultations ?? 0;
   if (
     typeof consultations !== "number" ||
     !Number.isSafeInteger(consultations) ||
@@ -73,7 +91,11 @@ export const parseReactBenchResult = (
       "ReactBench result consultations must be a non-negative integer."
     );
   }
-  const cost = parsed.cost === undefined ? "unavailable" : parsed.cost;
+  return consultations;
+};
+
+const parseCost = (value: Record<string, unknown>): CostValue => {
+  const cost = value.cost === undefined ? "unavailable" : value.cost;
   if (
     cost !== "unavailable" &&
     (typeof cost !== "number" || !Number.isFinite(cost) || cost < 0)
@@ -82,7 +104,11 @@ export const parseReactBenchResult = (
       "ReactBench result cost must be non-negative or unavailable."
     );
   }
-  const { requests } = parsed;
+  return cost as CostValue;
+};
+
+const parseRequests = (value: Record<string, unknown>) => {
+  const { requests } = value;
   if (
     requests !== undefined &&
     (!Array.isArray(requests) ||
@@ -93,13 +119,30 @@ export const parseReactBenchResult = (
   ) {
     throw new TypeError("ReactBench result requests must be an object array.");
   }
+  return requests as RecordedProviderRequest[] | undefined;
+};
+
+export const parseReactBenchResult = (
+  output: string,
+  fallbackTaskId: string
+): ReactBenchTrialResult => {
+  const lines = output.split(RESULT_LINE_BREAK).map((value) => value.trim());
+  const line = lastLineWithPrefix(lines, "BENCH_RESULT=");
+  if (!line) {
+    throw new Error(
+      "ReactBench adapter did not emit a BENCH_RESULT=<json> record."
+    );
+  }
+  const parsed = parseResultObject(line);
+  const lineAttestation = parseAttestationLine(lines);
+  const attestation = parsed.attestation ?? lineAttestation;
+  const requests = parseRequests(parsed);
   return {
-    consultations,
-    cost: cost as CostValue,
+    ...(attestation === undefined ? {} : { attestation }),
+    consultations: parseConsultations(parsed),
+    cost: parseCost(parsed),
     passed: parsed.passed,
-    ...(requests === undefined
-      ? {}
-      : { requests: requests as RecordedProviderRequest[] }),
+    ...(requests === undefined ? {} : { requests }),
     taskId: typeof parsed.taskId === "string" ? parsed.taskId : fallbackTaskId,
     ...(typeof parsed.trajectoryPath === "string"
       ? { trajectoryPath: parsed.trajectoryPath }
