@@ -3,10 +3,6 @@
 `bench/` is a repository-only benchmark for the Executor/Advisor flow. It is
 not included in the published npm package.
 
-> [!CAUTION]
-> This is a fully **vibe coded** benchmark harness. It is not a general-purpose benchmark framework and does not attempt to measure provider performance.
-> It's sole purpose is to back the pi-advisor-flow with *somewhat* realistic numbers and to check if they change signifciantly during release cycles or with new experimental features.
-
 The benchmark has three isolated tiers:
 
 | Tier | Command | What it can establish |
