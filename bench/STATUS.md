@@ -4,7 +4,7 @@ State values: `not-started`, `in-progress`, `done`.
 
 | Phase | State | Current blocker / exit note |
 | --- | --- | --- |
-| 0 — scaffolding, controls, Harbor spike | in-progress | Colima 0.10.3 cannot fetch its aarch64 VM image (`clonefile failed: no such file or directory`); no container or provider-reachability test has run, and the outside-Harbor fallback is not yet selected. |
+| 0 — scaffolding, controls, Harbor spike | in-progress | Harbor oracle canary passes and an allowlisted Pi probe reaches the provider endpoint with a deliberate 401; a real credentialed run and the benchmark adapter remain. |
 | 1 — Tier 1 replay | done | Offline replay passes 18 gate cases, zero privacy leaks, pin assertions, context, budget, and determinism checks; CI runs `bench:replay`. |
 | 2 — Tier 2 bootstrap corpus | done | 24 derived items (12 positive/12 negative) load successfully; provenance and scorer-key privacy are checked in replay and tests. |
 | 3 — Q1 scoring and nightly run | in-progress | Offline 24-item scoring, controls, budget checks, reports, and nightly workflow are ready; live provider pricing/credentials are unavailable, so Scout numbers and the live <$10 report remain unmeasured. |

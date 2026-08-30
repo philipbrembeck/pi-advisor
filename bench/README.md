@@ -62,6 +62,18 @@ Tier 3 requires all of the following:
 3. An executable Pi adapter command.
 4. A live provider endpoint and non-zero pricing.
 
+Before running Harbor, verify that the Docker CLI exposes all three commands
+used by its local backend:
+
+```bash
+docker info
+docker compose version
+docker buildx version
+```
+
+A standalone `docker-compose` executable is not enough; Harbor invokes the
+Compose and Buildx CLI plugins as `docker compose` and `docker buildx`.
+
 Set paths for the current checkout; these are operator-supplied and are not
 part of the repository:
 
@@ -121,18 +133,23 @@ keys contaminate the models.
 
 ## Harbor provider access
 
-The feasibility spike recorded that ReactBench was available at commit
-`11ff042e60ec83a613053fbd721a54ed4dbfdf6f` and that Harbor exposed its task
-runner and shipped adapters. The spike could not start a container because the
-configured Docker/Colima daemon was unavailable; the Colima VM image download
-also failed with `clonefile failed: no such file or directory`. Therefore
-provider reachability from an agent container remains untested.
+ReactBench is pinned to commit
+`11ff042e60ec83a613053fbd721a54ed4dbfdf6f`, and Harbor exposes the task runner
+and shipped adapters. The default Colima profile was rebuilt after its cached
+VM image and disk link were missing.
 
-**Gate A is unresolved.** The outside-Harbor Pi adapter is only a provisional
-fallback proposal. It has not been selected as the authoritative harness, and
-no corpus is claimed to be screened until the runtime path and provider access
-are recorded in a successful live run. See `bench/STATUS.md` for the current
-phase state.
+The Gate A canary then passed: Harbor ran the `hello-react` oracle task with
+one trial, no exception, and reward/tests/React Doctor metrics all equal to
+`1.0`. A separate allowlisted probe also ran Harbor's Pi agent inside a task
+container. Pi reached `https://api.openai.com/v1/models` and received the
+expected `401` response for a deliberately invalid probe key. That verifies the
+container-to-provider network path without making a paid model request.
+
+**Gate A status:** container startup, ReactBench grading, and allowlisted
+provider transport are validated. A real authenticated provider run is still
+required before screening; no model-quality or economic result is claimed.
+The benchmark's Pi/ReactBench adapter is still required to make the pinned
+Executor/Advisor flow reproducible. See `bench/STATUS.md` for phase state.
 
 ## Provenance and licensing
 
