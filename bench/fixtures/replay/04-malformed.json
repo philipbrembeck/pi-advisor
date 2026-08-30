@@ -1,0 +1,15 @@
+{
+  "id": "04-malformed",
+  "gate": {
+    "case": "malformed",
+    "failureMode": "block-session",
+    "response": "Decision: proceed now\nThis is not a valid header.",
+    "expected": "failure"
+  },
+  "payload": {
+    "conversation": "User: A malformed gate response must fail closed.",
+    "draft": "Keep the safety boundary.",
+    "timestamp": "volatile-4"
+  },
+  "volatileFields": ["timestamp"]
+}

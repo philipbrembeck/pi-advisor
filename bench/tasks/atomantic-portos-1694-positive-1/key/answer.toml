@@ -1,0 +1,5 @@
+defectClass = "catalog-kind-metadata"
+findingId = "react-doctor/catalog-kind-metadata"
+reasonTokens = ["catalog metadata", "Rule", "LLM"]
+targetFile = "client/src/components/findings/FindingsTriage.tsx"
+targetSymbol = "FindingsTriage"

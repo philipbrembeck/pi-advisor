@@ -18,5 +18,11 @@
       "@earendil-works/pi-tui/*": ["./node_modules/@earendil-works/pi-tui/*"]
     }
   },
-  "include": ["src/**/*", "extensions/**/*", "test/**/*"]
+  "include": [
+    "src/**/*",
+    "extensions/**/*",
+    "test/**/*",
+    "bench/src/**/*",
+    "bench/test/**/*"
+  ]
 }

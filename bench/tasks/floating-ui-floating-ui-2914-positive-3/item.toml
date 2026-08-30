@@ -1,0 +1,4 @@
+id = "floating-ui-floating-ui-2914-positive-3"
+polarity = "positive"
+origin = "https://github.com/floating-ui/floating-ui/pull/2914 (derived decision fixture; upstream task content not vendored)"
+reactBenchCommit = "11ff042e60ec83a613053fbd721a54ed4dbfdf6f"

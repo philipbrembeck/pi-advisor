@@ -1,0 +1,5 @@
+defectClass = "catalog-map-lookup"
+findingId = "react-doctor/catalog-map-lookup"
+reasonTokens = ["disabled checks", "complete catalog", "Map"]
+targetFile = "client/src/components/findings/FindingsTriage.tsx"
+targetSymbol = "GroupDescription"

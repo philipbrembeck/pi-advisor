@@ -1,0 +1,5 @@
+defectClass = "ssr-loading-skeleton"
+findingId = "react-doctor/ssr-loading-skeleton"
+reasonTokens = ["loading skeleton", "breadcrumbs", "navigation trigger"]
+targetFile = "src/app-layout/index.tsx"
+targetSymbol = "AppLayoutToolbar"

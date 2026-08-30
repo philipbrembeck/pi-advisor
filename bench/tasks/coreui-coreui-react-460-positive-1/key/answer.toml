@@ -1,0 +1,5 @@
+defectClass = "nested-open-state"
+findingId = "react-doctor/nested-open-state"
+reasonTokens = ["nested subgroup", "restore", "parent collapse"]
+targetFile = "packages/coreui-react/src/components/nav/CSidebarNav.tsx"
+targetSymbol = "CSidebarNav"

@@ -1,0 +1,11 @@
+{
+  "id": "control-positive",
+  "polarity": "positive",
+  "key": {
+    "defectClass": "stale-effect-dependency",
+    "targetFile": "src/Profile.tsx",
+    "targetSymbol": "ProfileCard",
+    "reasonTokens": ["dependency", "stale"]
+  },
+  "traps": []
+}

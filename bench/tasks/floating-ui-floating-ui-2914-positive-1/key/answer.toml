@@ -1,0 +1,5 @@
+defectClass = "controlled-selection-focus"
+findingId = "react-doctor/controlled-selection-focus"
+reasonTokens = ["controlled selectedIndex", "focus", "external update"]
+targetFile = "packages/react/src/hooks/useListNavigation.ts"
+targetSymbol = "useListNavigation"

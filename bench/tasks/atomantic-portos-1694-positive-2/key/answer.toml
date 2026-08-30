@@ -1,0 +1,5 @@
+defectClass = "description-disclosure-state"
+findingId = "react-doctor/description-disclosure-state"
+reasonTokens = ["aria-expanded", "aria-controls", "description"]
+targetFile = "client/src/components/findings/FindingsTriage.tsx"
+targetSymbol = "FindingGroup"

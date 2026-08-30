@@ -1,0 +1,5 @@
+defectClass = "ssr-hydration-shape"
+findingId = "react-doctor/ssr-hydration-shape"
+reasonTokens = ["server markup", "hydration", "content region"]
+targetFile = "src/app-layout/index.tsx"
+targetSymbol = "AppLayout"

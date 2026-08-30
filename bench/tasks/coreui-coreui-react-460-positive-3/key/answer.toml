@@ -1,0 +1,5 @@
+defectClass = "active-branch-reveal"
+findingId = "react-doctor/active-branch-reveal"
+reasonTokens = ["active link", "ancestor groups", "root"]
+targetFile = "packages/coreui-react/src/components/nav/CSidebarNav.tsx"
+targetSymbol = "visibleGroups"

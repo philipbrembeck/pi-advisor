@@ -1,0 +1,16 @@
+{
+  "id": "control-negative",
+  "polarity": "negative",
+  "key": {
+    "defectClass": "sound-direction",
+    "targetFile": "src/Profile.tsx",
+    "targetSymbol": "ProfileCard",
+    "reasonTokens": ["preserve"]
+  },
+  "traps": [
+    {
+      "choice": "keep the memoized selector",
+      "tokens": ["remove", "memoized selector"]
+    }
+  ]
+}

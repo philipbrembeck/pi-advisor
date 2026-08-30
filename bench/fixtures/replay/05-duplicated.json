@@ -1,0 +1,15 @@
+{
+  "id": "05-duplicated",
+  "gate": {
+    "case": "duplicated",
+    "failureMode": "block-tool",
+    "response": "Decision: proceed\nDecision: proceed",
+    "expected": "failure"
+  },
+  "payload": {
+    "conversation": "User: Duplicate decisions are invalid.",
+    "draft": "Do not accept an ambiguous response.",
+    "timestamp": "volatile-5"
+  },
+  "volatileFields": ["timestamp"]
+}

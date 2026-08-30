@@ -1,0 +1,55 @@
+{
+  "budgetUsd": 10,
+  "fixtureRoot": "bench/fixtures",
+  "gateFailureModes": ["block-session", "block-tool", "warn-and-continue"],
+  "pricing": {
+    "openai-codex/gpt-5.6-luna": {
+      "inputPerMillion": 0,
+      "outputPerMillion": 0,
+      "cacheReadPerMillion": 0,
+      "cacheWritePerMillion": 0
+    },
+    "openai-codex/gpt-5.6-sol": {
+      "inputPerMillion": 0,
+      "outputPerMillion": 0,
+      "cacheReadPerMillion": 0,
+      "cacheWritePerMillion": 0
+    }
+  },
+  "modelPins": {
+    "executor": {
+      "model": "openai-codex/gpt-5.6-luna",
+      "effort": "max",
+      "role": "executor"
+    },
+    "cheapAdvisor": {
+      "model": "openai-codex/gpt-5.6-luna",
+      "effort": "medium",
+      "role": "advisor"
+    },
+    "decisionAdvisor": {
+      "model": "openai-codex/gpt-5.6-sol",
+      "effort": "medium",
+      "role": "advisor"
+    },
+    "frontier": {
+      "model": "openai-codex/gpt-5.6-sol",
+      "effort": "max",
+      "role": "executor"
+    },
+    "frontierMedium": {
+      "model": "openai-codex/gpt-5.6-sol",
+      "effort": "medium",
+      "role": "executor"
+    },
+    "judge": {
+      "model": "openai-codex/gpt-5.6-sol",
+      "effort": "medium",
+      "role": "judge"
+    }
+  },
+  "reactBenchCommit": "11ff042e60ec83a613053fbd721a54ed4dbfdf6f",
+  "reactDoctorVersion": "pinned-by-reactbench",
+  "reportRoot": "bench/reports",
+  "seed": 1
+}

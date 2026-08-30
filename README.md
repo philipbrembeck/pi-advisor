@@ -77,6 +77,7 @@ Read [Privacy and data handling](https://github.com/philipbrembeck/pi-advisor/bl
 - [Configuration and automatic loop gates](https://github.com/philipbrembeck/pi-advisor/blob/main/docs/configuration.md)
 - [Privacy and data handling](https://github.com/philipbrembeck/pi-advisor/blob/main/docs/privacy.md)
 - [Development](https://github.com/philipbrembeck/pi-advisor/blob/main/docs/development.md)
+- [Benchmarking](docs/benchmark.md)
 - [Changelog](CHANGELOG.md)
 - [MIT License](LICENSE)
 - [npm package](https://www.npmjs.com/package/pi-advisor-flow)

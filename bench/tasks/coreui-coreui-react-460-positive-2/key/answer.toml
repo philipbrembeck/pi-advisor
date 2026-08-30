@@ -1,0 +1,5 @@
+defectClass = "parent-collapse-restore"
+findingId = "react-doctor/parent-collapse-restore"
+reasonTokens = ["accordion siblings", "open state", "nested"]
+targetFile = "packages/coreui-react/src/components/nav/CSidebarNav.tsx"
+targetSymbol = "CNavGroup"

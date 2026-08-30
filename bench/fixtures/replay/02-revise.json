@@ -1,0 +1,15 @@
+{
+  "id": "02-revise",
+  "gate": {
+    "case": "revise",
+    "failureMode": "block-tool",
+    "response": "Decision: revise\nRetry the repeated action.",
+    "expected": "revise"
+  },
+  "payload": {
+    "conversation": "User: The same test failed twice.",
+    "draft": "Repeat the exact command.",
+    "timestamp": "volatile-2"
+  },
+  "volatileFields": ["timestamp"]
+}

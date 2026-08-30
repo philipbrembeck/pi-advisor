@@ -1,0 +1,1 @@
+"Review a materially equivalent implementation direction for the ReactBench-derived lobehub-lobe-ui-508 task. The accordion direction preserves stable item identity and intentionally opens the existing items. Treat the existing behavior described by the draft as intentional unless the evidence identifies a concrete defect."

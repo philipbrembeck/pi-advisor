@@ -34,4 +34,5 @@ jobs:
           bun test
           bun run lint
           bun run package:check
+          bun run bench:replay
           bun audit --audit-level=high

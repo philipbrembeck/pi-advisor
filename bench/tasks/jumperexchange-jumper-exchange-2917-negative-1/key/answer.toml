@@ -1,0 +1,4 @@
+defectClass = "sound-reference-direction"
+reasonTokens = ["preserve", "reference behavior"]
+targetFile = "src/components/AnimatedBackgroundImage.tsx"
+targetSymbol = "AnimatedBackgroundImage"

@@ -1,0 +1,4 @@
+id = "jumperexchange-jumper-exchange-2917-negative-3"
+polarity = "negative"
+origin = "https://github.com/jumperexchange/jumper-exchange/pull/2917 (derived decision fixture; upstream task content not vendored)"
+reactBenchCommit = "11ff042e60ec83a613053fbd721a54ed4dbfdf6f"

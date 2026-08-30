@@ -1,0 +1,4 @@
+id = "frankchen021-datastoria-199-negative-1"
+polarity = "negative"
+origin = "https://github.com/FrankChen021/datastoria/pull/199 (derived decision fixture; upstream task content not vendored)"
+reactBenchCommit = "11ff042e60ec83a613053fbd721a54ed4dbfdf6f"

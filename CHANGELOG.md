@@ -4,6 +4,16 @@ All notable changes to this project are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Added
+
+- Added a repository-only failsafe benchmark with an offline replay tier, a
+  24-item decision-point corpus, pinned live-tier controls, hard budget limits,
+  and task-level uplift/dominance reporting. See [Benchmarking](docs/benchmark.md).
+- Ensured configured Advisor reasoning effort reaches the provider-facing
+  request field used by current Pi AI adapters.
+
 ## 0.5.0
 
 ### Changed

@@ -1,0 +1,15 @@
+{
+  "id": "06-contradictory",
+  "gate": {
+    "case": "contradictory",
+    "failureMode": "warn-and-continue",
+    "response": "Decision: proceed\nDecision: blocked",
+    "expected": "failure"
+  },
+  "payload": {
+    "conversation": "User: Contradictory decisions must remain visible.",
+    "draft": "Do not silently choose one decision.",
+    "timestamp": "volatile-6"
+  },
+  "volatileFields": ["timestamp"]
+}

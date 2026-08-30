@@ -1,0 +1,5 @@
+defectClass = "keyboard-navigation-ref"
+findingId = "react-doctor/keyboard-navigation-ref"
+reasonTokens = ["focused item", "arrow-key", "index"]
+targetFile = "packages/react/src/hooks/useListNavigation.ts"
+targetSymbol = "indexRef"

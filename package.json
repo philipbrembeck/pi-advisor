@@ -28,6 +28,10 @@
     "README.md"
   ],
   "scripts": {
+    "bench:decisions": "bun bench/src/cli.ts decisions",
+    "bench:evaluate": "bun bench/src/cli.ts evaluate",
+    "bench:replay": "bun bench/src/cli.ts replay",
+    "bench:screen": "bun bench/src/cli.ts screen",
     "format": "bunx ultracite fix --linter-enabled=false",
     "lint": "bunx ultracite check",
     "lint:fix": "bunx ultracite fix",

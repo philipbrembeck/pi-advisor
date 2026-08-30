@@ -1,0 +1,15 @@
+{
+  "id": "01-proceed",
+  "gate": {
+    "case": "proceed",
+    "failureMode": "block-session",
+    "response": "Decision: proceed\nContinue.",
+    "expected": "proceed"
+  },
+  "payload": {
+    "conversation": "User: Review this safe change.",
+    "draft": "No material risk remains.",
+    "timestamp": "volatile-1"
+  },
+  "volatileFields": ["timestamp"]
+}

@@ -1,0 +1,15 @@
+{
+  "id": "03-blocked",
+  "gate": {
+    "case": "blocked",
+    "failureMode": "warn-and-continue",
+    "response": "Decision: blocked\nA user decision is required.",
+    "expected": "blocked"
+  },
+  "payload": {
+    "conversation": "User: A destructive action is pending.",
+    "draft": "Proceed without confirmation.",
+    "timestamp": "volatile-3"
+  },
+  "volatileFields": ["timestamp"]
+}

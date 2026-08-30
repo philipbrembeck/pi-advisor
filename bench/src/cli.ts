@@ -1,21 +1,25 @@
 import { resolve } from "node:path";
-import { defaultControlAdvice, runControls } from "./controls.js";
 import { DEFAULT_CONFIG, loadBenchmarkConfig } from "./config.js";
-import { reportFor, writeReport } from "./report.js";
+import { defaultControlAdvice, runControls } from "./controls.js";
+import { runDecisions as runDecisionBenchmark } from "./decisions.js";
+import { runEvaluation } from "./evaluate-runner.js";
+import { hashTree } from "./fixture.js";
 import { runReplay } from "./replay/runner.js";
-import type { BenchmarkTier } from "./types.js";
+import { reportFor, writeReport } from "./report.js";
+import { runScreening } from "./screen.js";
+import type { BenchmarkReport, BenchmarkTier } from "./types.js";
 
 const help = () => `Usage: bun bench/src/cli.ts <command> [options]
 
 Commands:
   replay      Run the offline Tier 1 replay and controls
-  decisions   Run the deterministic controls (live scoring requires BENCH_LIVE=1)
+  decisions   Run Tier 2 decisions (offline controls or BENCH_LIVE=1 scoring)
   screen      Run Tier 3 Stage 1 screening (requires BENCH_LIVE=1)
   evaluate    Run Tier 3 Stage 2 evaluation (requires BENCH_LIVE=1)
 
 Options:
   --config <path>  Use a benchmark JSON configuration
-  --no-report      Do not write a report (replay only)
+  --no-report      Do not write a report
   --help           Show this help
 `;
 
@@ -26,57 +30,74 @@ const option = (args: string[], name: string) => {
 
 const has = (args: string[], name: string) => args.includes(name);
 
-const unavailableTier = (tier: BenchmarkTier, config = DEFAULT_CONFIG) => {
-  const report = reportFor(
-    tier,
-    config,
-    { live: false },
-    {
-      status: "UNAVAILABLE",
-      warnings: [
-        `Tier ${tier} is live-only. Set BENCH_LIVE=1 after provider, ReactBench, and preregistration checks are ready.`,
-      ],
-    }
-  );
-  writeReport(report);
-  return report;
-};
-
-const runDecisions = (config = DEFAULT_CONFIG) => {
-  const controls = runControls(
+const unavailableTier = (
+  tier: BenchmarkTier,
+  config = DEFAULT_CONFIG,
+  reason = `Tier ${tier} is live-only. Set BENCH_LIVE=1 after provider, ReactBench, and preregistration checks are ready.`
+) => {
+  const controlRun = runControls(
     resolve(config.fixtureRoot, "controls"),
     defaultControlAdvice
   );
-  const status = controls.controls.invalid ? "INVALID" : "PASS";
   const report = reportFor(
-    "decisions",
+    tier,
     config,
-    { controls: controls.scores, itemCount: controls.scores.length / 2 },
-    { controls: controls.controls, status }
+    {
+      controlSource: "deterministic fixture controls only",
+      controls: controlRun.scores,
+      live: false,
+    },
+    {
+      controls: controlRun.controls,
+      fixtureHashes: {
+        controls: hashTree(resolve(config.fixtureRoot, "controls")),
+      },
+      status: "UNAVAILABLE",
+      warnings: [reason],
+    }
   );
-  writeReport(report);
+  writeReport(report, undefined, config.reportRoot);
   return report;
 };
 
+/* biome-ignore lint/complexity/noExcessiveCognitiveComplexity: the CLI keeps each tier's fail-closed exit policy explicit. */
 export const main = async (argv = process.argv.slice(2)) => {
   const [command] = argv;
   if (!command || command === "--help" || has(argv, "--help")) {
     console.log(help());
     return;
   }
-  const loaded = loadBenchmarkConfig(option(argv, "--config"));
-  const config = loaded.config;
+  const { config } = loadBenchmarkConfig(option(argv, "--config"));
   if (command === "replay") {
-    const report = await runReplay({ config, report: !has(argv, "--no-report") });
+    const report = await runReplay({
+      config,
+      writeReportOutput: !has(argv, "--no-report"),
+    });
     console.log(`Tier 1 replay: ${report.status}`);
+    if (report.status !== "PASS") {
+      process.exitCode = report.status === "UNAVAILABLE" ? 2 : 1;
+    }
     return;
   }
   if (command === "decisions") {
-    const report =
-      process.env.BENCH_LIVE === "1"
-        ? runDecisions(config)
-        : runDecisions(config);
-    console.log(`Tier 2 controls: ${report.status}`);
+    let report: BenchmarkReport;
+    try {
+      report = await runDecisionBenchmark({
+        config,
+        live: process.env.BENCH_LIVE === "1",
+        writeReportOutput: !has(argv, "--no-report"),
+      });
+    } catch (error) {
+      report = unavailableTier(
+        "decisions",
+        config,
+        `Tier decisions failed closed: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+    console.log(`Tier 2 decisions: ${report.status}`);
+    if (report.status !== "PASS") {
+      process.exitCode = report.status === "UNAVAILABLE" ? 2 : 1;
+    }
     return;
   }
   if (command === "screen" || command === "evaluate") {
@@ -86,9 +107,30 @@ export const main = async (argv = process.argv.slice(2)) => {
       process.exitCode = 2;
       return;
     }
-    throw new Error(
-      `Tier ${command} live runner is not enabled until the ReactBench adapter and preregistration are present.`
-    );
+    let report: BenchmarkReport;
+    try {
+      report =
+        command === "screen"
+          ? await runScreening({
+              config,
+              writeReportOutput: !has(argv, "--no-report"),
+            })
+          : await runEvaluation({
+              config,
+              writeReportOutput: !has(argv, "--no-report"),
+            });
+    } catch (error) {
+      report = unavailableTier(
+        command,
+        config,
+        `Tier ${command} failed closed: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+    console.log(`Tier ${command}: ${report.status}`);
+    if (report.status !== "PASS") {
+      process.exitCode = report.status === "UNAVAILABLE" ? 2 : 1;
+    }
+    return;
   }
   throw new Error(`Unknown benchmark command: ${command}`);
 };

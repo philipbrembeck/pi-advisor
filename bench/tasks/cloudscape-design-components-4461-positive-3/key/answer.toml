@@ -1,0 +1,5 @@
+defectClass = "hydration-stable-width"
+findingId = "react-doctor/hydration-stable-width"
+reasonTokens = ["maxContentWidth", "server output", "hydration"]
+targetFile = "src/app-layout/index.tsx"
+targetSymbol = "useAppLayout"

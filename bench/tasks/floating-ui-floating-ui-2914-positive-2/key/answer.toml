@@ -1,0 +1,5 @@
+defectClass = "selection-effect"
+findingId = "react-doctor/selection-effect"
+reasonTokens = ["selection change", "active navigation", "focus"]
+targetFile = "packages/react/src/hooks/useListNavigation.ts"
+targetSymbol = "selectedIndexRef"

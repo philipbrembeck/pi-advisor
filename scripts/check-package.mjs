@@ -32,6 +32,15 @@ const expectedFiles = [
   "src/usage.ts",
 ];
 
+const benchmarkFiles = actualFiles.filter(
+  (path) => path === "bench" || path.startsWith("bench/")
+);
+if (benchmarkFiles.length > 0) {
+  throw new Error(
+    `Repository-only benchmark files leaked into the package:\n${benchmarkFiles.join("\n")}`
+  );
+}
+
 if (
   result.name !== packageJson.name ||
   result.version !== packageJson.version

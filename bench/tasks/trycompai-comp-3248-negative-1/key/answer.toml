@@ -1,0 +1,4 @@
+defectClass = "sound-reference-direction"
+reasonTokens = ["preserve", "reference behavior"]
+targetFile = "apps/framework-editor/components/RequirementsGrid.tsx"
+targetSymbol = "RequirementsGrid"
