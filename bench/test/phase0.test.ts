@@ -14,7 +14,11 @@ import {
 } from "../src/config.js";
 import { CostMeter, configuredCost, normalizeUsage } from "../src/cost.js";
 import { hashTree } from "../src/fixture.js";
-import { assertRecordedRequestPin, capturePins } from "../src/pins.js";
+import {
+  assertPinnedLiveModelConfiguration,
+  assertRecordedRequestPin,
+  capturePins,
+} from "../src/pins.js";
 import { readReport, reportFor, writeReport } from "../src/report.js";
 import { UNAVAILABLE } from "../src/types.js";
 
@@ -134,6 +138,22 @@ describe("benchmark Phase 0 infrastructure", () => {
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
+  });
+
+  test("rejects live configurations that change the preregistered pair", () => {
+    expect(assertPinnedLiveModelConfiguration(DEFAULT_CONFIG)).toBe(true);
+    expect(() =>
+      assertPinnedLiveModelConfiguration({
+        ...DEFAULT_CONFIG,
+        modelPins: {
+          ...DEFAULT_CONFIG.modelPins,
+          executor: {
+            ...DEFAULT_CONFIG.modelPins.executor,
+            effort: "high",
+          },
+        },
+      })
+    ).toThrow("Live model pin executor");
   });
 
   test("captures every configured model pin and effort", () => {

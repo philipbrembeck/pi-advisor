@@ -22,19 +22,25 @@ describe("Stage 1 screening", () => {
           `tags = ["${index % 2 ? "write-react" : "fix-react"}"]\n`
         );
       }
+      const trialBudgets: number[] = [];
       const runner = {
-        run: async (
+        run: (
           request: ReactBenchTrialRequest
-        ): Promise<ReactBenchTrialResult> => ({
-          consultations: 0,
-          cost: 0,
-          passed:
-            request.arm === "F"
-              ? request.taskPath.endsWith("00") ||
-                request.taskPath.endsWith("01")
-              : !request.taskPath.endsWith("00"),
-          taskId: request.taskPath,
-        }),
+        ): Promise<ReactBenchTrialResult> => {
+          if (request.budgetUsd !== undefined) {
+            trialBudgets.push(request.budgetUsd);
+          }
+          return Promise.resolve({
+            consultations: 0,
+            cost: 0,
+            passed:
+              request.arm === "F"
+                ? request.taskPath.endsWith("00") ||
+                  request.taskPath.endsWith("01")
+                : !request.taskPath.endsWith("00"),
+            taskId: request.taskPath,
+          });
+        },
       };
       const pricing = Object.fromEntries(
         Object.values(DEFAULT_CONFIG.modelPins).map((pin) => [
@@ -60,6 +66,10 @@ describe("Stage 1 screening", () => {
       expect(report.metrics.candidateBandPrevalence).toBeGreaterThan(0);
       expect(report.metrics.trivialStratumTaskIds).toHaveLength(3);
       expect(report.metrics.screeningSeeds).toEqual([11, 23]);
+      expect(trialBudgets).toHaveLength(120);
+      expect(trialBudgets.every((value) => value > 0 && value <= 10)).toBe(
+        true
+      );
     } finally {
       rmSync(root, { force: true, recursive: true });
     }

@@ -3,5 +3,7 @@ dist/
 /tmp/
 .DS_Store
 *.log
+__pycache__/
+*.py[cod]
 docs/agents/
 .analysis/*

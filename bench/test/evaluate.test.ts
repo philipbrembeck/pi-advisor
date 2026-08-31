@@ -130,6 +130,13 @@ describe("Tier 3 statistics", () => {
         prevalence: 0.75,
       },
     ]);
+    const flow = reweighted.find((value) => value.arm === "E+A");
+    expect(flow).toMatchObject({
+      arm: "E+A",
+      passRate: 0.95,
+      taskCount: 6,
+    });
+    expect(flow?.costPerTask).toBeCloseTo(1.325, 10);
     const verdict = dominanceVerdict(reweighted);
     expect(verdict.status).toBe("not-dominated");
     expect(verdict.flow.passRate).toBeGreaterThanOrEqual(
@@ -137,15 +144,31 @@ describe("Tier 3 statistics", () => {
     );
     expect(breakEvenConsultations(1, 4, 0.5)).toBe(6);
     expect(renderCostQualityPlot(reweighted, "test")).toContain('role="img"');
+    expect(() =>
+      reweightCostQuality([
+        {
+          points: [point("E", 1, 0)],
+          prevalence: 1,
+        },
+        {
+          points: [],
+          prevalence: 1,
+        },
+      ])
+    ).toThrow("missing from a positive-prevalence stratum");
   });
 
   test("parses only the adapter result record", () => {
     expect(
-      parseReactBenchResult('log\nBENCH_RESULT={"passed":true}', "task")
+      parseReactBenchResult(
+        'log\nBENCH_RESULT={"passed":true,"requests":[]}',
+        "task"
+      )
     ).toEqual({
       consultations: 0,
       cost: "unavailable",
       passed: true,
+      requests: [],
       taskId: "task",
     });
     expect(() => parseReactBenchResult("no result", "task")).toThrow(

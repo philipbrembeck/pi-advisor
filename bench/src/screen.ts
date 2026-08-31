@@ -10,8 +10,10 @@ import { DEFAULT_CONFIG, defaultPricingFor, modelPin } from "./config.js";
 import { defaultControlAdvice, runControls } from "./controls.js";
 import { hashTree } from "./fixture.js";
 import { createPiAdvisorHarborAdapter } from "./pi-advisor-adapter.js";
+import { assertPinnedLiveModelConfiguration } from "./pins.js";
 import { requireCommittedPreregistration } from "./preregistration.js";
 import {
+  assertReactBenchCheckout,
   discoverReactBenchTasks,
   type ReactBenchTrialResult,
   type ReactBenchTrialRunner,
@@ -21,6 +23,7 @@ import {
   candidateBandPrevalence,
   classifyScreeningPool,
   selectTrivialStratum,
+  validateEvaluationSeeds,
 } from "./screening.js";
 import { EVALUATION_SEEDS, SCREENING_SEEDS } from "./seeds.js";
 import type { BenchmarkConfig, BenchmarkReport, ModelPin } from "./types.js";
@@ -93,18 +96,24 @@ const trialRequest = (
   artifactRoot: string,
   arm: "E" | "F",
   seed: number,
-  config: BenchmarkConfig
-) => ({
-  advisor: undefined,
-  arm,
-  artifactRoot,
-  executor:
+  config: BenchmarkConfig,
+  budgetUsd: number
+) => {
+  const executor =
     arm === "E"
       ? modelPin(config, "executor", "executor")
-      : modelPin(config, "frontier", "executor"),
-  seed,
-  taskPath,
-});
+      : modelPin(config, "frontier", "executor");
+  return {
+    advisor: undefined,
+    arm,
+    artifactRoot,
+    budgetUsd,
+    executor,
+    pricing: { executor: pricingFor(config, executor) },
+    seed,
+    taskPath,
+  };
+};
 
 export const runScreening = async ({
   announceBudget = true,
@@ -115,6 +124,8 @@ export const runScreening = async ({
   writeReportOutput = true,
 }: ScreeningRunOptions = {}): Promise<BenchmarkReport> => {
   preregistered();
+  validateEvaluationSeeds(SCREENING_SEEDS, EVALUATION_SEEDS);
+  assertPinnedLiveModelConfiguration(config);
   if (!sourceRoot) {
     const report = unavailable(
       config,
@@ -126,6 +137,7 @@ export const runScreening = async ({
     }
     return report;
   }
+  let harborRunnerCreated = false;
   if (!runner) {
     const command =
       process.env.BENCH_PI_ADVISOR_ADAPTER ??
@@ -146,6 +158,10 @@ export const runScreening = async ({
     if (!runner) {
       throw new Error("Pi ReactBench adapter could not be initialized.");
     }
+    harborRunnerCreated = true;
+  }
+  if (harborRunnerCreated) {
+    assertReactBenchCheckout(sourceRoot, config.reactBenchCommit);
   }
   const tasks = discoverReactBenchTasks(sourceRoot, SCREENING_TASK_COUNT);
   const executorPin = modelPin(config, "executor", "executor");
@@ -204,13 +220,23 @@ export const runScreening = async ({
             TOKEN_ASSUMPTION.output * pricing.outputPerMillion) /
             1_000_000
         );
+        // The baseline reserve belongs to this trial; the proxy lease may
+        // spend that reserve as well as the still-unreserved remainder.
+        const trialBudget = budget.remainingUsd() + reserve;
+        if (!(trialBudget > 0)) {
+          throw new Error(
+            "Benchmark budget is exhausted before the next provider trial."
+          );
+        }
         const result = await runner.run(
-          trialRequest(task.path, root, arm, seed, config)
+          trialRequest(task.path, root, arm, seed, config, trialBudget)
         );
-        budget.settle(
-          reserve,
-          result.cost === "unavailable" ? undefined : result.cost
-        );
+        if (result.cost === "unavailable") {
+          throw new Error(
+            "Provider usage is unavailable; refusing to continue after an unpriced screening trial."
+          );
+        }
+        budget.settle(reserve, result.cost);
         trials.push({ ...result, arm, seed, taskId: task.taskId });
       }
     }

@@ -214,23 +214,64 @@ export interface DominanceResult {
 }
 
 const weighted = (
-  points: readonly CostQualityPoint[],
-  prevalence: readonly number[]
+  strata: readonly {
+    prevalence: number;
+    points: readonly CostQualityPoint[];
+  }[]
 ): CostQualityPoint[] => {
-  if (points.length !== prevalence.length || points.length === 0) {
-    throw new RangeError(
-      "Weighted cost/quality points and prevalence must align."
-    );
+  if (strata.length === 0) {
+    throw new RangeError("Weighted cost/quality strata are required.");
   }
-  const total = prevalence.reduce((sum, value) => sum + value, 0);
-  if (!(total > 0)) {
-    throw new RangeError("Point prevalence must have a positive total.");
+  const total = strata.reduce((sum, { prevalence }) => {
+    if (!Number.isFinite(prevalence) || prevalence < 0) {
+      throw new TypeError("Point prevalence must be finite and non-negative.");
+    }
+    return sum + prevalence;
+  }, 0);
+  if (!(Number.isFinite(total) && total > 0)) {
+    throw new RangeError("Point prevalence must have a finite positive total.");
   }
-  const arms = [...new Set(points.map((point) => point.arm))];
+  const positiveStrata = strata.filter(({ prevalence }) => prevalence > 0);
+  for (const { points } of positiveStrata) {
+    for (const point of points) {
+      if (
+        !Number.isFinite(point.passRate) ||
+        point.passRate < 0 ||
+        point.passRate > 1 ||
+        (point.costPerTask !== "unavailable" &&
+          (!Number.isFinite(point.costPerTask) || point.costPerTask < 0)) ||
+        !Number.isSafeInteger(point.taskCount) ||
+        point.taskCount < 0
+      ) {
+        throw new TypeError("Malformed cost/quality point.");
+      }
+    }
+  }
+  const arms = [
+    ...new Set(
+      positiveStrata.flatMap(({ points }) => points.map((point) => point.arm))
+    ),
+  ];
+  if (arms.length === 0) {
+    throw new RangeError("Weighted cost/quality points are required.");
+  }
+  for (const arm of arms) {
+    if (
+      positiveStrata.some(({ points }) =>
+        points.every((point) => point.arm !== arm)
+      )
+    ) {
+      throw new RangeError(
+        `Weighted cost/quality arm ${arm} is missing from a positive-prevalence stratum.`
+      );
+    }
+  }
   return arms.map((arm) => {
-    const selected = points
-      .map((point, index) => ({ point, weight: prevalence[index] }))
-      .filter(({ point, weight }) => point.arm === arm && weight > 0);
+    const selected = strata.flatMap(({ points, prevalence }) =>
+      points
+        .filter((point) => point.arm === arm && prevalence > 0)
+        .map((point) => ({ point, weight: prevalence }))
+    );
     const unavailable = selected.some(
       ({ point }) => point.costPerTask === "unavailable"
     );
@@ -260,11 +301,7 @@ export const reweightCostQuality = (
     prevalence: number;
     points: readonly CostQualityPoint[];
   }[]
-) =>
-  weighted(
-    strata.flatMap((stratum) => stratum.points),
-    strata.flatMap((stratum) => stratum.points.map(() => stratum.prevalence))
-  );
+) => weighted(strata);
 
 export const dominanceVerdict = (
   points: readonly CostQualityPoint[],

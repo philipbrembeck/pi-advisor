@@ -1,0 +1,3 @@
+#!/bin/sh
+set -eu
+exec bun "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/run-trial.ts" "$@"

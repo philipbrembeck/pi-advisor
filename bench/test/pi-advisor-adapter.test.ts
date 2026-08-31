@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import {
   assertPiAdvisorPrerequisites,
@@ -13,6 +19,7 @@ const prerequisites = (extensionPath: string) => ({
   credentialPresent: true,
   extensionPath,
   extensionVersion: "0.5.0",
+  piVersion: "0.84.4",
   providerBaseUrl: "https://provider.example/v1",
 });
 
@@ -28,6 +35,7 @@ describe("pi-advisor Harbor adapter boundary", () => {
           extensionVersion: "0.5.0",
           loaded: true,
           mode: "advisor",
+          shutdown: true,
         })}`,
       ].join("\n"),
       "0.5.0",
@@ -50,11 +58,12 @@ describe("pi-advisor Harbor adapter boundary", () => {
           extensionVersion: "0.5.0",
           loaded: true,
           mode: "advisor",
+          shutdown: true,
         })}`,
         "0.5.0",
         "E+A"
       )
-    ).toThrow("at least one Advisor consultation");
+    ).toThrow("exact expected number of consultations");
   });
 
   test("requires a pinned extension, endpoint, and credential", () => {
@@ -82,6 +91,40 @@ describe("pi-advisor Harbor adapter boundary", () => {
       const extensionPath = join(root, "extensions.ts");
       const script = join(root, "adapter.mjs");
       writeFileSync(extensionPath, "export default () => {};\n");
+      const trajectoryPath = join(root, "trajectory");
+      mkdirSync(join(trajectoryPath, "agent"), { recursive: true });
+      mkdirSync(join(trajectoryPath, "verifier"), { recursive: true });
+      writeFileSync(join(trajectoryPath, "agent", "pi.txt"), "trajectory\n");
+      writeFileSync(
+        join(trajectoryPath, "agent", "bench-records.jsonl"),
+        "{}\n"
+      );
+      writeFileSync(
+        join(trajectoryPath, "agent", "bench-attestation.json"),
+        "{}\n"
+      );
+      writeFileSync(
+        join(trajectoryPath, "verifier", "reward.json"),
+        JSON.stringify({ reward: 1 })
+      );
+      const usage = {
+        advisor: {
+          cacheRead: 0,
+          cacheWrite: 0,
+          input: 1,
+          output: 1,
+          totalTokens: 2,
+          usageAvailable: true,
+        },
+        executor: {
+          cacheRead: 0,
+          cacheWrite: 0,
+          input: 1,
+          output: 1,
+          totalTokens: 2,
+          usageAvailable: true,
+        },
+      };
       const result = {
         attestation: {
           adapter: "pi-advisor-harbor",
@@ -90,6 +133,7 @@ describe("pi-advisor Harbor adapter boundary", () => {
           extensionVersion: "0.5.0",
           loaded: true,
           mode: "advisor",
+          shutdown: true,
         },
         consultations: 1,
         cost: 0,
@@ -100,14 +144,19 @@ describe("pi-advisor Harbor adapter boundary", () => {
             model: "gpt-5.6-luna",
             provider: "openai-codex",
             role: "executor",
+            usage: usage.executor,
           },
           {
             effort: "medium",
             model: "gpt-5.6-sol",
             provider: "openai-codex",
             role: "advisor",
+            usage: usage.advisor,
           },
         ],
+        taskId: "task",
+        trajectoryPath,
+        usage,
       };
       const resultLine = JSON.stringify(
         `BENCH_RESULT=${JSON.stringify(result)}\n`

@@ -22,14 +22,16 @@ import {
 } from "./evaluate.js";
 import { hashFile, hashTree } from "./fixture.js";
 import { createPiAdvisorHarborAdapter } from "./pi-advisor-adapter.js";
+import { assertPinnedLiveModelConfiguration } from "./pins.js";
 import { requireCommittedPreregistration } from "./preregistration.js";
 import {
+  assertReactBenchCheckout,
   discoverReactBenchTasks,
   type ReactBenchTrialResult,
   type ReactBenchTrialRunner,
 } from "./reactbench.js";
 import { readReport, reportFor, writeReport } from "./report.js";
-import { validateEvaluationSeeds } from "./screening.js";
+import { classifyCandidateBand, validateEvaluationSeeds } from "./screening.js";
 import { EVALUATION_SEEDS, SCREENING_SEEDS } from "./seeds.js";
 import type {
   BandScreenResult,
@@ -76,6 +78,16 @@ export const latestScreeningReport = (
   return name ? resolve(reportRoot, name) : undefined;
 };
 
+const exactSeedSet = (value: unknown, expected: readonly number[]) =>
+  Array.isArray(value) &&
+  value.length === expected.length &&
+  value.every(
+    (seed, index) =>
+      typeof seed === "number" &&
+      Number.isSafeInteger(seed) &&
+      seed === expected[index]
+  );
+
 const readScreening = (
   path: string
 ): {
@@ -85,32 +97,91 @@ const readScreening = (
   trivialStratumTaskIds: string[];
 } => {
   const report = readReport(path);
+  if (report.status !== "PASS") {
+    return {
+      report,
+      results: [],
+      trials: [],
+      trivialStratumTaskIds: [],
+    };
+  }
   const rawResults = report.metrics.tasks;
   const rawTrials = report.metrics.trajectories;
   const rawTrivial = report.metrics.trivialStratumTaskIds;
   if (
     !(
+      report.tier === "screen" &&
       Array.isArray(rawResults) &&
+      rawResults.length > 0 &&
       Array.isArray(rawTrials) &&
-      Array.isArray(rawTrivial)
+      Array.isArray(rawTrivial) &&
+      exactSeedSet(report.metrics.screeningSeeds, SCREENING_SEEDS) &&
+      exactSeedSet(report.metrics.evaluationSeeds, EVALUATION_SEEDS)
     )
   ) {
     throw new TypeError(
-      "Screening report is missing task assignments or trajectories."
+      "Screening report is missing task assignments, trajectories, or pinned seed sets."
     );
   }
+  const taskIds = new Set<string>();
   const results = rawResults.map((value) => {
-    if (!isRecord(value) || typeof value.taskId !== "string") {
+    if (
+      !isRecord(value) ||
+      typeof value.taskId !== "string" ||
+      !value.taskId.trim() ||
+      taskIds.has(value.taskId) ||
+      !["trivial", "candidate-uplift", "out-of-reach"].includes(
+        value.candidateBand as string
+      ) ||
+      !Array.isArray(value.executorPasses) ||
+      !Array.isArray(value.frontierPasses) ||
+      value.executorPasses.length !== SCREENING_SEEDS.length ||
+      value.frontierPasses.length !== SCREENING_SEEDS.length ||
+      value.executorPasses.some((passed) => typeof passed !== "boolean") ||
+      value.frontierPasses.some((passed) => typeof passed !== "boolean")
+    ) {
       throw new TypeError("Malformed screening task assignment.");
     }
-    return value as unknown as BandScreenResult;
+    const executorPasses = value.executorPasses as boolean[];
+    const frontierPasses = value.frontierPasses as boolean[];
+    if (
+      classifyCandidateBand(executorPasses, frontierPasses) !==
+      value.candidateBand
+    ) {
+      throw new TypeError(
+        `Screening task assignment disagrees with its seed outcomes: ${value.taskId}.`
+      );
+    }
+    taskIds.add(value.taskId);
+    return {
+      candidateBand: value.candidateBand as BandScreenResult["candidateBand"],
+      executorPasses: [...executorPasses],
+      frontierPasses: [...frontierPasses],
+      taskId: value.taskId,
+    };
   });
+  const reportedPrevalence = report.metrics.candidateBandPrevalence;
+  const computedPrevalence =
+    results.filter((result) => result.candidateBand === "candidate-uplift")
+      .length / results.length;
+  if (
+    typeof reportedPrevalence !== "number" ||
+    !Number.isFinite(reportedPrevalence) ||
+    reportedPrevalence !== computedPrevalence
+  ) {
+    throw new TypeError(
+      "Screening candidate-band prevalence disagrees with task assignments."
+    );
+  }
   const trials = rawTrials.map((value) => {
     if (
       !isRecord(value) ||
       (value.arm !== "E" && value.arm !== "F") ||
       typeof value.taskId !== "string" ||
+      !taskIds.has(value.taskId) ||
       typeof value.seed !== "number" ||
+      !Number.isSafeInteger(value.seed) ||
+      !SCREENING_SEEDS.some((seed) => seed === value.seed) ||
       typeof value.passed !== "boolean"
     ) {
       throw new TypeError("Malformed screening trajectory.");
@@ -130,9 +201,57 @@ const readScreening = (
       taskId: value.taskId,
     };
   });
-  const trivialStratumTaskIds = rawTrivial.filter(
-    (value): value is string => typeof value === "string"
-  );
+  const trialKeys = new Set<string>();
+  for (const trial of trials) {
+    const key = `${trial.taskId}:${trial.arm}:${trial.seed}`;
+    if (trialKeys.has(key)) {
+      throw new TypeError(`Duplicate screening trajectory: ${key}.`);
+    }
+    trialKeys.add(key);
+  }
+  const trivialStratumTaskIds = rawTrivial.map((value) => {
+    if (
+      typeof value !== "string" ||
+      !taskIds.has(value) ||
+      results.find((result) => result.taskId === value)?.candidateBand !==
+        "trivial"
+    ) {
+      throw new TypeError("Malformed trivial-band stratum.");
+    }
+    return value;
+  });
+  if (new Set(trivialStratumTaskIds).size !== trivialStratumTaskIds.length) {
+    throw new TypeError("Trivial-band stratum contains duplicate tasks.");
+  }
+  const expectedTrialCount = results.length * SCREENING_SEEDS.length * 2;
+  if (
+    trials.length !== expectedTrialCount ||
+    trialKeys.size !== expectedTrialCount
+  ) {
+    throw new TypeError(
+      "Screening report must archive exactly one E and F trajectory per task and screening seed."
+    );
+  }
+  for (const result of results) {
+    for (const [index, seed] of SCREENING_SEEDS.entries()) {
+      for (const [arm, passes] of [
+        ["E", result.executorPasses],
+        ["F", result.frontierPasses],
+      ] as const) {
+        const trial = trials.find(
+          (candidate) =>
+            candidate.taskId === result.taskId &&
+            candidate.arm === arm &&
+            candidate.seed === seed
+        );
+        if (!trial || trial.passed !== passes[index]) {
+          throw new TypeError(
+            `Screening assignment does not match its archived trajectory: ${result.taskId}/${arm}/${seed}.`
+          );
+        }
+      }
+    }
+  }
   return { report, results, trials, trivialStratumTaskIds };
 };
 
@@ -251,29 +370,31 @@ const pointsForStratum = (
   aggregates: ReturnType<typeof aggregateEvaluation>,
   trials: readonly ScreeningTrialRecord[],
   includeFMedium: boolean,
-  outOfReach = false
+  outOfReach = false,
+  evaluatedFrontier = false
 ) => {
   const points: CostQualityPoint[] = [
     evaluatedPoint("E", taskIds, evaluated, aggregates),
     evaluatedPoint("E+A", taskIds, evaluated, aggregates),
-    screeningPoint("F", taskIds, trials, outOfReach),
+    evaluatedFrontier
+      ? evaluatedPoint("F", taskIds, evaluated, aggregates)
+      : screeningPoint("F", taskIds, trials, outOfReach),
   ];
   if (outOfReach) {
     const executor = screeningPoint("E", taskIds, trials, true);
     const flow: CostQualityPoint = {
       arm: "E+A",
-      costPerTask: executor.costPerTask,
+      // E+A is intentionally not run on out-of-reach tasks. Never equate
+      // its unknown Advisor-inclusive cost with the screening E cost.
+      costPerTask: "unavailable",
       passRate: 0,
       taskCount: executor.taskCount,
     };
     points[0] = executor;
     points[1] = flow;
   }
-  if (includeFMedium) {
-    points.push({
-      ...screeningPoint("F", taskIds, trials, outOfReach),
-      arm: "F′",
-    });
+  if (includeFMedium && evaluatedFrontier) {
+    points.push(evaluatedPoint("F′", taskIds, evaluated, aggregates));
   }
   return points;
 };
@@ -312,7 +433,34 @@ export const runEvaluation = async ({
     return report;
   }
   requireCommittedPreregistration(PREREG_SECTION_TWO, "Stage 2 evaluation");
+  assertPinnedLiveModelConfiguration(config);
   const screening = readScreening(screeningReportPath);
+  if (screening.report.pins.reactBenchCommit !== config.reactBenchCommit) {
+    throw new Error(
+      `Screening report ReactBench pin mismatch: expected ${config.reactBenchCommit}.`
+    );
+  }
+  if (screening.report.pins.reactDoctorVersion !== config.reactDoctorVersion) {
+    throw new Error(
+      `Screening report React Doctor pin mismatch: expected ${config.reactDoctorVersion}.`
+    );
+  }
+  if (typeof screening.report.pins.fixtureHashes.reactBench !== "string") {
+    throw new TypeError(
+      "Screening report is missing the pinned ReactBench fixture hash."
+    );
+  }
+  for (const [name, expected] of Object.entries(config.modelPins)) {
+    const actual = screening.report.pins.modelPins[name];
+    if (
+      !actual ||
+      actual.role !== expected.role ||
+      actual.model !== expected.model ||
+      actual.effort !== expected.effort
+    ) {
+      throw new Error(`Screening report model pin mismatch for ${name}.`);
+    }
+  }
   const reactBenchFixtureHash = screening.report.pins.fixtureHashes.reactBench;
   if (screening.report.status !== "PASS") {
     const report = unavailable(
@@ -391,8 +539,9 @@ export const runEvaluation = async ({
     }
     return report;
   }
+  let harborRunnerCreated = false;
+  const sourceRoot = process.env.BENCH_REACTBENCH_ROOT;
   if (!runner) {
-    const sourceRoot = process.env.BENCH_REACTBENCH_ROOT;
     const command =
       process.env.BENCH_PI_ADVISOR_ADAPTER ??
       process.env.BENCH_PI_ADAPTER ??
@@ -412,6 +561,13 @@ export const runEvaluation = async ({
     if (!runner) {
       throw new Error("Pi ReactBench adapter could not be initialized.");
     }
+    harborRunnerCreated = true;
+  }
+  if (harborRunnerCreated) {
+    if (!sourceRoot) {
+      throw new Error("BENCH_REACTBENCH_ROOT is required for Stage 2.");
+    }
+    assertReactBenchCheckout(sourceRoot, config.reactBenchCommit);
   }
   const includeFMedium = process.env.BENCH_FRONTIER_MEDIUM === "1";
   const arms: EvaluationArm[] = ["E", "E+A", "F"];
@@ -506,18 +662,33 @@ export const runEvaluation = async ({
     const reserve = budget.reserve(
       perCall(executor) + (advisor ? perCall(advisor) : 0)
     );
+    // The baseline reserve belongs to this trial; the proxy lease may spend
+    // that reserve as well as the still-unreserved remainder.
+    const trialBudget = budget.remainingUsd() + reserve;
+    if (!(trialBudget > 0)) {
+      throw new Error(
+        "Benchmark budget is exhausted before the next provider trial."
+      );
+    }
     const result: ReactBenchTrialResult = await activeRunner.run({
       advisor,
       arm,
       artifactRoot: resolve("bench/reports/evaluation-trajectories"),
+      budgetUsd: trialBudget,
       executor,
+      pricing: {
+        executor: pricingFor(config, executor),
+        ...(advisor ? { advisor: pricingFor(config, advisor) } : {}),
+      },
       seed,
       taskPath,
     });
-    budget.settle(
-      reserve,
-      result.cost === "unavailable" ? undefined : result.cost
-    );
+    if (result.cost === "unavailable") {
+      throw new Error(
+        "Provider usage is unavailable; refusing to continue after an unpriced evaluation trial."
+      );
+    }
+    budget.settle(reserve, result.cost);
     outcomes.push({
       arm,
       consultations: result.consultations,
@@ -527,14 +698,17 @@ export const runEvaluation = async ({
       taskId,
     });
   };
-  const tasks = process.env.BENCH_REACTBENCH_ROOT
-    ? discoverReactBenchTasks(
-        process.env.BENCH_REACTBENCH_ROOT,
-        screening.results.length
-      )
+  const tasks = sourceRoot
+    ? discoverReactBenchTasks(sourceRoot, screening.results.length)
     : [];
   const pathById = new Map(tasks.map((task) => [task.taskId, task.path]));
-  for (const taskId of [...candidateIds, ...trivialIds]) {
+  const requiredTaskIds = [...candidateIds, ...trivialIds];
+  if (sourceRoot && requiredTaskIds.some((taskId) => !pathById.has(taskId))) {
+    throw new Error(
+      "Screening task assignments are not present in the pinned ReactBench checkout."
+    );
+  }
+  for (const taskId of requiredTaskIds) {
     const taskPath = pathById.get(taskId) ?? taskId;
     const taskArms = candidateIds.includes(taskId)
       ? arms
@@ -556,7 +730,9 @@ export const runEvaluation = async ({
     outcomes,
     aggregates,
     screening.trials,
-    includeFMedium
+    includeFMedium,
+    false,
+    true
   );
   const trivialPoints = pointsForStratum(
     trivialIds,
@@ -574,18 +750,21 @@ export const runEvaluation = async ({
     true
   );
   const reweighted = reweightCostQuality([
-    { points: upliftPoints, prevalence },
+    {
+      points: upliftPoints.filter((point) => point.arm !== "F′"),
+      prevalence,
+    },
     { points: trivialPoints, prevalence: trivialPrevalence },
     { points: outPoints, prevalence: outOfReachPrevalence },
   ]);
   const dominance = dominanceVerdict(reweighted, QUALITY_FRACTION);
-  const point = (points: readonly CostQualityPoint[], arm: EvaluationArm) =>
+  const findPoint = (points: readonly CostQualityPoint[], arm: EvaluationArm) =>
     points.find((value) => value.arm === arm);
-  const upliftE = point(upliftPoints, "E");
-  const upliftEA = point(upliftPoints, "E+A");
-  const upliftF = point(upliftPoints, "F");
-  const trivialE = point(trivialPoints, "E");
-  const trivialEA = point(trivialPoints, "E+A");
+  const upliftE = findPoint(upliftPoints, "E");
+  const upliftEA = findPoint(upliftPoints, "E+A");
+  const upliftF = findPoint(upliftPoints, "F");
+  const trivialE = findPoint(trivialPoints, "E");
+  const trivialEA = findPoint(trivialPoints, "E+A");
   const advisorUnitCost = (
     executor: CostQualityPoint | undefined,
     flow: CostQualityPoint | undefined,
@@ -677,6 +856,11 @@ export const runEvaluation = async ({
           : []),
         "Q2 is a direction-only task-level paired result; per-seed counts are descriptive and are not independent observations.",
         "The reweighted Q3 point is the headline; the uplift-only point is diagnostic.",
+        ...(outOfReachIds.length > 0
+          ? [
+              "Out-of-reach E+A was not run; its Advisor-inclusive cost is unavailable, so the reweighted Q3 verdict fails closed.",
+            ]
+          : []),
         ...(outOfReachIds.length === 0
           ? [
               "No out-of-reach tasks were screened; reweighting has no out-of-reach contribution.",

@@ -40,6 +40,9 @@ describe("Stage 2 evaluation runner", () => {
         "screen",
         DEFAULT_CONFIG,
         {
+          candidateBandPrevalence: 0,
+          evaluationSeeds: [101, 113, 127, 139, 151],
+          screeningSeeds: [11, 23],
           tasks: [
             {
               candidateBand: "trivial",
@@ -60,10 +63,28 @@ describe("Stage 2 evaluation runner", () => {
               taskId: "task-c",
             },
           ],
-          trajectories: [],
+          trajectories: [
+            ["task-a", "E", true],
+            ["task-a", "F", true],
+            ["task-b", "E", true],
+            ["task-b", "F", true],
+            ["task-c", "E", true],
+            ["task-c", "F", true],
+          ].flatMap(([taskId, arm, passed]) =>
+            [11, 23].map((seed) => ({
+              arm,
+              cost: 0.1,
+              passed: taskId === "task-b" && arm === "E" ? seed === 11 : passed,
+              seed,
+              taskId,
+            }))
+          ),
           trivialStratumTaskIds: ["task-a", "task-b", "task-c"],
         },
-        { generatedAt: "2026-08-29T00:00:00.000Z" }
+        {
+          fixtureHashes: { reactBench: "reactbench-hash" },
+          generatedAt: "2026-08-29T00:00:00.000Z",
+        }
       );
       const paths = writeReport(screening, {
         json: join(root, "screen.json"),
@@ -97,10 +118,10 @@ describe("Stage 2 evaluation runner", () => {
         ["out", "E", false, 0.1],
         ["out", "F", false, 0.5],
       ].flatMap(([taskId, arm, passed, cost]) =>
-        [101, 113].map((seed) => ({
+        [11, 23].map((seed) => ({
           arm,
           cost,
-          passed,
+          passed: taskId === "candidate" && arm === "F" ? seed === 11 : passed,
           seed,
           taskId,
         }))
@@ -109,6 +130,9 @@ describe("Stage 2 evaluation runner", () => {
         "screen",
         DEFAULT_CONFIG,
         {
+          candidateBandPrevalence: 0.2,
+          evaluationSeeds: [101, 113, 127, 139, 151],
+          screeningSeeds: [11, 23],
           tasks: [
             {
               candidateBand: "candidate-uplift",
@@ -144,7 +168,10 @@ describe("Stage 2 evaluation runner", () => {
           trajectories: trials,
           trivialStratumTaskIds: ["trivial", "trivial-2", "trivial-3"],
         },
-        { generatedAt: "2026-08-29T00:00:00.000Z" }
+        {
+          fixtureHashes: { reactBench: "reactbench-hash" },
+          generatedAt: "2026-08-29T00:00:00.000Z",
+        }
       );
       const paths = writeReport(screening, {
         json: join(root, "screen.json"),
@@ -180,7 +207,15 @@ describe("Stage 2 evaluation runner", () => {
         screeningReportPath: paths.json,
         writeReportOutput: false,
       });
-      expect(report.status).toBe("PASS");
+      expect(report.status).toBe("UNAVAILABLE");
+      expect(report.metrics).toMatchObject({
+        dominance: {
+          reweighted: {
+            status: "unavailable",
+            verdict: "UNAVAILABLE",
+          },
+        },
+      });
       expect(report.metrics.q2).toMatchObject({
         taskLevel: {
           all: {
@@ -192,6 +227,28 @@ describe("Stage 2 evaluation runner", () => {
       expect(report.metrics.plots).toMatchObject({
         reweighted: expect.stringContaining("<svg"),
         uplift: expect.stringContaining("<svg"),
+      });
+      const { strata } = report.metrics as unknown as {
+        strata: {
+          outOfReach: { arm: string; costPerTask: unknown }[];
+          uplift: {
+            arm: string;
+            costPerTask: unknown;
+            passRate: number;
+            taskCount: number;
+          }[];
+        };
+      };
+      expect(
+        strata.outOfReach.some(
+          (point) => point.arm === "E+A" && point.costPerTask === "unavailable"
+        )
+      ).toBe(true);
+      expect(strata.uplift).toContainEqual({
+        arm: "F",
+        costPerTask: 0.5,
+        passRate: 1,
+        taskCount: 1,
       });
     } finally {
       rmSync(root, { force: true, recursive: true });

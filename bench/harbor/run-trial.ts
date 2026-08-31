@@ -1,0 +1,936 @@
+#!/usr/bin/env bun
+
+/* biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: the wrapper validates the complete Harbor evidence boundary before returning a trial. */
+import { execFile, execFileSync } from "node:child_process";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { basename, dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
+import { normalizeUsage } from "../src/cost.js";
+import type {
+  CostValue,
+  PricingRates,
+  RecordedProviderRequest,
+} from "../src/types.js";
+
+const execFileAsync = promisify(execFile);
+const RESULT_PREFIX = "BENCH_RESULT=";
+const ATTESTATION_PREFIX = "BENCH_ADVISOR_ATTESTATION=";
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+const EXPECTED_AGENT_IMPORT = "bench.harbor.agent:PiAdvisorAgent";
+const DEFAULT_EXTENSION_PATH = resolve(REPO_ROOT, "extensions/index.ts");
+const DEFAULT_RECORDER_PATH = resolve(REPO_ROOT, "bench/harbor/recorder.ts");
+const DEFAULT_BUDGET_PROXY_PATH = resolve(
+  REPO_ROOT,
+  "bench/harbor/budget-proxy.mjs"
+);
+const RECORDER_TARGET = "/bench-source/bench/harbor/recorder.ts";
+const BUDGET_PROXY_TARGET = "/bench-source/bench/harbor/budget-proxy.mjs";
+const RUN_ID_PATTERN = /[^A-Za-z0-9._-]/g;
+const LINE_BREAK = /\r?\n/;
+const PI_INSTALL_HOSTS = [
+  "archive.ubuntu.com",
+  "deb.debian.org",
+  "github.com",
+  "nodejs.org",
+  "raw.githubusercontent.com",
+  "registry.npmjs.org",
+  "security.debian.org",
+  "security.ubuntu.com",
+];
+
+export type HarborTrialArm = "E" | "E+A" | "F" | "F′";
+
+export interface HarborTrialRequest {
+  advisorEffort?: string;
+  advisorModel?: string;
+  arm: HarborTrialArm;
+  artifactRoot: string;
+  budgetUsd?: number;
+  executorEffort: string;
+  executorModel: string;
+  pricing?: Partial<Record<"executor" | "advisor", PricingRates>>;
+  seed: number;
+  taskPath: string;
+}
+
+interface JsonObject {
+  [key: string]: unknown;
+}
+
+const isObject = (value: unknown): value is JsonObject =>
+  Boolean(value) && typeof value === "object" && !Array.isArray(value);
+
+const own = (value: JsonObject, key: string) => Object.hasOwn(value, key);
+
+const requiredString = (value: unknown, name: string) => {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new TypeError(`${name} must be a non-empty string.`);
+  }
+  return value.trim();
+};
+
+const safeInteger = (value: string, name: string) => {
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 0) {
+    throw new TypeError(`${name} must be a non-negative safe integer.`);
+  }
+  return parsed;
+};
+
+export const parseHarborTrialArgs = (argv: string[]): HarborTrialRequest => {
+  const values = new Map<string, string>();
+  const known = new Set([
+    "task",
+    "seed",
+    "arm",
+    "executor-model",
+    "executor-effort",
+    "advisor-model",
+    "advisor-effort",
+    "artifact-root",
+    "budget-usd",
+    "pricing-json",
+  ]);
+  for (let index = 0; index < argv.length; index += 1) {
+    const flag = argv[index];
+    if (!flag?.startsWith("--")) {
+      throw new TypeError(
+        `Unexpected Harbor adapter argument: ${flag ?? "missing"}`
+      );
+    }
+    const key = flag.slice(2);
+    if (!known.has(key)) {
+      throw new TypeError(`Unknown Harbor adapter argument: --${key}`);
+    }
+    const value = argv[index + 1];
+    if (value === undefined || value.startsWith("--")) {
+      throw new TypeError(`Missing value for --${key}.`);
+    }
+    if (values.has(key)) {
+      throw new TypeError(`Duplicate Harbor adapter argument: --${key}.`);
+    }
+    values.set(key, value);
+    index += 1;
+  }
+
+  const arm = requiredString(values.get("arm"), "arm") as HarborTrialArm;
+  if (!["E", "E+A", "F", "F′"].includes(arm)) {
+    throw new TypeError(`Unsupported benchmark arm: ${arm}`);
+  }
+  const executorModel = requiredString(
+    values.get("executor-model"),
+    "executor-model"
+  );
+  const executorEffort = requiredString(
+    values.get("executor-effort"),
+    "executor-effort"
+  );
+  const advisorModel = values.get("advisor-model")?.trim() || undefined;
+  const advisorEffort = values.get("advisor-effort")?.trim() || undefined;
+  if (arm === "E+A" && !(advisorModel && advisorEffort)) {
+    throw new TypeError("E+A requires advisor-model and advisor-effort.");
+  }
+  if (arm !== "E+A" && (advisorModel || advisorEffort)) {
+    throw new TypeError("Only E+A may carry an Advisor model pin.");
+  }
+
+  let budgetUsd: number | undefined;
+  const budgetText = values.get("budget-usd");
+  if (budgetText !== undefined) {
+    budgetUsd = Number(budgetText);
+    if (!Number.isFinite(budgetUsd) || budgetUsd <= 0) {
+      throw new TypeError("budget-usd must be finite and positive.");
+    }
+  }
+
+  let pricing: HarborTrialRequest["pricing"];
+  const pricingText = values.get("pricing-json");
+  if (pricingText !== undefined) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(pricingText);
+    } catch (error) {
+      throw new TypeError("pricing-json must contain valid JSON.", {
+        cause: error,
+      });
+    }
+    if (!isObject(parsed)) {
+      throw new TypeError("pricing-json must be an object.");
+    }
+    pricing = parsed as HarborTrialRequest["pricing"];
+  }
+
+  return {
+    ...(advisorEffort ? { advisorEffort } : {}),
+    ...(advisorModel ? { advisorModel } : {}),
+    arm,
+    artifactRoot: requiredString(values.get("artifact-root"), "artifact-root"),
+    ...(budgetUsd === undefined ? {} : { budgetUsd }),
+    executorEffort,
+    executorModel,
+    ...(pricing ? { pricing } : {}),
+    seed: safeInteger(requiredString(values.get("seed"), "seed"), "seed"),
+    taskPath: requiredString(values.get("task"), "task"),
+  };
+};
+
+const readEnv = (name: string) => {
+  const value = process.env[name]?.trim();
+  return value || undefined;
+};
+
+const requireFile = (path: string, label: string) => {
+  if (!(existsSync(path) && statSync(path).isFile())) {
+    throw new Error(`${label} is missing: ${path}`);
+  }
+};
+
+const requireDirectory = (path: string, label: string) => {
+  if (!(existsSync(path) && statSync(path).isDirectory())) {
+    throw new Error(`${label} is missing: ${path}`);
+  }
+};
+
+const checkoutRootFor = (taskPath: string, sourceRoot: string) => {
+  try {
+    return execFileSync(
+      "git",
+      ["-C", taskPath, "rev-parse", "--show-toplevel"],
+      {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+      }
+    ).trim();
+  } catch (error) {
+    const candidate = resolve(sourceRoot);
+    if (existsSync(join(candidate, "pyproject.toml"))) {
+      return candidate;
+    }
+    throw new Error(
+      "ReactBench task is not inside a Git checkout and no pyproject.toml was found at BENCH_REACTBENCH_ROOT.",
+      { cause: error }
+    );
+  }
+};
+
+const safePart = (value: string) =>
+  value.replace(RUN_ID_PATTERN, "-").replace(/^-+|-+$/g, "") || "run";
+
+const trialNameFor = (taskId: string, arm: HarborTrialArm, seed: number) => {
+  const runId = safePart(
+    readEnv("BENCH_RUN_ID") ?? `${Date.now()}-${process.pid}`
+  );
+  return `pi-advisor-${safePart(taskId).slice(0, 64)}-${safePart(arm)}-${seed}-${runId.slice(-32)}`;
+};
+
+const providerHost = (baseUrl: string) => {
+  let url: URL;
+  try {
+    url = new URL(baseUrl);
+  } catch (error) {
+    throw new TypeError("BENCH_BASE_URL must be an absolute http(s) URL.", {
+      cause: error,
+    });
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new TypeError("BENCH_BASE_URL must use http or https.");
+  }
+  return url.hostname;
+};
+
+const parseAllowHosts = (host: string) => {
+  const extra = (readEnv("BENCH_HARBOR_ALLOW_HOSTS") ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  return [...new Set([host, ...PI_INSTALL_HOSTS, ...extra])];
+};
+
+const PRICING_KEYS = [
+  "inputPerMillion",
+  "outputPerMillion",
+  "cacheReadPerMillion",
+  "cacheWritePerMillion",
+] as const;
+
+const pricingFor = (
+  pricing: HarborTrialRequest["pricing"],
+  role: "executor" | "advisor"
+) => {
+  const value = pricing?.[role];
+  if (!isObject(value)) {
+    return;
+  }
+  if (
+    Object.keys(value).some(
+      (key) => !(PRICING_KEYS as readonly string[]).includes(key)
+    ) ||
+    PRICING_KEYS.some(
+      (key) =>
+        typeof value[key] !== "number" ||
+        !Number.isFinite(value[key]) ||
+        value[key] < 0
+    )
+  ) {
+    throw new TypeError(`Invalid ${role} pricing in pricing-json.`);
+  }
+  return value as PricingRates;
+};
+
+const samePricing = (
+  left: PricingRates | undefined,
+  right: PricingRates | undefined
+) => {
+  if (!(left && right)) {
+    return false;
+  }
+  return PRICING_KEYS.every((key) => left[key] === right[key]);
+};
+
+export const validateHarborTrialPricing = (request: HarborTrialRequest) => {
+  const pricedRoles =
+    request.arm === "E+A"
+      ? (["executor", "advisor"] as const)
+      : (["executor"] as const);
+  for (const role of pricedRoles) {
+    const rates = pricingFor(request.pricing, role);
+    if (!rates || PRICING_KEYS.every((key) => rates[key] === 0)) {
+      throw new Error(
+        `Missing non-zero ${role} pricing; refusing an unpriced Harbor trial.`
+      );
+    }
+  }
+  if (
+    request.arm === "E+A" &&
+    request.executorModel === request.advisorModel &&
+    !samePricing(
+      pricingFor(request.pricing, "executor"),
+      pricingFor(request.pricing, "advisor")
+    )
+  ) {
+    throw new Error(
+      "Executor and Advisor cannot share a model with different trial pricing."
+    );
+  }
+};
+
+const aggregateUsage = (requests: RecordedProviderRequest[]) => {
+  const result = {
+    cacheRead: 0,
+    cacheWrite: 0,
+    input: 0,
+    output: 0,
+    totalTokens: 0,
+    usageAvailable: true,
+  };
+  for (const request of requests) {
+    const snapshot = normalizeUsage(request.usage);
+    if (!snapshot.usageAvailable) {
+      result.usageAvailable = false;
+    }
+    result.cacheRead += snapshot.cacheRead ?? 0;
+    result.cacheWrite += snapshot.cacheWrite ?? 0;
+    result.input += snapshot.input ?? 0;
+    result.output += snapshot.output ?? 0;
+    result.totalTokens += snapshot.totalTokens ?? 0;
+  }
+  return result;
+};
+
+const costFor = (
+  requests: RecordedProviderRequest[],
+  pricing: HarborTrialRequest["pricing"]
+): CostValue => {
+  let total = 0;
+  for (const request of requests) {
+    const role = request.role === "advisor" ? "advisor" : "executor";
+    const rates = pricingFor(pricing, role);
+    const usage = normalizeUsage(request.usage);
+    if (!(rates && usage.usageAvailable)) {
+      return "unavailable";
+    }
+    total +=
+      ((usage.input ?? 0) * rates.inputPerMillion +
+        (usage.output ?? 0) * rates.outputPerMillion +
+        (usage.cacheRead ?? 0) * rates.cacheReadPerMillion +
+        (usage.cacheWrite ?? 0) * rates.cacheWritePerMillion) /
+      1_000_000;
+  }
+  return total;
+};
+
+const readJson = (path: string, label: string): JsonObject => {
+  requireFile(path, label);
+  let value: unknown;
+  try {
+    value = JSON.parse(readFileSync(path, "utf8"));
+  } catch (error) {
+    throw new TypeError(`${label} is not valid JSON: ${path}`, {
+      cause: error,
+    });
+  }
+  if (!isObject(value)) {
+    throw new TypeError(`${label} must contain an object: ${path}`);
+  }
+  return value;
+};
+
+const artifactDirectory = (trialDir: string, name: "agent" | "verifier") => {
+  const direct = join(trialDir, name);
+  if (existsSync(direct) && statSync(direct).isDirectory()) {
+    return direct;
+  }
+  const steps = join(trialDir, "steps");
+  if (existsSync(steps) && statSync(steps).isDirectory()) {
+    const matches = readdirSync(steps)
+      .map((step) => join(steps, step, name))
+      .filter((path) => existsSync(path) && statSync(path).isDirectory());
+    if (matches.length === 1) {
+      return matches[0];
+    }
+  }
+  throw new Error(`Harbor ${name} artifact directory is missing: ${trialDir}`);
+};
+
+const sameJsonFields = (
+  left: JsonObject,
+  right: JsonObject,
+  fields: string[]
+) => fields.every((field) => left[field] === right[field]);
+
+const expectedMode = (arm: HarborTrialArm) =>
+  arm === "E+A" ? "advisor" : "executor";
+
+const validateAttestation = (
+  value: unknown,
+  request: HarborTrialRequest,
+  expectedVersion: string
+): JsonObject => {
+  if (!isObject(value)) {
+    throw new TypeError("Harbor attestation must be an object.");
+  }
+  const expectedCalls = request.arm === "E+A" ? 1 : 0;
+  if (
+    value.adapter !== "pi-advisor-harbor" ||
+    value.extension !== "pi-advisor-flow" ||
+    value.loaded !== true ||
+    value.extensionVersion !== expectedVersion ||
+    value.mode !== expectedMode(request.arm) ||
+    value.shutdown !== true ||
+    value.advisorCalls !== expectedCalls
+  ) {
+    throw new Error(
+      "Harbor trial did not attest the pinned extension, mode, clean shutdown, and exact consultation count."
+    );
+  }
+  return value;
+};
+
+const parseRecords = (path: string) => {
+  requireFile(path, "Harbor request/usage record");
+  const records: JsonObject[] = [];
+  const lines = readFileSync(path, "utf8").split(LINE_BREAK);
+  for (const [index, line] of lines.entries()) {
+    if (!line.trim()) {
+      continue;
+    }
+    let value: unknown;
+    try {
+      value = JSON.parse(line);
+    } catch (error) {
+      throw new TypeError(`Malformed Harbor record at line ${index + 1}.`, {
+        cause: error,
+      });
+    }
+    if (!isObject(value)) {
+      throw new TypeError(
+        `Harbor record at line ${index + 1} is not an object.`
+      );
+    }
+    records.push(value);
+  }
+  if (records.length === 0) {
+    throw new Error("Harbor request/usage record is empty.");
+  }
+  return records;
+};
+
+const validateRequests = (
+  records: JsonObject[],
+  request: HarborTrialRequest
+): RecordedProviderRequest[] => {
+  const requests = records.filter((record) => record.kind === "request");
+  if (requests.length === 0) {
+    throw new Error("Harbor trial produced no provider request records.");
+  }
+  const expectedAdvisorCalls = request.arm === "E+A" ? 1 : 0;
+  const advisorRequests = requests.filter(
+    (record) => record.role === "advisor"
+  );
+  if (advisorRequests.length !== expectedAdvisorCalls) {
+    throw new Error(
+      `Harbor Advisor request count mismatch: expected ${expectedAdvisorCalls}, got ${advisorRequests.length}.`
+    );
+  }
+
+  const normalExecutorUsage = records.filter(
+    (record) =>
+      record.kind === "usage" &&
+      record.role === "executor" &&
+      record.source === "message_end"
+  );
+  let normalUsageIndex = 0;
+  const normalized: RecordedProviderRequest[] = [];
+  for (const record of requests) {
+    const { role, source } = record;
+    if (role !== "executor" && role !== "advisor") {
+      throw new Error(`Unexpected Harbor request role: ${String(role)}.`);
+    }
+    if (
+      source !== "before_provider_request" &&
+      source !== "ask_advisor_tool_result" &&
+      source !== "advisor_scout"
+    ) {
+      throw new Error(`Unexpected Harbor request source: ${String(source)}.`);
+    }
+    const model = requiredString(record.model, `${role} request model`);
+    const effort = requiredString(record.effort, `${role} request effort`);
+    const expectedModel =
+      role === "advisor" ? request.advisorModel : request.executorModel;
+    const expectedEffort =
+      role === "advisor" ? request.advisorEffort : request.executorEffort;
+    if (model !== expectedModel || effort !== expectedEffort) {
+      throw new Error(
+        `Harbor request pin mismatch for ${role}: expected ${expectedModel}@${expectedEffort}, got ${model}@${effort}.`
+      );
+    }
+    if (role === "advisor" && source !== "ask_advisor_tool_result") {
+      throw new Error(
+        "Advisor requests must come from ask_advisor tool results."
+      );
+    }
+    if (role === "executor" && source === "ask_advisor_tool_result") {
+      throw new Error(
+        "Executor requests cannot be labeled as Advisor tool results."
+      );
+    }
+    let { usage } = record;
+    if (source === "before_provider_request") {
+      const usageRecord = normalExecutorUsage[normalUsageIndex];
+      normalUsageIndex += 1;
+      if (
+        !(usageRecord && own(usageRecord, "usage")) ||
+        usageRecord.usage === undefined
+      ) {
+        throw new Error(
+          "A Harbor executor request is missing its usage artifact."
+        );
+      }
+      ({ usage } = usageRecord);
+    } else if (!own(record, "usage") || usage === undefined) {
+      throw new Error(
+        `A Harbor ${role} request is missing its usage artifact.`
+      );
+    }
+    if (!normalizeUsage(usage).usageAvailable) {
+      throw new Error(
+        `A Harbor ${role} request contains malformed or incomplete usage.`
+      );
+    }
+    normalized.push({
+      ...record,
+      effort,
+      model,
+      role,
+      usage,
+    });
+  }
+  if (normalUsageIndex !== normalExecutorUsage.length) {
+    throw new Error("Harbor usage artifacts do not match executor requests.");
+  }
+  return normalized;
+};
+
+const validateGrader = (trial: JsonObject, verifierDirectory: string) => {
+  const rewardFile = readJson(
+    join(verifierDirectory, "reward.json"),
+    "Harbor grader reward"
+  );
+  const { reward, react_doctor: reactDoctor, tests } = rewardFile;
+  if (
+    typeof reward !== "number" ||
+    !Number.isFinite(reward) ||
+    (reward !== 0 && reward !== 1) ||
+    typeof tests !== "number" ||
+    !Number.isFinite(tests) ||
+    (tests !== 0 && tests !== 1) ||
+    typeof reactDoctor !== "number" ||
+    !Number.isFinite(reactDoctor) ||
+    (reactDoctor !== 0 && reactDoctor !== 1)
+  ) {
+    throw new TypeError(
+      "ReactBench grader must record binary reward, behavioral-test, and React Doctor results."
+    );
+  }
+  if (reward === 1 && !(tests === 1 && reactDoctor === 1)) {
+    throw new Error(
+      "ReactBench grader reward claims a pass without both behavioral tests and React Doctor passing."
+    );
+  }
+  const verifierResult = trial.verifier_result;
+  if (!(isObject(verifierResult) && isObject(verifierResult.rewards))) {
+    throw new Error("Harbor result is missing its verifier result artifact.");
+  }
+  if (verifierResult.rewards.reward !== reward) {
+    throw new Error("Harbor result and grader reward artifacts disagree.");
+  }
+  return reward === 1;
+};
+
+const validateTrialIdentity = (
+  trial: JsonObject,
+  request: HarborTrialRequest,
+  trialName: string
+) => {
+  if (trial.trial_name !== trialName) {
+    throw new Error("Harbor result belongs to a different trial.");
+  }
+  if (trial.exception_info !== null && trial.exception_info !== undefined) {
+    throw new Error("Harbor trial contains an exception artifact.");
+  }
+  const modelInfo = isObject(trial.agent_info)
+    ? trial.agent_info.model_info
+    : undefined;
+  if (
+    !(
+      isObject(modelInfo) &&
+      typeof modelInfo.provider === "string" &&
+      typeof modelInfo.name === "string"
+    )
+  ) {
+    throw new Error("Harbor result is missing its resolved agent model pin.");
+  }
+  const reportedModel = `${modelInfo.provider}/${modelInfo.name}`;
+  if (reportedModel !== request.executorModel) {
+    throw new Error(
+      `Harbor result agent model mismatch: expected ${request.executorModel}, got ${reportedModel}.`
+    );
+  }
+};
+
+export const validateHarborArtifacts = (
+  trialDirectory: string,
+  request: HarborTrialRequest,
+  extensionVersion: string
+) => {
+  const trialName = basename(trialDirectory);
+  const taskId = basename(resolve(request.taskPath));
+  const agentDirectory = artifactDirectory(trialDirectory, "agent");
+  const verifierDirectory = artifactDirectory(trialDirectory, "verifier");
+  requireFile(join(agentDirectory, "pi.txt"), "Harbor Pi trajectory");
+  const records = parseRecords(join(agentDirectory, "bench-records.jsonl"));
+  const attestation = validateAttestation(
+    readJson(
+      join(agentDirectory, "bench-attestation.json"),
+      "Harbor attestation"
+    ),
+    request,
+    extensionVersion
+  );
+  const extensionLoaded = records.find(
+    (record) => record.kind === "extension_loaded"
+  );
+  if (
+    extensionLoaded?.extension !== "pi-advisor-flow" ||
+    extensionLoaded?.extensionVersion !== extensionVersion ||
+    extensionLoaded?.loaded !== true
+  ) {
+    throw new Error("Harbor records do not prove the pinned extension loaded.");
+  }
+  const finalAttestation = records
+    .filter((record) => record.kind === "attestation")
+    .at(-1);
+  if (
+    !(
+      finalAttestation &&
+      sameJsonFields(finalAttestation, attestation, [
+        "adapter",
+        "advisorCalls",
+        "extension",
+        "extensionVersion",
+        "loaded",
+        "mode",
+        "shutdown",
+      ])
+    )
+  ) {
+    throw new Error(
+      "Harbor attestation artifact does not match its final record."
+    );
+  }
+
+  const trialResultPath = existsSync(join(trialDirectory, "result.json"))
+    ? join(trialDirectory, "result.json")
+    : join(trialDirectory, "results.json");
+  const trial = readJson(trialResultPath, "Harbor trial result");
+  validateTrialIdentity(trial, request, trialName);
+  const passed = validateGrader(trial, verifierDirectory);
+  const requests = validateRequests(records, request);
+  const executorRequests = requests.filter((item) => item.role === "executor");
+  const advisorRequests = requests.filter((item) => item.role === "advisor");
+  const usage = {
+    advisor: aggregateUsage(advisorRequests),
+    executor: aggregateUsage(executorRequests),
+  };
+  return {
+    attestation,
+    consultations: advisorRequests.length,
+    cost: costFor(requests, request.pricing),
+    passed,
+    requests,
+    taskId,
+    trajectoryPath: trialDirectory,
+    usage,
+  };
+};
+
+interface HarborInvocationOptions {
+  artifactRoot: string;
+  baseUrl: string;
+  budgetProxyPath: string;
+  extensionPath: string;
+  extensionVersion: string;
+  harborBinary: string;
+  piVersion: string;
+  recorderPath: string;
+  request: HarborTrialRequest;
+  trialName: string;
+}
+
+export const buildHarborTrialArgs = ({
+  artifactRoot,
+  baseUrl,
+  budgetProxyPath,
+  extensionPath,
+  extensionVersion,
+  harborBinary,
+  piVersion,
+  recorderPath,
+  request,
+  trialName,
+}: HarborInvocationOptions) => {
+  const extensionDirectory = dirname(extensionPath);
+  const extensionSourceDirectory = resolve(extensionDirectory, "../src");
+  const extensionFilename = basename(extensionPath);
+  const mounts = [
+    {
+      read_only: true,
+      source: extensionDirectory,
+      target: "/bench-source/extensions",
+      type: "bind",
+    },
+    {
+      read_only: true,
+      source: extensionSourceDirectory,
+      target: "/bench-source/src",
+      type: "bind",
+    },
+    {
+      read_only: true,
+      source: recorderPath,
+      target: RECORDER_TARGET,
+      type: "bind",
+    },
+    {
+      read_only: true,
+      source: budgetProxyPath,
+      target: BUDGET_PROXY_TARGET,
+      type: "bind",
+    },
+  ];
+  const agentKwargs = [
+    `version=${piVersion}`,
+    `thinking=${request.executorEffort}`,
+    `extension_path=/bench-source/extensions/${extensionFilename}`,
+    `extension_version=${extensionVersion}`,
+    `benchmark_arm=${request.arm}`,
+    "model_api=openai-completions",
+    `scout_enabled=${readEnv("BENCH_SCOUT") === "1" ? "true" : "false"}`,
+  ];
+  if (request.arm === "E+A") {
+    agentKwargs.push(`advisor_model=${request.advisorModel}`);
+    agentKwargs.push(`advisor_effort=${request.advisorEffort}`);
+  }
+  const harborPrefix =
+    harborBinary === "uv"
+      ? ["run", "--locked", "harbor", "trial", "start"]
+      : ["trial", "start"];
+  return [
+    ...harborPrefix,
+    "--path",
+    request.taskPath,
+    "--trial-name",
+    trialName,
+    "--trials-dir",
+    artifactRoot,
+    "--agent",
+    EXPECTED_AGENT_IMPORT,
+    "--model",
+    request.executorModel,
+    ...agentKwargs.flatMap((value) => ["--agent-kwarg", value]),
+    "--agent-env",
+    `BENCH_API_KEY=${"$"}{BENCH_API_KEY}`,
+    "--agent-env",
+    `BENCH_BASE_URL=${"$"}{BENCH_BASE_URL}`,
+    "--agent-env",
+    `BENCH_TRIAL_BUDGET_USD=${request.budgetUsd}`,
+    "--agent-env",
+    `BENCH_TRIAL_PRICING_JSON=${JSON.stringify(request.pricing ?? {})}`,
+    "--mounts",
+    JSON.stringify(mounts),
+    ...parseAllowHosts(providerHost(baseUrl)).flatMap((host) => [
+      "--allow-agent-host",
+      host,
+      "--allow-environment-host",
+      host,
+    ]),
+  ];
+};
+
+export const runTrial = async (request: HarborTrialRequest) => {
+  if (process.env.BENCH_LIVE !== "1") {
+    throw new Error(
+      "BENCH_LIVE=1 is required; refusing to start a paid Harbor trial."
+    );
+  }
+  const sourceRoot = readEnv("BENCH_REACTBENCH_ROOT");
+  if (!sourceRoot) {
+    throw new Error("BENCH_REACTBENCH_ROOT is required by the Harbor wrapper.");
+  }
+  if (
+    request.budgetUsd === undefined ||
+    !Number.isFinite(request.budgetUsd) ||
+    request.budgetUsd <= 0
+  ) {
+    throw new Error(
+      "--budget-usd must be finite and positive; refusing an unbounded Harbor trial."
+    );
+  }
+  validateHarborTrialPricing(request);
+  const taskPath = resolve(request.taskPath);
+  requireFile(join(taskPath, "task.toml"), "ReactBench task definition");
+  const checkoutRoot = checkoutRootFor(taskPath, sourceRoot);
+  requireFile(
+    join(checkoutRoot, "pyproject.toml"),
+    "ReactBench pyproject.toml"
+  );
+
+  const extensionPath = resolve(
+    readEnv("BENCH_PI_ADVISOR_EXTENSION") ?? DEFAULT_EXTENSION_PATH
+  );
+  const recorderPath = resolve(
+    readEnv("BENCH_PI_ADVISOR_RECORDER") ?? DEFAULT_RECORDER_PATH
+  );
+  const budgetProxyPath = DEFAULT_BUDGET_PROXY_PATH;
+  requireFile(extensionPath, "Pinned pi-advisor extension");
+  requireFile(recorderPath, "Benchmark recorder");
+  requireFile(budgetProxyPath, "Benchmark budget proxy");
+  requireFile(resolve(REPO_ROOT, "bench/harbor/agent.py"), "Harbor Pi agent");
+  const extensionDirectory = dirname(extensionPath);
+  const extensionSourceDirectory = resolve(extensionDirectory, "../src");
+  requireDirectory(extensionSourceDirectory, "Pinned pi-advisor source");
+
+  const credentialEnv =
+    readEnv("BENCH_PI_ADVISOR_CREDENTIAL_ENV") ?? "BENCH_API_KEY";
+  const credential = readEnv(credentialEnv);
+  if (!credential) {
+    throw new Error(
+      `${credentialEnv} is not set; refusing an unauthenticated Harbor trial.`
+    );
+  }
+  const baseUrl = readEnv("BENCH_BASE_URL");
+  if (!baseUrl) {
+    throw new Error("BENCH_BASE_URL is required by the Harbor wrapper.");
+  }
+  const extensionVersion = readEnv("BENCH_PI_ADVISOR_VERSION");
+  const piVersion = readEnv("BENCH_PI_VERSION");
+  if (!(extensionVersion && piVersion)) {
+    throw new Error(
+      "BENCH_PI_ADVISOR_VERSION and BENCH_PI_VERSION are required."
+    );
+  }
+
+  const taskId = basename(taskPath);
+  const trialName = trialNameFor(taskId, request.arm, request.seed);
+  const artifactRoot = resolve(request.artifactRoot);
+  const trialDirectory = join(artifactRoot, trialName);
+  if (existsSync(trialDirectory)) {
+    throw new Error(
+      `Refusing to overwrite existing Harbor artifacts: ${trialDirectory}`
+    );
+  }
+
+  const configuredHarborBinary = readEnv("BENCH_HARBOR_BIN");
+  const harborBinary = configuredHarborBinary ?? "uv";
+  const args = buildHarborTrialArgs({
+    artifactRoot,
+    baseUrl,
+    budgetProxyPath,
+    extensionPath,
+    extensionVersion,
+    harborBinary,
+    piVersion,
+    recorderPath,
+    request,
+    trialName,
+  });
+  const env = {
+    ...process.env,
+    BENCH_API_KEY: credential,
+    BENCH_BASE_URL: baseUrl,
+    PYTHONPATH: [REPO_ROOT, process.env.PYTHONPATH].filter(Boolean).join(":"),
+  };
+
+  try {
+    await execFileAsync(harborBinary, args, {
+      cwd: checkoutRoot,
+      env,
+      maxBuffer: 64 * 1024 * 1024,
+    });
+  } catch (error) {
+    const code =
+      isObject(error) &&
+      (typeof error.code === "number" || typeof error.code === "string")
+        ? String(error.code)
+        : "unknown";
+    throw new Error(
+      `Harbor trial failed with exit code ${code}; inspect ${trialDirectory}.`,
+      { cause: error }
+    );
+  }
+
+  const result = validateHarborArtifacts(
+    trialDirectory,
+    request,
+    extensionVersion
+  );
+  process.stdout.write(
+    `${ATTESTATION_PREFIX}${JSON.stringify(result.attestation)}\n`
+  );
+  process.stdout.write(`${RESULT_PREFIX}${JSON.stringify(result)}\n`);
+  return result;
+};
+
+export const main = async (argv = process.argv.slice(2)) => {
+  const request = parseHarborTrialArgs(argv);
+  await runTrial(request);
+};
+
+if (import.meta.main) {
+  main().catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error);
+    process.stderr.write(`Harbor adapter error: ${message}\n`);
+    process.exitCode = 1;
+  });
+}

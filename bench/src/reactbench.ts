@@ -1,9 +1,14 @@
-import { execFile } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { readdirSync, readFileSync, statSync } from "node:fs";
-import { basename, join } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { assertRecordedRequestPins } from "./pins.js";
-import type { CostValue, ModelPin, RecordedProviderRequest } from "./types.js";
+import type {
+  CostValue,
+  ModelPin,
+  PricingRates,
+  RecordedProviderRequest,
+} from "./types.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -13,7 +18,10 @@ export interface ReactBenchTrialRequest {
   advisor?: ModelPin;
   arm: TrialArm;
   artifactRoot: string;
+  /** USD lease left after reserving this trial's baseline estimate. */
+  budgetUsd?: number;
   executor: ModelPin;
+  pricing?: Partial<Record<"executor" | "advisor", PricingRates>>;
   seed: number;
   taskPath: string;
 }
@@ -110,16 +118,17 @@ const parseCost = (value: Record<string, unknown>): CostValue => {
 const parseRequests = (value: Record<string, unknown>) => {
   const { requests } = value;
   if (
-    requests !== undefined &&
-    (!Array.isArray(requests) ||
-      requests.some(
-        (request) =>
-          !request || typeof request !== "object" || Array.isArray(request)
-      ))
+    !Array.isArray(requests) ||
+    requests.some(
+      (request) =>
+        !request || typeof request !== "object" || Array.isArray(request)
+    )
   ) {
-    throw new TypeError("ReactBench result requests must be an object array.");
+    throw new TypeError(
+      "ReactBench result must include a provider request object array."
+    );
   }
-  return requests as RecordedProviderRequest[] | undefined;
+  return requests as RecordedProviderRequest[];
 };
 
 export const parseReactBenchResult = (
@@ -142,7 +151,7 @@ export const parseReactBenchResult = (
     consultations: parseConsultations(parsed),
     cost: parseCost(parsed),
     passed: parsed.passed,
-    ...(requests === undefined ? {} : { requests }),
+    requests,
     taskId: typeof parsed.taskId === "string" ? parsed.taskId : fallbackTaskId,
     ...(typeof parsed.trajectoryPath === "string"
       ? { trajectoryPath: parsed.trajectoryPath }
@@ -158,6 +167,84 @@ export interface CommandReactBenchRunnerOptions {
   extraArgs?: string[];
   timeoutMs?: number;
 }
+
+export const buildReactBenchArgs = (
+  request: ReactBenchTrialRequest,
+  extraArgs: string[] = []
+) => {
+  if (
+    request.budgetUsd !== undefined &&
+    (!Number.isFinite(request.budgetUsd) || request.budgetUsd <= 0)
+  ) {
+    throw new TypeError("ReactBench trial budget must be finite and positive.");
+  }
+  return [
+    ...extraArgs,
+    ...(request.budgetUsd === undefined
+      ? []
+      : ["--budget-usd", String(request.budgetUsd)]),
+    "--task",
+    request.taskPath,
+    "--seed",
+    String(request.seed),
+    "--arm",
+    request.arm,
+    "--executor-model",
+    request.executor.model,
+    "--executor-effort",
+    request.executor.effort,
+    "--artifact-root",
+    request.artifactRoot,
+    ...(request.pricing
+      ? ["--pricing-json", JSON.stringify(request.pricing)]
+      : []),
+    ...(request.advisor
+      ? [
+          "--advisor-model",
+          request.advisor.model,
+          "--advisor-effort",
+          request.advisor.effort,
+        ]
+      : []),
+  ];
+};
+
+const validateRecordedRequests = (
+  requests: readonly RecordedProviderRequest[],
+  request: ReactBenchTrialRequest
+) => {
+  if (requests.length === 0) {
+    throw new Error(
+      "ReactBench adapter must record every provider request for pin validation."
+    );
+  }
+  const expectedPins = [
+    request.executor,
+    ...(request.advisor ? [request.advisor] : []),
+  ];
+  const allowedRoles = new Set<string>(expectedPins.map((pin) => pin.role));
+  for (const providerRequest of requests) {
+    if (
+      typeof providerRequest.role !== "string" ||
+      !allowedRoles.has(providerRequest.role)
+    ) {
+      throw new Error(
+        `ReactBench adapter emitted an unexpected request role: ${String(providerRequest.role)}.`
+      );
+    }
+  }
+  for (const pin of expectedPins) {
+    const roleRequests = requests.filter(
+      (providerRequest) => providerRequest.role === pin.role
+    );
+    assertRecordedRequestPins(roleRequests as RecordedProviderRequest[], pin);
+    if (pin.role === "advisor" && roleRequests.length !== 1) {
+      throw new Error(
+        `ReactBench adapter emitted ${roleRequests.length} Advisor requests; expected 1.`
+      );
+    }
+  }
+};
 
 /**
  * Narrow process boundary for both the Harbor adapter and the approved
@@ -175,32 +262,28 @@ export class CommandReactBenchRunner implements ReactBenchTrialRunner {
   }
 
   async run(request: ReactBenchTrialRequest) {
-    const args = [
-      ...(this.#options.extraArgs ?? []),
-      "--task",
-      request.taskPath,
-      "--seed",
-      String(request.seed),
-      "--arm",
-      request.arm,
-      "--executor-model",
-      request.executor.model,
-      "--executor-effort",
-      request.executor.effort,
-      "--artifact-root",
-      request.artifactRoot,
-      ...(request.advisor
-        ? [
-            "--advisor-model",
-            request.advisor.model,
-            "--advisor-effort",
-            request.advisor.effort,
-          ]
-        : []),
-    ];
+    const args = buildReactBenchArgs(request, this.#options.extraArgs);
     const result = await execFileAsync(this.#options.command, args, {
       cwd: this.#options.cwd,
-      env: { ...process.env, BENCH_TASK_ARM: request.arm },
+      env: {
+        ...process.env,
+        ...(request.advisor
+          ? {
+              BENCH_ADVISOR_EFFORT: request.advisor.effort,
+              BENCH_ADVISOR_MODEL: request.advisor.model,
+            }
+          : {}),
+        ...(request.budgetUsd === undefined
+          ? {}
+          : { BENCH_TRIAL_BUDGET_USD: String(request.budgetUsd) }),
+        ...(request.pricing
+          ? { BENCH_TRIAL_PRICING_JSON: JSON.stringify(request.pricing) }
+          : {}),
+        BENCH_EXECUTOR_EFFORT: request.executor.effort,
+        BENCH_EXECUTOR_MODEL: request.executor.model,
+        BENCH_TASK_ARM: request.arm,
+        BENCH_TASK_SEED: String(request.seed),
+      },
       maxBuffer: 16 * 1024 * 1024,
       timeout: this.#options.timeoutMs ?? 2_400_000,
     });
@@ -208,24 +291,51 @@ export class CommandReactBenchRunner implements ReactBenchTrialRunner {
       `${result.stdout}\n${result.stderr}`,
       request.taskPath
     );
-    if (!parsed.requests || parsed.requests.length === 0) {
+    if (!parsed.requests) {
       throw new Error(
         "ReactBench adapter must record every provider request for pin validation."
       );
     }
-    const expectedPins = [
-      request.executor,
-      ...(request.advisor ? [request.advisor] : []),
-    ];
-    for (const pin of expectedPins) {
-      const roleRequests = parsed.requests.filter(
-        (providerRequest) => providerRequest.role === pin.role
+    validateRecordedRequests(parsed.requests, request);
+    if (parsed.consultations !== (request.advisor ? 1 : 0)) {
+      throw new Error(
+        "ReactBench result consultations must equal the recorded Advisor request count."
       );
-      assertRecordedRequestPins(roleRequests, pin);
     }
     return parsed;
   }
 }
+
+export const assertReactBenchCheckout = (
+  root: string,
+  expectedCommit: string
+) => {
+  if (!expectedCommit.trim()) {
+    throw new TypeError("Expected ReactBench commit is required.");
+  }
+  const checkoutRoot = execFileSync(
+    "git",
+    ["-C", resolve(root), "rev-parse", "--show-toplevel"],
+    {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }
+  ).trim();
+  const actualCommit = execFileSync(
+    "git",
+    ["-C", checkoutRoot, "rev-parse", "HEAD"],
+    {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }
+  ).trim();
+  if (actualCommit !== expectedCommit) {
+    throw new Error(
+      `ReactBench checkout is not pinned: expected ${expectedCommit}, got ${actualCommit}.`
+    );
+  }
+  return { actualCommit, checkoutRoot };
+};
 
 export const discoverReactBenchTasks = (root: string, limit = 30) => {
   if (!Number.isSafeInteger(limit) || limit <= 0) {

@@ -26,6 +26,7 @@ import {
 } from "./decision-context.js";
 import { discoverDecisionItems, hashTree } from "./fixture.js";
 import { LiveModelClient, readLiveClientConfig } from "./live-client.js";
+import { assertPinnedLiveModelConfiguration } from "./pins.js";
 import { reportFor, writeReport } from "./report.js";
 import { scoreAdvice } from "./score/index.js";
 import { buildJudgePrompt, type JudgeInvoker } from "./score/judge.js";
@@ -766,6 +767,7 @@ export const runDecisions = async ({
     return report;
   }
 
+  assertPinnedLiveModelConfiguration(config);
   const includeScout = process.env.BENCH_SCOUT === "1";
   if (missingLiveCost(config, includeScout)) {
     const report = unavailableReport(

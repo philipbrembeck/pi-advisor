@@ -9,8 +9,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ### Added
 
 - Added a repository-only failsafe benchmark with an offline replay tier, a
-  24-item decision-point corpus, pinned live-tier controls, hard budget limits,
-  and task-level uplift/dominance reporting. See [Benchmarking](docs/benchmark.md).
+  24-item decision-point corpus, a fail-closed Pi/Harbor ReactBench adapter,
+  pinned live-tier controls, hard budget limits, and task-level
+  uplift/dominance reporting. See [Benchmarking](docs/benchmark.md).
 - Ensured configured Advisor reasoning effort reaches the provider-facing
   request field used by current Pi AI adapters.
 

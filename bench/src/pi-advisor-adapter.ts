@@ -1,4 +1,6 @@
-import { statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
+import { normalizeUsage } from "./cost.js";
 import type {
   CommandReactBenchRunnerOptions,
   ReactBenchTrialRequest,
@@ -22,6 +24,7 @@ export interface AdvisorRuntimeAttestation {
   extensionVersion: string;
   loaded: true;
   mode: AdvisorAdapterMode;
+  shutdown: true;
 }
 
 export interface PiAdvisorAdapterPrerequisites {
@@ -29,6 +32,7 @@ export interface PiAdvisorAdapterPrerequisites {
   credentialPresent?: boolean;
   extensionPath: string;
   extensionVersion: string;
+  piVersion: string;
   providerBaseUrl: string;
 }
 
@@ -86,6 +90,11 @@ export const assertPiAdvisorPrerequisites = (
       "BENCH_PI_ADVISOR_VERSION must identify the pinned Advisor extension."
     );
   }
+  if (!prerequisites.piVersion.trim()) {
+    throw new PiAdvisorAdapterUnavailableError(
+      "BENCH_PI_VERSION must identify the pinned Pi package."
+    );
+  }
   if (!isValidProviderUrl(prerequisites.providerBaseUrl)) {
     throw new PiAdvisorAdapterUnavailableError(
       "BENCH_BASE_URL must be an http(s) provider endpoint for the Harbor adapter."
@@ -98,7 +107,7 @@ export const assertPiAdvisorPrerequisites = (
   }
   const credentialPresent =
     prerequisites.credentialPresent ??
-    Boolean(env[prerequisites.credentialEnv]);
+    Boolean(env[prerequisites.credentialEnv]?.trim());
   if (!credentialPresent) {
     throw new PiAdvisorAdapterUnavailableError(
       `${prerequisites.credentialEnv} is not set; refusing to run plain or unauthenticated Pi.`
@@ -107,33 +116,123 @@ export const assertPiAdvisorPrerequisites = (
   return true;
 };
 
+const assertRuntimeArtifacts = (result: ReactBenchTrialResult) => {
+  if (
+    typeof result.trajectoryPath !== "string" ||
+    !result.trajectoryPath.trim()
+  ) {
+    throw new Error(
+      "Harbor adapter result must identify its archived trajectory."
+    );
+  }
+  const { trajectoryPath } = result;
+  if (!(existsSync(trajectoryPath) && statSync(trajectoryPath).isDirectory())) {
+    throw new Error(
+      `Harbor trajectory directory is missing: ${trajectoryPath}`
+    );
+  }
+  const artifactFile = (relativePath: string) => {
+    const direct = join(trajectoryPath, relativePath);
+    if (existsSync(direct) && statSync(direct).isFile()) {
+      return direct;
+    }
+    const steps = join(trajectoryPath, "steps");
+    if (!(existsSync(steps) && statSync(steps).isDirectory())) {
+      return;
+    }
+    const matches = readdirSync(steps)
+      .map((step) => join(steps, step, relativePath))
+      .filter((path) => existsSync(path) && statSync(path).isFile());
+    return matches.length === 1 ? matches[0] : undefined;
+  };
+  const requiredFiles = [
+    "agent/pi.txt",
+    "agent/bench-records.jsonl",
+    "agent/bench-attestation.json",
+    "verifier/reward.json",
+  ];
+  if (requiredFiles.some((file) => !artifactFile(file))) {
+    throw new Error(
+      "Harbor adapter trajectory is missing a session, request/usage, attestation, or grader artifact."
+    );
+  }
+  const { usage } = result;
+  if (!usage) {
+    throw new Error("Harbor adapter result must include usage aggregates.");
+  }
+  if (
+    !(
+      isRecord(usage) &&
+      isRecord(usage.executor) &&
+      isRecord(usage.advisor) &&
+      usage.executor.usageAvailable === true &&
+      usage.advisor.usageAvailable === true
+    )
+  ) {
+    throw new Error(
+      "Harbor adapter result contains unavailable or malformed usage aggregates."
+    );
+  }
+  if (!result.requests?.length) {
+    throw new Error("Harbor adapter result must include provider requests.");
+  }
+  if (
+    result.requests.some(
+      (request) =>
+        !Object.hasOwn(request, "usage") ||
+        request.usage === undefined ||
+        !normalizeUsage(request.usage).usageAvailable
+    )
+  ) {
+    throw new Error(
+      "Harbor adapter result contains a missing or malformed request usage artifact."
+    );
+  }
+  const rewardPath = artifactFile("verifier/reward.json");
+  if (!rewardPath) {
+    throw new Error("Harbor grader reward artifact is missing.");
+  }
+  let reward: unknown;
+  try {
+    reward = JSON.parse(readFileSync(rewardPath, "utf8"));
+  } catch (error) {
+    throw new TypeError("Harbor grader reward is not valid JSON.", {
+      cause: error,
+    });
+  }
+  if (
+    !isRecord(reward) ||
+    (reward.reward !== 0 && reward.reward !== 1) ||
+    result.passed !== (reward.reward === 1)
+  ) {
+    throw new Error("Harbor result does not agree with its grader reward.");
+  }
+};
+
 const parseAttestationValue = (
   value: unknown,
   expectedVersion: string,
   arm: TrialArm
 ): AdvisorRuntimeAttestation => {
+  const expectedCalls = arm === "E+A" ? 1 : 0;
   if (
     !(
       isRecord(value) &&
       value.adapter === ADVISOR_ADAPTER_ID &&
       value.extension === ADVISOR_EXTENSION_ID &&
       value.loaded === true &&
+      value.shutdown === true &&
       typeof value.extensionVersion === "string" &&
       value.extensionVersion === expectedVersion &&
       (value.mode === "executor" || value.mode === "advisor") &&
       value.mode === modeForArm(arm) &&
       typeof value.advisorCalls === "number" &&
       Number.isSafeInteger(value.advisorCalls) &&
-      value.advisorCalls >= 0
+      value.advisorCalls === expectedCalls
     )
   ) {
     throw new Error(
-      "Harbor adapter must attest that the pinned pi-advisor extension loaded in the expected mode."
-    );
-  }
-  if (arm === "E+A" && value.advisorCalls < 1) {
-    throw new Error(
-      "Harbor E+A trial must attest at least one Advisor consultation."
+      "Harbor adapter must attest that the pinned pi-advisor extension loaded, shut down cleanly, and made the exact expected number of consultations."
     );
   }
   return {
@@ -143,6 +242,7 @@ const parseAttestationValue = (
     extensionVersion: value.extensionVersion,
     loaded: true,
     mode: value.mode,
+    shutdown: true,
   };
 };
 
@@ -202,6 +302,13 @@ export class PiAdvisorHarborAdapter {
       this.#prerequisites.extensionVersion,
       request.arm
     );
+    const expectedConsultations = request.arm === "E+A" ? 1 : 0;
+    if (result.consultations !== expectedConsultations) {
+      throw new Error(
+        `Harbor result consultations must equal the exact expected count (${expectedConsultations}).`
+      );
+    }
+    assertRuntimeArtifacts(result);
     return { ...result, attestation };
   };
 }
@@ -217,11 +324,12 @@ export const createPiAdvisorHarborAdapter = (
   }
   const extensionPath = env.BENCH_PI_ADVISOR_EXTENSION;
   const extensionVersion = env.BENCH_PI_ADVISOR_VERSION;
+  const piVersion = env.BENCH_PI_VERSION;
   const providerBaseUrl = env.BENCH_BASE_URL;
   const credentialEnv = env.BENCH_PI_ADVISOR_CREDENTIAL_ENV ?? "BENCH_API_KEY";
-  if (!(extensionPath && extensionVersion && providerBaseUrl)) {
+  if (!(extensionPath && extensionVersion && piVersion && providerBaseUrl)) {
     throw new PiAdvisorAdapterUnavailableError(
-      "BENCH_PI_ADVISOR_EXTENSION, BENCH_PI_ADVISOR_VERSION, and BENCH_BASE_URL are required for the Advisor Harbor adapter."
+      "BENCH_PI_ADVISOR_EXTENSION, BENCH_PI_ADVISOR_VERSION, BENCH_PI_VERSION, and BENCH_BASE_URL are required for the Advisor Harbor adapter."
     );
   }
   return new PiAdvisorHarborAdapter({
@@ -230,9 +338,10 @@ export const createPiAdvisorHarborAdapter = (
     cwd: process.cwd(),
     prerequisites: {
       credentialEnv,
-      credentialPresent: Boolean(env[credentialEnv]),
+      credentialPresent: Boolean(env[credentialEnv]?.trim()),
       extensionPath,
       extensionVersion,
+      piVersion,
       providerBaseUrl,
     },
   });

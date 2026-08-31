@@ -3,6 +3,10 @@
 `bench/` is a repository-only benchmark for the Executor/Advisor flow. It is
 not included in the published npm package.
 
+> [!CAUTION]
+> This is a fully **vibe coded** benchmark harness. It is not a general-purpose benchmark framework and does not attempt to measure provider performance.
+> Its sole purpose is to back the pi-advisor-flow with *somewhat* realistic numbers and to check whether they change significantly during release cycles or with new experimental features.
+
 The benchmark has three isolated tiers:
 
 | Tier | Command | What it can establish |
@@ -78,10 +82,11 @@ Set paths for the current checkout; these are operator-supplied and are not
 part of the repository:
 
 ```bash
-export BENCH_REACTBENCH_ROOT=/path/to/reactbench
-export BENCH_PI_ADVISOR_ADAPTER=/path/to/pi-advisor-harbor-adapter
-export BENCH_PI_ADVISOR_EXTENSION=/path/to/pi-advisor/extensions/index.ts
+export BENCH_REACTBENCH_ROOT=/path/to/reactbench/tasks
+export BENCH_PI_ADVISOR_ADAPTER="$PWD/bench/harbor/run-trial"
+export BENCH_PI_ADVISOR_EXTENSION="$PWD/extensions/index.ts"
 export BENCH_PI_ADVISOR_VERSION=0.5.0
+export BENCH_PI_VERSION=0.84.4
 export BENCH_BASE_URL=https://provider.example/v1
 export BENCH_API_KEY=replace-with-a-secret
 
@@ -94,15 +99,31 @@ arm, pinned model/effort values, and artifact directory. It must load the
 pinned `pi-advisor` extension, refuse plain Pi, and print both records:
 
 ```text
-BENCH_ADVISOR_ATTESTATION={"adapter":"pi-advisor-harbor","extension":"pi-advisor-flow","extensionVersion":"0.5.0","loaded":true,"mode":"advisor","advisorCalls":1}
+BENCH_ADVISOR_ATTESTATION={"adapter":"pi-advisor-harbor","extension":"pi-advisor-flow","extensionVersion":"0.5.0","loaded":true,"mode":"advisor","advisorCalls":1,"shutdown":true}
 BENCH_RESULT={"passed":true,"cost":0.12,"consultations":1,"taskId":"...","requests":[...]}
 ```
 
-The `E+A` result must attest at least one Advisor consultation. The `E`, `F`,
-and optional `F′` results must attest the extension in executor mode. A result
-without the attestation is rejected as plain-Pi output. The current repository
-contains the fail-closed boundary and protocol tests; a credentialed executable
-adapter still has to be supplied and reviewed before screening.
+The `E+A` result must attest exactly one Advisor consultation. The `E`, `F`,
+and optional `F′` results must attest the extension in executor mode and zero
+Advisor consultations. The checked-in `bench/harbor/run-trial` executable
+starts Harbor with the ReactBench checkout's pinned `uv.lock`, mounts only the
+extension/source, recorder, and budget proxy needed by the agent, forwards the seed/model/
+effort/pricing request, gives the normal Pi client a remaining-USD lease enforced by a
+local forwarding proxy before provider requests, and archives the Harbor
+result plus Pi trajectory. It refuses to overwrite an existing trial
+directory. The wrapper allowlists the provider and standard Pi installation
+hosts. Set `BENCH_HARBOR_ALLOW_HOSTS` to a comma-separated list for any
+additional installation host. It rejects missing
+trajectory, grader, request, usage, attestation, or clean-shutdown artifacts,
+wrong model/effort pins, extra Advisor calls, and zero E+A consultations. A
+credentialed trial is still required before screening; no model-quality or
+economic result is claimed. The request/attestation files are runtime instrumentation written inside the
+agent container, not cryptographic proof against a malicious agent: the
+wrapper detects missing and inconsistent artifacts, but a hostile process with
+shell access could forge them. The budget proxy removes the real credential
+and upstream URL from Pi's process, but it is still process-level isolation,
+not a cryptographic boundary. Harbor's verifier reward remains the independent
+grading artifact.
 
 Run Stage 2 only after Stage 1 has produced a screening report and the
 corresponding preregistration section was committed. If `BENCH_SCREEN_REPORT`
@@ -132,6 +153,9 @@ settings, fixture hashes, budget accounting, controls, and warnings. Tier 2
 keeps the positive mechanical score separate from the LLM judge and retains
 judge justifications. Tier 3 aggregates five seeds to task-level outcomes for
 Q2 and reports the candidate-band-reweighted cost/pass-rate comparison for Q3.
+If out-of-reach tasks have nonzero prevalence, E+A is not run there, so its
+Advisor-inclusive reweighted cost is marked unavailable rather than equated
+with Executor cost; the Q3 verdict fails closed.
 
 The benchmark never reports an absolute ReactBench score. Its results are
 paired comparisons between fixed arms on the same tasks and seeds.
@@ -159,10 +183,10 @@ expected `401` response for a deliberately invalid probe key. That verifies the
 container-to-provider network path without making a paid model request.
 
 **Gate A status:** container startup, ReactBench grading, and allowlisted
-provider transport are validated. A real authenticated provider run is still
-required before screening; no model-quality or economic result is claimed.
-The benchmark's Pi/ReactBench adapter is still required to make the pinned
-Executor/Advisor flow reproducible. See `bench/STATUS.md` for phase state.
+provider transport are validated. The checked-in Pi/ReactBench adapter and
+fail-closed artifact boundary are implemented, but a real authenticated
+provider run is still required before screening; no model-quality or economic
+result is claimed. See `bench/STATUS.md` for phase state.
 
 ## Provenance and licensing
 

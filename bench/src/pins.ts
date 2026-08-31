@@ -2,6 +2,13 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import {
+  PINNED_ADVISOR,
+  PINNED_ADVISOR_EFFORT,
+  PINNED_EXECUTOR,
+  PINNED_EXECUTOR_EFFORT,
+  PINNED_JUDGE_EFFORT,
+} from "./config.js";
 import type {
   BenchmarkConfig,
   BenchmarkPins,
@@ -72,6 +79,57 @@ export const capturePins = (
 
 export const modelPinText = (pin: ModelPin) =>
   `${pin.role}=${pin.model}@${pin.effort}`;
+
+const EXPECTED_LIVE_PINS: Record<string, ModelPin> = {
+  cheapAdvisor: {
+    effort: PINNED_ADVISOR_EFFORT,
+    model: PINNED_EXECUTOR,
+    role: "advisor",
+  },
+  decisionAdvisor: {
+    effort: PINNED_ADVISOR_EFFORT,
+    model: PINNED_ADVISOR,
+    role: "advisor",
+  },
+  executor: {
+    effort: PINNED_EXECUTOR_EFFORT,
+    model: PINNED_EXECUTOR,
+    role: "executor",
+  },
+  frontier: {
+    effort: PINNED_EXECUTOR_EFFORT,
+    model: PINNED_ADVISOR,
+    role: "executor",
+  },
+  frontierMedium: {
+    effort: PINNED_ADVISOR_EFFORT,
+    model: PINNED_ADVISOR,
+    role: "executor",
+  },
+  judge: {
+    effort: PINNED_JUDGE_EFFORT,
+    model: PINNED_ADVISOR,
+    role: "judge",
+  },
+};
+
+/** Reject a live config that silently changes the preregistered model pair. */
+export const assertPinnedLiveModelConfiguration = (config: BenchmarkConfig) => {
+  for (const [name, expected] of Object.entries(EXPECTED_LIVE_PINS)) {
+    const actual = config.modelPins[name];
+    if (
+      !actual ||
+      actual.role !== expected.role ||
+      actual.model !== expected.model ||
+      actual.effort !== expected.effort
+    ) {
+      throw new Error(
+        `Live model pin ${name} must remain ${modelPinText(expected)}.`
+      );
+    }
+  }
+  return true;
+};
 
 const requestModel = (request: RecordedProviderRequest) => {
   if (typeof request.model === "string" && request.model.includes("/")) {

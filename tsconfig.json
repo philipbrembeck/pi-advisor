@@ -23,6 +23,7 @@
     "extensions/**/*",
     "test/**/*",
     "bench/src/**/*",
-    "bench/test/**/*"
+    "bench/test/**/*",
+    "bench/harbor/**/*.ts"
   ]
 }
