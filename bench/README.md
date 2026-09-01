@@ -155,7 +155,7 @@ Harbor's default delete behavior removes each completed local environment image,
 while the archived trajectory remains under `bench/reports/`. For long local
 Docker runs, `BENCH_HARBOR_PRUNE=1` also prunes BuildKit's unused cache after
 each trial; use it only on the dedicated benchmark Docker context because the
-prune is context-wide.
+prune is context-wide, and do not combine it with concurrent Harbor trials.
 
 ```bash
 export BENCH_SCREEN_REPORT=/path/to/screen-report.json
