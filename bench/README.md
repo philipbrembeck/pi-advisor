@@ -148,8 +148,9 @@ trial. On Apple silicon, `BENCH_HARBOR_ENV=apple-container` is an experimental
 opt-in: install the Apple Container CLI and system kernel, configure
 `host.container.internal` for the broker as described in Apple's host-integration
 docs, and first verify that the selected ReactBench task supports Harbor's
-Apple backend. Tasks requiring Docker Compose, network allowlists, or separate
-verifier features may still require Docker/Colima; the default remains Docker.
+Apple backend. The pinned ReactBench screening tasks currently request enforced
+`no-network` phases, which Harbor's Apple backend rejects; use Docker/Colima
+unless that capability is added. The default remains Docker.
 Harbor's default delete behavior removes each completed local environment image,
 while the archived trajectory remains under `bench/reports/`. For long local
 Docker runs, `BENCH_HARBOR_PRUNE=1` also prunes BuildKit's unused cache after
