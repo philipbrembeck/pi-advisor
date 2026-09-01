@@ -15,6 +15,9 @@ const environmentValue = (name: string) => {
   return value || undefined;
 };
 
+const booleanEnvironmentValue = (name: string) =>
+  ["1", "true", "yes"].includes(environmentValue(name)?.toLowerCase() ?? "");
+
 const modelId = (ref: string | undefined) => {
   if (!ref) {
     return;
@@ -75,6 +78,7 @@ export default function (pi: ExtensionAPI) {
   let advisorCalls = 0;
   const mode = environmentValue("BENCH_ADAPTER_MODE");
   const extensionVersion = environmentValue("BENCH_PI_ADVISOR_VERSION");
+  const smokeProtocol = booleanEnvironmentValue("BENCH_SMOKE_PROTOCOL");
 
   const writeAttestation = (shutdown: boolean) => {
     const attestation = {
@@ -85,6 +89,7 @@ export default function (pi: ExtensionAPI) {
       loaded: true,
       mode,
       shutdown,
+      smokeProtocol,
     };
     mkdirSync("/logs/agent", { recursive: true });
     writeFileSync(ATTESTATION_PATH, `${JSON.stringify(attestation)}\n`, "utf8");
@@ -98,6 +103,7 @@ export default function (pi: ExtensionAPI) {
     kind: "extension_loaded",
     loaded: true,
     mode,
+    smokeProtocol,
   });
 
   pi.on("before_provider_request", (event, ctx) => {

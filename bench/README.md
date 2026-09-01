@@ -107,31 +107,34 @@ arm, pinned model/effort values, and artifact directory. It must load the
 pinned `pi-advisor` extension, refuse plain Pi, and print both records:
 
 ```text
-BENCH_ADVISOR_ATTESTATION={"adapter":"pi-advisor-harbor","extension":"pi-advisor-flow","extensionVersion":"0.5.0","loaded":true,"mode":"advisor","advisorCalls":1,"shutdown":true}
+BENCH_ADVISOR_ATTESTATION={"adapter":"pi-advisor-harbor","extension":"pi-advisor-flow","extensionVersion":"0.5.0","loaded":true,"mode":"advisor","advisorCalls":1,"shutdown":true,"smokeProtocol":false}
 BENCH_RESULT={"passed":true,"cost":0.12,"consultations":1,"taskId":"...","requests":[...]}
 ```
 
-The `E+A` result must attest exactly one Advisor consultation. The `E`, `F`,
-and optional `F′` results must attest the extension in executor mode and zero
-Advisor consultations. The checked-in `bench/harbor/run-trial` executable starts Harbor with the
-ReactBench checkout's pinned `uv.lock`, mounts only the extension/source and
-recorder needed by the agent, forwards the seed/model/effort/pricing request,
-gives the normal Pi client a remaining-USD lease enforced by the host-side
-Codex broker before provider requests, and archives the Harbor result plus Pi
-trajectory. It refuses to overwrite an existing trial
-directory. The wrapper allowlists the provider and standard Pi installation
-hosts. Set `BENCH_HARBOR_ALLOW_HOSTS` to a comma-separated list for any
-additional installation host. It rejects missing trajectory, grader, request, usage, attestation, or
-clean-shutdown artifacts, wrong model/effort pins, extra Advisor calls, and
-zero E+A consultations. A credentialed smoke trial is still required before
-screening; no model-quality or economic result is claimed before that gate.
-The request/attestation files are runtime instrumentation written inside the
-agent container, not cryptographic proof against a malicious agent: the
-wrapper detects missing and inconsistent artifacts, but a hostile process with
-shell access could forge them. The host broker is a conservative process-level
-OAuth and budget boundary, not cryptographic isolation against a hostile
-same-container agent. Harbor's verifier reward remains the independent grading
-artifact.
+The attestation records whether the run used the smoke-only protocol. The
+`E+A` result may contain zero or one Advisor consultation, bounded by the
+configured one-call session budget; its observed frequency and cost are part
+of the evaluation. The `E`, `F`, and optional `F′` results must attest the
+extension in executor mode and zero Advisor consultations. The checked-in
+`bench/harbor/run-trial` executable starts Harbor with the ReactBench
+checkout's pinned `uv.lock`, mounts only the extension/source and recorder
+needed by the agent, forwards the seed/model/effort/pricing request, gives the
+normal Pi client a remaining-USD lease enforced by the host-side Codex broker
+before provider requests, and archives the Harbor result plus Pi trajectory.
+It refuses to overwrite an existing trial directory. The wrapper allowlists
+the provider and standard Pi installation hosts. Set
+`BENCH_HARBOR_ALLOW_HOSTS` to a comma-separated list for any additional
+installation host. It rejects missing trajectory, grader, request, usage,
+attestation, or clean-shutdown artifacts, wrong model/effort pins, and extra
+Advisor calls. The smoke-only `BENCH_SMOKE=1` protocol forces one consultation
+to verify the broker path; ordinary screening and evaluation do not inject a
+consultation. The request/attestation files are runtime instrumentation
+written inside the agent container, not cryptographic proof against a
+malicious agent: the wrapper detects missing and inconsistent artifacts, but a
+hostile process with shell access could forge them. The host broker is a
+conservative process-level OAuth and budget boundary, not cryptographic
+isolation against a hostile same-container agent. Harbor's verifier reward
+remains the independent grading artifact.
 
 Run Stage 2 only after Stage 1 has produced a screening report and the
 corresponding preregistration section was committed. If `BENCH_SCREEN_REPORT`
@@ -188,11 +191,13 @@ trial, no exception, and reward/tests/React Doctor metrics all equal to `1.0`.
 The host-side OAuth broker and pinned native Codex transport are covered by
 offline proxy tests. On 2026-09-01, bounded authenticated smoke trials also
 passed the artifact boundary: one `E` `fix-react` trial (seed `101`, normalized
-cost `$0.0392`) and one `E+A` `write-react` trial (seed `103`, normalized cost
-`$0.0658`). They resolved Executor `luna@max`, and the E+A trial resolved
-Advisor `sol@medium` with exactly one consultation. Both task rewards were
-`0`, so these are transport/integration evidence only, not model-quality or
-economic results. See `bench/STATUS.md` for phase state.
+cost `$0.0471`) and one smoke-only `E+A` `write-react` trial (seed `103`,
+normalized cost `$0.0397`). They resolved Executor `luna@max`; the smoke trial
+resolved Advisor `sol@medium` with exactly one consultation. A matching
+ordinary E+A trial (normalized cost `$0.0317`) recorded zero consultations
+without the smoke protocol, showing that screening does not inject a call. All
+task rewards were `0`, so these are transport/integration evidence only, not
+model-quality or economic results. See `bench/STATUS.md` for phase state.
 
 ## Provenance and licensing
 

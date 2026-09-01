@@ -175,8 +175,18 @@ export interface CommandReactBenchRunnerOptions {
   command: string;
   cwd?: string;
   extraArgs?: string[];
+  smokeProtocol?: boolean;
   timeoutMs?: number;
 }
+
+/** Smoke-only forced consultations must never leak into screening/evaluation. */
+export const assertNoSmokeProtocol = (entrypoint: string) => {
+  if (process.env.BENCH_SMOKE === "1") {
+    throw new Error(
+      `BENCH_SMOKE=1 is reserved for the dedicated Harbor smoke invocation; refusing ${entrypoint}.`
+    );
+  }
+};
 
 export const buildReactBenchArgs = (
   request: ReactBenchTrialRequest,
@@ -247,10 +257,13 @@ const validateRecordedRequests = (
     const roleRequests = requests.filter(
       (providerRequest) => providerRequest.role === pin.role
     );
+    if (pin.role === "advisor" && roleRequests.length === 0) {
+      continue;
+    }
     assertRecordedRequestPins(roleRequests as RecordedProviderRequest[], pin);
-    if (pin.role === "advisor" && roleRequests.length !== 1) {
+    if (pin.role === "advisor" && roleRequests.length > 1) {
       throw new Error(
-        `ReactBench adapter emitted ${roleRequests.length} Advisor requests; expected 1.`
+        `ReactBench adapter emitted ${roleRequests.length} Advisor requests; expected at most 1.`
       );
     }
   }
@@ -273,10 +286,12 @@ export class CommandReactBenchRunner implements ReactBenchTrialRunner {
 
   async run(request: ReactBenchTrialRequest) {
     const args = buildReactBenchArgs(request, this.#options.extraArgs);
+    const { BENCH_SMOKE: _ambientSmoke, ...hostEnvironment } = process.env;
     const result = await execFileAsync(this.#options.command, args, {
       cwd: this.#options.cwd,
       env: {
-        ...process.env,
+        ...hostEnvironment,
+        ...(this.#options.smokeProtocol ? { BENCH_SMOKE: "1" } : {}),
         ...(request.advisor
           ? {
               BENCH_ADVISOR_EFFORT: request.advisor.effort,
@@ -307,9 +322,15 @@ export class CommandReactBenchRunner implements ReactBenchTrialRunner {
       );
     }
     validateRecordedRequests(parsed.requests, request);
-    if (parsed.consultations !== (request.advisor ? 1 : 0)) {
+    const advisorRequests = parsed.requests.filter(
+      (providerRequest) => providerRequest.role === "advisor"
+    );
+    if (
+      parsed.consultations !== advisorRequests.length ||
+      parsed.consultations > (request.advisor ? 1 : 0)
+    ) {
       throw new Error(
-        "ReactBench result consultations must equal the recorded Advisor request count."
+        "ReactBench result consultations must equal the recorded Advisor request count and stay within the session call budget."
       );
     }
     return parsed;

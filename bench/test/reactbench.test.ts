@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import {
   buildReactBenchArgs,
@@ -93,6 +99,93 @@ describe("ReactBench adapter boundary", () => {
         taskPath: "task",
       });
       expect(result.passed).toBe(true);
+      expect(result.requests).toHaveLength(1);
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  test("scrubs ambient smoke mode unless explicitly requested", async () => {
+    const root = mkdtempSync(
+      join(process.env.TMPDIR ?? "/tmp", "bench-adapter-smoke-env-")
+    );
+    const previous = process.env.BENCH_SMOKE;
+    process.env.BENCH_SMOKE = "1";
+    try {
+      const marker = join(root, "smoke-mode.txt");
+      const script = join(root, "adapter.mjs");
+      writeFileSync(
+        script,
+        `import { writeFileSync } from "node:fs"; writeFileSync(${JSON.stringify(marker)}, process.env.BENCH_SMOKE ?? "unset"); console.log("BENCH_RESULT=" + JSON.stringify({passed:true, consultations:0, requests:[{provider:"openai-codex", model:"gpt-5.6-luna", effort:"max", role:"executor"}]}));\n`
+      );
+      chmodSync(script, 0o755);
+      const request = {
+        arm: "E" as const,
+        artifactRoot: root,
+        executor: {
+          effort: "max",
+          model: "openai-codex/gpt-5.6-luna",
+          role: "executor" as const,
+        },
+        seed: 11,
+        taskPath: "task",
+      };
+      await new CommandReactBenchRunner({
+        artifactRoot: root,
+        command: process.execPath,
+        extraArgs: [script],
+      }).run(request);
+      expect(readFileSync(marker, "utf8")).toBe("unset");
+
+      await new CommandReactBenchRunner({
+        artifactRoot: root,
+        command: process.execPath,
+        extraArgs: [script],
+        smokeProtocol: true,
+      }).run(request);
+      expect(readFileSync(marker, "utf8")).toBe("1");
+    } finally {
+      if (previous === undefined) {
+        delete process.env.BENCH_SMOKE;
+      } else {
+        process.env.BENCH_SMOKE = previous;
+      }
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  test("allows an unused Advisor budget in E+A", async () => {
+    const root = mkdtempSync(
+      join(process.env.TMPDIR ?? "/tmp", "bench-advisor-unused-")
+    );
+    try {
+      const script = join(root, "adapter.mjs");
+      writeFileSync(
+        script,
+        `console.log("BENCH_RESULT=" + JSON.stringify({passed:true, consultations:0, requests:[{provider:"openai-codex", model:"gpt-5.6-luna", effort:"max", role:"executor", usage:{input:1, output:1, totalTokens:2}}]}));\n`
+      );
+      chmodSync(script, 0o755);
+      const result = await new CommandReactBenchRunner({
+        artifactRoot: root,
+        command: process.execPath,
+        extraArgs: [script],
+      }).run({
+        advisor: {
+          effort: "medium",
+          model: "openai-codex/gpt-5.6-sol",
+          role: "advisor",
+        },
+        arm: "E+A",
+        artifactRoot: root,
+        executor: {
+          effort: "max",
+          model: "openai-codex/gpt-5.6-luna",
+          role: "executor",
+        },
+        seed: 11,
+        taskPath: "task",
+      });
+      expect(result.consultations).toBe(0);
       expect(result.requests).toHaveLength(1);
     } finally {
       rmSync(root, { force: true, recursive: true });

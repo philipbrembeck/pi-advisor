@@ -56,6 +56,7 @@ class PiAdvisorAgent(Pi):
         codex_broker_token: str | None = None,
         model_api: str = _CODEX_API,
         scout_enabled: str | bool = False,
+        smoke_protocol: str | bool = False,
         **kwargs: Any,
     ) -> None:
         # Harbor 0.18's Pi has no model_api parameter; newer Harbor versions
@@ -71,6 +72,11 @@ class PiAdvisorAgent(Pi):
         self._codex_broker_token = codex_broker_token
         self._model_api = model_api
         self._scout_enabled = str(scout_enabled).lower() in {"1", "true", "yes"}
+        self._smoke_protocol = str(smoke_protocol).lower() in {
+            "1",
+            "true",
+            "yes",
+        }
 
     @staticmethod
     @override
@@ -280,22 +286,24 @@ class PiAdvisorAgent(Pi):
             }
         )
         is_advisor_treatment = self._benchmark_arm == "E+A"
+        smoke_protocol = is_advisor_treatment and self._smoke_protocol
         quoted_instruction = shlex.quote(
             (
-                "BENCHMARK PROTOCOL (mandatory): before using any other tool, "
-                "call ask_advisor with an empty JSON object exactly once. Wait "
-                "for its result, then continue the task and do not call it again.\n\n"
-                if is_advisor_treatment
+                "BENCHMARK SMOKE PROTOCOL (mandatory): before using any other "
+                "tool, call ask_advisor with an empty JSON object exactly once. "
+                "Wait for its result, then continue the task and do not call it "
+                "again.\n\n"
+                if smoke_protocol
                 else ""
             )
             + instruction
         )
         system_prompt = (
-            "This is a benchmark E+A treatment. The first tool call must be "
-            "ask_advisor with {} before any read, shell, edit, or write. Make "
+            "This is a benchmark smoke E+A treatment. The first tool call must "
+            "be ask_advisor with {} before any read, shell, edit, or write. Make "
             "exactly one Advisor call total, wait for its result, and then "
             "continue the task."
-            if is_advisor_treatment
+            if smoke_protocol
             else None
         )
         excluded_tools = (

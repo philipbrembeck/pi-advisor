@@ -20,6 +20,22 @@ const trialCost = (arm: string) => {
 };
 
 describe("Stage 2 evaluation runner", () => {
+  test("rejects the smoke protocol at the evaluation entrypoint", async () => {
+    const previous = process.env.BENCH_SMOKE;
+    process.env.BENCH_SMOKE = "1";
+    try {
+      await expect(runEvaluation({ writeReportOutput: false })).rejects.toThrow(
+        "reserved for the dedicated Harbor smoke invocation"
+      );
+    } finally {
+      if (previous === undefined) {
+        delete process.env.BENCH_SMOKE;
+      } else {
+        process.env.BENCH_SMOKE = previous;
+      }
+    }
+  });
+
   test("resolves the newest screening report to an absolute path", () => {
     const root = mkdtempSync(
       join(process.env.TMPDIR ?? "/tmp", "bench-latest-")

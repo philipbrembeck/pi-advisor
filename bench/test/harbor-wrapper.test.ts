@@ -61,7 +61,8 @@ const makeArtifacts = (
   request: HarborTrialRequest,
   changes: (records: Record<string, unknown>[]) => void = () => {
     // Keep the default artifact set unchanged.
-  }
+  },
+  smokeProtocol = false
 ) => {
   const trialName = basename(root);
   const agent = join(root, "agent");
@@ -77,6 +78,7 @@ const makeArtifacts = (
       kind: "extension_loaded",
       loaded: true,
       mode: advisor ? "advisor" : "executor",
+      smokeProtocol,
     },
     {
       adapter: "pi-advisor-harbor",
@@ -87,6 +89,7 @@ const makeArtifacts = (
       loaded: true,
       mode: advisor ? "advisor" : "executor",
       shutdown: false,
+      smokeProtocol,
     },
     {
       effort: request.executorEffort,
@@ -131,6 +134,7 @@ const makeArtifacts = (
     loaded: true,
     mode: advisor ? "advisor" : "executor",
     shutdown: true,
+    smokeProtocol,
   });
   changes(records);
   writeFileSync(
@@ -221,6 +225,38 @@ describe("Harbor trial wrapper protocol", () => {
     );
     expect(args.join("\u0000")).not.toContain("BENCH_API_KEY");
     expect(args.join("\u0000")).not.toContain("BENCH_BASE_URL");
+    expect(args.join("\u0000")).not.toContain("smoke_protocol=true");
+    expect(args.join("\u0000")).toContain("BENCH_SMOKE_PROTOCOL=false");
+    expect(
+      buildHarborTrialArgs({
+        artifactRoot: "/tmp/artifacts",
+        codexBrokerToken: "trial-token",
+        codexProxyUrl: "http://host.docker.internal:18765",
+        extensionPath,
+        extensionVersion: "0.5.0",
+        harborBinary: "harbor",
+        piVersion: "0.84.4",
+        recorderPath,
+        request,
+        smokeProtocol: true,
+        trialName: "pi-advisor-example-E-A-101-smoke",
+      }).join("\u0000")
+    ).toContain("smoke_protocol=true");
+    expect(
+      buildHarborTrialArgs({
+        artifactRoot: "/tmp/artifacts",
+        codexBrokerToken: "trial-token",
+        codexProxyUrl: "http://host.docker.internal:18765",
+        extensionPath,
+        extensionVersion: "0.5.0",
+        harborBinary: "harbor",
+        piVersion: "0.84.4",
+        recorderPath,
+        request,
+        smokeProtocol: true,
+        trialName: "pi-advisor-example-E-A-101-smoke",
+      }).join("\u0000")
+    ).toContain("BENCH_SMOKE_PROTOCOL=true");
     expect(args).toContain("--allow-environment-host");
     expect(args).toContain("registry.npmjs.org");
     const mounts = JSON.parse(
@@ -276,6 +312,53 @@ describe("Harbor trial wrapper protocol", () => {
       expect(result.consultations).toBe(1);
       expect(result.requests).toHaveLength(2);
       expect(result.cost).toBeGreaterThan(0);
+
+      const smokeRoot = mkdtempSync(
+        join(process.env.TMPDIR ?? "/tmp", "harbor-smoke-")
+      );
+      try {
+        makeArtifacts(smokeRoot, requestFor(), undefined, true);
+        const smokeResult = validateHarborArtifacts(
+          smokeRoot,
+          requestFor(),
+          "0.5.0",
+          { smokeProtocol: true }
+        );
+        expect(smokeResult.attestation.smokeProtocol).toBe(true);
+
+        const zeroSmokeRoot = mkdtempSync(
+          join(process.env.TMPDIR ?? "/tmp", "harbor-smoke-zero-")
+        );
+        try {
+          makeArtifacts(
+            zeroSmokeRoot,
+            requestFor(),
+            (records) => {
+              const advisorRequestIndex = records.findIndex(
+                (record) =>
+                  record.kind === "request" && record.role === "advisor"
+              );
+              if (advisorRequestIndex >= 0) {
+                records.splice(advisorRequestIndex, 2);
+              }
+              const final = records.at(-1);
+              if (final) {
+                final.advisorCalls = 0;
+              }
+            },
+            true
+          );
+          expect(() =>
+            validateHarborArtifacts(zeroSmokeRoot, requestFor(), "0.5.0", {
+              smokeProtocol: true,
+            })
+          ).toThrow("bounded consultation count");
+        } finally {
+          rmSync(zeroSmokeRoot, { force: true, recursive: true });
+        }
+      } finally {
+        rmSync(smokeRoot, { force: true, recursive: true });
+      }
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
@@ -325,7 +408,7 @@ describe("Harbor trial wrapper protocol", () => {
     }
   });
 
-  test("rejects wrong extension versions and zero consultations", () => {
+  test("rejects wrong extension versions and allows zero consultations", () => {
     const root = mkdtempSync(join(process.env.TMPDIR ?? "/tmp", "harbor-pin-"));
     try {
       makeArtifacts(root, requestFor());
@@ -338,16 +421,39 @@ describe("Harbor trial wrapper protocol", () => {
       );
       try {
         makeArtifacts(zeroRoot, requestFor(), (records) => {
+          const advisorRequestIndex = records.findIndex(
+            (record) => record.kind === "request" && record.role === "advisor"
+          );
+          if (advisorRequestIndex >= 0) {
+            records.splice(advisorRequestIndex, 2);
+          }
+          const final = records.at(-1);
+          if (final) {
+            final.advisorCalls = 0;
+          }
+        });
+        const result = validateHarborArtifacts(zeroRoot, requestFor(), "0.5.0");
+        expect(result.consultations).toBe(0);
+        expect(result.cost).toBeGreaterThan(0);
+      } finally {
+        rmSync(zeroRoot, { force: true, recursive: true });
+      }
+
+      const mismatchRoot = mkdtempSync(
+        join(process.env.TMPDIR ?? "/tmp", "harbor-mismatch-")
+      );
+      try {
+        makeArtifacts(mismatchRoot, requestFor(), (records) => {
           const final = records.at(-1);
           if (final) {
             final.advisorCalls = 0;
           }
         });
         expect(() =>
-          validateHarborArtifacts(zeroRoot, requestFor(), "0.5.0")
-        ).toThrow("exact consultation count");
+          validateHarborArtifacts(mismatchRoot, requestFor(), "0.5.0")
+        ).toThrow("does not match recorded Advisor requests");
       } finally {
-        rmSync(zeroRoot, { force: true, recursive: true });
+        rmSync(mismatchRoot, { force: true, recursive: true });
       }
     } finally {
       rmSync(root, { force: true, recursive: true });

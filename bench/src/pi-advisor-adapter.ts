@@ -30,6 +30,7 @@ export interface AdvisorRuntimeAttestation {
   loaded: true;
   mode: AdvisorAdapterMode;
   shutdown: true;
+  smokeProtocol: boolean;
 }
 
 export interface PiAdvisorAdapterPrerequisites {
@@ -222,9 +223,20 @@ const assertRuntimeArtifacts = (result: ReactBenchTrialResult) => {
 const parseAttestationValue = (
   value: unknown,
   expectedVersion: string,
-  arm: TrialArm
+  arm: TrialArm,
+  smokeProtocol = false
 ): AdvisorRuntimeAttestation => {
-  const expectedCalls = arm === "E+A" ? 1 : 0;
+  const expectedSmoke = arm === "E+A" && smokeProtocol;
+  const hasValidAdvisorCalls = (
+    candidate: Record<string, unknown>
+  ): candidate is Record<string, unknown> & { advisorCalls: number } =>
+    typeof candidate.advisorCalls === "number" &&
+    Number.isSafeInteger(candidate.advisorCalls) &&
+    candidate.advisorCalls >= 0 &&
+    (arm === "E+A"
+      ? candidate.advisorCalls <= 1 &&
+        (!expectedSmoke || candidate.advisorCalls === 1)
+      : candidate.advisorCalls === 0);
   if (
     !(
       isRecord(value) &&
@@ -236,13 +248,12 @@ const parseAttestationValue = (
       value.extensionVersion === expectedVersion &&
       (value.mode === "executor" || value.mode === "advisor") &&
       value.mode === modeForArm(arm) &&
-      typeof value.advisorCalls === "number" &&
-      Number.isSafeInteger(value.advisorCalls) &&
-      value.advisorCalls === expectedCalls
+      value.smokeProtocol === expectedSmoke &&
+      hasValidAdvisorCalls(value)
     )
   ) {
     throw new Error(
-      "Harbor adapter must attest that the pinned pi-advisor extension loaded, shut down cleanly, and made the exact expected number of consultations."
+      "Harbor adapter must attest that the pinned pi-advisor extension loaded, shut down cleanly, and stayed within the pinned consultation budget."
     );
   }
   return {
@@ -253,13 +264,15 @@ const parseAttestationValue = (
     loaded: true,
     mode: value.mode,
     shutdown: true,
+    smokeProtocol: expectedSmoke,
   };
 };
 
 export const parseAdvisorAttestation = (
   output: string,
   expectedVersion: string,
-  arm: TrialArm
+  arm: TrialArm,
+  smokeProtocol = false
 ): AdvisorRuntimeAttestation => {
   const line = output
     .split(LINE_BREAK)
@@ -279,7 +292,7 @@ export const parseAdvisorAttestation = (
       cause: error,
     });
   }
-  return parseAttestationValue(parsed, expectedVersion, arm);
+  return parseAttestationValue(parsed, expectedVersion, arm, smokeProtocol);
 };
 
 export interface PiAdvisorHarborAdapterOptions
@@ -296,10 +309,12 @@ export interface PiAdvisorHarborAdapterOptions
 export class PiAdvisorHarborAdapter {
   readonly #prerequisites: PiAdvisorAdapterPrerequisites;
   readonly #runner: CommandReactBenchRunner;
+  readonly #smokeProtocol: boolean;
 
   constructor(options: PiAdvisorHarborAdapterOptions) {
     assertPiAdvisorPrerequisites(options.prerequisites);
     this.#prerequisites = { ...options.prerequisites };
+    this.#smokeProtocol = options.smokeProtocol === true;
     this.#runner = new CommandReactBenchRunner(options);
   }
 
@@ -310,12 +325,18 @@ export class PiAdvisorHarborAdapter {
     const attestation = parseAttestationValue(
       result.attestation,
       this.#prerequisites.extensionVersion,
-      request.arm
+      request.arm,
+      this.#smokeProtocol
     );
-    const expectedConsultations = request.arm === "E+A" ? 1 : 0;
-    if (result.consultations !== expectedConsultations) {
+    const maxConsultations = request.arm === "E+A" ? 1 : 0;
+    if (result.consultations > maxConsultations) {
       throw new Error(
-        `Harbor result consultations must equal the exact expected count (${expectedConsultations}).`
+        `Harbor result consultations exceed the pinned session budget (${maxConsultations}).`
+      );
+    }
+    if (attestation.advisorCalls !== result.consultations) {
+      throw new Error(
+        "Harbor attestation consultation count does not match the result."
       );
     }
     assertRuntimeArtifacts(result);
@@ -355,5 +376,6 @@ export const createPiAdvisorHarborAdapter = (
       extensionVersion,
       piVersion,
     },
+    smokeProtocol: env.BENCH_SMOKE === "1",
   });
 };

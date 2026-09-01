@@ -67,11 +67,29 @@ describe("Stage 1 screening", () => {
       expect(report.metrics.trivialStratumTaskIds).toHaveLength(3);
       expect(report.metrics.screeningSeeds).toEqual([11, 23]);
       expect(trialBudgets).toHaveLength(120);
-      expect(trialBudgets.every((value) => value > 0 && value <= 10)).toBe(
-        true
-      );
+      expect(
+        trialBudgets.every(
+          (value) => value > 0 && value <= DEFAULT_CONFIG.budgetUsd
+        )
+      ).toBe(true);
     } finally {
       rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  test("rejects the smoke protocol at the screening entrypoint", async () => {
+    const previous = process.env.BENCH_SMOKE;
+    process.env.BENCH_SMOKE = "1";
+    try {
+      await expect(
+        runScreening({ announceBudget: false, writeReportOutput: false })
+      ).rejects.toThrow("reserved for the dedicated Harbor smoke invocation");
+    } finally {
+      if (previous === undefined) {
+        delete process.env.BENCH_SMOKE;
+      } else {
+        process.env.BENCH_SMOKE = previous;
+      }
     }
   });
 });

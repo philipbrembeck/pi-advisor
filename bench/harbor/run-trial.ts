@@ -230,11 +230,17 @@ const checkoutRootFor = (taskPath: string, sourceRoot?: string) => {
 const safePart = (value: string) =>
   value.replace(RUN_ID_PATTERN, "-").replace(/^-+|-+$/g, "") || "run";
 
-const trialNameFor = (taskId: string, arm: HarborTrialArm, seed: number) => {
+const trialNameFor = (
+  taskId: string,
+  arm: HarborTrialArm,
+  seed: number,
+  smokeProtocol = false
+) => {
   const runId = safePart(
     readEnv("BENCH_RUN_ID") ?? `${Date.now()}-${process.pid}`
   );
-  return `pi-advisor-${safePart(taskId).slice(0, 64)}-${safePart(arm)}-${seed}-${runId.slice(-32)}`;
+  const protocol = smokeProtocol ? "smoke-" : "";
+  return `pi-advisor-${safePart(taskId).slice(0, 64)}-${safePart(arm)}-${seed}-${protocol}${runId.slice(-32)}`;
 };
 
 const proxyHost = (proxyUrl: string) => {
@@ -522,15 +528,28 @@ const sameJsonFields = (
 const expectedMode = (arm: HarborTrialArm) =>
   arm === "E+A" ? "advisor" : "executor";
 
+const expectedSmokeProtocol = (
+  request: HarborTrialRequest,
+  smokeProtocol: boolean
+) => request.arm === "E+A" && smokeProtocol;
+
 const validateAttestation = (
   value: unknown,
   request: HarborTrialRequest,
-  expectedVersion: string
+  expectedVersion: string,
+  smokeProtocol: boolean
 ): JsonObject => {
   if (!isObject(value)) {
     throw new TypeError("Harbor attestation must be an object.");
   }
-  const expectedCalls = request.arm === "E+A" ? 1 : 0;
+  const expectedSmoke = expectedSmokeProtocol(request, smokeProtocol);
+  const validAdvisorCalls =
+    typeof value.advisorCalls === "number" &&
+    Number.isSafeInteger(value.advisorCalls) &&
+    value.advisorCalls >= 0 &&
+    (request.arm === "E+A"
+      ? value.advisorCalls <= 1 && (!expectedSmoke || value.advisorCalls === 1)
+      : value.advisorCalls === 0);
   if (
     value.adapter !== "pi-advisor-harbor" ||
     value.extension !== "pi-advisor-flow" ||
@@ -538,10 +557,11 @@ const validateAttestation = (
     value.extensionVersion !== expectedVersion ||
     value.mode !== expectedMode(request.arm) ||
     value.shutdown !== true ||
-    value.advisorCalls !== expectedCalls
+    value.smokeProtocol !== expectedSmoke ||
+    !validAdvisorCalls
   ) {
     throw new Error(
-      "Harbor trial did not attest the pinned extension, mode, clean shutdown, and exact consultation count."
+      "Harbor trial did not attest the pinned extension, mode, clean shutdown, and bounded consultation count."
     );
   }
   return value;
@@ -584,13 +604,15 @@ const validateRequests = (
   if (requests.length === 0) {
     throw new Error("Harbor trial produced no provider request records.");
   }
-  const expectedAdvisorCalls = request.arm === "E+A" ? 1 : 0;
   const advisorRequests = requests.filter(
     (record) => record.role === "advisor"
   );
-  if (advisorRequests.length !== expectedAdvisorCalls) {
+  if (
+    (request.arm !== "E+A" && advisorRequests.length !== 0) ||
+    (request.arm === "E+A" && advisorRequests.length > 1)
+  ) {
     throw new Error(
-      `Harbor Advisor request count mismatch: expected ${expectedAdvisorCalls}, got ${advisorRequests.length}.`
+      `Harbor Advisor request count exceeds the pinned session budget: got ${advisorRequests.length}.`
     );
   }
 
@@ -739,11 +761,17 @@ const validateTrialIdentity = (
   }
 };
 
+export interface HarborArtifactValidationOptions {
+  smokeProtocol?: boolean;
+}
+
 export const validateHarborArtifacts = (
   trialDirectory: string,
   request: HarborTrialRequest,
-  extensionVersion: string
+  extensionVersion: string,
+  options: HarborArtifactValidationOptions = {}
 ) => {
+  const smokeProtocol = options.smokeProtocol === true;
   const trialName = basename(trialDirectory);
   const taskId = basename(resolve(request.taskPath));
   const agentDirectory = artifactDirectory(trialDirectory, "agent");
@@ -756,7 +784,8 @@ export const validateHarborArtifacts = (
       "Harbor attestation"
     ),
     request,
-    extensionVersion
+    extensionVersion,
+    smokeProtocol
   );
   const extensionLoaded = records.find(
     (record) => record.kind === "extension_loaded"
@@ -764,7 +793,9 @@ export const validateHarborArtifacts = (
   if (
     extensionLoaded?.extension !== "pi-advisor-flow" ||
     extensionLoaded?.extensionVersion !== extensionVersion ||
-    extensionLoaded?.loaded !== true
+    extensionLoaded?.loaded !== true ||
+    extensionLoaded?.smokeProtocol !==
+      expectedSmokeProtocol(request, smokeProtocol)
   ) {
     throw new Error("Harbor records do not prove the pinned extension loaded.");
   }
@@ -782,6 +813,7 @@ export const validateHarborArtifacts = (
         "loaded",
         "mode",
         "shutdown",
+        "smokeProtocol",
       ])
     )
   ) {
@@ -797,6 +829,14 @@ export const validateHarborArtifacts = (
   validateTrialIdentity(trial, request, trialName);
   const passed = validateGrader(trial, verifierDirectory);
   const requests = validateRequests(records, request);
+  if (
+    attestation.advisorCalls !==
+    requests.filter((item) => item.role === "advisor").length
+  ) {
+    throw new Error(
+      "Harbor attestation consultation count does not match recorded Advisor requests."
+    );
+  }
   const executorRequests = requests.filter((item) => item.role === "executor");
   const advisorRequests = requests.filter((item) => item.role === "advisor");
   const usage = {
@@ -825,6 +865,7 @@ interface HarborInvocationOptions {
   piVersion: string;
   recorderPath: string;
   request: HarborTrialRequest;
+  smokeProtocol?: boolean;
   trialName: string;
 }
 
@@ -838,6 +879,7 @@ export const buildHarborTrialArgs = ({
   piVersion,
   recorderPath,
   request,
+  smokeProtocol = false,
   trialName,
 }: HarborInvocationOptions) => {
   const extensionDirectory = dirname(extensionPath);
@@ -873,6 +915,7 @@ export const buildHarborTrialArgs = ({
     `codex_proxy_url=${codexProxyUrl}`,
     `codex_broker_token=${codexBrokerToken}`,
     `scout_enabled=${readEnv("BENCH_SCOUT") === "1" ? "true" : "false"}`,
+    ...(smokeProtocol ? ["smoke_protocol=true"] : []),
   ];
   if (request.arm === "E+A") {
     agentKwargs.push(`advisor_model=${request.advisorModel}`);
@@ -899,6 +942,8 @@ export const buildHarborTrialArgs = ({
     `BENCH_TRIAL_BUDGET_USD=${request.budgetUsd}`,
     "--agent-env",
     `BENCH_TRIAL_PRICING_JSON=${JSON.stringify(request.pricing ?? {})}`,
+    "--agent-env",
+    `BENCH_SMOKE_PROTOCOL=${smokeProtocol ? "true" : "false"}`,
     "--mounts",
     JSON.stringify(mounts),
     ...parseAllowHosts(proxyHost(codexProxyUrl)).flatMap((host) => [
@@ -980,7 +1025,13 @@ export const runTrial = async (request: HarborTrialRequest) => {
   const piVersion = readEnv("BENCH_PI_VERSION") ?? DEFAULT_PI_VERSION;
 
   const taskId = basename(taskPath);
-  const trialName = trialNameFor(taskId, request.arm, request.seed);
+  const smokeProtocol = request.arm === "E+A" && readEnv("BENCH_SMOKE") === "1";
+  const trialName = trialNameFor(
+    taskId,
+    request.arm,
+    request.seed,
+    smokeProtocol
+  );
   const requestedArtifactRoot = resolve(request.artifactRoot);
   mkdirSync(requestedArtifactRoot, { recursive: true });
   const artifactRoot = realpathSync(requestedArtifactRoot);
@@ -1009,6 +1060,7 @@ export const runTrial = async (request: HarborTrialRequest) => {
   // available only to the broker child; the per-trial broker token is passed
   // separately as an intentional agent kwarg.
   for (const name of [
+    "BENCH_SMOKE",
     "BENCH_API_KEY",
     "BENCH_BASE_URL",
     "BENCH_CODEX_AUTH_FILE",
@@ -1032,6 +1084,7 @@ export const runTrial = async (request: HarborTrialRequest) => {
       piVersion,
       recorderPath,
       request,
+      smokeProtocol,
       trialName,
     });
     await execFileAsync(harborBinary, args, {
@@ -1056,7 +1109,8 @@ export const runTrial = async (request: HarborTrialRequest) => {
   const result = validateHarborArtifacts(
     trialDirectory,
     request,
-    extensionVersion
+    extensionVersion,
+    { smokeProtocol }
   );
   process.stdout.write(
     `${ATTESTATION_PREFIX}${JSON.stringify(result.attestation)}\n`

@@ -35,6 +35,7 @@ describe("pi-advisor Harbor adapter boundary", () => {
           loaded: true,
           mode: "advisor",
           shutdown: true,
+          smokeProtocol: false,
         })}`,
       ].join("\n"),
       "0.5.0",
@@ -42,12 +43,29 @@ describe("pi-advisor Harbor adapter boundary", () => {
     );
     expect(attestation.mode).toBe("advisor");
     expect(attestation.advisorCalls).toBe(1);
+    expect(attestation.smokeProtocol).toBe(false);
   });
 
-  test("rejects plain Pi output and wrong runtime mode", () => {
+  test("rejects plain Pi output and over-budget runtime mode", () => {
     expect(() => parseAdvisorAttestation("pi completed", "0.5.0", "E")).toThrow(
       "BENCH_ADVISOR_ATTESTATION"
     );
+    expect(() =>
+      parseAdvisorAttestation(
+        `BENCH_ADVISOR_ATTESTATION=${JSON.stringify({
+          adapter: "pi-advisor-harbor",
+          advisorCalls: 2,
+          extension: "pi-advisor-flow",
+          extensionVersion: "0.5.0",
+          loaded: true,
+          mode: "advisor",
+          shutdown: true,
+          smokeProtocol: false,
+        })}`,
+        "0.5.0",
+        "E+A"
+      )
+    ).toThrow("pinned consultation budget");
     expect(() =>
       parseAdvisorAttestation(
         `BENCH_ADVISOR_ATTESTATION=${JSON.stringify({
@@ -58,11 +76,13 @@ describe("pi-advisor Harbor adapter boundary", () => {
           loaded: true,
           mode: "advisor",
           shutdown: true,
+          smokeProtocol: true,
         })}`,
         "0.5.0",
-        "E+A"
+        "E+A",
+        true
       )
-    ).toThrow("exact expected number of consultations");
+    ).toThrow("pinned consultation budget");
   });
 
   test("requires a pinned extension and Pi Codex OAuth session", () => {
@@ -133,6 +153,7 @@ describe("pi-advisor Harbor adapter boundary", () => {
           loaded: true,
           mode: "advisor",
           shutdown: true,
+          smokeProtocol: false,
         },
         consultations: 1,
         cost: 0,

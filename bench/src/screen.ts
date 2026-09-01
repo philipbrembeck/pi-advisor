@@ -13,6 +13,7 @@ import { createPiAdvisorHarborAdapter } from "./pi-advisor-adapter.js";
 import { assertPinnedLiveModelConfiguration } from "./pins.js";
 import { requireCommittedPreregistration } from "./preregistration.js";
 import {
+  assertNoSmokeProtocol,
   assertReactBenchCheckout,
   discoverReactBenchTasks,
   ensurePinnedReactBenchCheckout,
@@ -124,6 +125,7 @@ export const runScreening = async ({
   sourceRoot,
   writeReportOutput = true,
 }: ScreeningRunOptions = {}): Promise<BenchmarkReport> => {
+  assertNoSmokeProtocol("Stage 1 screening");
   preregistered();
   validateEvaluationSeeds(SCREENING_SEEDS, EVALUATION_SEEDS);
   assertPinnedLiveModelConfiguration(config);
