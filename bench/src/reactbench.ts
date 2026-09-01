@@ -1,6 +1,13 @@
 import { execFile, execFileSync } from "node:child_process";
-import { readdirSync, readFileSync, statSync } from "node:fs";
-import { basename, join, resolve } from "node:path";
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { basename, dirname, join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { assertRecordedRequestPins } from "./pins.js";
 import type {
@@ -44,6 +51,9 @@ export interface ReactBenchTrialRunner {
 const RESULT_LINE_BREAK = /\r?\n/;
 const REACT_BENCH_TASK = /fix-react|write-react/;
 const ADVISOR_ATTESTATION_PREFIX = "BENCH_ADVISOR_ATTESTATION=";
+const FULL_SHA = /^[0-9a-f]{40}$/u;
+export const REACTBENCH_REPOSITORY =
+  "https://github.com/millionco/reactbench.git";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -306,12 +316,23 @@ export class CommandReactBenchRunner implements ReactBenchTrialRunner {
   }
 }
 
+const gitOutput = (args: string[]) =>
+  execFileSync("git", args, {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+  }).trim();
+
+const reactBenchTasksRoot = (checkoutRoot: string) => {
+  const directTask = join(checkoutRoot, "hello-react", "task.toml");
+  return existsSync(directTask) ? checkoutRoot : join(checkoutRoot, "tasks");
+};
+
 export const assertReactBenchCheckout = (
   root: string,
   expectedCommit: string
 ) => {
-  if (!expectedCommit.trim()) {
-    throw new TypeError("Expected ReactBench commit is required.");
+  if (!FULL_SHA.test(expectedCommit.trim())) {
+    throw new TypeError("Expected ReactBench commit must be a full SHA-1.");
   }
   const checkoutRoot = execFileSync(
     "git",
@@ -321,20 +342,88 @@ export const assertReactBenchCheckout = (
       stdio: ["ignore", "pipe", "ignore"],
     }
   ).trim();
-  const actualCommit = execFileSync(
-    "git",
-    ["-C", checkoutRoot, "rev-parse", "HEAD"],
-    {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-    }
-  ).trim();
+  const actualCommit = gitOutput(["-C", checkoutRoot, "rev-parse", "HEAD"]);
   if (actualCommit !== expectedCommit) {
     throw new Error(
       `ReactBench checkout is not pinned: expected ${expectedCommit}, got ${actualCommit}.`
     );
   }
-  return { actualCommit, checkoutRoot };
+  if (gitOutput(["-C", checkoutRoot, "status", "--porcelain"])) {
+    throw new Error(
+      "ReactBench checkout is dirty; refusing a non-reproducible run."
+    );
+  }
+  for (const required of ["pyproject.toml", "uv.lock"]) {
+    if (!existsSync(join(checkoutRoot, required))) {
+      throw new Error(`ReactBench checkout is missing ${required}.`);
+    }
+  }
+  const tasksRoot = reactBenchTasksRoot(checkoutRoot);
+  if (!(existsSync(tasksRoot) && statSync(tasksRoot).isDirectory())) {
+    throw new Error("ReactBench checkout is missing its tasks directory.");
+  }
+  return { actualCommit, checkoutRoot, tasksRoot };
+};
+
+/**
+ * Materialize the exact public ReactBench revision in a disposable cache when
+ * the caller did not provide a checkout. Existing caches are never reset over
+ * local changes; they must be clean before the pinned revision is fetched.
+ */
+export const ensurePinnedReactBenchCheckout = (
+  expectedCommit: string,
+  cacheRoot = process.env.BENCH_REACTBENCH_CACHE ??
+    join(tmpdir(), `pi-advisor-reactbench-${expectedCommit.slice(0, 12)}`)
+) => {
+  if (!FULL_SHA.test(expectedCommit.trim())) {
+    throw new TypeError("Expected ReactBench commit must be a full SHA-1.");
+  }
+  const checkoutRoot = resolve(cacheRoot);
+  let cloned = false;
+  if (!existsSync(checkoutRoot)) {
+    mkdirSync(dirname(checkoutRoot), { recursive: true });
+    try {
+      execFileSync(
+        "git",
+        [
+          "clone",
+          "--filter=blob:none",
+          "--no-checkout",
+          REACTBENCH_REPOSITORY,
+          checkoutRoot,
+        ],
+        { stdio: "ignore" }
+      );
+      cloned = true;
+    } catch (error) {
+      throw new Error("Unable to clone the pinned ReactBench repository.", {
+        cause: error,
+      });
+    }
+  }
+  try {
+    // A fresh --no-checkout clone reports every tracked path as deleted until
+    // the pinned checkout below populates the worktree. Existing caches must
+    // still be clean before they are fetched or moved.
+    if (!cloned && gitOutput(["-C", checkoutRoot, "status", "--porcelain"])) {
+      throw new Error("ReactBench cache is dirty; refusing to overwrite it.");
+    }
+    execFileSync(
+      "git",
+      ["-C", checkoutRoot, "fetch", "--depth=1", "origin", expectedCommit],
+      { stdio: "ignore" }
+    );
+    execFileSync(
+      "git",
+      ["-C", checkoutRoot, "checkout", "--detach", expectedCommit],
+      { stdio: "ignore" }
+    );
+  } catch (error) {
+    throw new Error("Unable to materialize the pinned ReactBench checkout.", {
+      cause: error,
+    });
+  }
+  return assertReactBenchCheckout(checkoutRoot, expectedCommit);
 };
 
 export const discoverReactBenchTasks = (root: string, limit = 30) => {

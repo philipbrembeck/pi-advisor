@@ -1,19 +1,19 @@
 {
-  "budgetUsd": 10,
+  "budgetUsd": 25,
   "fixtureRoot": "bench/fixtures",
   "gateFailureModes": ["block-session", "block-tool", "warn-and-continue"],
   "pricing": {
     "openai-codex/gpt-5.6-luna": {
-      "inputPerMillion": 0,
-      "outputPerMillion": 0,
-      "cacheReadPerMillion": 0,
-      "cacheWritePerMillion": 0
+      "inputPerMillion": 0.2,
+      "outputPerMillion": 1.2,
+      "cacheReadPerMillion": 0.02,
+      "cacheWritePerMillion": 0.25
     },
     "openai-codex/gpt-5.6-sol": {
-      "inputPerMillion": 0,
-      "outputPerMillion": 0,
-      "cacheReadPerMillion": 0,
-      "cacheWritePerMillion": 0
+      "inputPerMillion": 5,
+      "outputPerMillion": 30,
+      "cacheReadPerMillion": 0.5,
+      "cacheWritePerMillion": 6.25
     }
   },
   "modelPins": {

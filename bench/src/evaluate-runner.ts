@@ -27,6 +27,7 @@ import { requireCommittedPreregistration } from "./preregistration.js";
 import {
   assertReactBenchCheckout,
   discoverReactBenchTasks,
+  ensurePinnedReactBenchCheckout,
   type ReactBenchTrialResult,
   type ReactBenchTrialRunner,
 } from "./reactbench.js";
@@ -51,6 +52,7 @@ export interface EvaluationRunOptions {
   reportTimestamp?: string;
   runner?: ReactBenchTrialRunner;
   screeningReportPath?: string;
+  sourceRoot?: string;
   writeReportOutput?: boolean;
 }
 
@@ -419,6 +421,7 @@ export const runEvaluation = async ({
   reportTimestamp,
   screeningReportPath = process.env.BENCH_SCREEN_REPORT ??
     latestScreeningReport(),
+  sourceRoot: optionsSourceRoot,
   writeReportOutput = true,
 }: EvaluationRunOptions = {}): Promise<BenchmarkReport> => {
   if (!screeningReportPath) {
@@ -540,16 +543,22 @@ export const runEvaluation = async ({
     return report;
   }
   let harborRunnerCreated = false;
-  const sourceRoot = process.env.BENCH_REACTBENCH_ROOT;
+  let sourceRoot = optionsSourceRoot ?? process.env.BENCH_REACTBENCH_ROOT;
   if (!runner) {
+    if (!sourceRoot) {
+      sourceRoot = ensurePinnedReactBenchCheckout(
+        config.reactBenchCommit
+      ).tasksRoot;
+    }
     const command =
       process.env.BENCH_PI_ADVISOR_ADAPTER ??
       process.env.BENCH_PI_ADAPTER ??
       process.env.BENCH_REACTBENCH_RUNNER;
-    if (!(sourceRoot && command)) {
+    runner = createPiAdvisorHarborAdapter(command);
+    if (!runner) {
       const report = unavailable(
         config,
-        "BENCH_REACTBENCH_ROOT and BENCH_REACTBENCH_RUNNER are required for Stage 2.",
+        "The pinned Pi/ReactBench adapter could not be initialized.",
         reportTimestamp
       );
       if (writeReportOutput) {
@@ -557,15 +566,11 @@ export const runEvaluation = async ({
       }
       return report;
     }
-    runner = createPiAdvisorHarborAdapter(command);
-    if (!runner) {
-      throw new Error("Pi ReactBench adapter could not be initialized.");
-    }
     harborRunnerCreated = true;
   }
   if (harborRunnerCreated) {
     if (!sourceRoot) {
-      throw new Error("BENCH_REACTBENCH_ROOT is required for Stage 2.");
+      throw new Error("ReactBench source checkout is unavailable for Stage 2.");
     }
     assertReactBenchCheckout(sourceRoot, config.reactBenchCommit);
   }

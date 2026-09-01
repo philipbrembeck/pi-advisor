@@ -15,17 +15,21 @@ of the npm package.
   config file, and `BENCH_LIVE=1`; it is scheduled rather than run on PRs.
   `BENCH_SCOUT=1` enables the Scout on/off experiment.
 - **Tier 3 screening:** `BENCH_LIVE=1 bun run bench:screen`. It requires a
-  successful Harbor/provider feasibility spike, `BENCH_REACTBENCH_ROOT`, and a
-  Pi/ReactBench adapter command. It classifies tasks using the committed §1
+  successful Harbor/provider feasibility spike and the local Pi
+  `openai-codex` OAuth session. If `BENCH_REACTBENCH_ROOT` and a runner are not
+  supplied, the adapter fetches the pinned public ReactBench checkout and uses
+  the checked-in Harbor command. It classifies tasks using the committed §1
   preregistration and reports candidate-band prevalence as a proxy.
 - **Tier 3 evaluation:** `BENCH_LIVE=1 bun run bench:evaluate`. It consumes a
-  screening report and fresh, disjoint seeds. The committed §2 preregistration
-  governs task-level majority aggregation, McNemar's exact test, and Q3's
-  dominance threshold.
+  screening report and fresh, disjoint seeds, using the same host-side Pi/Codex
+  OAuth broker. The committed §2 preregistration governs task-level majority
+  aggregation, McNemar's exact test, and Q3's dominance threshold.
 
 Live tiers are quality signals. They run only from `workflow_dispatch` or a
 schedule and do not block releases. Missing providers, budgets, or usage yield
-`UNAVAILABLE`, not a fabricated zero or a successful value claim.
+`UNAVAILABLE`, not a fabricated zero or a successful value claim. Tier 3's
+built-in Codex rates are normalized list-price equivalents for the subscription,
+not evidence of an API invoice.
 
 ## Reading a report
 

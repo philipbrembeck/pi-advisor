@@ -1,8 +1,17 @@
 #!/usr/bin/env bun
 
 /* biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: the wrapper validates the complete Harbor evidence boundary before returning a trial. */
-import { execFile, execFileSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { execFile, execFileSync, spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  statSync,
+} from "node:fs";
+import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
@@ -20,12 +29,16 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const EXPECTED_AGENT_IMPORT = "bench.harbor.agent:PiAdvisorAgent";
 const DEFAULT_EXTENSION_PATH = resolve(REPO_ROOT, "extensions/index.ts");
 const DEFAULT_RECORDER_PATH = resolve(REPO_ROOT, "bench/harbor/recorder.ts");
-const DEFAULT_BUDGET_PROXY_PATH = resolve(
+const DEFAULT_CODEX_BROKER_PATH = resolve(
   REPO_ROOT,
-  "bench/harbor/budget-proxy.mjs"
+  "bench/harbor/codex-broker.mjs"
 );
 const RECORDER_TARGET = "/bench-source/bench/harbor/recorder.ts";
-const BUDGET_PROXY_TARGET = "/bench-source/bench/harbor/budget-proxy.mjs";
+const CODEX_UPSTREAM_URL = "https://chatgpt.com/backend-api";
+const DEFAULT_PI_VERSION = "0.84.4";
+const DEFAULT_EXTENSION_VERSION = "0.5.0";
+const DEFAULT_REACTBENCH_COMMIT = "11ff042e60ec83a613053fbd721a54ed4dbfdf6f";
+const BROKER_READY_PREFIX = "BENCH_CODEX_BROKER_PORT=";
 const RUN_ID_PATTERN = /[^A-Za-z0-9._-]/g;
 const LINE_BREAK = /\r?\n/;
 const PI_INSTALL_HOSTS = [
@@ -192,7 +205,7 @@ const requireDirectory = (path: string, label: string) => {
   }
 };
 
-const checkoutRootFor = (taskPath: string, sourceRoot: string) => {
+const checkoutRootFor = (taskPath: string, sourceRoot?: string) => {
   try {
     return execFileSync(
       "git",
@@ -203,12 +216,12 @@ const checkoutRootFor = (taskPath: string, sourceRoot: string) => {
       }
     ).trim();
   } catch (error) {
-    const candidate = resolve(sourceRoot);
-    if (existsSync(join(candidate, "pyproject.toml"))) {
+    const candidate = sourceRoot ? resolve(sourceRoot) : undefined;
+    if (candidate && existsSync(join(candidate, "pyproject.toml"))) {
       return candidate;
     }
     throw new Error(
-      "ReactBench task is not inside a Git checkout and no pyproject.toml was found at BENCH_REACTBENCH_ROOT.",
+      "ReactBench task is not inside a Git checkout and no ReactBench pyproject.toml was found.",
       { cause: error }
     );
   }
@@ -224,17 +237,17 @@ const trialNameFor = (taskId: string, arm: HarborTrialArm, seed: number) => {
   return `pi-advisor-${safePart(taskId).slice(0, 64)}-${safePart(arm)}-${seed}-${runId.slice(-32)}`;
 };
 
-const providerHost = (baseUrl: string) => {
+const proxyHost = (proxyUrl: string) => {
   let url: URL;
   try {
-    url = new URL(baseUrl);
+    url = new URL(proxyUrl);
   } catch (error) {
-    throw new TypeError("BENCH_BASE_URL must be an absolute http(s) URL.", {
+    throw new TypeError("Codex broker URL must be an absolute http(s) URL.", {
       cause: error,
     });
   }
   if (url.protocol !== "http:" && url.protocol !== "https:") {
-    throw new TypeError("BENCH_BASE_URL must use http or https.");
+    throw new TypeError("Codex broker URL must use http or https.");
   }
   return url.hostname;
 };
@@ -374,6 +387,113 @@ const readJson = (path: string, label: string): JsonObject => {
     throw new TypeError(`${label} must contain an object: ${path}`);
   }
   return value;
+};
+
+const validateCodexAuthFile = (path: string) => {
+  const auth = readJson(path, "Pi Codex OAuth auth file");
+  const credential = auth["openai-codex"];
+  if (
+    !isObject(credential) ||
+    credential.type !== "oauth" ||
+    typeof credential.access !== "string" ||
+    !credential.access.trim() ||
+    typeof credential.refresh !== "string" ||
+    !credential.refresh.trim() ||
+    typeof credential.expires !== "number" ||
+    !Number.isFinite(credential.expires)
+  ) {
+    throw new Error(
+      "Pi Codex OAuth auth file has no usable openai-codex credential."
+    );
+  }
+};
+
+const startCodexBroker = ({
+  authFile,
+  request,
+  token,
+}: {
+  authFile: string;
+  request: HarborTrialRequest;
+  token: string;
+}) => {
+  const child = spawn(process.execPath, [DEFAULT_CODEX_BROKER_PATH], {
+    cwd: REPO_ROOT,
+    env: {
+      ...process.env,
+      BENCH_ADVISOR_MODEL: request.advisorModel ?? "",
+      BENCH_CODEX_AUTH_FILE: authFile,
+      BENCH_CODEX_PROXY_TOKEN: token,
+      BENCH_CODEX_UPSTREAM_URL: CODEX_UPSTREAM_URL,
+      BENCH_EXECUTOR_MODEL: request.executorModel,
+      BENCH_PROXY_PORT: "0",
+      BENCH_TRIAL_BUDGET_USD: String(request.budgetUsd),
+      BENCH_TRIAL_PRICING_JSON: JSON.stringify(request.pricing ?? {}),
+    },
+    stdio: ["ignore", "pipe", "ignore"],
+  });
+
+  return new Promise<{ child: ReturnType<typeof spawn>; port: number }>(
+    (resolveReady, reject) => {
+      let settled = false;
+      const timeout = setTimeout(() => {
+        if (!settled) {
+          settled = true;
+          child.kill("SIGTERM");
+          reject(new Error("Codex broker did not become ready."));
+        }
+      }, 15_000);
+      const fail = (message: string) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(timeout);
+        child.kill("SIGTERM");
+        reject(new Error(message));
+      };
+      child.stdout?.setEncoding("utf8");
+      child.stdout?.on("data", (chunk: string) => {
+        const match = chunk.match(new RegExp(`${BROKER_READY_PREFIX}(\\d+)`));
+        if (!match) {
+          return;
+        }
+        const port = Number(match[1]);
+        if (!Number.isInteger(port) || port <= 0 || port >= 65_536) {
+          fail("Codex broker reported an invalid port.");
+          return;
+        }
+        settled = true;
+        clearTimeout(timeout);
+        resolveReady({ child, port });
+      });
+      child.once("error", () => fail("Codex broker failed to start."));
+      child.once("exit", (code) => {
+        if (!settled) {
+          fail(
+            `Codex broker exited before becoming ready (code ${code ?? "unknown"}).`
+          );
+        }
+      });
+    }
+  );
+};
+
+const stopCodexBroker = async (child: ReturnType<typeof spawn>) => {
+  if (child.exitCode !== null) {
+    return;
+  }
+  await new Promise<void>((resolveStopped) => {
+    const timeout = setTimeout(() => {
+      child.kill("SIGKILL");
+      resolveStopped();
+    }, 5000);
+    child.once("exit", () => {
+      clearTimeout(timeout);
+      resolveStopped();
+    });
+    child.kill("SIGTERM");
+  });
 };
 
 const artifactDirectory = (trialDir: string, name: "agent" | "verifier") => {
@@ -697,8 +817,8 @@ export const validateHarborArtifacts = (
 
 interface HarborInvocationOptions {
   artifactRoot: string;
-  baseUrl: string;
-  budgetProxyPath: string;
+  codexBrokerToken: string;
+  codexProxyUrl: string;
   extensionPath: string;
   extensionVersion: string;
   harborBinary: string;
@@ -710,8 +830,8 @@ interface HarborInvocationOptions {
 
 export const buildHarborTrialArgs = ({
   artifactRoot,
-  baseUrl,
-  budgetProxyPath,
+  codexBrokerToken,
+  codexProxyUrl,
   extensionPath,
   extensionVersion,
   harborBinary,
@@ -742,12 +862,6 @@ export const buildHarborTrialArgs = ({
       target: RECORDER_TARGET,
       type: "bind",
     },
-    {
-      read_only: true,
-      source: budgetProxyPath,
-      target: BUDGET_PROXY_TARGET,
-      type: "bind",
-    },
   ];
   const agentKwargs = [
     `version=${piVersion}`,
@@ -755,7 +869,9 @@ export const buildHarborTrialArgs = ({
     `extension_path=/bench-source/extensions/${extensionFilename}`,
     `extension_version=${extensionVersion}`,
     `benchmark_arm=${request.arm}`,
-    "model_api=openai-completions",
+    "model_api=openai-codex-responses",
+    `codex_proxy_url=${codexProxyUrl}`,
+    `codex_broker_token=${codexBrokerToken}`,
     `scout_enabled=${readEnv("BENCH_SCOUT") === "1" ? "true" : "false"}`,
   ];
   if (request.arm === "E+A") {
@@ -780,16 +896,12 @@ export const buildHarborTrialArgs = ({
     request.executorModel,
     ...agentKwargs.flatMap((value) => ["--agent-kwarg", value]),
     "--agent-env",
-    `BENCH_API_KEY=${"$"}{BENCH_API_KEY}`,
-    "--agent-env",
-    `BENCH_BASE_URL=${"$"}{BENCH_BASE_URL}`,
-    "--agent-env",
     `BENCH_TRIAL_BUDGET_USD=${request.budgetUsd}`,
     "--agent-env",
     `BENCH_TRIAL_PRICING_JSON=${JSON.stringify(request.pricing ?? {})}`,
     "--mounts",
     JSON.stringify(mounts),
-    ...parseAllowHosts(providerHost(baseUrl)).flatMap((host) => [
+    ...parseAllowHosts(proxyHost(codexProxyUrl)).flatMap((host) => [
       "--allow-agent-host",
       host,
       "--allow-environment-host",
@@ -805,9 +917,6 @@ export const runTrial = async (request: HarborTrialRequest) => {
     );
   }
   const sourceRoot = readEnv("BENCH_REACTBENCH_ROOT");
-  if (!sourceRoot) {
-    throw new Error("BENCH_REACTBENCH_ROOT is required by the Harbor wrapper.");
-  }
   if (
     request.budgetUsd === undefined ||
     !Number.isFinite(request.budgetUsd) ||
@@ -821,10 +930,31 @@ export const runTrial = async (request: HarborTrialRequest) => {
   const taskPath = resolve(request.taskPath);
   requireFile(join(taskPath, "task.toml"), "ReactBench task definition");
   const checkoutRoot = checkoutRootFor(taskPath, sourceRoot);
+  const checkoutCommit = execFileSync(
+    "git",
+    ["-C", checkoutRoot, "rev-parse", "HEAD"],
+    { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }
+  ).trim();
+  if (checkoutCommit !== DEFAULT_REACTBENCH_COMMIT) {
+    throw new Error(
+      `ReactBench checkout is not pinned: expected ${DEFAULT_REACTBENCH_COMMIT}, got ${checkoutCommit}.`
+    );
+  }
+  if (
+    execFileSync("git", ["-C", checkoutRoot, "status", "--porcelain"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim()
+  ) {
+    throw new Error(
+      "ReactBench checkout is dirty; refusing a non-reproducible trial."
+    );
+  }
   requireFile(
     join(checkoutRoot, "pyproject.toml"),
     "ReactBench pyproject.toml"
   );
+  requireFile(join(checkoutRoot, "uv.lock"), "ReactBench uv.lock");
 
   const extensionPath = resolve(
     readEnv("BENCH_PI_ADVISOR_EXTENSION") ?? DEFAULT_EXTENSION_PATH
@@ -832,38 +962,28 @@ export const runTrial = async (request: HarborTrialRequest) => {
   const recorderPath = resolve(
     readEnv("BENCH_PI_ADVISOR_RECORDER") ?? DEFAULT_RECORDER_PATH
   );
-  const budgetProxyPath = DEFAULT_BUDGET_PROXY_PATH;
   requireFile(extensionPath, "Pinned pi-advisor extension");
   requireFile(recorderPath, "Benchmark recorder");
-  requireFile(budgetProxyPath, "Benchmark budget proxy");
+  requireFile(DEFAULT_CODEX_BROKER_PATH, "Codex OAuth broker");
   requireFile(resolve(REPO_ROOT, "bench/harbor/agent.py"), "Harbor Pi agent");
   const extensionDirectory = dirname(extensionPath);
   const extensionSourceDirectory = resolve(extensionDirectory, "../src");
   requireDirectory(extensionSourceDirectory, "Pinned pi-advisor source");
 
-  const credentialEnv =
-    readEnv("BENCH_PI_ADVISOR_CREDENTIAL_ENV") ?? "BENCH_API_KEY";
-  const credential = readEnv(credentialEnv);
-  if (!credential) {
-    throw new Error(
-      `${credentialEnv} is not set; refusing an unauthenticated Harbor trial.`
-    );
-  }
-  const baseUrl = readEnv("BENCH_BASE_URL");
-  if (!baseUrl) {
-    throw new Error("BENCH_BASE_URL is required by the Harbor wrapper.");
-  }
-  const extensionVersion = readEnv("BENCH_PI_ADVISOR_VERSION");
-  const piVersion = readEnv("BENCH_PI_VERSION");
-  if (!(extensionVersion && piVersion)) {
-    throw new Error(
-      "BENCH_PI_ADVISOR_VERSION and BENCH_PI_VERSION are required."
-    );
-  }
+  const authFile = resolve(
+    readEnv("BENCH_PI_ADVISOR_AUTH_FILE") ??
+      join(homedir(), ".pi", "agent", "auth.json")
+  );
+  validateCodexAuthFile(authFile);
+  const extensionVersion =
+    readEnv("BENCH_PI_ADVISOR_VERSION") ?? DEFAULT_EXTENSION_VERSION;
+  const piVersion = readEnv("BENCH_PI_VERSION") ?? DEFAULT_PI_VERSION;
 
   const taskId = basename(taskPath);
   const trialName = trialNameFor(taskId, request.arm, request.seed);
-  const artifactRoot = resolve(request.artifactRoot);
+  const requestedArtifactRoot = resolve(request.artifactRoot);
+  mkdirSync(requestedArtifactRoot, { recursive: true });
+  const artifactRoot = realpathSync(requestedArtifactRoot);
   const trialDirectory = join(artifactRoot, trialName);
   if (existsSync(trialDirectory)) {
     throw new Error(
@@ -873,26 +993,47 @@ export const runTrial = async (request: HarborTrialRequest) => {
 
   const configuredHarborBinary = readEnv("BENCH_HARBOR_BIN");
   const harborBinary = configuredHarborBinary ?? "uv";
-  const args = buildHarborTrialArgs({
-    artifactRoot,
-    baseUrl,
-    budgetProxyPath,
-    extensionPath,
-    extensionVersion,
-    harborBinary,
-    piVersion,
-    recorderPath,
+  const brokerToken = randomBytes(32).toString("hex");
+  const broker = await startCodexBroker({
+    authFile,
     request,
-    trialName,
+    token: brokerToken,
   });
-  const env = {
+  const codexProxyUrl = `http://host.docker.internal:${broker.port}`;
+  const env: NodeJS.ProcessEnv = {
     ...process.env,
-    BENCH_API_KEY: credential,
-    BENCH_BASE_URL: baseUrl,
     PYTHONPATH: [REPO_ROOT, process.env.PYTHONPATH].filter(Boolean).join(":"),
   };
+  // Do not let host credentials, broker settings, or the selected auth-file
+  // path enter Harbor's launcher environment. The OAuth credential is
+  // available only to the broker child; the per-trial broker token is passed
+  // separately as an intentional agent kwarg.
+  for (const name of [
+    "BENCH_API_KEY",
+    "BENCH_BASE_URL",
+    "BENCH_CODEX_AUTH_FILE",
+    "BENCH_CODEX_PROXY_TOKEN",
+    "BENCH_CODEX_UPSTREAM_URL",
+    "BENCH_PI_ADVISOR_AUTH_FILE",
+    "OPENAI_API_KEY",
+    "OPENAI_ACCESS_TOKEN",
+  ]) {
+    delete env[name];
+  }
 
   try {
+    const args = buildHarborTrialArgs({
+      artifactRoot,
+      codexBrokerToken: brokerToken,
+      codexProxyUrl,
+      extensionPath,
+      extensionVersion,
+      harborBinary,
+      piVersion,
+      recorderPath,
+      request,
+      trialName,
+    });
     await execFileAsync(harborBinary, args, {
       cwd: checkoutRoot,
       env,
@@ -908,6 +1049,8 @@ export const runTrial = async (request: HarborTrialRequest) => {
       `Harbor trial failed with exit code ${code}; inspect ${trialDirectory}.`,
       { cause: error }
     );
+  } finally {
+    await stopCodexBroker(broker.child);
   }
 
   const result = validateHarborArtifacts(

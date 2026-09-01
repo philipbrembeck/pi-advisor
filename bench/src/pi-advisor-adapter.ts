@@ -1,5 +1,6 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { homedir } from "node:os";
+import { join, resolve } from "node:path";
 import { normalizeUsage } from "./cost.js";
 import type {
   CommandReactBenchRunnerOptions,
@@ -14,6 +15,10 @@ export const ADVISOR_ADAPTER_ID = "pi-advisor-harbor";
 export const ADVISOR_EXTENSION_ID = "pi-advisor-flow";
 
 const LINE_BREAK = /\r?\n/;
+const DEFAULT_EXTENSION_PATH = resolve(process.cwd(), "extensions/index.ts");
+const DEFAULT_COMMAND = resolve(process.cwd(), "bench/harbor/run-trial");
+const DEFAULT_EXTENSION_VERSION = "0.5.0";
+const DEFAULT_PI_VERSION = "0.84.4";
 
 export type AdvisorAdapterMode = "executor" | "advisor";
 
@@ -28,12 +33,11 @@ export interface AdvisorRuntimeAttestation {
 }
 
 export interface PiAdvisorAdapterPrerequisites {
-  credentialEnv: string;
-  credentialPresent?: boolean;
+  authFile: string;
+  authPresent?: boolean;
   extensionPath: string;
   extensionVersion: string;
   piVersion: string;
-  providerBaseUrl: string;
 }
 
 export class PiAdvisorAdapterUnavailableError extends Error {
@@ -57,10 +61,23 @@ const isRegularFile = (path: string) => {
   }
 };
 
-const isValidProviderUrl = (value: string) => {
+const isUsableCodexAuthFile = (path: string) => {
   try {
-    const url = new URL(value);
-    return url.protocol === "http:" || url.protocol === "https:";
+    const value: unknown = JSON.parse(readFileSync(path, "utf8"));
+    if (!isRecord(value)) {
+      return false;
+    }
+    const credential = value["openai-codex"];
+    return Boolean(
+      isRecord(credential) &&
+        credential.type === "oauth" &&
+        typeof credential.access === "string" &&
+        credential.access.trim() &&
+        typeof credential.refresh === "string" &&
+        credential.refresh.trim() &&
+        typeof credential.expires === "number" &&
+        Number.isFinite(credential.expires)
+    );
   } catch {
     return false;
   }
@@ -68,12 +85,11 @@ const isValidProviderUrl = (value: string) => {
 
 /**
  * Validates the inputs that make an adapter run measure pi-advisor rather than
- * a plain Pi invocation. The credential value is never included in errors or
- * attestation records.
+ * a plain Pi invocation. OAuth values are never included in errors or
+ * attestation records; the host broker performs the live refresh/preflight.
  */
 export const assertPiAdvisorPrerequisites = (
-  prerequisites: PiAdvisorAdapterPrerequisites,
-  env: NodeJS.ProcessEnv = process.env
+  prerequisites: PiAdvisorAdapterPrerequisites
 ) => {
   if (!prerequisites.extensionPath.trim()) {
     throw new PiAdvisorAdapterUnavailableError(
@@ -95,22 +111,16 @@ export const assertPiAdvisorPrerequisites = (
       "BENCH_PI_VERSION must identify the pinned Pi package."
     );
   }
-  if (!isValidProviderUrl(prerequisites.providerBaseUrl)) {
+  if (!prerequisites.authFile.trim()) {
     throw new PiAdvisorAdapterUnavailableError(
-      "BENCH_BASE_URL must be an http(s) provider endpoint for the Harbor adapter."
+      "BENCH_PI_ADVISOR_AUTH_FILE must point to the Pi auth.json file."
     );
   }
-  if (!prerequisites.credentialEnv.trim()) {
+  const authPresent =
+    prerequisites.authPresent ?? isUsableCodexAuthFile(prerequisites.authFile);
+  if (!authPresent) {
     throw new PiAdvisorAdapterUnavailableError(
-      "A provider credential environment variable is required for Harbor."
-    );
-  }
-  const credentialPresent =
-    prerequisites.credentialPresent ??
-    Boolean(env[prerequisites.credentialEnv]?.trim());
-  if (!credentialPresent) {
-    throw new PiAdvisorAdapterUnavailableError(
-      `${prerequisites.credentialEnv} is not set; refusing to run plain or unauthenticated Pi.`
+      `Pi auth.json has no usable openai-codex OAuth session: ${prerequisites.authFile}`
     );
   }
   return true;
@@ -317,32 +327,33 @@ export const createPiAdvisorHarborAdapter = (
   command?: string,
   env: NodeJS.ProcessEnv = process.env
 ) => {
-  const resolvedCommand =
+  const configuredCommand =
     command ?? env.BENCH_PI_ADVISOR_ADAPTER ?? env.BENCH_PI_ADAPTER;
-  if (!resolvedCommand?.trim()) {
+  const resolvedCommand =
+    configuredCommand?.trim() ||
+    (existsSync(DEFAULT_COMMAND) ? DEFAULT_COMMAND : undefined);
+  if (!resolvedCommand) {
     return;
   }
-  const extensionPath = env.BENCH_PI_ADVISOR_EXTENSION;
-  const extensionVersion = env.BENCH_PI_ADVISOR_VERSION;
-  const piVersion = env.BENCH_PI_VERSION;
-  const providerBaseUrl = env.BENCH_BASE_URL;
-  const credentialEnv = env.BENCH_PI_ADVISOR_CREDENTIAL_ENV ?? "BENCH_API_KEY";
-  if (!(extensionPath && extensionVersion && piVersion && providerBaseUrl)) {
-    throw new PiAdvisorAdapterUnavailableError(
-      "BENCH_PI_ADVISOR_EXTENSION, BENCH_PI_ADVISOR_VERSION, BENCH_PI_VERSION, and BENCH_BASE_URL are required for the Advisor Harbor adapter."
-    );
-  }
+  const extensionPath =
+    env.BENCH_PI_ADVISOR_EXTENSION ?? DEFAULT_EXTENSION_PATH;
+  const extensionVersion =
+    env.BENCH_PI_ADVISOR_VERSION ?? DEFAULT_EXTENSION_VERSION;
+  const piVersion = env.BENCH_PI_VERSION ?? DEFAULT_PI_VERSION;
+  const authFile = resolve(
+    env.BENCH_PI_ADVISOR_AUTH_FILE ??
+      join(homedir(), ".pi", "agent", "auth.json")
+  );
   return new PiAdvisorHarborAdapter({
     artifactRoot: "bench/reports/reactbench-trajectories",
     command: resolvedCommand,
     cwd: process.cwd(),
     prerequisites: {
-      credentialEnv,
-      credentialPresent: Boolean(env[credentialEnv]?.trim()),
+      authFile,
+      authPresent: isUsableCodexAuthFile(authFile),
       extensionPath,
       extensionVersion,
       piVersion,
-      providerBaseUrl,
     },
   });
 };

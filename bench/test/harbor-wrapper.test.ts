@@ -199,15 +199,14 @@ describe("Harbor trial wrapper protocol", () => {
     );
   });
 
-  test("keeps credentials templated and allows setup hosts", () => {
+  test("passes only the broker token and allows setup hosts", () => {
     const extensionPath = join(process.cwd(), "extensions/index.ts");
     const recorderPath = join(process.cwd(), "bench/harbor/recorder.ts");
-    const proxyPath = join(process.cwd(), "bench/harbor/budget-proxy.mjs");
     const request = { ...requestFor(), budgetUsd: 3 };
     const args = buildHarborTrialArgs({
       artifactRoot: "/tmp/artifacts",
-      baseUrl: "https://provider.example/v1",
-      budgetProxyPath: proxyPath,
+      codexBrokerToken: "trial-token",
+      codexProxyUrl: "http://host.docker.internal:18765",
       extensionPath,
       extensionVersion: "0.5.0",
       harborBinary: "harbor",
@@ -216,9 +215,12 @@ describe("Harbor trial wrapper protocol", () => {
       request,
       trialName: "pi-advisor-example-E-A-101-test",
     });
-    expect(args).toContain(`BENCH_API_KEY=${"${"}BENCH_API_KEY}`);
-    expect(args).toContain(`BENCH_BASE_URL=${"${"}BENCH_BASE_URL}`);
-    expect(args.join("\u0000")).not.toContain("provider-secret");
+    expect(args.join("\u0000")).toContain("codex_broker_token=trial-token");
+    expect(args.join("\u0000")).toContain(
+      "codex_proxy_url=http://host.docker.internal:18765"
+    );
+    expect(args.join("\u0000")).not.toContain("BENCH_API_KEY");
+    expect(args.join("\u0000")).not.toContain("BENCH_BASE_URL");
     expect(args).toContain("--allow-environment-host");
     expect(args).toContain("registry.npmjs.org");
     const mounts = JSON.parse(
@@ -230,12 +232,9 @@ describe("Harbor trial wrapper protocol", () => {
       target: "/bench-source/bench/harbor/recorder.ts",
       type: "bind",
     });
-    expect(mounts).toContainEqual({
-      read_only: true,
-      source: proxyPath,
-      target: "/bench-source/bench/harbor/budget-proxy.mjs",
-      type: "bind",
-    });
+    expect(mounts).not.toContainEqual(
+      expect.objectContaining({ target: expect.stringContaining("proxy") })
+    );
   });
 
   test("forwards and parses seed, both pins, and pricing", () => {

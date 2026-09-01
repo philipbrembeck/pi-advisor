@@ -15,6 +15,7 @@ import { requireCommittedPreregistration } from "./preregistration.js";
 import {
   assertReactBenchCheckout,
   discoverReactBenchTasks,
+  ensurePinnedReactBenchCheckout,
   type ReactBenchTrialResult,
   type ReactBenchTrialRunner,
 } from "./reactbench.js";
@@ -120,33 +121,29 @@ export const runScreening = async ({
   config = DEFAULT_CONFIG,
   runner,
   reportTimestamp,
-  sourceRoot = process.env.BENCH_REACTBENCH_ROOT,
+  sourceRoot,
   writeReportOutput = true,
 }: ScreeningRunOptions = {}): Promise<BenchmarkReport> => {
   preregistered();
   validateEvaluationSeeds(SCREENING_SEEDS, EVALUATION_SEEDS);
   assertPinnedLiveModelConfiguration(config);
-  if (!sourceRoot) {
-    const report = unavailable(
-      config,
-      "BENCH_REACTBENCH_ROOT is not set; Harbor/ReactBench screening was not run.",
-      reportTimestamp
-    );
-    if (writeReportOutput) {
-      writeReport(report, undefined, config.reportRoot);
-    }
-    return report;
-  }
+  let resolvedSourceRoot = sourceRoot ?? process.env.BENCH_REACTBENCH_ROOT;
   let harborRunnerCreated = false;
   if (!runner) {
+    if (!resolvedSourceRoot) {
+      resolvedSourceRoot = ensurePinnedReactBenchCheckout(
+        config.reactBenchCommit
+      ).tasksRoot;
+    }
     const command =
       process.env.BENCH_PI_ADVISOR_ADAPTER ??
       process.env.BENCH_PI_ADAPTER ??
       process.env.BENCH_REACTBENCH_RUNNER;
-    if (!command) {
+    runner = createPiAdvisorHarborAdapter(command);
+    if (!runner) {
       const report = unavailable(
         config,
-        "BENCH_REACTBENCH_RUNNER is not set; no Pi/ReactBench adapter is available.",
+        "The pinned Pi/ReactBench adapter could not be initialized.",
         reportTimestamp
       );
       if (writeReportOutput) {
@@ -154,16 +151,26 @@ export const runScreening = async ({
       }
       return report;
     }
-    runner = createPiAdvisorHarborAdapter(command);
-    if (!runner) {
-      throw new Error("Pi ReactBench adapter could not be initialized.");
-    }
     harborRunnerCreated = true;
   }
-  if (harborRunnerCreated) {
-    assertReactBenchCheckout(sourceRoot, config.reactBenchCommit);
+  if (!resolvedSourceRoot) {
+    const report = unavailable(
+      config,
+      "ReactBench source checkout is unavailable; screening was not run.",
+      reportTimestamp
+    );
+    if (writeReportOutput) {
+      writeReport(report, undefined, config.reportRoot);
+    }
+    return report;
   }
-  const tasks = discoverReactBenchTasks(sourceRoot, SCREENING_TASK_COUNT);
+  if (harborRunnerCreated) {
+    assertReactBenchCheckout(resolvedSourceRoot, config.reactBenchCommit);
+  }
+  const tasks = discoverReactBenchTasks(
+    resolvedSourceRoot,
+    SCREENING_TASK_COUNT
+  );
   const executorPin = modelPin(config, "executor", "executor");
   const frontierPin = modelPin(config, "frontier", "executor");
   if (
@@ -289,7 +296,7 @@ export const runScreening = async ({
     {
       budget: estimate,
       controls: controlRun.controls,
-      fixtureHashes: { reactBench: hashTree(sourceRoot) },
+      fixtureHashes: { reactBench: hashTree(resolvedSourceRoot) },
       gateSettings: {
         evaluationSeeds: EVALUATION_SEEDS,
         screeningSeeds: SCREENING_SEEDS,

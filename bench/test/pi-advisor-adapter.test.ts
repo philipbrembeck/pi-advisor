@@ -15,12 +15,11 @@ import {
 } from "../src/pi-advisor-adapter.js";
 
 const prerequisites = (extensionPath: string) => ({
-  credentialEnv: "BENCH_API_KEY",
-  credentialPresent: true,
+  authFile: join(extensionPath, "../auth.json"),
+  authPresent: true,
   extensionPath,
   extensionVersion: "0.5.0",
   piVersion: "0.84.4",
-  providerBaseUrl: "https://provider.example/v1",
 });
 
 describe("pi-advisor Harbor adapter boundary", () => {
@@ -66,7 +65,7 @@ describe("pi-advisor Harbor adapter boundary", () => {
     ).toThrow("exact expected number of consultations");
   });
 
-  test("requires a pinned extension, endpoint, and credential", () => {
+  test("requires a pinned extension and Pi Codex OAuth session", () => {
     const root = mkdtempSync(join(process.env.TMPDIR ?? "/tmp", "bench-pi-"));
     try {
       const extensionPath = join(root, "extensions.ts");
@@ -77,7 +76,7 @@ describe("pi-advisor Harbor adapter boundary", () => {
       expect(() =>
         assertPiAdvisorPrerequisites({
           ...prerequisites(extensionPath),
-          credentialPresent: false,
+          authPresent: false,
         })
       ).toThrow(PiAdvisorAdapterUnavailableError);
     } finally {

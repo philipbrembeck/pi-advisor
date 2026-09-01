@@ -19,18 +19,21 @@ export const PINNED_JUDGE_EFFORT = "medium";
 export const DEFAULT_REACT_BENCH_COMMIT =
   "11ff042e60ec83a613053fbd721a54ed4dbfdf6f";
 
+// Pi's pinned Codex catalog rates are used as a conservative normalized
+// list-price equivalent when the existing ChatGPT subscription is used. They
+// are not an API invoice and are surfaced as such in live reports.
 export const DEFAULT_PRICING: Record<string, PricingRates> = {
   [PINNED_EXECUTOR]: {
-    cacheReadPerMillion: 0,
-    cacheWritePerMillion: 0,
-    inputPerMillion: 0,
-    outputPerMillion: 0,
+    cacheReadPerMillion: 0.02,
+    cacheWritePerMillion: 0.25,
+    inputPerMillion: 0.2,
+    outputPerMillion: 1.2,
   },
   [PINNED_ADVISOR]: {
-    cacheReadPerMillion: 0,
-    cacheWritePerMillion: 0,
-    inputPerMillion: 0,
-    outputPerMillion: 0,
+    cacheReadPerMillion: 0.5,
+    cacheWritePerMillion: 6.25,
+    inputPerMillion: 5,
+    outputPerMillion: 30,
   },
 };
 
@@ -68,7 +71,7 @@ export const DEFAULT_MODEL_PINS: Record<string, ModelPin> = {
 };
 
 export const DEFAULT_CONFIG: BenchmarkConfig = {
-  budgetUsd: 10,
+  budgetUsd: 25,
   fixtureRoot: "bench/fixtures",
   gateFailureModes: [...GATE_FAILURE_MODES],
   modelPins: DEFAULT_MODEL_PINS,

@@ -62,9 +62,17 @@ and effort. Missing usage is reported as unavailable, never as zero.
 Tier 3 requires all of the following:
 
 1. A successful Harbor/ReactBench feasibility spike.
-2. A ReactBench checkout at the configured commit.
-3. An executable Pi adapter command.
-4. A live provider endpoint and non-zero pricing.
+2. A clean ReactBench checkout at the configured commit (the wrapper fetches
+   the pinned public checkout into a temporary cache when no path is set).
+3. The local Pi installation's `openai-codex` OAuth session in
+   `~/.pi/agent/auth.json` (override with `BENCH_PI_ADVISOR_AUTH_FILE`).
+4. `BENCH_LIVE=1` and non-zero pinned catalog pricing.
+
+The Harbor adapter uses the already-authenticated Pi/Codex subscription. It
+starts a trial-local host broker that refreshes OAuth through Pi's Codex
+credential, keeps the real token outside Harbor, and exposes only a
+per-trial, budget-checked endpoint to the task container. No `BENCH_API_KEY`,
+`OPENAI_API_KEY`, or `BENCH_BASE_URL` is needed for Tier 3.
 
 Before running Harbor, verify that the Docker CLI exposes all three commands
 used by its local backend:
@@ -78,20 +86,20 @@ docker buildx version
 A standalone `docker-compose` executable is not enough; Harbor invokes the
 Compose and Buildx CLI plugins as `docker compose` and `docker buildx`.
 
-Set paths for the current checkout; these are operator-supplied and are not
-part of the repository:
+The zero-configuration command uses the pinned checkout, adapter, extension,
+Pi version, and auth file defaults:
+
+```bash
+BENCH_LIVE=1 bun run bench:screen
+```
+
+Use these optional overrides only when needed:
 
 ```bash
 export BENCH_REACTBENCH_ROOT=/path/to/reactbench/tasks
+export BENCH_PI_ADVISOR_AUTH_FILE="$HOME/.pi/agent/auth.json"
 export BENCH_PI_ADVISOR_ADAPTER="$PWD/bench/harbor/run-trial"
-export BENCH_PI_ADVISOR_EXTENSION="$PWD/extensions/index.ts"
-export BENCH_PI_ADVISOR_VERSION=0.5.0
-export BENCH_PI_VERSION=0.84.4
-export BENCH_BASE_URL=https://provider.example/v1
-export BENCH_API_KEY=replace-with-a-secret
-
-BENCH_LIVE=1 bun run bench:screen \
-  --config /tmp/pi-advisor-benchmark.json
+BENCH_LIVE=1 bun run bench:screen --config /tmp/pi-advisor-benchmark.json
 ```
 
 The adapter receives one isolated trial at a time with the task path, seed,
@@ -105,31 +113,31 @@ BENCH_RESULT={"passed":true,"cost":0.12,"consultations":1,"taskId":"...","reques
 
 The `E+A` result must attest exactly one Advisor consultation. The `E`, `F`,
 and optional `F′` results must attest the extension in executor mode and zero
-Advisor consultations. The checked-in `bench/harbor/run-trial` executable
-starts Harbor with the ReactBench checkout's pinned `uv.lock`, mounts only the
-extension/source, recorder, and budget proxy needed by the agent, forwards the seed/model/
-effort/pricing request, gives the normal Pi client a remaining-USD lease enforced by a
-local forwarding proxy before provider requests, and archives the Harbor
-result plus Pi trajectory. It refuses to overwrite an existing trial
+Advisor consultations. The checked-in `bench/harbor/run-trial` executable starts Harbor with the
+ReactBench checkout's pinned `uv.lock`, mounts only the extension/source and
+recorder needed by the agent, forwards the seed/model/effort/pricing request,
+gives the normal Pi client a remaining-USD lease enforced by the host-side
+Codex broker before provider requests, and archives the Harbor result plus Pi
+trajectory. It refuses to overwrite an existing trial
 directory. The wrapper allowlists the provider and standard Pi installation
 hosts. Set `BENCH_HARBOR_ALLOW_HOSTS` to a comma-separated list for any
-additional installation host. It rejects missing
-trajectory, grader, request, usage, attestation, or clean-shutdown artifacts,
-wrong model/effort pins, extra Advisor calls, and zero E+A consultations. A
-credentialed trial is still required before screening; no model-quality or
-economic result is claimed. The request/attestation files are runtime instrumentation written inside the
+additional installation host. It rejects missing trajectory, grader, request, usage, attestation, or
+clean-shutdown artifacts, wrong model/effort pins, extra Advisor calls, and
+zero E+A consultations. A credentialed smoke trial is still required before
+screening; no model-quality or economic result is claimed before that gate.
+The request/attestation files are runtime instrumentation written inside the
 agent container, not cryptographic proof against a malicious agent: the
 wrapper detects missing and inconsistent artifacts, but a hostile process with
-shell access could forge them. The budget proxy removes the real credential
-and upstream URL from Pi's process, but it is still process-level isolation,
-not a cryptographic boundary. Harbor's verifier reward remains the independent
-grading artifact.
+shell access could forge them. The host broker is a conservative process-level
+OAuth and budget boundary, not cryptographic isolation against a hostile
+same-container agent. Harbor's verifier reward remains the independent grading
+artifact.
 
 Run Stage 2 only after Stage 1 has produced a screening report and the
 corresponding preregistration section was committed. If `BENCH_SCREEN_REPORT`
 is omitted, the newest `*-screen.json` report under `bench/reports/` is used.
-`BENCH_PI_ADVISOR_CREDENTIAL_ENV` may name a different credential variable;
-it defaults to `BENCH_API_KEY`.
+The same host-side Pi/Codex OAuth broker is used for every fresh evaluation
+trial.
 
 ```bash
 export BENCH_SCREEN_REPORT=/path/to/screen-report.json
@@ -175,18 +183,16 @@ ReactBench is pinned to commit
 and shipped adapters. The default Colima profile was rebuilt after its cached
 VM image and disk link were missing.
 
-The Gate A canary then passed: Harbor ran the `hello-react` oracle task with
-one trial, no exception, and reward/tests/React Doctor metrics all equal to
-`1.0`. A separate allowlisted probe also ran Harbor's Pi agent inside a task
-container. Pi reached `https://api.openai.com/v1/models` and received the
-expected `401` response for a deliberately invalid probe key. That verifies the
-container-to-provider network path without making a paid model request.
-
-**Gate A status:** container startup, ReactBench grading, and allowlisted
-provider transport are validated. The checked-in Pi/ReactBench adapter and
-fail-closed artifact boundary are implemented, but a real authenticated
-provider run is still required before screening; no model-quality or economic
-result is claimed. See `bench/STATUS.md` for phase state.
+The Gate A canary passed: Harbor ran the `hello-react` oracle task with one
+trial, no exception, and reward/tests/React Doctor metrics all equal to `1.0`.
+The host-side OAuth broker and pinned native Codex transport are covered by
+offline proxy tests. On 2026-09-01, bounded authenticated smoke trials also
+passed the artifact boundary: one `E` `fix-react` trial (seed `101`, normalized
+cost `$0.0392`) and one `E+A` `write-react` trial (seed `103`, normalized cost
+`$0.0658`). They resolved Executor `luna@max`, and the E+A trial resolved
+Advisor `sol@medium` with exactly one consultation. Both task rewards were
+`0`, so these are transport/integration evidence only, not model-quality or
+economic results. See `bench/STATUS.md` for phase state.
 
 ## Provenance and licensing
 
@@ -199,7 +205,8 @@ item must record its immutable source SHA and licensing decision in its
 ## Safety rules
 
 - Live commands refuse to run without `BENCH_LIVE=1`.
-- Every live command prints an estimate and enforces the configured USD cap.
+- Every live command prints an estimate and enforces the configured normalized
+  USD-equivalent cap; the ChatGPT subscription is not an API invoice.
 - Missing provider usage is reported as `unavailable`, never as zero.
 - Tier 1 fails closed on privacy leaks, malformed fixtures, budget overruns,
   and nondeterminism.

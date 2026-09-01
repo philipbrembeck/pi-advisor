@@ -1,17 +1,16 @@
 """Pinned Pi agent used by the repository-only Harbor adapter.
 
 ReactBench currently resolves Harbor 0.18.0.  Its built-in Pi agent cannot
-load an extension or configure an OpenAI-compatible endpoint, so this class
-keeps those two pieces explicit while retaining compatibility with the older
-Harbor agent API (and the newer API used by local Harbor installations). A
-trial-local forwarding proxy owns the real credential and enforces the USD
-lease before normal Pi requests reach the provider.
+load an extension or configure a benchmark-local Codex endpoint, so this
+class keeps those two pieces explicit while retaining compatibility with the
+older Harbor agent API (and the newer API used by local Harbor installations).
+A host-side broker owns the ChatGPT OAuth credential and enforces the USD lease
+before normal Pi requests reach Codex; no credential is mounted into Harbor.
 """
 
 from __future__ import annotations
 
 import json
-import os
 import shlex
 import tempfile
 from pathlib import Path, PurePosixPath
@@ -26,8 +25,11 @@ from harbor.models.agent.context import AgentContext
 _REMOTE_PI_CONFIG_DIR = PurePosixPath("/tmp/harbor-pi-agent")
 _CUSTOM_PROVIDER = "openai-codex"
 _RECORDER_PATH = "/bench-source/bench/harbor/recorder.ts"
-_BUDGET_PROXY_PATH = "/bench-source/bench/harbor/budget-proxy.mjs"
-_BUDGET_PROXY_URL = "http://127.0.0.1:18765/v1"
+_DUMMY_CODEX_TOKEN = (
+    "eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0."
+    "eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiYmVuY2gtcHJveHkifX0.x"
+)
+_CODEX_API = "openai-codex-responses"
 
 
 class PiAdvisorAgent(Pi):
@@ -50,7 +52,9 @@ class PiAdvisorAgent(Pi):
         benchmark_arm: str | None = None,
         advisor_model: str | None = None,
         advisor_effort: str | None = None,
-        model_api: str = "openai-completions",
+        codex_proxy_url: str | None = None,
+        codex_broker_token: str | None = None,
+        model_api: str = _CODEX_API,
         scout_enabled: str | bool = False,
         **kwargs: Any,
     ) -> None:
@@ -63,6 +67,8 @@ class PiAdvisorAgent(Pi):
         self._benchmark_arm = benchmark_arm
         self._advisor_model = advisor_model
         self._advisor_effort = advisor_effort
+        self._codex_proxy_url = codex_proxy_url
+        self._codex_broker_token = codex_broker_token
         self._model_api = model_api
         self._scout_enabled = str(scout_enabled).lower() in {"1", "true", "yes"}
 
@@ -70,12 +76,6 @@ class PiAdvisorAgent(Pi):
     @override
     def name() -> str:
         return "pi-advisor"
-
-    def _host_env(self, name: str) -> str | None:
-        # Harbor 0.18 stores --agent-env values on BaseAgent._extra_env;
-        # os.environ is useful for direct/unit construction and newer Harbor.
-        value = getattr(self, "_extra_env", {}).get(name) or os.environ.get(name)
-        return value.strip() if isinstance(value, str) and value.strip() else None
 
     async def install(self, environment: BaseEnvironment) -> None:
         if not self._version:
@@ -92,7 +92,12 @@ class PiAdvisorAgent(Pi):
             environment,
             command=(
                 "set -euo pipefail; "
-                f"{nvm_node_install_snippet()} && "
+                "if command -v node >/dev/null 2>&1 && "
+                "node -e 'process.exit(process.versions.node.startsWith(\"22.\") ? 0 : 1)'; then "
+                "node --version; "
+                "else "
+                f"{nvm_node_install_snippet()}; "
+                "fi && "
                 f"npm install -g --ignore-scripts {package} && "
                 "pi --version"
             ),
@@ -113,10 +118,10 @@ class PiAdvisorAgent(Pi):
             await environment.upload_file(local_path, remote_path)
 
     def _models_json(self, model_id: str) -> dict[str, Any]:
-        if not self._host_env("BENCH_API_KEY"):
-            raise ValueError("BENCH_API_KEY did not resolve inside Harbor")
-        if not self._host_env("BENCH_BASE_URL"):
-            raise ValueError("BENCH_BASE_URL did not resolve inside Harbor")
+        if not self._codex_proxy_url:
+            raise ValueError("PiAdvisorAgent requires a host-side Codex proxy URL")
+        if not self._codex_broker_token:
+            raise ValueError("PiAdvisorAgent requires a per-trial broker token")
 
         model_ids = [model_id]
         if self._advisor_model and "/" in self._advisor_model:
@@ -151,17 +156,13 @@ class PiAdvisorAgent(Pi):
             "providers": {
                 _CUSTOM_PROVIDER: {
                     "api": self._model_api,
-                    "apiKey": (
-                        "bench-proxy"
-                        if self._host_env("BENCH_TRIAL_BUDGET_USD")
-                        else "$BENCH_API_KEY"
-                    ),
-                    "baseUrl": (
-                        _BUDGET_PROXY_URL
-                        if self._host_env("BENCH_TRIAL_BUDGET_USD")
-                        else self._host_env("BENCH_BASE_URL")
-                    ),
+                    # Pi's Codex transport extracts an account id from a JWT
+                    # before sending. This is deliberately non-secret; the
+                    # host broker replaces the Authorization header with OAuth.
+                    "apiKey": _DUMMY_CODEX_TOKEN,
+                    "baseUrl": self._codex_proxy_url,
                     "compat": {"supportsReasoningEffort": True},
+                    "headers": {"x-bench-proxy-token": self._codex_broker_token},
                     "models": models,
                 }
             }
@@ -244,9 +245,9 @@ class PiAdvisorAgent(Pi):
             raise ValueError("PiAdvisorAgent requires an extension version pin")
         if not self._benchmark_arm:
             raise ValueError("PiAdvisorAgent requires a benchmark arm")
-        if self._model_api != "openai-completions":
+        if self._model_api != _CODEX_API:
             raise ValueError(
-                "PiAdvisorAgent requires the pinned openai-completions transport"
+                "PiAdvisorAgent requires the pinned openai-codex-responses transport"
             )
         if not self.model_name or "/" not in self.model_name:
             raise ValueError("Model name must be in provider/model format")
@@ -255,21 +256,15 @@ class PiAdvisorAgent(Pi):
             raise ValueError(
                 f"PiAdvisorAgent only accepts the pinned {_CUSTOM_PROVIDER} provider"
             )
-        if not self._host_env("BENCH_API_KEY"):
-            raise ValueError("BENCH_API_KEY did not resolve inside Harbor")
-        if not self._host_env("BENCH_BASE_URL"):
-            raise ValueError("BENCH_BASE_URL did not resolve inside Harbor")
+        if not self._codex_proxy_url or not self._codex_broker_token:
+            raise ValueError("PiAdvisorAgent requires host-side Codex broker settings")
 
         await self._write_config(environment, self.model_name, model_id)
 
-        # Harbor scopes ``extra_env`` onto every agent command. Keep the real
-        # credential available to the local proxy, but remove it from the Pi
-        # process and its shell tools below.
-        env = {
-            key: value
-            for key, value in getattr(self, "_extra_env", {}).items()
-            if key not in {"BENCH_API_KEY", "BENCH_BASE_URL"}
-        }
+        # Harbor scopes ``extra_env`` onto every agent command. The trial
+        # wrapper never supplies provider credentials here, and the model
+        # config contains only the dummy JWT above.
+        env = dict(getattr(self, "_extra_env", {}))
         env.update(
             {
                 "BENCH_ADAPTER_MODE": (
@@ -281,52 +276,54 @@ class PiAdvisorAgent(Pi):
                 "BENCH_EXECUTOR_EFFORT": self._resolved_flags.get("thinking", "max"),
                 "BENCH_EXECUTOR_MODEL": self.model_name,
                 "BENCH_PI_ADVISOR_VERSION": self._extension_version,
-                "BENCH_PROXY_PORT": "18765",
                 "PI_CODING_AGENT_DIR": _REMOTE_PI_CONFIG_DIR.as_posix(),
             }
         )
+        is_advisor_treatment = self._benchmark_arm == "E+A"
         quoted_instruction = shlex.quote(
-            instruction
-            + (
-                "\n\nThis is the E+A benchmark treatment. Use the ask_advisor tool "
-                "once before finalizing your implementation, then apply the "
-                "advice if it is relevant."
-                if self._benchmark_arm == "E+A"
+            (
+                "BENCHMARK PROTOCOL (mandatory): before using any other tool, "
+                "call ask_advisor with an empty JSON object exactly once. Wait "
+                "for its result, then continue the task and do not call it again.\n\n"
+                if is_advisor_treatment
                 else ""
             )
+            + instruction
+        )
+        system_prompt = (
+            "This is a benchmark E+A treatment. The first tool call must be "
+            "ask_advisor with {} before any read, shell, edit, or write. Make "
+            "exactly one Advisor call total, wait for its result, and then "
+            "continue the task."
+            if is_advisor_treatment
+            else None
         )
         excluded_tools = (
             " --exclude-tools ask_advisor,record_advisor_outcome"
-            if self._benchmark_arm != "E+A"
+            if not is_advisor_treatment
             else ""
         )
         cli_flags = self.build_cli_flags()
         cli_flags = f" {cli_flags}" if cli_flags else ""
+        appended_system_prompt = (
+            f" --append-system-prompt {shlex.quote(system_prompt)}"
+            if system_prompt
+            else ""
+        )
         command = (
             "set -euo pipefail; "
+            "test -d /logs/agent && test -w /logs/agent; "
+            "printf 'benchmark agent started\\n' > /logs/agent/pi.txt; "
             ". ~/.nvm/nvm.sh 2>/dev/null || true; "
             "export NODE_PATH=\"$(npm root -g)\"; "
-            "proxy_pid=; "
-            "if [ -n \"${BENCH_TRIAL_BUDGET_USD:-}\" ]; then "
-            f"node {shlex.quote(_BUDGET_PROXY_PATH)} >/dev/null 2>&1 & "
-            "proxy_pid=$!; "
-            "trap 'kill \"$proxy_pid\" 2>/dev/null || true' EXIT; "
-            "for attempt in $(seq 1 50); do "
-            "  if curl -fsS http://127.0.0.1:18765/health >/dev/null; then break; fi; "
-            "  sleep 0.1; "
-            "done; "
-            "curl -fsS http://127.0.0.1:18765/health >/dev/null; "
-            "fi; "
-            "unset BENCH_API_KEY BENCH_BASE_URL; "
-            "env -u BENCH_API_KEY -u BENCH_BASE_URL "
             f"pi --print --mode json --no-extensions --no-context-files "
             f"--extension {shlex.quote(self._extension_path)} "
             f"--extension {shlex.quote(_RECORDER_PATH)} "
             "--session-dir /logs/agent/pi/sessions "
             f"--provider {shlex.quote(_CUSTOM_PROVIDER)} "
             f"--model {shlex.quote(model_id)}"
-            f"{cli_flags}{excluded_tools} "
+            f"{cli_flags}{appended_system_prompt}{excluded_tools} "
             f"{quoted_instruction} "
-            "2>&1 | tee /logs/agent/pi.txt"
+            "2>&1 | tee -a /logs/agent/pi.txt"
         )
         await self.exec_as_agent(environment, command=command, env=env)
