@@ -151,7 +151,10 @@ docs, and first verify that the selected ReactBench task supports Harbor's
 Apple backend. Tasks requiring Docker Compose, network allowlists, or separate
 verifier features may still require Docker/Colima; the default remains Docker.
 Harbor's default delete behavior removes each completed local environment image,
-while the archived trajectory remains under `bench/reports/`.
+while the archived trajectory remains under `bench/reports/`. For long local
+Docker runs, `BENCH_HARBOR_PRUNE=1` also prunes BuildKit's unused cache after
+each trial; use it only on the dedicated benchmark Docker context because the
+prune is context-wide.
 
 ```bash
 export BENCH_SCREEN_REPORT=/path/to/screen-report.json

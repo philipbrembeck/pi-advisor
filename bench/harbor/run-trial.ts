@@ -517,6 +517,39 @@ const stopCodexBroker = async (child: ReturnType<typeof spawn>) => {
   });
 };
 
+type CommandRunner = (
+  command: string,
+  args: string[],
+  options: { maxBuffer: number }
+) => Promise<unknown>;
+
+export const pruneDockerBuildCache = async (
+  harborEnvironment: HarborEnvironment | undefined,
+  options: {
+    enabled?: boolean;
+    run?: CommandRunner;
+  } = {}
+) => {
+  if (
+    harborEnvironment === "apple-container" ||
+    (options.enabled ?? readEnv("BENCH_HARBOR_PRUNE") === "1") === false
+  ) {
+    return;
+  }
+  try {
+    await (
+      options.run ??
+      ((command, args, runOptions) => execFileAsync(command, args, runOptions))
+    )("docker", ["builder", "prune", "--all", "--force"], {
+      maxBuffer: 4 * 1024 * 1024,
+    });
+  } catch {
+    process.stderr.write(
+      "Harbor Docker build-cache cleanup failed; inspect Docker disk usage before continuing.\n"
+    );
+  }
+};
+
 const artifactDirectory = (trialDir: string, name: "agent" | "verifier") => {
   const direct = join(trialDir, name);
   if (existsSync(direct) && statSync(direct).isDirectory()) {
@@ -1128,6 +1161,7 @@ export const runTrial = async (request: HarborTrialRequest) => {
     );
   } finally {
     await stopCodexBroker(broker.child);
+    await pruneDockerBuildCache(harborEnvironment);
   }
 
   const result = validateHarborArtifacts(

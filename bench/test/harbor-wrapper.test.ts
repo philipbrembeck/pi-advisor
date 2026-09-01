@@ -12,6 +12,7 @@ import {
   type HarborTrialRequest,
   parseHarborEnvironment,
   parseHarborTrialArgs,
+  pruneDockerBuildCache,
   validateHarborArtifacts,
   validateHarborTrialPricing,
 } from "../harbor/run-trial.js";
@@ -174,6 +175,43 @@ describe("Harbor trial wrapper protocol", () => {
     expect(() => parseHarborEnvironment("podman")).toThrow(
       "must be docker or apple-container"
     );
+  });
+
+  test("bounds optional Docker build-cache cleanup", async () => {
+    const calls: [string, string[], { maxBuffer: number }][] = [];
+    const run = (
+      command: string,
+      args: string[],
+      options: { maxBuffer: number }
+    ) => Promise.resolve(calls.push([command, args, options]));
+    const previous = process.env.BENCH_HARBOR_PRUNE;
+    delete process.env.BENCH_HARBOR_PRUNE;
+    try {
+      await pruneDockerBuildCache(undefined, { run });
+      expect(calls).toHaveLength(0);
+      await pruneDockerBuildCache("apple-container", { enabled: true, run });
+      expect(calls).toHaveLength(0);
+      await pruneDockerBuildCache("docker", { enabled: true, run });
+      expect(calls).toEqual([
+        [
+          "docker",
+          ["builder", "prune", "--all", "--force"],
+          { maxBuffer: 4 * 1024 * 1024 },
+        ],
+      ]);
+      await expect(
+        pruneDockerBuildCache("docker", {
+          enabled: true,
+          run: () => Promise.reject(new Error("prune failed")),
+        })
+      ).resolves.toBeUndefined();
+    } finally {
+      if (previous === undefined) {
+        delete process.env.BENCH_HARBOR_PRUNE;
+      } else {
+        process.env.BENCH_HARBOR_PRUNE = previous;
+      }
+    }
   });
 
   test("rejects different pricing for a shared executor/Advisor model", () => {
