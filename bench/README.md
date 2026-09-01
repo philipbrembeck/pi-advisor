@@ -99,6 +99,10 @@ Use these optional overrides only when needed:
 export BENCH_REACTBENCH_ROOT=/path/to/reactbench/tasks
 export BENCH_PI_ADVISOR_AUTH_FILE="$HOME/.pi/agent/auth.json"
 export BENCH_PI_ADVISOR_ADAPTER="$PWD/bench/harbor/run-trial"
+# Experimental on Apple silicon; Harbor must support the task's capabilities.
+export BENCH_HARBOR_ENV=apple-container
+# Required once for the host-side broker (choose the documented test IP).
+# sudo container system dns create host.container.internal --localhost 203.0.113.113
 BENCH_LIVE=1 bun run bench:screen --config /tmp/pi-advisor-benchmark.json
 ```
 
@@ -140,7 +144,14 @@ Run Stage 2 only after Stage 1 has produced a screening report and the
 corresponding preregistration section was committed. If `BENCH_SCREEN_REPORT`
 is omitted, the newest `*-screen.json` report under `bench/reports/` is used.
 The same host-side Pi/Codex OAuth broker is used for every fresh evaluation
-trial.
+trial. On Apple silicon, `BENCH_HARBOR_ENV=apple-container` is an experimental
+opt-in: install the Apple Container CLI and system kernel, configure
+`host.container.internal` for the broker as described in Apple's host-integration
+docs, and first verify that the selected ReactBench task supports Harbor's
+Apple backend. Tasks requiring Docker Compose, network allowlists, or separate
+verifier features may still require Docker/Colima; the default remains Docker.
+Harbor's default delete behavior removes each completed local environment image,
+while the archived trajectory remains under `bench/reports/`.
 
 ```bash
 export BENCH_SCREEN_REPORT=/path/to/screen-report.json

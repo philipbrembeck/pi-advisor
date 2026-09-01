@@ -53,6 +53,7 @@ const PI_INSTALL_HOSTS = [
 ];
 
 export type HarborTrialArm = "E" | "E+A" | "F" | "F′";
+export type HarborEnvironment = "apple-container" | "docker";
 
 export interface HarborTrialRequest {
   advisorEffort?: string;
@@ -191,6 +192,20 @@ export const parseHarborTrialArgs = (argv: string[]): HarborTrialRequest => {
 const readEnv = (name: string) => {
   const value = process.env[name]?.trim();
   return value || undefined;
+};
+
+export const parseHarborEnvironment = (
+  value: string | undefined
+): HarborEnvironment | undefined => {
+  if (!value || value === "docker") {
+    return value ? "docker" : undefined;
+  }
+  if (value === "apple-container") {
+    return value;
+  }
+  throw new TypeError(
+    "BENCH_HARBOR_ENV must be docker or apple-container when set."
+  );
 };
 
 const requireFile = (path: string, label: string) => {
@@ -862,6 +877,7 @@ interface HarborInvocationOptions {
   extensionPath: string;
   extensionVersion: string;
   harborBinary: string;
+  harborEnvironment?: HarborEnvironment;
   piVersion: string;
   recorderPath: string;
   request: HarborTrialRequest;
@@ -876,6 +892,7 @@ export const buildHarborTrialArgs = ({
   extensionPath,
   extensionVersion,
   harborBinary,
+  harborEnvironment,
   piVersion,
   recorderPath,
   request,
@@ -933,6 +950,7 @@ export const buildHarborTrialArgs = ({
     trialName,
     "--trials-dir",
     artifactRoot,
+    ...(harborEnvironment ? ["--env", harborEnvironment] : []),
     "--agent",
     EXPECTED_AGENT_IMPORT,
     "--model",
@@ -1044,13 +1062,18 @@ export const runTrial = async (request: HarborTrialRequest) => {
 
   const configuredHarborBinary = readEnv("BENCH_HARBOR_BIN");
   const harborBinary = configuredHarborBinary ?? "uv";
+  const harborEnvironment = parseHarborEnvironment(readEnv("BENCH_HARBOR_ENV"));
+  const codexProxyHost =
+    harborEnvironment === "apple-container"
+      ? "host.container.internal"
+      : "host.docker.internal";
   const brokerToken = randomBytes(32).toString("hex");
   const broker = await startCodexBroker({
     authFile,
     request,
     token: brokerToken,
   });
-  const codexProxyUrl = `http://host.docker.internal:${broker.port}`;
+  const codexProxyUrl = `http://${codexProxyHost}:${broker.port}`;
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     PYTHONPATH: [REPO_ROOT, process.env.PYTHONPATH].filter(Boolean).join(":"),
@@ -1081,6 +1104,7 @@ export const runTrial = async (request: HarborTrialRequest) => {
       extensionPath,
       extensionVersion,
       harborBinary,
+      harborEnvironment,
       piVersion,
       recorderPath,
       request,

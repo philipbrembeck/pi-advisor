@@ -10,6 +10,7 @@ import { basename, join } from "node:path";
 import {
   buildHarborTrialArgs,
   type HarborTrialRequest,
+  parseHarborEnvironment,
   parseHarborTrialArgs,
   validateHarborArtifacts,
   validateHarborTrialPricing,
@@ -166,6 +167,15 @@ const makeArtifacts = (
 };
 
 describe("Harbor trial wrapper protocol", () => {
+  test("accepts only supported local Harbor runtimes", () => {
+    expect(parseHarborEnvironment(undefined)).toBeUndefined();
+    expect(parseHarborEnvironment("docker")).toBe("docker");
+    expect(parseHarborEnvironment("apple-container")).toBe("apple-container");
+    expect(() => parseHarborEnvironment("podman")).toThrow(
+      "must be docker or apple-container"
+    );
+  });
+
   test("rejects different pricing for a shared executor/Advisor model", () => {
     const sameModel = requestFor("E+A");
     sameModel.advisorModel = sameModel.executorModel;
@@ -259,6 +269,25 @@ describe("Harbor trial wrapper protocol", () => {
     ).toContain("BENCH_SMOKE_PROTOCOL=true");
     expect(args).toContain("--allow-environment-host");
     expect(args).toContain("registry.npmjs.org");
+    const appleArgs = buildHarborTrialArgs({
+      artifactRoot: "/tmp/artifacts",
+      codexBrokerToken: "trial-token",
+      codexProxyUrl: "http://host.docker.internal:18765",
+      extensionPath,
+      extensionVersion: "0.5.0",
+      harborBinary: "harbor",
+      harborEnvironment: "apple-container",
+      piVersion: "0.84.4",
+      recorderPath,
+      request,
+      trialName: "pi-advisor-example-E-A-101-apple",
+    });
+    expect(
+      appleArgs.slice(
+        appleArgs.indexOf("--env"),
+        appleArgs.indexOf("--env") + 2
+      )
+    ).toEqual(["--env", "apple-container"]);
     const mounts = JSON.parse(
       args[args.indexOf("--mounts") + 1] ?? "null"
     ) as Record<string, unknown>[];
