@@ -8,7 +8,7 @@ State values: `not-started`, `in-progress`, `done`.
 | 1 — Tier 1 replay | done | Offline replay passes 18 gate cases, zero privacy leaks, pin assertions, context, budget, and determinism checks; CI runs `bench:replay`. |
 | 2 — Tier 2 bootstrap corpus | done | 24 derived items (12 positive/12 negative) load successfully; provenance and scorer-key privacy are checked in replay and tests. |
 | 3 — Q1 scoring and nightly run | in-progress | Offline 24-item scoring, controls, budget checks, reports, and nightly workflow are ready; live Tier 2 execution remains unmeasured, including the Scout comparison and <$10 report. |
-| 4 — Pi/Harbor adapter and Stage 1 screening | in-progress | The checked-in Harbor wrapper, Harbor 0.18-compatible Pi agent, host-side Codex broker, artifact validation, protocol tests, and bounded authenticated E/E+A smoke are complete; Stage 1 screening remains. |
+| 4 — Pi/Harbor adapter and Stage 1 screening | in-progress | The checked-in Harbor wrapper, Harbor 0.18-compatible Pi agent, host-side Codex broker, artifact validation, protocol tests, bounded authenticated E/E+A smoke, and a completed 3600-second timeout feasibility probe are complete; a fresh full Stage 1 screening remains. |
 | 5 — Stage 2 evaluation | not-started | Requires Phase 4 screening output and preregistration. |
 | 6 — reseed Tier 2 from trajectories | not-started | Requires archived Stage 2 trajectories. |
 

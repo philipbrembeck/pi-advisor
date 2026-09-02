@@ -12,6 +12,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   24-item decision-point corpus, a fail-closed Pi/Harbor ReactBench adapter,
   pinned live-tier controls, hard budget limits, and task-level
   uplift/dominance reporting. See [Benchmarking](docs/benchmark.md).
+- Added bounded local Harbor runtime controls for Apple Container experiments,
+  Docker build-cache cleanup, and a recorded one-hour agent timeout for complex
+  ReactBench tasks.
 - Ensured configured Advisor reasoning effort reaches the provider-facing
   request field used by current Pi AI adapters.
 
