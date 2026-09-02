@@ -32,6 +32,35 @@ interpretation.
   with the seeded sampler from all trivial tasks, with at least three tasks;
   there is no hand-picking after outcomes are visible.
 
+## §1A — Replacement Stage 1 operational run (committed before rerun)
+
+**Commitment:** 2026-09-02, before the replacement screening invocation.
+
+The original Stage 1 protocol in §1 is unchanged. This amendment governs only a
+fresh replacement run because the first authenticated operational runs were
+unavailable: one hit the original Harbor timeout, one hit a pinned Docker build
+transport issue, and one hit a transient base-image pull failure. Those partial
+runs are excluded, their artifacts are retained as failed-run evidence, and
+successful trials from them are not merged into the replacement result. The
+excluded run IDs are `stage1-docker-pruned-20260901`,
+`stage1-docker-timeout3600-20260902`, `stage1-docker-gitcompat-20260902`,
+and `stage1-docker-gitcompat2-20260902`. Some partial artifacts contain
+rewards; they remain transport evidence, not screening outcomes.
+
+- The original screening estimate was `$11.232` for 120 calls under a `$25`
+  per-run cap. The replacement cap is `$100`, derived from the observed
+  `$9.0041` for the first 16 completed replacement trials and the linear
+  projection `$9.0041 / 16 * 120 ≈ $67.53`, with headroom for uneven frontier
+  usage and infrastructure retries.
+- The replacement run uses exactly the same pinned 30-task corpus, arms (`E`
+  and `F`), screening seeds (`11` and `23`), deterministic task/arm/seed order,
+  model pins, behavioral/React Doctor pass rule, and classification/scoring
+  procedure as §1.
+- The aggregate Stage 1 operational spend limit, including the excluded
+  attempts and the replacement run, is `$150`. A retry is allowed only for a
+  recorded infrastructure failure, uses a distinct trial artifact, and counts
+  against this aggregate limit; valid behavioral artifacts are never retried.
+
 ## §2 — Value decision (committed before the first Stage 2 evaluation run)
 
 **Commitment:** 2026-08-29, before any evaluation invocation.
