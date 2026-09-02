@@ -57,7 +57,7 @@ rewards; they remain transport evidence, not screening outcomes.
   model pins, behavioral/React Doctor pass rule, and classification/scoring
   procedure as §1.
 - The aggregate Stage 1 operational spend limit, including the excluded
-  attempts and the replacement run, is `$150`. A retry is allowed only for a
+  attempts and the replacement run, is `$200`. A retry is allowed only for a
   recorded infrastructure failure, uses a distinct trial artifact, and counts
   against this aggregate limit; valid behavioral artifacts are never retried.
 
