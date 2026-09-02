@@ -36,6 +36,8 @@ interpretation.
 
 **Commitment:** 2026-09-02, before the replacement screening invocation.
 
+The governed fresh run identifier is `stage1-docker-retry-20260903`.
+
 The original Stage 1 protocol in §1 is unchanged. This amendment governs only a
 fresh replacement run because the first authenticated operational runs were
 unavailable: one hit the original Harbor timeout, one hit a pinned Docker build
