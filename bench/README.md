@@ -129,8 +129,12 @@ It refuses to overwrite an existing trial directory. The wrapper allowlists
 the provider and standard Pi installation hosts. Set
 `BENCH_HARBOR_ALLOW_HOSTS` to a comma-separated list for any additional
 installation host. It rejects missing trajectory, grader, request, usage,
-attestation, or clean-shutdown artifacts, wrong model/effort pins, and extra
-Advisor calls. The smoke-only `BENCH_SMOKE=1` protocol forces one consultation
+attestation, or clean-shutdown artifacts, wrong model/effort pins, extra
+Advisor calls, or a result that does not record the selected Harbor agent
+timeout. The default is 3600 seconds. `BENCH_HARBOR_AGENT_TIMEOUT_SEC` may
+select a bounded timeout from 1 through 7200 seconds for an explicitly
+documented run; the selected value is recorded in each Harbor result. This
+overrides ReactBench's 1800-second task default. The smoke-only `BENCH_SMOKE=1` protocol forces one consultation
 to verify the broker path; ordinary screening and evaluation do not inject a
 consultation. The request/attestation files are runtime instrumentation
 written inside the agent container, not cryptographic proof against a

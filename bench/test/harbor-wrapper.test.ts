@@ -9,7 +9,9 @@ import {
 import { basename, join } from "node:path";
 import {
   buildHarborTrialArgs,
+  DEFAULT_HARBOR_AGENT_TIMEOUT_SEC,
   type HarborTrialRequest,
+  parseHarborAgentTimeout,
   parseHarborEnvironment,
   parseHarborTrialArgs,
   pruneDockerBuildCache,
@@ -160,6 +162,7 @@ const makeArtifacts = (
           provider: "openai-codex",
         },
       },
+      config: { agent: { override_timeout_sec: 3600 } },
       exception_info: null,
       trial_name: trialName,
       verifier_result: { rewards: { reward: 1 } },
@@ -175,6 +178,41 @@ describe("Harbor trial wrapper protocol", () => {
     expect(() => parseHarborEnvironment("podman")).toThrow(
       "must be docker or apple-container"
     );
+  });
+
+  test("validates and pins the Harbor agent timeout", () => {
+    expect(parseHarborAgentTimeout(undefined)).toBe(
+      DEFAULT_HARBOR_AGENT_TIMEOUT_SEC
+    );
+    expect(parseHarborAgentTimeout("3600")).toBe(3600);
+    expect(() => parseHarborAgentTimeout("0")).toThrow(
+      "must be finite and between 1 and 7200"
+    );
+    expect(() => parseHarborAgentTimeout("7201")).toThrow(
+      "must be finite and between 1 and 7200"
+    );
+    expect(() => parseHarborAgentTimeout("not-a-number")).toThrow(
+      "must be finite and between 1 and 7200"
+    );
+
+    const args = buildHarborTrialArgs({
+      artifactRoot: "/tmp/artifacts",
+      codexBrokerToken: "trial-token",
+      codexProxyUrl: "http://host.docker.internal:18765",
+      extensionPath: join(process.cwd(), "extensions/index.ts"),
+      extensionVersion: "0.5.0",
+      harborBinary: "harbor",
+      piVersion: "0.84.4",
+      recorderPath: join(process.cwd(), "bench/harbor/recorder.ts"),
+      request: requestFor("E"),
+      trialName: "pi-advisor-example-E-101-timeout",
+    });
+    expect(
+      args.slice(
+        args.indexOf("--agent-timeout"),
+        args.indexOf("--agent-timeout") + 2
+      )
+    ).toEqual(["--agent-timeout", "3600"]);
   });
 
   test("bounds optional Docker build-cache cleanup", async () => {
@@ -378,6 +416,16 @@ describe("Harbor trial wrapper protocol", () => {
       expect(result.passed).toBe(true);
       expect(result.consultations).toBe(1);
       expect(result.requests).toHaveLength(2);
+      expect(
+        validateHarborArtifacts(root, requestFor(), "0.5.0", {
+          agentTimeoutSec: 3600,
+        }).passed
+      ).toBe(true);
+      expect(() =>
+        validateHarborArtifacts(root, requestFor(), "0.5.0", {
+          agentTimeoutSec: 1800,
+        })
+      ).toThrow("pinned agent timeout");
       expect(result.cost).toBeGreaterThan(0);
 
       const smokeRoot = mkdtempSync(

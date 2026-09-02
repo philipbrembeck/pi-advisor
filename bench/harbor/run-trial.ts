@@ -37,6 +37,8 @@ const RECORDER_TARGET = "/bench-source/bench/harbor/recorder.ts";
 const CODEX_UPSTREAM_URL = "https://chatgpt.com/backend-api";
 const DEFAULT_PI_VERSION = "0.84.4";
 const DEFAULT_EXTENSION_VERSION = "0.5.0";
+export const DEFAULT_HARBOR_AGENT_TIMEOUT_SEC = 3600;
+const MAX_HARBOR_AGENT_TIMEOUT_SEC = 7200;
 const DEFAULT_REACTBENCH_COMMIT = "11ff042e60ec83a613053fbd721a54ed4dbfdf6f";
 const BROKER_READY_PREFIX = "BENCH_CODEX_BROKER_PORT=";
 const RUN_ID_PATTERN = /[^A-Za-z0-9._-]/g;
@@ -206,6 +208,23 @@ export const parseHarborEnvironment = (
   throw new TypeError(
     "BENCH_HARBOR_ENV must be docker or apple-container when set."
   );
+};
+
+export const parseHarborAgentTimeout = (value: string | undefined) => {
+  if (!value) {
+    return DEFAULT_HARBOR_AGENT_TIMEOUT_SEC;
+  }
+  const timeout = Number(value);
+  if (
+    !Number.isFinite(timeout) ||
+    timeout <= 0 ||
+    timeout > MAX_HARBOR_AGENT_TIMEOUT_SEC
+  ) {
+    throw new TypeError(
+      `BENCH_HARBOR_AGENT_TIMEOUT_SEC must be finite and between 1 and ${MAX_HARBOR_AGENT_TIMEOUT_SEC} seconds.`
+    );
+  }
+  return timeout;
 };
 
 const requireFile = (path: string, label: string) => {
@@ -781,13 +800,25 @@ const validateGrader = (trial: JsonObject, verifierDirectory: string) => {
 const validateTrialIdentity = (
   trial: JsonObject,
   request: HarborTrialRequest,
-  trialName: string
+  trialName: string,
+  expectedAgentTimeoutSec?: number
 ) => {
   if (trial.trial_name !== trialName) {
     throw new Error("Harbor result belongs to a different trial.");
   }
   if (trial.exception_info !== null && trial.exception_info !== undefined) {
     throw new Error("Harbor trial contains an exception artifact.");
+  }
+  if (expectedAgentTimeoutSec !== undefined) {
+    const agentConfig = isObject(trial.config) ? trial.config.agent : undefined;
+    if (
+      !isObject(agentConfig) ||
+      agentConfig.override_timeout_sec !== expectedAgentTimeoutSec
+    ) {
+      throw new Error(
+        `Harbor result does not attest the pinned agent timeout of ${expectedAgentTimeoutSec} seconds.`
+      );
+    }
   }
   const modelInfo = isObject(trial.agent_info)
     ? trial.agent_info.model_info
@@ -810,6 +841,7 @@ const validateTrialIdentity = (
 };
 
 export interface HarborArtifactValidationOptions {
+  agentTimeoutSec?: number;
   smokeProtocol?: boolean;
 }
 
@@ -874,7 +906,7 @@ export const validateHarborArtifacts = (
     ? join(trialDirectory, "result.json")
     : join(trialDirectory, "results.json");
   const trial = readJson(trialResultPath, "Harbor trial result");
-  validateTrialIdentity(trial, request, trialName);
+  validateTrialIdentity(trial, request, trialName, options.agentTimeoutSec);
   const passed = validateGrader(trial, verifierDirectory);
   const requests = validateRequests(records, request);
   if (
@@ -904,6 +936,7 @@ export const validateHarborArtifacts = (
 };
 
 interface HarborInvocationOptions {
+  agentTimeoutSec?: number;
   artifactRoot: string;
   codexBrokerToken: string;
   codexProxyUrl: string;
@@ -919,6 +952,7 @@ interface HarborInvocationOptions {
 }
 
 export const buildHarborTrialArgs = ({
+  agentTimeoutSec: configuredAgentTimeoutSec,
   artifactRoot,
   codexBrokerToken,
   codexProxyUrl,
@@ -955,6 +989,10 @@ export const buildHarborTrialArgs = ({
       type: "bind",
     },
   ];
+  const agentTimeoutSec =
+    configuredAgentTimeoutSec === undefined
+      ? parseHarborAgentTimeout(readEnv("BENCH_HARBOR_AGENT_TIMEOUT_SEC"))
+      : parseHarborAgentTimeout(String(configuredAgentTimeoutSec));
   const agentKwargs = [
     `version=${piVersion}`,
     `thinking=${request.executorEffort}`,
@@ -984,6 +1022,8 @@ export const buildHarborTrialArgs = ({
     "--trials-dir",
     artifactRoot,
     ...(harborEnvironment ? ["--env", harborEnvironment] : []),
+    "--agent-timeout",
+    String(agentTimeoutSec),
     "--agent",
     EXPECTED_AGENT_IMPORT,
     "--model",
@@ -1096,6 +1136,9 @@ export const runTrial = async (request: HarborTrialRequest) => {
   const configuredHarborBinary = readEnv("BENCH_HARBOR_BIN");
   const harborBinary = configuredHarborBinary ?? "uv";
   const harborEnvironment = parseHarborEnvironment(readEnv("BENCH_HARBOR_ENV"));
+  const agentTimeoutSec = parseHarborAgentTimeout(
+    readEnv("BENCH_HARBOR_AGENT_TIMEOUT_SEC")
+  );
   const codexProxyHost =
     harborEnvironment === "apple-container"
       ? "host.container.internal"
@@ -1131,6 +1174,7 @@ export const runTrial = async (request: HarborTrialRequest) => {
 
   try {
     const args = buildHarborTrialArgs({
+      agentTimeoutSec,
       artifactRoot,
       codexBrokerToken: brokerToken,
       codexProxyUrl,
@@ -1168,7 +1212,7 @@ export const runTrial = async (request: HarborTrialRequest) => {
     trialDirectory,
     request,
     extensionVersion,
-    { smokeProtocol }
+    { agentTimeoutSec, smokeProtocol }
   );
   process.stdout.write(
     `${ATTESTATION_PREFIX}${JSON.stringify(result.attestation)}\n`
