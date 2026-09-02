@@ -17,7 +17,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   ReactBench tasks.
 - Added a disposable, credential-free GitHub build compatibility layer for
   pinned ReactBench Dockerfiles whose Git 2.39 transport is rejected by the
-  GitHub endpoint.
+  GitHub endpoint, with bounded pre-agent Harbor infrastructure retries and
+  per-attempt artifacts for transient build and transport failures.
 - Ensured configured Advisor reasoning effort reaches the provider-facing
   request field used by current Pi AI adapters.
 

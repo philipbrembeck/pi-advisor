@@ -11,7 +11,12 @@ import { basename, join } from "node:path";
 import {
   buildHarborTrialArgs,
   DEFAULT_HARBOR_AGENT_TIMEOUT_SEC,
+  HARBOR_INFRA_RETRY_BACKOFF_MS,
   type HarborTrialRequest,
+  harborInfrastructureFailureCategory,
+  harborTrialAttemptName,
+  isPreAgentHarborInfrastructureFailure,
+  MAX_HARBOR_INFRA_RETRIES,
   parseHarborAgentTimeout,
   parseHarborEnvironment,
   parseHarborTrialArgs,
@@ -218,6 +223,50 @@ describe("Harbor trial wrapper protocol", () => {
         args.indexOf("--agent-timeout") + 2
       )
     ).toEqual(["--agent-timeout", "3600"]);
+  });
+
+  test("retries only recognized pre-agent Harbor infrastructure failures", () => {
+    expect(MAX_HARBOR_INFRA_RETRIES).toBe(2);
+    expect(HARBOR_INFRA_RETRY_BACKOFF_MS).toEqual([5000, 15_000]);
+    expect(harborTrialAttemptName("trial", 0)).toBe("trial");
+    expect(harborTrialAttemptName("trial", 1)).toBe("trial-retry-1");
+    expect(harborTrialAttemptName("trial", 2)).toBe("trial-retry-2");
+
+    const root = mkdtempSync(
+      join(process.env.TMPDIR ?? "/tmp", "harbor-retry-allow-")
+    );
+    try {
+      const buildFailure = Object.assign(new Error("Harbor trial failed"), {
+        stderr:
+          "Docker compose command failed: RPC failed; GnuTLS recv error; early EOF",
+      });
+      expect(harborInfrastructureFailureCategory(buildFailure)).toBe(
+        "git-transport"
+      );
+      expect(isPreAgentHarborInfrastructureFailure(buildFailure, root)).toBe(
+        true
+      );
+
+      mkdirSync(join(root, "agent"), { recursive: true });
+      writeFileSync(join(root, "agent", "pi.txt"), "started\n");
+      expect(isPreAgentHarborInfrastructureFailure(buildFailure, root)).toBe(
+        false
+      );
+
+      rmSync(join(root, "agent", "pi.txt"));
+      writeFileSync(
+        join(root, "agent", "bench-records.jsonl"),
+        '{"kind":"usage"}\n'
+      );
+      expect(isPreAgentHarborInfrastructureFailure(buildFailure, root)).toBe(
+        false
+      );
+      expect(
+        harborInfrastructureFailureCategory(new Error("agent failed"))
+      ).toBeUndefined();
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
   });
 
   test("keeps pinned task sources clean while fixing GitHub build clones", () => {

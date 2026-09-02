@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 
 /* biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: the wrapper validates the complete Harbor evidence boundary before returning a trial. */
+/* biome-ignore-all lint/performance/noAwaitInLoops: infrastructure retries are intentionally sequential so only one Harbor trial can run at a time. */
 import { execFile, execFileSync, spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import {
@@ -10,6 +11,7 @@ import {
   readFileSync,
   realpathSync,
   statSync,
+  writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
@@ -40,10 +42,20 @@ const DEFAULT_PI_VERSION = "0.84.4";
 const DEFAULT_EXTENSION_VERSION = "0.5.0";
 export const DEFAULT_HARBOR_AGENT_TIMEOUT_SEC = 3600;
 const MAX_HARBOR_AGENT_TIMEOUT_SEC = 7200;
+export const MAX_HARBOR_INFRA_RETRIES = 2;
+export const HARBOR_INFRA_RETRY_BACKOFF_MS = [5000, 15_000] as const;
 const DEFAULT_REACTBENCH_COMMIT = "11ff042e60ec83a613053fbd721a54ed4dbfdf6f";
 const BROKER_READY_PREFIX = "BENCH_CODEX_BROKER_PORT=";
 const RUN_ID_PATTERN = /[^A-Za-z0-9._-]/g;
 const LINE_BREAK = /\r?\n/;
+const GIT_TRANSPORT_ERROR =
+  /(?:RPC failed|GnuTLS|fetch-pack|early EOF|index-pack|unexpected disconnect|TLS packet|git (?:clone|fetch))/iu;
+const IMAGE_PULL_ERROR =
+  /(?:load metadata for|pull access denied|failed to pull|manifest unknown|no matching manifest|image .* not found)/iu;
+const NETWORK_TRANSPORT_ERROR =
+  /(?:connection (?:reset|timed out|closed)|network|timed out|context deadline|i\/o timeout)/iu;
+const DOCKER_BUILD_ERROR =
+  /(?:Docker compose command failed|failed to solve|Dockerfile|build failed)/iu;
 const PI_INSTALL_HOSTS = [
   "archive.ubuntu.com",
   "deb.debian.org",
@@ -79,6 +91,149 @@ const isObject = (value: unknown): value is JsonObject =>
   Boolean(value) && typeof value === "object" && !Array.isArray(value);
 
 const own = (value: JsonObject, key: string) => Object.hasOwn(value, key);
+
+export type HarborInfrastructureFailureCategory =
+  | "docker-build"
+  | "image-pull"
+  | "git-transport"
+  | "network-transport";
+
+const errorText = (error: unknown) => {
+  const seen = new Set<object>();
+  const parts: string[] = [];
+  const visit = (value: unknown) => {
+    if (typeof value === "string") {
+      parts.push(value);
+      return;
+    }
+    if (!value || typeof value !== "object" || seen.has(value)) {
+      return;
+    }
+    seen.add(value);
+    if (value instanceof Error) {
+      parts.push(value.message);
+    }
+    if (isObject(value)) {
+      for (const key of ["message", "stdout", "stderr", "cause"]) {
+        if (own(value, key)) {
+          visit(value[key]);
+        }
+      }
+    }
+  };
+  visit(error);
+  return parts.join("\n");
+};
+
+export const harborInfrastructureFailureCategory = (
+  error: unknown
+): HarborInfrastructureFailureCategory | undefined => {
+  const text = errorText(error);
+  if (GIT_TRANSPORT_ERROR.test(text)) {
+    return "git-transport";
+  }
+  if (IMAGE_PULL_ERROR.test(text)) {
+    return "image-pull";
+  }
+  if (NETWORK_TRANSPORT_ERROR.test(text)) {
+    return "network-transport";
+  }
+  if (DOCKER_BUILD_ERROR.test(text)) {
+    return "docker-build";
+  }
+  return undefined;
+};
+
+const filesNamed = (root: string, name: string) => {
+  const matches: string[] = [];
+  const visit = (directory: string) => {
+    if (!existsSync(directory)) {
+      return;
+    }
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const path = join(directory, entry.name);
+      if (entry.isDirectory()) {
+        visit(path);
+      } else if (entry.isFile() && entry.name === name) {
+        matches.push(path);
+      }
+    }
+  };
+  visit(root);
+  return matches;
+};
+
+const hasAgentStartup = (trialDirectory: string) =>
+  filesNamed(trialDirectory, "pi.txt").length > 0;
+
+const hasProviderRecords = (trialDirectory: string) => {
+  for (const path of filesNamed(trialDirectory, "bench-records.jsonl")) {
+    let text: string;
+    try {
+      text = readFileSync(path, "utf8");
+    } catch {
+      return true;
+    }
+    for (const line of text.split(LINE_BREAK)) {
+      if (!line.trim()) {
+        continue;
+      }
+      let value: unknown;
+      try {
+        value = JSON.parse(line);
+      } catch {
+        return true;
+      }
+      if (
+        isObject(value) &&
+        (value.kind === "request" || value.kind === "usage")
+      ) {
+        return true;
+      }
+    }
+  }
+  return false;
+};
+
+export const isPreAgentHarborInfrastructureFailure = (
+  error: unknown,
+  trialDirectory: string
+) =>
+  !(hasAgentStartup(trialDirectory) || hasProviderRecords(trialDirectory)) &&
+  harborInfrastructureFailureCategory(error) !== undefined;
+
+export const harborTrialAttemptName = (trialName: string, attempt: number) => {
+  if (!trialName.trim()) {
+    throw new TypeError("Harbor trial name is required.");
+  }
+  if (!Number.isSafeInteger(attempt) || attempt < 0) {
+    throw new TypeError("Harbor trial attempt must be a non-negative integer.");
+  }
+  return attempt === 0 ? trialName : `${trialName}-retry-${attempt}`;
+};
+
+interface HarborRetryMetadata {
+  attempt: number;
+  category: HarborInfrastructureFailureCategory | "unclassified";
+  failedBeforeAgent: boolean;
+  maxRetries: number;
+  priorFailures?: HarborInfrastructureFailureCategory[];
+  providerUsageRecorded: boolean;
+  retryScheduled: boolean;
+  retryTrialName?: string;
+}
+
+const writeHarborRetryMetadata = (
+  trialDirectory: string,
+  metadata: HarborRetryMetadata
+) => {
+  mkdirSync(trialDirectory, { recursive: true });
+  writeFileSync(
+    join(trialDirectory, "infrastructure-retry.json"),
+    `${JSON.stringify(metadata)}\n`,
+    "utf8"
+  );
+};
 
 const requiredString = (value: unknown, name: string) => {
   if (typeof value !== "string" || !value.trim()) {
@@ -738,7 +893,7 @@ const validateRequests = (
         );
       }
       ({ usage } = usageRecord);
-    } else if (!own(record, "usage") || usage === undefined) {
+    } else if (!own(record, "usage")) {
       throw new Error(
         `A Harbor ${role} request is missing its usage artifact.`
       );
@@ -1144,9 +1299,7 @@ export const runTrial = async (request: HarborTrialRequest) => {
     harborEnvironment === "apple-container"
       ? "host.container.internal"
       : "host.docker.internal";
-  const brokerToken = randomBytes(32).toString("hex");
   const harborTask = createHarborTaskOverlay(taskPath);
-  let broker: Awaited<ReturnType<typeof startCodexBroker>> | undefined;
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     PYTHONPATH: [REPO_ROOT, process.env.PYTHONPATH].filter(Boolean).join(":"),
@@ -1169,62 +1322,133 @@ export const runTrial = async (request: HarborTrialRequest) => {
     delete env[name];
   }
 
+  const retryCategories: HarborInfrastructureFailureCategory[] = [];
   try {
-    broker = await startCodexBroker({
-      authFile,
-      request,
-      token: brokerToken,
-    });
-    const codexProxyUrl = `http://${codexProxyHost}:${broker.port}`;
-    const args = buildHarborTrialArgs({
-      agentTimeoutSec,
-      artifactRoot,
-      codexBrokerToken: brokerToken,
-      codexProxyUrl,
-      extensionPath,
-      extensionVersion,
-      harborBinary,
-      harborEnvironment,
-      piVersion,
-      recorderPath,
-      request: { ...request, taskPath: harborTask.taskPath },
-      smokeProtocol,
-      trialName,
-    });
-    await execFileAsync(harborBinary, args, {
-      cwd: checkoutRoot,
-      env,
-      maxBuffer: 64 * 1024 * 1024,
-    });
-  } catch (error) {
-    const code =
-      isObject(error) &&
-      (typeof error.code === "number" || typeof error.code === "string")
-        ? String(error.code)
-        : "unknown";
-    throw new Error(
-      `Harbor trial failed with exit code ${code}; inspect ${trialDirectory}.`,
-      { cause: error }
-    );
-  } finally {
-    if (broker) {
-      await stopCodexBroker(broker.child);
+    for (let attempt = 0; attempt <= MAX_HARBOR_INFRA_RETRIES; attempt += 1) {
+      const attemptTrialName = harborTrialAttemptName(trialName, attempt);
+      const attemptTrialDirectory = join(artifactRoot, attemptTrialName);
+      if (existsSync(attemptTrialDirectory)) {
+        throw new Error(
+          `Refusing to overwrite existing Harbor artifacts: ${attemptTrialDirectory}`
+        );
+      }
+
+      const brokerToken = randomBytes(32).toString("hex");
+      let broker: Awaited<ReturnType<typeof startCodexBroker>> | undefined;
+      let attemptFailed = false;
+      let failure: unknown;
+      try {
+        broker = await startCodexBroker({
+          authFile,
+          request,
+          token: brokerToken,
+        });
+        const codexProxyUrl = `http://${codexProxyHost}:${broker.port}`;
+        const args = buildHarborTrialArgs({
+          agentTimeoutSec,
+          artifactRoot,
+          codexBrokerToken: brokerToken,
+          codexProxyUrl,
+          extensionPath,
+          extensionVersion,
+          harborBinary,
+          harborEnvironment,
+          piVersion,
+          recorderPath,
+          request: { ...request, taskPath: harborTask.taskPath },
+          smokeProtocol,
+          trialName: attemptTrialName,
+        });
+        await execFileAsync(harborBinary, args, {
+          cwd: checkoutRoot,
+          env,
+          maxBuffer: 64 * 1024 * 1024,
+        });
+      } catch (error) {
+        attemptFailed = true;
+        failure = error;
+      } finally {
+        if (broker) {
+          await stopCodexBroker(broker.child);
+        }
+        await pruneDockerBuildCache(harborEnvironment);
+      }
+
+      if (attemptFailed) {
+        const category =
+          harborInfrastructureFailureCategory(failure) ?? "unclassified";
+        const failedBeforeAgent = !hasAgentStartup(attemptTrialDirectory);
+        const providerUsageRecorded = hasProviderRecords(attemptTrialDirectory);
+        const retryable =
+          category !== "unclassified" &&
+          failedBeforeAgent &&
+          !providerUsageRecorded &&
+          attempt < MAX_HARBOR_INFRA_RETRIES;
+        const retryTrialName = retryable
+          ? harborTrialAttemptName(trialName, attempt + 1)
+          : undefined;
+        writeHarborRetryMetadata(attemptTrialDirectory, {
+          attempt: attempt + 1,
+          category,
+          failedBeforeAgent,
+          maxRetries: MAX_HARBOR_INFRA_RETRIES,
+          providerUsageRecorded,
+          retryScheduled: retryable,
+          ...(retryTrialName ? { retryTrialName } : {}),
+          ...(retryCategories.length > 0
+            ? { priorFailures: [...retryCategories] }
+            : {}),
+        });
+        if (retryable) {
+          retryCategories.push(category);
+          const backoffMs = HARBOR_INFRA_RETRY_BACKOFF_MS[attempt];
+          if (backoffMs !== undefined) {
+            await new Promise<void>((resolveDelay) =>
+              setTimeout(resolveDelay, backoffMs)
+            );
+          }
+          continue;
+        }
+        const code =
+          isObject(failure) &&
+          (typeof failure.code === "number" || typeof failure.code === "string")
+            ? String(failure.code)
+            : "unknown";
+        throw new Error(
+          `Harbor trial failed with exit code ${code}; inspect ${attemptTrialDirectory}.`,
+          { cause: failure }
+        );
+      }
+
+      const result = validateHarborArtifacts(
+        attemptTrialDirectory,
+        request,
+        extensionVersion,
+        { agentTimeoutSec, smokeProtocol }
+      );
+      if (retryCategories.length > 0) {
+        writeHarborRetryMetadata(attemptTrialDirectory, {
+          attempt: attempt + 1,
+          category: retryCategories.at(
+            -1
+          ) as HarborInfrastructureFailureCategory,
+          failedBeforeAgent: false,
+          maxRetries: MAX_HARBOR_INFRA_RETRIES,
+          priorFailures: [...retryCategories],
+          providerUsageRecorded: false,
+          retryScheduled: false,
+        });
+      }
+      process.stdout.write(
+        `${ATTESTATION_PREFIX}${JSON.stringify(result.attestation)}\n`
+      );
+      process.stdout.write(`${RESULT_PREFIX}${JSON.stringify(result)}\n`);
+      return result;
     }
-    await pruneDockerBuildCache(harborEnvironment);
+  } finally {
     harborTask.cleanup();
   }
-
-  const result = validateHarborArtifacts(
-    trialDirectory,
-    request,
-    extensionVersion,
-    { agentTimeoutSec, smokeProtocol }
-  );
-  process.stdout.write(
-    `${ATTESTATION_PREFIX}${JSON.stringify(result.attestation)}\n`
-  );
-  process.stdout.write(`${RESULT_PREFIX}${JSON.stringify(result)}\n`);
-  return result;
+  throw new Error("Harbor trial retry loop ended unexpectedly.");
 };
 
 export const main = async (argv = process.argv.slice(2)) => {

@@ -44,8 +44,9 @@ runs are excluded, their artifacts are retained as failed-run evidence, and
 successful trials from them are not merged into the replacement result. The
 excluded run IDs are `stage1-docker-pruned-20260901`,
 `stage1-docker-timeout3600-20260902`, `stage1-docker-gitcompat-20260902`,
-and `stage1-docker-gitcompat2-20260902`. Some partial artifacts contain
-rewards; they remain transport evidence, not screening outcomes.
+`stage1-docker-gitcompat2-20260902`, and `stage1-docker-final-20260902`.
+Some partial artifacts contain rewards; they remain transport evidence, not
+screening outcomes.
 
 - The original screening estimate was `$11.232` for 120 calls under a `$25`
   per-run cap. The replacement cap is `$100`, derived from the observed
@@ -57,9 +58,15 @@ rewards; they remain transport evidence, not screening outcomes.
   model pins, behavioral/React Doctor pass rule, and classification/scoring
   procedure as §1.
 - The aggregate Stage 1 operational spend limit, including the excluded
-  attempts and the replacement run, is `$200`. A retry is allowed only for a
-  recorded infrastructure failure, uses a distinct trial artifact, and counts
-  against this aggregate limit; valid behavioral artifacts are never retried.
+  attempts and the replacement run, is `$200`. The Harbor wrapper may make at
+  most two retries after an initial attempt, and only when the failure is
+  recognized as pre-agent infrastructure (build, image pull, or transport),
+  the artifact has no `agent/pi.txt` and no provider usage records, and the
+  failure is not ambiguous. Each attempt has a distinct artifact name; failed
+  attempts are retained and their infrastructure reason is recorded. There is
+  no retry after agent startup, provider usage, verifier execution, or a valid
+  behavioral artifact. Retry backoff is fixed at 5 and 15 seconds, and every
+  attempt counts against this aggregate limit.
 
 ## §2 — Value decision (committed before the first Stage 2 evaluation run)
 

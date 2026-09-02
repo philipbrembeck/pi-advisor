@@ -137,7 +137,12 @@ documented run; the selected value is recorded in each Harbor result. This
 overrides ReactBench's 1800-second task default. For pinned task Dockerfiles
 that clone GitHub repositories, the wrapper builds from a disposable copy with
 Git protocol v1 and HTTP/1.1 forced; the pinned checkout remains unchanged and
-no host credentials enter Harbor. The smoke-only `BENCH_SMOKE=1` protocol forces one consultation
+no host credentials enter Harbor. For recognized Docker build, image-pull, or
+Git/network transport failures that occur before agent startup, the wrapper
+may make at most two sequential retries with 5- and 15-second backoffs. Each
+attempt uses a distinct Harbor artifact directory and writes
+`infrastructure-retry.json`; failures after `agent/pi.txt`, provider usage, or
+verifier execution are never retried. The smoke-only `BENCH_SMOKE=1` protocol forces one consultation
 to verify the broker path; ordinary screening and evaluation do not inject a
 consultation. The request/attestation files are runtime instrumentation
 written inside the agent container, not cryptographic proof against a
