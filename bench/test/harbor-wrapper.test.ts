@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -18,6 +19,10 @@ import {
   validateHarborArtifacts,
   validateHarborTrialPricing,
 } from "../harbor/run-trial.js";
+import {
+  createHarborTaskOverlay,
+  patchGitHubCloneCommands,
+} from "../harbor/task-compat.js";
 
 const requestFor = (arm: "E" | "E+A" = "E+A"): HarborTrialRequest => ({
   ...(arm === "E+A"
@@ -213,6 +218,53 @@ describe("Harbor trial wrapper protocol", () => {
         args.indexOf("--agent-timeout") + 2
       )
     ).toEqual(["--agent-timeout", "3600"]);
+  });
+
+  test("keeps pinned task sources clean while fixing GitHub build clones", () => {
+    const root = mkdtempSync(
+      join(process.env.TMPDIR ?? "/tmp", "harbor-task-")
+    );
+    const dockerfile = [
+      "FROM example/base",
+      "RUN rm -rf /app && git clone --filter=blob:none https://github.com/example/repo /app",
+    ].join("\n");
+    const untouched = "git clone https://gitlab.com/example/repo /other\n";
+    try {
+      mkdirSync(join(root, "environment"), { recursive: true });
+      mkdirSync(join(root, "tests"), { recursive: true });
+      writeFileSync(join(root, "environment", "Dockerfile"), dockerfile);
+      writeFileSync(join(root, "tests", "Dockerfile"), untouched);
+      const overlay = createHarborTaskOverlay(root);
+      try {
+        expect(overlay.taskPath).not.toBe(root);
+        expect(overlay.patchedDockerfiles).toEqual(["environment/Dockerfile"]);
+        expect(
+          readFileSync(join(root, "environment", "Dockerfile"), "utf8")
+        ).toBe(dockerfile);
+        expect(
+          readFileSync(
+            join(overlay.taskPath, "environment", "Dockerfile"),
+            "utf8"
+          )
+        ).toContain(
+          "git -c protocol.version=1 -c http.version=HTTP/1.1 clone --filter=blob:none"
+        );
+        expect(
+          readFileSync(join(overlay.taskPath, "tests", "Dockerfile"), "utf8")
+        ).toBe(untouched);
+      } finally {
+        const overlayPath = overlay.taskPath;
+        overlay.cleanup();
+        expect(existsSync(overlayPath)).toBe(false);
+        overlay.cleanup();
+      }
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+
+    expect(
+      patchGitHubCloneCommands("FROM example/base\nRUN echo ready\n")
+    ).toBe("FROM example/base\nRUN echo ready\n");
   });
 
   test("bounds optional Docker build-cache cleanup", async () => {

@@ -21,6 +21,7 @@ import type {
   PricingRates,
   RecordedProviderRequest,
 } from "../src/types.js";
+import { createHarborTaskOverlay } from "./task-compat.js";
 
 const execFileAsync = promisify(execFile);
 const RESULT_PREFIX = "BENCH_RESULT=";
@@ -1144,12 +1145,8 @@ export const runTrial = async (request: HarborTrialRequest) => {
       ? "host.container.internal"
       : "host.docker.internal";
   const brokerToken = randomBytes(32).toString("hex");
-  const broker = await startCodexBroker({
-    authFile,
-    request,
-    token: brokerToken,
-  });
-  const codexProxyUrl = `http://${codexProxyHost}:${broker.port}`;
+  const harborTask = createHarborTaskOverlay(taskPath);
+  let broker: Awaited<ReturnType<typeof startCodexBroker>> | undefined;
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     PYTHONPATH: [REPO_ROOT, process.env.PYTHONPATH].filter(Boolean).join(":"),
@@ -1173,6 +1170,12 @@ export const runTrial = async (request: HarborTrialRequest) => {
   }
 
   try {
+    broker = await startCodexBroker({
+      authFile,
+      request,
+      token: brokerToken,
+    });
+    const codexProxyUrl = `http://${codexProxyHost}:${broker.port}`;
     const args = buildHarborTrialArgs({
       agentTimeoutSec,
       artifactRoot,
@@ -1184,7 +1187,7 @@ export const runTrial = async (request: HarborTrialRequest) => {
       harborEnvironment,
       piVersion,
       recorderPath,
-      request,
+      request: { ...request, taskPath: harborTask.taskPath },
       smokeProtocol,
       trialName,
     });
@@ -1204,8 +1207,11 @@ export const runTrial = async (request: HarborTrialRequest) => {
       { cause: error }
     );
   } finally {
-    await stopCodexBroker(broker.child);
+    if (broker) {
+      await stopCodexBroker(broker.child);
+    }
     await pruneDockerBuildCache(harborEnvironment);
+    harborTask.cleanup();
   }
 
   const result = validateHarborArtifacts(
