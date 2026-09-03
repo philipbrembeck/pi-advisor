@@ -70,6 +70,46 @@ screening outcomes.
   behavioral artifact. Retry backoff is fixed at 5 and 15 seconds, and every
   attempt counts against this aggregate limit.
 
+## §1B — Host-timeout correction replacement (committed before rerun)
+
+**Commitment:** 2026-09-03, before the corrected replacement screening invocation.
+
+The governed fresh run identifier is `stage1-docker-complete-20260903`.
+The preceding `stage1-docker-retry-20260903` run is excluded in full: its
+ninth Harbor artifact completed after the host adapter's 40-minute command
+boundary and was not returned to the screening runner, so it cannot be merged
+with any later run.
+
+The Stage 1 task, arm, seed, model, scoring, retry, and spend rules in §1 and
+§1A remain unchanged. The timeout boundary is corrected consistently at both
+layers: each Harbor attempt is bounded by the configured agent timeout plus
+`1800` seconds for setup/verification, and the outer command timeout allows all
+three attempts, `600` seconds of cleanup per attempt, the preregistered retry
+backoffs, and a `60`-second termination margin. At the default 3600-second
+agent timeout this is `18,080` seconds; at the allowed maximum it is `28,880`
+seconds. The outer process terminates its entire process group, including the
+host broker and Harbor descendants.
+
+## §1B — Host-timeout correction replacement (committed before rerun)
+
+**Commitment:** 2026-09-03, before the corrected replacement screening invocation.
+
+The governed fresh run identifier is `stage1-docker-complete-20260903`.
+The preceding `stage1-docker-retry-20260903` run is excluded in full: its
+ninth Harbor artifact completed after the host adapter's 40-minute command
+boundary and was not returned to the screening runner, so it cannot be merged
+with any later run.
+
+The Stage 1 task, arm, seed, model, scoring, retry, and spend rules in §1 and
+§1A remain unchanged. The timeout boundary is corrected consistently at both
+layers: each Harbor attempt is bounded by the configured agent timeout plus
+`1800` seconds for setup/verification, and the outer command timeout allows all
+three attempts, `600` seconds of cleanup per attempt, the preregistered retry
+backoffs, and a `60`-second termination margin. At the default 3600-second
+agent timeout this is `18,080` seconds; at the allowed maximum it is `28,880`
+seconds. The outer process terminates its entire process group, including the
+host broker and Harbor descendants.
+
 ## §2 — Value decision (committed before the first Stage 2 evaluation run)
 
 **Commitment:** 2026-08-29, before any evaluation invocation.

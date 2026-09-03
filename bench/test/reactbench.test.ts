@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   chmodSync,
+  existsSync,
   mkdtempSync,
   readFileSync,
   rmSync,
@@ -248,6 +249,23 @@ describe("ReactBench adapter boundary", () => {
           timeoutMs: 25,
         }).run(request)
       ).rejects.toThrow();
+
+      const marker = join(root, "descendant-survivor");
+      const descendant = join(root, "descendant.mjs");
+      writeFileSync(
+        descendant,
+        `import { spawn } from "node:child_process"; import { writeFileSync } from "node:fs"; const child = spawn(process.execPath, ["-e", ${JSON.stringify(`process.on("SIGTERM", () => {}); setTimeout(() => writeFileSync(${JSON.stringify(marker)}, "alive"), 150);`)}], { stdio: "ignore" }); void child; setTimeout(() => {}, 1000);\n`
+      );
+      await expect(
+        new CommandReactBenchRunner({
+          artifactRoot: root,
+          command: process.execPath,
+          extraArgs: [descendant],
+          timeoutMs: 25,
+        }).run(request)
+      ).rejects.toThrow();
+      await new Promise<void>((resolveDelay) => setTimeout(resolveDelay, 300));
+      expect(existsSync(marker)).toBe(false);
     } finally {
       rmSync(root, { force: true, recursive: true });
     }

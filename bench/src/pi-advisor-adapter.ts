@@ -2,6 +2,11 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { normalizeUsage } from "./cost.js";
+import {
+  DEFAULT_HARBOR_AGENT_TIMEOUT_SEC,
+  harborCommandTimeoutMs,
+  parseHarborAgentTimeout,
+} from "./harbor-timeout.js";
 import type {
   CommandReactBenchRunnerOptions,
   ReactBenchTrialRequest,
@@ -315,7 +320,12 @@ export class PiAdvisorHarborAdapter {
     assertPiAdvisorPrerequisites(options.prerequisites);
     this.#prerequisites = { ...options.prerequisites };
     this.#smokeProtocol = options.smokeProtocol === true;
-    this.#runner = new CommandReactBenchRunner(options);
+    this.#runner = new CommandReactBenchRunner({
+      ...options,
+      timeoutMs:
+        options.timeoutMs ??
+        harborCommandTimeoutMs(DEFAULT_HARBOR_AGENT_TIMEOUT_SEC),
+    });
   }
 
   run = async (
@@ -377,5 +387,8 @@ export const createPiAdvisorHarborAdapter = (
       piVersion,
     },
     smokeProtocol: env.BENCH_SMOKE === "1",
+    timeoutMs: harborCommandTimeoutMs(
+      parseHarborAgentTimeout(env.BENCH_HARBOR_AGENT_TIMEOUT_SEC)
+    ),
   });
 };

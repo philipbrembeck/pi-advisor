@@ -18,6 +18,13 @@ import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { normalizeUsage } from "../src/cost.js";
+import {
+  HARBOR_INFRA_RETRY_BACKOFF_MS,
+  harborAttemptTimeoutMs,
+  MAX_HARBOR_INFRA_RETRIES,
+  parseHarborAgentTimeout,
+} from "../src/harbor-timeout.js";
+import { runProcess } from "../src/process.js";
 import type {
   CostValue,
   PricingRates,
@@ -40,10 +47,6 @@ const RECORDER_TARGET = "/bench-source/bench/harbor/recorder.ts";
 const CODEX_UPSTREAM_URL = "https://chatgpt.com/backend-api";
 const DEFAULT_PI_VERSION = "0.84.4";
 const DEFAULT_EXTENSION_VERSION = "0.5.0";
-export const DEFAULT_HARBOR_AGENT_TIMEOUT_SEC = 3600;
-const MAX_HARBOR_AGENT_TIMEOUT_SEC = 7200;
-export const MAX_HARBOR_INFRA_RETRIES = 2;
-export const HARBOR_INFRA_RETRY_BACKOFF_MS = [5000, 15_000] as const;
 const DEFAULT_REACTBENCH_COMMIT = "11ff042e60ec83a613053fbd721a54ed4dbfdf6f";
 const BROKER_READY_PREFIX = "BENCH_CODEX_BROKER_PORT=";
 const RUN_ID_PATTERN = /[^A-Za-z0-9._-]/g;
@@ -364,23 +367,6 @@ export const parseHarborEnvironment = (
   throw new TypeError(
     "BENCH_HARBOR_ENV must be docker or apple-container when set."
   );
-};
-
-export const parseHarborAgentTimeout = (value: string | undefined) => {
-  if (!value) {
-    return DEFAULT_HARBOR_AGENT_TIMEOUT_SEC;
-  }
-  const timeout = Number(value);
-  if (
-    !Number.isFinite(timeout) ||
-    timeout <= 0 ||
-    timeout > MAX_HARBOR_AGENT_TIMEOUT_SEC
-  ) {
-    throw new TypeError(
-      `BENCH_HARBOR_AGENT_TIMEOUT_SEC must be finite and between 1 and ${MAX_HARBOR_AGENT_TIMEOUT_SEC} seconds.`
-    );
-  }
-  return timeout;
 };
 
 const requireFile = (path: string, label: string) => {
@@ -1359,10 +1345,11 @@ export const runTrial = async (request: HarborTrialRequest) => {
           smokeProtocol,
           trialName: attemptTrialName,
         });
-        await execFileAsync(harborBinary, args, {
+        await runProcess(harborBinary, args, {
           cwd: checkoutRoot,
           env,
           maxBuffer: 64 * 1024 * 1024,
+          timeoutMs: harborAttemptTimeoutMs(agentTimeoutSec),
         });
       } catch (error) {
         attemptFailed = true;

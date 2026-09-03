@@ -142,7 +142,12 @@ Git/network transport failures that occur before agent startup, the wrapper
 may make at most two sequential retries with 5- and 15-second backoffs. Each
 attempt uses a distinct Harbor artifact directory and writes
 `infrastructure-retry.json`; failures after `agent/pi.txt`, provider usage, or
-verifier execution are never retried. The smoke-only `BENCH_SMOKE=1` protocol forces one consultation
+verifier execution are never retried. The Harbor command timeout is derived
+from the configured agent timeout: each attempt adds 30 minutes for setup and
+verification, while the outer command also budgets cleanup, all three bounded
+attempts, backoff, and termination margin. At the default 3600-second agent
+setting, the outer boundary is 18,080 seconds. The process-group cleanup also
+terminates the host broker and Harbor descendants. The smoke-only `BENCH_SMOKE=1` protocol forces one consultation
 to verify the broker path; ordinary screening and evaluation do not inject a
 consultation. The request/attestation files are runtime instrumentation
 written inside the agent container, not cryptographic proof against a

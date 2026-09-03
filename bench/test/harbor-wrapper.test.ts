@@ -10,14 +10,10 @@ import {
 import { basename, join } from "node:path";
 import {
   buildHarborTrialArgs,
-  DEFAULT_HARBOR_AGENT_TIMEOUT_SEC,
-  HARBOR_INFRA_RETRY_BACKOFF_MS,
   type HarborTrialRequest,
   harborInfrastructureFailureCategory,
   harborTrialAttemptName,
   isPreAgentHarborInfrastructureFailure,
-  MAX_HARBOR_INFRA_RETRIES,
-  parseHarborAgentTimeout,
   parseHarborEnvironment,
   parseHarborTrialArgs,
   pruneDockerBuildCache,
@@ -28,6 +24,14 @@ import {
   createHarborTaskOverlay,
   patchGitHubCloneCommands,
 } from "../harbor/task-compat.js";
+import {
+  DEFAULT_HARBOR_AGENT_TIMEOUT_SEC,
+  HARBOR_INFRA_RETRY_BACKOFF_MS,
+  harborAttemptTimeoutMs,
+  harborCommandTimeoutMs,
+  MAX_HARBOR_INFRA_RETRIES,
+  parseHarborAgentTimeout,
+} from "../src/harbor-timeout.js";
 
 const requestFor = (arm: "E" | "E+A" = "E+A"): HarborTrialRequest => ({
   ...(arm === "E+A"
@@ -195,11 +199,17 @@ describe("Harbor trial wrapper protocol", () => {
       DEFAULT_HARBOR_AGENT_TIMEOUT_SEC
     );
     expect(parseHarborAgentTimeout("3600")).toBe(3600);
+    expect(harborAttemptTimeoutMs(3600)).toBe(5_400_000);
+    expect(harborCommandTimeoutMs(3600)).toBe(18_080_000);
+    expect(harborCommandTimeoutMs(7200)).toBe(28_880_000);
     expect(() => parseHarborAgentTimeout("0")).toThrow(
       "must be finite and between 1 and 7200"
     );
     expect(() => parseHarborAgentTimeout("7201")).toThrow(
       "must be finite and between 1 and 7200"
+    );
+    expect(() => harborAttemptTimeoutMs(7201)).toThrow(
+      "within its configured bound"
     );
     expect(() => parseHarborAgentTimeout("not-a-number")).toThrow(
       "must be finite and between 1 and 7200"

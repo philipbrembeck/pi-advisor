@@ -1,4 +1,4 @@
-import { execFile, execFileSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
@@ -8,8 +8,8 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
-import { promisify } from "node:util";
 import { assertRecordedRequestPins } from "./pins.js";
+import { runProcess } from "./process.js";
 import type {
   CostValue,
   ModelPin,
@@ -17,7 +17,7 @@ import type {
   RecordedProviderRequest,
 } from "./types.js";
 
-const execFileAsync = promisify(execFile);
+const DEFAULT_COMMAND_TIMEOUT_MS = 2_400_000;
 
 export type TrialArm = "E" | "E+A" | "F" | "F′";
 
@@ -287,7 +287,7 @@ export class CommandReactBenchRunner implements ReactBenchTrialRunner {
   async run(request: ReactBenchTrialRequest) {
     const args = buildReactBenchArgs(request, this.#options.extraArgs);
     const { BENCH_SMOKE: _ambientSmoke, ...hostEnvironment } = process.env;
-    const result = await execFileAsync(this.#options.command, args, {
+    const result = await runProcess(this.#options.command, args, {
       cwd: this.#options.cwd,
       env: {
         ...hostEnvironment,
@@ -310,7 +310,7 @@ export class CommandReactBenchRunner implements ReactBenchTrialRunner {
         BENCH_TASK_SEED: String(request.seed),
       },
       maxBuffer: 16 * 1024 * 1024,
-      timeout: this.#options.timeoutMs ?? 2_400_000,
+      timeoutMs: this.#options.timeoutMs ?? DEFAULT_COMMAND_TIMEOUT_MS,
     });
     const parsed = parseReactBenchResult(
       `${result.stdout}\n${result.stderr}`,

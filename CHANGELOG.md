@@ -19,6 +19,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   pinned ReactBench Dockerfiles whose Git 2.39 transport is rejected by the
   GitHub endpoint, with bounded pre-agent Harbor infrastructure retries and
   per-attempt artifacts for transient build and transport failures.
+- Derived the host Harbor command timeout from the bounded agent timeout and
+  made timeout cleanup terminate the full Harbor process group, including the
+  broker and descendants.
 - Ensured configured Advisor reasoning effort reaches the provider-facing
   request field used by current Pi AI adapters.
 
