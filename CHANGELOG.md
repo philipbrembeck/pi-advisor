@@ -4,7 +4,7 @@ All notable changes to this project are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## 5.1.0
+## 0.5.1
 
 ### Changed
 
@@ -37,6 +37,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Added a concise `/advisor` explanation of the Advisor's second-opinion role.
 - Preserved Markdown formatting in visible Scout and nested Advisor thinking previews while retaining their speech-bubble cue. During streaming, incomplete Markdown delimiters display transiently until they close, which is expected behavior when thinking arrives incrementally.
 - Adopted an explicit `/model` selection made before `/advisor` as the Executor on the next successful activation, without persisting ordinary model changes while the flow is off.
+
+## [5.1.0] - 2026-09-04 [YANKED]
+
+### Release status
+
+- Published by mistake instead of `0.5.1`; withdrawn from npm and removed from Git, with `latest` restored to `0.5.0`.
 
 ## 0.5.0
 
