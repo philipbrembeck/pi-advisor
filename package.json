@@ -43,28 +43,34 @@
   "lint-staged": {
     "*.{json,jsonc,ts}": "bun run lint:fix --"
   },
+  "resolutions": {
+    "is-unicode-supported": "npm:@socketregistry/is-unicode-supported@^1",
+    "safe-buffer": "npm:@socketregistry/safe-buffer@^1"
+  },
   "overrides": {
     "brace-expansion": "5.0.9",
+    "is-unicode-supported": "npm:@socketregistry/is-unicode-supported@^1",
+    "safe-buffer": "npm:@socketregistry/safe-buffer@^1",
     "undici": "8.9.0"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.5.11",
-    "@earendil-works/pi-ai": "^0.84.4",
-    "@earendil-works/pi-coding-agent": "^0.84.4",
-    "@earendil-works/pi-tui": "^0.84.4",
-    "@types/node": "^26.4.0",
-    "bun-types": "1.3.14",
+    "@biomejs/biome": "2.5.12",
+    "@earendil-works/pi-ai": "^0.85.0",
+    "@earendil-works/pi-coding-agent": "^0.85.0",
+    "@earendil-works/pi-tui": "^0.85.0",
+    "@types/node": "^26.4.1",
+    "bun-types": "1.4.1",
     "husky": "^9.1.7",
     "lint-staged": "^17.4.1",
-    "typebox": "^1.3.21",
+    "typebox": "^1.3.25",
     "typescript": "^7.0.2",
-    "ultracite": "7.10.7"
+    "ultracite": "7.10.8"
   },
   "peerDependencies": {
-    "@earendil-works/pi-ai": "^0.84.1",
-    "@earendil-works/pi-coding-agent": "^0.84.1",
-    "@earendil-works/pi-tui": "^0.84.1",
-    "typebox": "^1.1.38"
+    "@earendil-works/pi-ai": "^0.85.0",
+    "@earendil-works/pi-coding-agent": "^0.85.0",
+    "@earendil-works/pi-tui": "^0.85.0",
+    "typebox": "^1.3.25"
   },
   "peerDependenciesMeta": {
     "@earendil-works/pi-ai": {

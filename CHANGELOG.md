@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## Unreleased
 
+### Changed
+
+- Updated development dependencies and Pi compatibility packages to current releases, including Pi 0.85.0.
+
 ### Added
 
 - Added a repository-only failsafe benchmark with an offline replay tier, a
