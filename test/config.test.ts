@@ -45,10 +45,7 @@ import {
   DEFAULT_CONTEXT_MAX_CHARS,
   executorEffortRef,
   executorRef,
-  FALLBACK_ADVISOR,
-  FALLBACK_EXECUTOR,
   getAdvisorMaxCallsPerSession,
-  getPersistedModelRefs,
   loadConfig,
   MAX_CONTEXT_MAX_CHARS,
   parseArgs,
@@ -312,8 +309,8 @@ describe("Config Module", () => {
 
     try {
       loadConfig({ cwd: tmpdir(), isProjectTrusted: () => false } as any);
-      expect(executorRef).toBe(FALLBACK_EXECUTOR);
-      expect(advisorRef).toBe(FALLBACK_ADVISOR);
+      expect(executorRef).toBe("");
+      expect(advisorRef).toBe("");
       expect(executorEffortRef).toBeUndefined();
       expect(advisorEffortRef).toBeUndefined();
     } finally {
@@ -322,36 +319,6 @@ describe("Config Module", () => {
       } else {
         process.env[AGENT_DIR_ENV] = previousAgentDir;
       }
-      rmSync(agentDir, { force: true, recursive: true });
-    }
-  });
-
-  test("does not treat legacy fallback refs as persisted models", () => {
-    const agentDir = mkdtempSync(join(tmpdir(), "pi-advisor-agent-"));
-    const previousAgentDir = process.env[AGENT_DIR_ENV];
-    process.env[AGENT_DIR_ENV] = agentDir;
-    writeFileSync(
-      join(agentDir, "advisor.json"),
-      JSON.stringify({
-        advisor: FALLBACK_ADVISOR,
-        executor: FALLBACK_EXECUTOR,
-      })
-    );
-    resetConfigCache();
-
-    try {
-      loadConfig({ cwd: tmpdir(), isProjectTrusted: () => false } as any);
-      expect(getPersistedModelRefs()).toEqual({
-        advisor: undefined,
-        executor: undefined,
-      });
-    } finally {
-      if (previousAgentDir === undefined) {
-        delete process.env[AGENT_DIR_ENV];
-      } else {
-        process.env[AGENT_DIR_ENV] = previousAgentDir;
-      }
-      resetConfigCache();
       rmSync(agentDir, { force: true, recursive: true });
     }
   });

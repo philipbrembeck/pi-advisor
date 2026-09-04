@@ -113,6 +113,8 @@ const selectedEffort = (choice: string): string | undefined => {
     : choice;
   return effort === DEFAULT_EFFORT_LEVEL ? undefined : effort;
 };
+const ADVISOR_ACTIVATION_EXPLANATION =
+  "The Advisor is a second-opinion model that reviews the Executor's context and returns risks, alternatives, and verification steps without changing files or running tools. It invokes itself before consequential plans, after repeated failures, before completion, and on repeated tool loops when those gates are enabled; custom rules can add triggers, and you can also ask it directly with ask_advisor.";
 const ARGUMENT_WHITESPACE = /\s+/;
 const hasModelOverride = (args: string, key: "advisor" | "executor") =>
   args
@@ -283,7 +285,13 @@ class ManualAdvisorProgressComponent implements Component {
   }
 }
 
-const findConfiguredModel = (ctx: ExtensionContext, ref: string) => {
+const findConfiguredModel = (
+  ctx: ExtensionContext,
+  ref: string | undefined
+) => {
+  if (!ref) {
+    return;
+  }
   const [provider, modelId] = splitRef(ref);
   return ctx.modelRegistry.find(provider, modelId);
 };
@@ -299,7 +307,7 @@ const getAvailableModelRefs = (ctx: ExtensionContext): string[] | undefined => {
 
 const isSelectableModel = (
   ctx: ExtensionContext,
-  ref: string,
+  ref: string | undefined,
   availableRefs: Set<string> | undefined
 ) => {
   if (!ref) {
@@ -314,12 +322,15 @@ const isSelectableModel = (
 
 const getExplicitModelError = (
   ctx: ExtensionContext,
-  ref: string,
+  ref: string | undefined,
   label: "Advisor" | "Executor",
   overridden: boolean,
   availableRefs: Set<string> | undefined
 ) => {
   if (overridden) {
+    if (!ref) {
+      return `${label} model not configured`;
+    }
     if (!findConfiguredModel(ctx, ref)) {
       return `${label} model not found: ${ref}`;
     }
@@ -337,8 +348,8 @@ interface ActivationModelPlan {
 
 const planActivationModels = (
   ctx: ExtensionContext,
-  executor: string,
-  advisor: string,
+  executor: string | undefined,
+  advisor: string | undefined,
   pendingExecutorRef: string | undefined,
   persisted: ReturnType<typeof getPersistedModelRefs>,
   executorOverride: boolean,
@@ -376,7 +387,11 @@ interface AdvisorModelSelection {
   executorEffort: string | undefined;
 }
 
-interface AdvisorModelPickerOptions extends AdvisorModelSelection {
+interface AdvisorModelPickerOptions {
+  advisor: string | undefined;
+  advisorEffort: string | undefined;
+  executor: string | undefined;
+  executorEffort: string | undefined;
   selectAdvisor: boolean;
   selectExecutor: boolean;
 }
@@ -400,7 +415,9 @@ const selectAdvisorModels = async (
   const allOptions = [
     ...new Set(
       refs ??
-        [options.executor, options.advisor].filter((ref) => ref.length > 0)
+        [options.executor, options.advisor].filter((ref): ref is string =>
+          Boolean(ref)
+        )
     ),
   ];
   let { advisor, advisorEffort, executor, executorEffort } = options;
@@ -461,6 +478,9 @@ const selectAdvisorModels = async (
     advisorEffort = selectedEffort(selectedAdvisorEffort);
   }
 
+  if (!(advisor && executor)) {
+    return undefined;
+  }
   return { advisor, advisorEffort, executor, executorEffort };
 };
 
@@ -721,11 +741,19 @@ export const registerCommands = (
   const resolveActivationModels = async (ctx: ExtensionContext) => {
     const executor = findConfiguredModel(ctx, executorRef);
     if (!executor) {
-      return { error: `Executor model not found: ${executorRef}` };
+      return {
+        error: executorRef
+          ? `Executor model not found: ${executorRef}`
+          : "Executor model not configured",
+      };
     }
     const advisor = findConfiguredModel(ctx, advisorRef);
     if (!advisor) {
-      return { error: `Advisor model not found: ${advisorRef}` };
+      return {
+        error: advisorRef
+          ? `Advisor model not found: ${advisorRef}`
+          : "Advisor model not configured",
+      };
     }
     const advisorAuth = await ctx.modelRegistry.getApiKeyAndHeaders(advisor);
     if (!(advisorAuth.ok && advisorAuth.apiKey)) {
@@ -798,8 +826,8 @@ export const registerCommands = (
       return { pendingExecutor: plan.pendingExecutor, pickedModels: false };
     }
 
-    // Always-on startup must not silently choose a fallback. It has no safe
-    // interactive path, while an explicit `/advisor` can open the picker.
+    // Always-on startup cannot open an interactive picker, so it leaves the
+    // flow disabled until the user selects both models with `/advisor`.
     if (!announce) {
       notify(
         ctx,
@@ -899,12 +927,7 @@ export const registerCommands = (
     if (announce) {
       notify(
         ctx,
-        "The Advisor is a second-opinion model that reviews the Executor's context and returns risks, alternatives, and verification steps without changing files or running tools. It invokes itself before consequential plans, after repeated failures, before completion, and on repeated tool loops when those gates are enabled; custom rules can add triggers, and you can also ask it directly with ask_advisor.",
-        "info"
-      );
-      notify(
-        ctx,
-        `Advisor flow ready — Executor: ${executorRef} (thinking: ${executorEffortRef || "default"}) · Advisor: ${advisorRef} (thinking: ${advisorEffortRef || "default"})`,
+        `${ADVISOR_ACTIVATION_EXPLANATION}\n\nAdvisor flow ready — Executor: ${executorRef} (thinking: ${executorEffortRef || "default"}) · Advisor: ${advisorRef} (thinking: ${advisorEffortRef || "default"})`,
         "info"
       );
     }
@@ -1137,8 +1160,7 @@ export const registerCommands = (
       }
       // When `/model` was used before activation, show that session choice as
       // the Executor's current option instead of making the persisted Executor
-      // look like the active selection. Legacy fallback refs are not treated as
-      // a user choice, even when an old advisor.json still contains them.
+      // look like the active selection.
       const persisted = getPersistedModelRefs();
       const selection = await selectAdvisorModels(ctx, {
         advisor: persisted.advisor ? advisorRef : "",

@@ -18,9 +18,12 @@ export interface ResolvedConfiguredModel {
 
 export const resolveConfiguredModel = async (
   ctx: ExtensionContext,
-  ref: string,
+  ref: string | undefined,
   label: string
 ): Promise<ResolvedConfiguredModel> => {
+  if (!ref) {
+    throw new Error(`${label} model not configured`);
+  }
   const [provider, modelId] = splitRef(ref);
   const model = ctx.modelRegistry.find(provider, modelId);
   if (!model) {

@@ -33,7 +33,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
-- Made `/advisor` open the available-model picker on first use or when either saved model is missing or unavailable, treating legacy fallback refs as unset; activation never silently selects a model outside the user's available catalog.
+- Made `/advisor` open the available-model picker on first use or when either saved model is missing or unavailable; activation never silently selects a model outside the user's available catalog.
 - Added a two-sentence `/advisor` explanation covering the Advisor's second-opinion role and its automatic invocation gates.
 - Preserved Markdown formatting in visible Scout and nested Advisor thinking previews while retaining their speech-bubble cue. During streaming, incomplete Markdown delimiters display transiently until they close, which is expected behavior when thinking arrives incrementally.
 - Adopted an explicit `/model` selection made before `/advisor` as the Executor on the next successful activation, without persisting ordinary model changes while the flow is off.

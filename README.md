@@ -47,7 +47,7 @@ Reload Pi after installing.
 /advisor-settings   # Configure behavior, modes, etc.
 ```
 
-On first use, or whenever a saved model is unavailable, `/advisor` opens the same available-model picker as `/advisor-models`; it never silently chooses a fallback model. After activation, `/advisor` explains that the Advisor reviews the Executor's context and invokes itself for the configured plan, failure, completion, and custom gates.
+On first use, or whenever a saved model is unavailable, `/advisor` opens the same available-model picker as `/advisor-models`; it never silently chooses an unconfigured model. After activation, `/advisor` explains that the Advisor reviews the Executor's context and invokes itself for the configured plan, failure, completion, and custom gates.
 
 From the Executor, `ask_advisor({})` requests a general review. A targeted `question` or concise `draft` can focus the review on a particular decision.
 

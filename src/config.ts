@@ -13,9 +13,6 @@ import {
   isValidGitContextLevel,
 } from "./git.js";
 
-// Kept for compatibility with older configs; activation treats these as unset.
-export const FALLBACK_EXECUTOR = "openai-codex/gpt-5.6-luna";
-export const FALLBACK_ADVISOR = "openai-codex/gpt-5.6-sol";
 export const DEFAULT_CONTEXT_MAX_CHARS = 15_000;
 export const MAX_CONTEXT_MAX_CHARS = Number.MAX_SAFE_INTEGER;
 export const DEFAULT_ADVISOR_TOOL_RESULT_MAX_LINES = DEFAULT_MAX_LINES;
@@ -38,8 +35,9 @@ export const GATE_FAILURE_MODES: GateFailureMode[] = [
   "warn-and-continue",
 ];
 
-export let executorRef = FALLBACK_EXECUTOR;
-export let advisorRef = FALLBACK_ADVISOR;
+// An empty ref means no model has been selected yet.
+export let executorRef = "";
+export let advisorRef = "";
 let persistedExecutorRef: string | undefined;
 let persistedAdvisorRef: string | undefined;
 export let executorEffortRef: string | undefined;
@@ -477,8 +475,8 @@ export const validateConfig = (
 };
 
 const resetDefaults = () => {
-  executorRef = FALLBACK_EXECUTOR;
-  advisorRef = FALLBACK_ADVISOR;
+  executorRef = "";
+  advisorRef = "";
   persistedExecutorRef = undefined;
   persistedAdvisorRef = undefined;
   executorEffortRef = undefined;
@@ -532,13 +530,8 @@ const applyNonEmptyStringConfig = (
   }
 };
 
-const configuredModelRef = (
-  value: string | undefined,
-  fallback: string
-): string | undefined => {
-  const ref = value?.trim();
-  return ref && ref !== fallback ? ref : undefined;
-};
+const configuredModelRef = (value: string | undefined): string | undefined =>
+  value?.trim() || undefined;
 
 const applyConfig = (config: AdvisorConfig) => {
   applyNonEmptyStringConfig(config.executor, setExecutorRef);
@@ -685,14 +678,8 @@ export const loadConfig = (_ctx: ExtensionContext) => {
   const globalConfig = existsSync(global)
     ? readConfigCached(global)
     : undefined;
-  persistedExecutorRef = configuredModelRef(
-    globalConfig?.executor,
-    FALLBACK_EXECUTOR
-  );
-  persistedAdvisorRef = configuredModelRef(
-    globalConfig?.advisor,
-    FALLBACK_ADVISOR
-  );
+  persistedExecutorRef = configuredModelRef(globalConfig?.executor);
+  persistedAdvisorRef = configuredModelRef(globalConfig?.advisor);
   if (globalConfig) {
     applyConfig(globalConfig);
     const unknownKeys = unknownConfigKeys(globalConfig as ConfigRecord);
@@ -743,7 +730,7 @@ export const saveConfig = (
   }
   const data = {
     ...existing,
-    ...(persistAdvisor ? { advisor: advisorRef } : {}),
+    ...(persistAdvisor && advisorRef ? { advisor: advisorRef } : {}),
     advisorAutoLoopGate: advisorAutoLoopGateRef,
     advisorBlockOnBlocked: advisorBlockOnBlockedRef,
     advisorCollapseResponses: advisorCollapseResponsesRef,
@@ -754,7 +741,7 @@ export const saveConfig = (
     advisorLoopThreshold: advisorLoopThresholdRef,
     advisorPlanGate: advisorPlanGateRef,
     contextMaxChars: contextMaxCharsRef,
-    ...(persistExecutor ? { executor: executorRef } : {}),
+    ...(persistExecutor && executorRef ? { executor: executorRef } : {}),
     executorEffort: executorEffortRef,
     ...(advisorMaxCallsPerSessionRef === undefined
       ? {}

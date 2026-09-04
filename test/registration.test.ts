@@ -22,8 +22,6 @@ import { registerCommands } from "../src/commands.js";
 import {
   advisorScoutEnabledRef,
   contextMaxCharsRef,
-  FALLBACK_ADVISOR,
-  FALLBACK_EXECUTOR,
   getAdvisorSettings,
   loadConfig,
   resetConfigCache,
@@ -2837,30 +2835,99 @@ describe("Advisor activation and mode regressions", () => {
   });
 
   test("opens the model picker before first activation", async () => {
+    await withAgentDir({}, async (agentDir) => {
+      const { commands, pi, setActiveTools } = harness();
+      setActiveTools([]);
+      const models = [
+        { id: "chosen-executor", provider: "provider" },
+        { id: "chosen-advisor", provider: "provider" },
+      ];
+      const selectedModels: string[] = [];
+      const notices: string[] = [];
+      let customCall = 0;
+      const ctx = {
+        cwd: agentDir,
+        hasUI: true,
+        isProjectTrusted: () => false,
+        modelRegistry: {
+          find: (provider: string, id: string) =>
+            models.find(
+              (model) => model.provider === provider && model.id === id
+            ),
+          getApiKeyAndHeaders: () =>
+            Promise.resolve({ apiKey: "key", ok: true }),
+          getAvailable: () => models,
+        },
+        ui: {
+          custom: (factory: any) =>
+            new Promise((resolve) => {
+              const done = (value: string | undefined) => {
+                if (value) {
+                  selectedModels.push(value);
+                }
+                resolve(value);
+              };
+              const selector = factory(
+                { requestRender: () => undefined },
+                plainTheme,
+                { matches: () => false },
+                done
+              );
+              selector.render(100);
+              if (customCall === 1) {
+                for (const character of "chosen-advisor") {
+                  selector.handleInput(character);
+                }
+                selector.render(100);
+              }
+              customCall += 1;
+              selector.handleInput("\r");
+            }),
+          notify: (message: string) => notices.push(message),
+          select: () => Promise.resolve("✓ Default (Model Default)"),
+        },
+      } as any;
+
+      registerCommands(pi);
+      await commands.get("advisor").handler("", ctx);
+
+      expect(selectedModels).toEqual([
+        "provider/chosen-executor",
+        "provider/chosen-advisor",
+      ]);
+      expect(savedConfig(agentDir)).toMatchObject({
+        advisor: "provider/chosen-advisor",
+        executor: "provider/chosen-executor",
+      });
+      expect(pi.getActiveTools()).toContain("ask_advisor");
+      const explanation = notices.find((message) =>
+        message.startsWith("The Advisor is")
+      );
+      expect(explanation).toContain(
+        "The Advisor is a second-opinion model that reviews the Executor's context and returns risks, alternatives, and verification steps without changing files or running tools. It invokes itself before consequential plans, after repeated failures, before completion, and on repeated tool loops when those gates are enabled; custom rules can add triggers, and you can also ask it directly with ask_advisor."
+      );
+      expect(explanation).toContain("Advisor flow ready");
+      expect(notices).toHaveLength(1);
+      expect(
+        explanation?.split("\n\n")[0].match(/[.!?](?=\s|$)/g)
+      ).toHaveLength(2);
+    });
+  });
+
+  test("keeps available persisted models without opening the picker", async () => {
     await withAgentDir(
       {
-        advisor: FALLBACK_ADVISOR,
-        executor: FALLBACK_EXECUTOR,
+        advisor: "provider/advisor",
+        executor: "provider/executor",
       },
       async (agentDir) => {
         const { commands, pi, setActiveTools } = harness();
         setActiveTools([]);
-        const modelFromRef = (ref: string) => {
-          const separator = ref.indexOf("/");
-          return {
-            id: ref.slice(separator + 1),
-            provider: ref.slice(0, separator),
-          };
-        };
         const models = [
-          { id: "chosen-executor", provider: "provider" },
-          { id: "chosen-advisor", provider: "provider" },
-          modelFromRef(FALLBACK_EXECUTOR),
-          modelFromRef(FALLBACK_ADVISOR),
+          { id: "executor", provider: "provider" },
+          { id: "advisor", provider: "provider" },
         ];
-        const selectedModels: string[] = [];
-        const notices: string[] = [];
-        let customCall = 0;
+        let customCalls = 0;
         const ctx = {
           cwd: agentDir,
           hasUI: true,
@@ -2875,56 +2942,19 @@ describe("Advisor activation and mode regressions", () => {
             getAvailable: () => models,
           },
           ui: {
-            custom: (factory: any) =>
-              new Promise((resolve) => {
-                const done = (value: string | undefined) => {
-                  if (value) {
-                    selectedModels.push(value);
-                  }
-                  resolve(value);
-                };
-                const selector = factory(
-                  { requestRender: () => undefined },
-                  plainTheme,
-                  { matches: () => false },
-                  done
-                );
-                selector.render(100);
-                if (customCall === 1) {
-                  for (const character of "chosen-advisor") {
-                    selector.handleInput(character);
-                  }
-                  selector.render(100);
-                }
-                customCall += 1;
-                selector.handleInput("\r");
-              }),
-            notify: (message: string) => notices.push(message),
-            select: () => Promise.resolve("✓ Default (Model Default)"),
+            custom: () => {
+              customCalls += 1;
+              return Promise.resolve(undefined);
+            },
+            notify: () => undefined,
           },
         } as any;
 
         registerCommands(pi);
         await commands.get("advisor").handler("", ctx);
 
-        expect(selectedModels).toEqual([
-          "provider/chosen-executor",
-          "provider/chosen-advisor",
-        ]);
-        expect(savedConfig(agentDir)).toMatchObject({
-          advisor: "provider/chosen-advisor",
-          executor: "provider/chosen-executor",
-        });
-        expect(savedConfig(agentDir).executor).not.toBe(FALLBACK_EXECUTOR);
-        expect(savedConfig(agentDir).advisor).not.toBe(FALLBACK_ADVISOR);
+        expect(customCalls).toBe(0);
         expect(pi.getActiveTools()).toContain("ask_advisor");
-        const explanation = notices.find((message) =>
-          message.startsWith("The Advisor is")
-        );
-        expect(explanation).toBe(
-          "The Advisor is a second-opinion model that reviews the Executor's context and returns risks, alternatives, and verification steps without changing files or running tools. It invokes itself before consequential plans, after repeated failures, before completion, and on repeated tool loops when those gates are enabled; custom rules can add triggers, and you can also ask it directly with ask_advisor."
-        );
-        expect(explanation?.match(/[.!?](?=\s|$)/g)).toHaveLength(2);
       }
     );
   });
