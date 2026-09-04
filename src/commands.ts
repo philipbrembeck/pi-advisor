@@ -65,6 +65,7 @@ import {
   renderAdvisorCallBox,
   renderAdvisorResponseHeader,
   renderScoutDetails,
+  renderThinkingMarkdown,
   resolveAdvisorRequest,
   ScoutStatusManager,
   type ScoutToolDetails,
@@ -255,16 +256,9 @@ class ManualAdvisorProgressComponent implements Component {
         0
       )
     );
-    if (this.state.thinking) {
+    if (this.state.thinking?.trim()) {
       box.addChild(
-        new Text(
-          this.theme.fg(
-            "thinkingText",
-            `  💭 ${this.state.thinking.replace(/\n/g, " ").slice(-200)}`
-          ),
-          0,
-          0
-        )
+        renderThinkingMarkdown(this.state.thinking.slice(-200), this.theme)
       );
     }
     if (this.state.text) {

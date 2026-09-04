@@ -10,7 +10,14 @@ import {
   type ToolCallEventResult,
   type ToolRenderResultOptions,
 } from "@earendil-works/pi-coding-agent";
-import { Box, Markdown, Text } from "@earendil-works/pi-tui";
+import {
+  Box,
+  type Component,
+  Markdown,
+  Text,
+  truncateToWidth,
+  visibleWidth,
+} from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import {
   advisorAutoLoopGateRef,
@@ -111,6 +118,56 @@ export const SPINNER_FRAMES = [
   "⠇",
   "⠏",
 ];
+
+const THINKING_PREFIX = "  💭 ";
+const THINKING_PREFIX_WIDTH = visibleWidth(THINKING_PREFIX);
+type ThinkingTheme = Pick<Theme, "fg">;
+
+/**
+ * Renders visible nested-model thinking with the same Markdown semantics as
+ * Pi's assistant thinking blocks while keeping the compact speech-bubble cue.
+ * The prefix is added after Markdown parsing so it cannot change block syntax.
+ *
+ * Note: During streaming, incomplete Markdown (e.g., `**text` without closing `**`)
+ * displays raw markers transiently until delimiters arrive. This mirrors expected
+ * behavior when typing Markdown incrementally and is acceptable in the context
+ * of brief thinking previews. When thinking is complete, all markers render.
+ */
+class ThinkingMarkdown implements Component {
+  private readonly markdown: Markdown;
+  private readonly prefix: string;
+
+  constructor(thinking: string, theme: ThinkingTheme) {
+    this.markdown = new Markdown(thinking.trim(), 0, 0, getMarkdownTheme(), {
+      color: (text) => theme.fg("thinkingText", text),
+      italic: true,
+    });
+    this.prefix = theme.fg("thinkingText", THINKING_PREFIX);
+  }
+
+  render(width: number): string[] {
+    const renderWidth = Math.max(1, Math.floor(width));
+    const contentWidth = Math.max(1, renderWidth - THINKING_PREFIX_WIDTH);
+    const lines = this.markdown.render(contentWidth);
+    return lines.map((line, index) =>
+      truncateToWidth(
+        index === 0 ? `${this.prefix}${line}` : line,
+        renderWidth,
+        ""
+      )
+    );
+  }
+
+  invalidate(): void {
+    this.markdown.invalidate();
+  }
+}
+
+export const renderThinkingMarkdown = (
+  thinking: string,
+  theme: ThinkingTheme
+): Component => new ThinkingMarkdown(thinking, theme);
+
 export const resolveAdvisorRequest = (question?: string) =>
   question?.trim() || undefined;
 export const advisorMessageText = (
@@ -1214,21 +1271,19 @@ export const renderScoutDetails = (
   if (scout.fallbackReason) {
     lines.push(theme.fg("warning", `  ${scout.fallbackReason}`));
   }
-  if (scout.thinking && active) {
-    lines.push(
-      theme.fg(
-        "thinkingText",
-        `  💭 ${scout.thinking.replace(/\n/g, " ").slice(-200)}`
-      )
-    );
+  const thinking = scout.thinking && active ? scout.thinking.slice(-200) : "";
+  box.addChild(new Text(lines.join("\n"), 0, 0));
+  if (thinking.trim()) {
+    box.addChild(renderThinkingMarkdown(thinking, theme));
   }
+  const expandedLines: string[] = [];
   if (expanded && scout.selectedLabels?.length) {
-    lines.push(
+    expandedLines.push(
       theme.fg("dim", `  Selected: ${scout.selectedLabels.join("; ")}`)
     );
   }
   if (expanded && scout.synthesis) {
-    lines.push(
+    expandedLines.push(
       theme.fg(
         "dim",
         `  Scout synthesis (untrusted inference): ${scout.synthesis}`
@@ -1236,14 +1291,16 @@ export const renderScoutDetails = (
     );
   }
   if (expanded && scout.omittedBeforeScout) {
-    lines.push(
+    expandedLines.push(
       theme.fg(
         "dim",
         `  ${scout.omittedBeforeScout} group(s) omitted before Scout`
       )
     );
   }
-  box.addChild(new Text(lines.join("\n"), 0, 0));
+  if (expandedLines.length > 0) {
+    box.addChild(new Text(expandedLines.join("\n"), 0, 0));
+  }
 };
 
 const syncRenderPhase = (context: AdvisorToolContext, phase: string) => {
@@ -1283,14 +1340,14 @@ const renderPartialAdvisorResult = (
   const lines = [
     `${theme.fg("warning", theme.bold(`◆ ADVISOR ${frame}`))} ${theme.fg("dim", "· Working…")}`,
   ];
-  if (details?.thinking) {
+  box.addChild(new Text(lines.join("\n"), 0, 0));
+  if (details?.thinking?.trim()) {
     const thought =
       details.thinking.length > 200
         ? details.thinking.slice(-200)
         : details.thinking;
-    lines.push(theme.fg("thinkingText", `  💭 ${thought.replace(/\n/g, " ")}`));
+    box.addChild(renderThinkingMarkdown(thought, theme));
   }
-  box.addChild(new Text(lines.join("\n"), 0, 0));
   if (details?.text) {
     box.addChild(
       new Markdown(
@@ -1354,17 +1411,14 @@ const renderFinalAdvisorResult = (
   if (attachments.length) {
     lines.push(theme.fg("dim", `  ${attachments.join(" · ")}`));
   }
-  if (details?.thinking) {
-    const thought = details.thinking.replace(/\n/g, " ").slice(0, 300);
-    lines.push(
-      theme.fg(
-        "thinkingText",
-        `  💭 ${thought}${details.thinking.length > 300 ? "…" : ""}`
-      )
-    );
-  }
+  const thinking = details?.thinking?.trim()
+    ? `${details.thinking.slice(0, 300)}${details.thinking.length > 300 ? "…" : ""}`
+    : "";
   const displayAdvice = advice || "(Advisor returned no advice.)";
   box.addChild(new Text(lines.join("\n"), 0, 0));
+  if (thinking) {
+    box.addChild(renderThinkingMarkdown(thinking, theme));
+  }
   box.addChild(
     new Markdown(
       adviceForDisplay(displayAdvice, expanded),

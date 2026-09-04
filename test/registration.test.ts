@@ -9,7 +9,11 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type ExtensionAPI, initTheme } from "@earendil-works/pi-coding-agent";
-import { getKeybindings, stripTerminalSequences } from "@earendil-works/pi-tui";
+import {
+  getKeybindings,
+  stripTerminalSequences,
+  visibleWidth,
+} from "@earendil-works/pi-tui";
 import registerExtension, {
   consultAdvisor,
   runAdvisorGate,
@@ -45,6 +49,7 @@ import {
   gateFailureEffectForMode,
   parseAutomaticDecision,
   registerAdvisorTool,
+  renderThinkingMarkdown,
   resolveAdvisorRequest,
   ScoutStatusManager,
 } from "../src/tools.js";
@@ -1253,10 +1258,12 @@ describe("Extension Registration", () => {
             },
             type: "success",
           });
-          onChunk?.("Thinking", "Partial answer");
+          onChunk?.("**Thinking**\n\n- check", "Partial answer");
           const advisorRendered = component.render(100).join("\\n");
           expect(advisorRendered).toContain("◆ ADVISOR");
           expect(advisorRendered).toContain("Partial answer");
+          expect(advisorRendered).toContain("Thinking");
+          expect(advisorRendered).not.toContain("**Thinking**");
 
           harness.events.get("session_shutdown")?.(undefined, harness.ctx);
           resolveConsult({ markdown: "Done.", thinkingText: "" });
@@ -2287,7 +2294,12 @@ describe("Extension Registration", () => {
         {
           content: [],
           details: {
-            scout: { model: "provider/executor", status: "streaming" },
+            scout: {
+              model: "provider/executor",
+              status: "streaming",
+              thinking:
+                "**Selecting relevant context**\n\n- preserve failed attempts",
+            },
           },
         },
         { expanded: false, isPartial: true },
@@ -2298,6 +2310,9 @@ describe("Extension Registration", () => {
       .join("\n");
     expect(scouting).toContain("SCOUT");
     expect(scouting).not.toContain("ADVISOR");
+    expect(scouting).toContain("Selecting relevant context");
+    expect(scouting).toContain("preserve failed attempts");
+    expect(scouting).not.toContain("**Selecting relevant context**");
     const scoutTimer = context.state.timerId;
     const advising = advisorTool
       .renderResult(
@@ -2311,6 +2326,8 @@ describe("Extension Registration", () => {
               selectedCount: 2,
               status: "curated",
             },
+            text: "**Partial recommendation**",
+            thinking: "**Streaming review**\n\n- partial check",
           },
         },
         { expanded: false, isPartial: true },
@@ -2321,27 +2338,94 @@ describe("Extension Registration", () => {
       .join("\n");
     expect(advising).toContain("SCOUT · CURATED");
     expect(advising).toContain("ADVISOR");
+    expect(advising).toContain("Streaming review");
+    expect(advising).toContain("partial check");
+    expect(advising).not.toContain("**Streaming review**");
+    expect(advising).not.toContain("**Partial recommendation**");
     expect(context.state.timerId).toBeDefined();
     expect(context.state.timerId).not.toBe(scoutTimer);
-    advisorTool.renderResult(
-      {
-        content: [{ text: "Done.", type: "text" }],
-        details: {
-          scout: {
-            availableCount: 3,
-            model: "provider/executor",
-            selectedCount: 2,
-            selectedLabels: ["current task"],
-            status: "curated",
-            synthesis: "Open decision",
+    const final = advisorTool
+      .renderResult(
+        {
+          content: [{ text: "Done.", type: "text" }],
+          details: {
+            advisor: "provider/advisor",
+            scout: {
+              availableCount: 3,
+              model: "provider/executor",
+              selectedCount: 2,
+              selectedLabels: ["current task"],
+              status: "curated",
+              synthesis: "Open decision",
+            },
+            text: "**Done.**",
+            thinking:
+              "**Reviewing the final recommendation**\n\n- check validation",
           },
         },
-      },
-      { expanded: true, isPartial: false },
-      theme,
-      context
-    );
+        { expanded: true, isPartial: false },
+        theme,
+        context
+      )
+      .render(120)
+      .join("\n");
+    expect(final).toContain("Reviewing the final recommendation");
+    expect(final).toContain("check validation");
+    expect(final).not.toContain("**Reviewing the final recommendation**");
+    expect(final).not.toContain("**Done.**");
     expect(context.state.timerId).toBeUndefined();
+  });
+
+  test("renders incomplete thinking Markdown within narrow widths", () => {
+    const theme = {
+      bg: (_color: string, text: string) => text,
+      bold: (text: string) => text,
+      fg: (_color: string, text: string) => text,
+    };
+    const component = renderThinkingMarkdown(
+      "**Reviewing\n\n```ts\nconst next = 1",
+      theme
+    );
+    const rendered = component.render(24);
+    const plain = rendered.map(stripTerminalSequences).join("\n");
+
+    expect(rendered.length).toBeGreaterThan(0);
+    expect(plain).toContain("Reviewing");
+    expect(plain).toContain("const next");
+    expect(plain).toContain("💭");
+    expect(
+      rendered.every((line) => visibleWidth(stripTerminalSequences(line)) <= 24)
+    ).toBe(true);
+  });
+
+  test("accepts transient incomplete Markdown during streaming", () => {
+    const theme = {
+      bg: (_color: string, text: string) => text,
+      bold: (text: string) => text,
+      fg: (_color: string, text: string) => text,
+    };
+    const incomplete = renderThinkingMarkdown("**Incomplete bold", theme);
+    const plain = incomplete.render(80).map(stripTerminalSequences).join("\n");
+
+    // During streaming, raw markers appear transiently (expected behavior).
+    // When thinking completes, they will render properly.
+    expect(plain).toContain("💭");
+    expect(plain).toContain("Incomplete bold");
+  });
+
+  test("renders completed Markdown thinking without raw markers", () => {
+    const theme = {
+      bg: (_color: string, text: string) => text,
+      bold: (text: string) => text,
+      fg: (_color: string, text: string) => text,
+    };
+    const complete = renderThinkingMarkdown("**Completed bold**", theme);
+    const plain = complete.render(80).map(stripTerminalSequences).join("\n");
+
+    expect(plain).toContain("💭");
+    expect(plain).toContain("Completed bold");
+    // Once delimiters close, markers don't appear
+    expect(plain).not.toContain("**Completed");
   });
 
   test("renders automatic-gate Scout fallback before the unaffected Advisor gate", async () => {

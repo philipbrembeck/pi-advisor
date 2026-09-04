@@ -33,6 +33,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- Preserved Markdown formatting in visible Scout and nested Advisor thinking previews while retaining their speech-bubble cue. During streaming, incomplete Markdown delimiters display transiently until they close, which is expected behavior when thinking arrives incrementally.
 - Adopted an explicit `/model` selection made before `/advisor` as the Executor on the next successful activation, without persisting ordinary model changes while the flow is off.
 
 ## 0.5.0
