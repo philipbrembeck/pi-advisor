@@ -22,6 +22,8 @@ import { registerCommands } from "../src/commands.js";
 import {
   advisorScoutEnabledRef,
   contextMaxCharsRef,
+  FALLBACK_ADVISOR,
+  FALLBACK_EXECUTOR,
   getAdvisorSettings,
   loadConfig,
   resetConfigCache,
@@ -2834,6 +2836,187 @@ describe("Advisor activation and mode regressions", () => {
     });
   });
 
+  test("opens the model picker before first activation", async () => {
+    await withAgentDir(
+      {
+        advisor: FALLBACK_ADVISOR,
+        executor: FALLBACK_EXECUTOR,
+      },
+      async (agentDir) => {
+        const { commands, pi, setActiveTools } = harness();
+        setActiveTools([]);
+        const modelFromRef = (ref: string) => {
+          const separator = ref.indexOf("/");
+          return {
+            id: ref.slice(separator + 1),
+            provider: ref.slice(0, separator),
+          };
+        };
+        const models = [
+          { id: "chosen-executor", provider: "provider" },
+          { id: "chosen-advisor", provider: "provider" },
+          modelFromRef(FALLBACK_EXECUTOR),
+          modelFromRef(FALLBACK_ADVISOR),
+        ];
+        const selectedModels: string[] = [];
+        const notices: string[] = [];
+        let customCall = 0;
+        const ctx = {
+          cwd: agentDir,
+          hasUI: true,
+          isProjectTrusted: () => false,
+          modelRegistry: {
+            find: (provider: string, id: string) =>
+              models.find(
+                (model) => model.provider === provider && model.id === id
+              ),
+            getApiKeyAndHeaders: () =>
+              Promise.resolve({ apiKey: "key", ok: true }),
+            getAvailable: () => models,
+          },
+          ui: {
+            custom: (factory: any) =>
+              new Promise((resolve) => {
+                const done = (value: string | undefined) => {
+                  if (value) {
+                    selectedModels.push(value);
+                  }
+                  resolve(value);
+                };
+                const selector = factory(
+                  { requestRender: () => undefined },
+                  plainTheme,
+                  { matches: () => false },
+                  done
+                );
+                selector.render(100);
+                if (customCall === 1) {
+                  for (const character of "chosen-advisor") {
+                    selector.handleInput(character);
+                  }
+                  selector.render(100);
+                }
+                customCall += 1;
+                selector.handleInput("\r");
+              }),
+            notify: (message: string) => notices.push(message),
+            select: () => Promise.resolve("✓ Default (Model Default)"),
+          },
+        } as any;
+
+        registerCommands(pi);
+        await commands.get("advisor").handler("", ctx);
+
+        expect(selectedModels).toEqual([
+          "provider/chosen-executor",
+          "provider/chosen-advisor",
+        ]);
+        expect(savedConfig(agentDir)).toMatchObject({
+          advisor: "provider/chosen-advisor",
+          executor: "provider/chosen-executor",
+        });
+        expect(savedConfig(agentDir).executor).not.toBe(FALLBACK_EXECUTOR);
+        expect(savedConfig(agentDir).advisor).not.toBe(FALLBACK_ADVISOR);
+        expect(pi.getActiveTools()).toContain("ask_advisor");
+        const explanation = notices.find((message) =>
+          message.startsWith("The Advisor is")
+        );
+        expect(explanation).toBe(
+          "The Advisor is a second-opinion model that reviews the Executor's context and returns risks, alternatives, and verification steps without changing files or running tools. It invokes itself before consequential plans, after repeated failures, before completion, and on repeated tool loops when those gates are enabled; custom rules can add triggers, and you can also ask it directly with ask_advisor."
+        );
+        expect(explanation?.match(/[.!?](?=\s|$)/g)).toHaveLength(2);
+      }
+    );
+  });
+
+  test("opens the picker when a persisted model is unavailable", async () => {
+    await withAgentDir(
+      {
+        advisor: "provider/stale",
+        executor: "provider/executor",
+      },
+      async (agentDir) => {
+        const { commands, pi } = harness();
+        const models = [
+          { id: "replacement", provider: "provider" },
+          { id: "executor", provider: "provider" },
+        ];
+        let customCalls = 0;
+        const ctx = {
+          cwd: agentDir,
+          hasUI: true,
+          isProjectTrusted: () => false,
+          modelRegistry: {
+            find: (provider: string, id: string) =>
+              models.find(
+                (model) => model.provider === provider && model.id === id
+              ),
+            getApiKeyAndHeaders: () =>
+              Promise.resolve({ apiKey: "key", ok: true }),
+            getAvailable: () => models,
+          },
+          ui: {
+            custom: (factory: any) =>
+              new Promise((resolve) => {
+                const selector = factory(
+                  { requestRender: () => undefined },
+                  plainTheme,
+                  { matches: () => false },
+                  resolve
+                );
+                customCalls += 1;
+                selector.render(100);
+                selector.handleInput("\r");
+              }),
+            notify: () => undefined,
+            select: () => Promise.resolve("✓ Default (Model Default)"),
+          },
+        } as any;
+
+        registerCommands(pi);
+        await commands.get("advisor").handler("", ctx);
+
+        expect(customCalls).toBe(1);
+        expect(savedConfig(agentDir)).toMatchObject({
+          advisor: "provider/replacement",
+          executor: "provider/executor",
+        });
+        expect(pi.getActiveTools()).toContain("ask_advisor");
+      }
+    );
+  });
+
+  test("cancels first activation without persisting or enabling the flow", async () => {
+    await withAgentDir({}, async (agentDir) => {
+      const { commands, pi, setActiveTools } = harness();
+      setActiveTools([]);
+      const ctx = {
+        cwd: agentDir,
+        hasUI: true,
+        isProjectTrusted: () => false,
+        modelRegistry: {
+          find: () => undefined,
+          getApiKeyAndHeaders: () =>
+            Promise.resolve({ apiKey: "key", ok: true }),
+          getAvailable: () => [
+            { id: "executor", provider: "provider" },
+            { id: "advisor", provider: "provider" },
+          ],
+        },
+        ui: {
+          custom: () => Promise.resolve(undefined),
+          notify: () => undefined,
+        },
+      } as any;
+
+      registerCommands(pi);
+      await commands.get("advisor").handler("", ctx);
+
+      expect(savedConfig(agentDir)).toEqual({});
+      expect(pi.getActiveTools()).toEqual([]);
+    });
+  });
+
   test("preselects an inactive /model choice in advisor-models", async () => {
     await withAgentDir(
       { advisor: "provider/sonnet", executor: "provider/sonnet" },
@@ -3016,22 +3199,29 @@ describe("Advisor activation and mode regressions", () => {
   });
 
   test("activates silently for always-on sessions but announces /advisor", async () => {
-    await withAgentDir({ alwaysOn: true }, async (agentDir) => {
-      const { commands, events, pi, setActiveTools } = harness();
-      registerCommands(pi);
-      const automatic: string[] = [];
-      setActiveTools([]);
-      await events.get("session_start")?.(
-        { reason: "startup" },
-        context(agentDir, automatic)
-      );
-      expect(automatic).toEqual([]);
-      expect(pi.getActiveTools()).toContain("ask_advisor");
+    await withAgentDir(
+      {
+        advisor: "provider/advisor",
+        alwaysOn: true,
+        executor: "provider/executor",
+      },
+      async (agentDir) => {
+        const { commands, events, pi, setActiveTools } = harness();
+        registerCommands(pi);
+        const automatic: string[] = [];
+        setActiveTools([]);
+        await events.get("session_start")?.(
+          { reason: "startup" },
+          context(agentDir, automatic)
+        );
+        expect(automatic).toEqual([]);
+        expect(pi.getActiveTools()).toContain("ask_advisor");
 
-      const manual: string[] = [];
-      await commands.get("advisor").handler("", context(agentDir, manual));
-      expect(manual.join("\n")).toContain("Advisor flow ready");
-    });
+        const manual: string[] = [];
+        await commands.get("advisor").handler("", context(agentDir, manual));
+        expect(manual.join("\n")).toContain("Advisor flow ready");
+      }
+    );
   });
 
   test("hides usage details from automatic gate results when disabled", () => {
@@ -3066,31 +3256,45 @@ describe("Advisor activation and mode regressions", () => {
   });
 
   test("turning the Advisor off also clears persistent activation", async () => {
-    await withAgentDir({ alwaysOn: true }, async (agentDir) => {
-      const { commands, events, pi } = harness();
-      registerCommands(pi);
-      const notes: string[] = [];
-      const ctx = context(agentDir, notes);
-      await events.get("session_start")?.({ reason: "startup" }, ctx);
+    await withAgentDir(
+      {
+        advisor: "provider/advisor",
+        alwaysOn: true,
+        executor: "provider/executor",
+      },
+      async (agentDir) => {
+        const { commands, events, pi } = harness();
+        registerCommands(pi);
+        const notes: string[] = [];
+        const ctx = context(agentDir, notes);
+        await events.get("session_start")?.({ reason: "startup" }, ctx);
 
-      await commands.get("advisor-off").handler("", ctx);
-      expect(pi.getActiveTools()).not.toContain("ask_advisor");
-      expect(savedConfig(agentDir).alwaysOn).toBe(false);
-      expect(notes.at(-1)).toContain("Always on turned off");
-    });
+        await commands.get("advisor-off").handler("", ctx);
+        expect(pi.getActiveTools()).not.toContain("ask_advisor");
+        expect(savedConfig(agentDir).alwaysOn).toBe(false);
+        expect(notes.at(-1)).toContain("Always on turned off");
+      }
+    );
   });
 
   test("persists context arguments supplied to /advisor", async () => {
-    await withAgentDir({ contextMaxChars: 15_000 }, async (agentDir) => {
-      const { commands, pi } = harness();
-      registerCommands(pi);
-      await commands
-        .get("advisor")
-        .handler("contextMaxChars=5000", context(agentDir));
-      expect(savedConfig(agentDir).contextMaxChars).toBe(5000);
-      expect(loadConfig(context(agentDir))).toBeTruthy();
-      expect(contextMaxCharsRef).toBe(5000);
-    });
+    await withAgentDir(
+      {
+        advisor: "provider/advisor",
+        contextMaxChars: 15_000,
+        executor: "provider/executor",
+      },
+      async (agentDir) => {
+        const { commands, pi } = harness();
+        registerCommands(pi);
+        await commands
+          .get("advisor")
+          .handler("contextMaxChars=5000", context(agentDir));
+        expect(savedConfig(agentDir).contextMaxChars).toBe(5000);
+        expect(loadConfig(context(agentDir))).toBeTruthy();
+        expect(contextMaxCharsRef).toBe(5000);
+      }
+    );
   });
 
   test("renders a manual sound verdict exactly like the tool response", async () => {

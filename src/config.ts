@@ -13,6 +13,7 @@ import {
   isValidGitContextLevel,
 } from "./git.js";
 
+// Kept for compatibility with older configs; activation treats these as unset.
 export const FALLBACK_EXECUTOR = "openai-codex/gpt-5.6-luna";
 export const FALLBACK_ADVISOR = "openai-codex/gpt-5.6-sol";
 export const DEFAULT_CONTEXT_MAX_CHARS = 15_000;
@@ -39,6 +40,8 @@ export const GATE_FAILURE_MODES: GateFailureMode[] = [
 
 export let executorRef = FALLBACK_EXECUTOR;
 export let advisorRef = FALLBACK_ADVISOR;
+let persistedExecutorRef: string | undefined;
+let persistedAdvisorRef: string | undefined;
 export let executorEffortRef: string | undefined;
 export let advisorEffortRef: string | undefined;
 export let contextMaxCharsRef = DEFAULT_CONTEXT_MAX_CHARS;
@@ -75,6 +78,11 @@ export const setExecutorRef = (ref: string) => {
 export const setAdvisorRef = (ref: string) => {
   advisorRef = ref;
 };
+/** Returns model refs explicitly persisted in the global Advisor config. */
+export const getPersistedModelRefs = () => ({
+  advisor: persistedAdvisorRef,
+  executor: persistedExecutorRef,
+});
 export const setExecutorEffortRef = (effort: string | undefined) => {
   executorEffortRef = effort;
 };
@@ -471,6 +479,8 @@ export const validateConfig = (
 const resetDefaults = () => {
   executorRef = FALLBACK_EXECUTOR;
   advisorRef = FALLBACK_ADVISOR;
+  persistedExecutorRef = undefined;
+  persistedAdvisorRef = undefined;
   executorEffortRef = undefined;
   advisorEffortRef = undefined;
   contextMaxCharsRef = DEFAULT_CONTEXT_MAX_CHARS;
@@ -520,6 +530,14 @@ const applyNonEmptyStringConfig = (
   if (value) {
     apply(value);
   }
+};
+
+const configuredModelRef = (
+  value: string | undefined,
+  fallback: string
+): string | undefined => {
+  const ref = value?.trim();
+  return ref && ref !== fallback ? ref : undefined;
 };
 
 const applyConfig = (config: AdvisorConfig) => {
@@ -667,6 +685,14 @@ export const loadConfig = (_ctx: ExtensionContext) => {
   const globalConfig = existsSync(global)
     ? readConfigCached(global)
     : undefined;
+  persistedExecutorRef = configuredModelRef(
+    globalConfig?.executor,
+    FALLBACK_EXECUTOR
+  );
+  persistedAdvisorRef = configuredModelRef(
+    globalConfig?.advisor,
+    FALLBACK_ADVISOR
+  );
   if (globalConfig) {
     applyConfig(globalConfig);
     const unknownKeys = unknownConfigKeys(globalConfig as ConfigRecord);
@@ -691,8 +717,18 @@ export const loadConfig = (_ctx: ExtensionContext) => {
 };
 
 /** Saves user-controlled configuration globally without outcome consent. */
-export const saveConfig = (_ctx: ExtensionContext) => {
+export interface SaveConfigOptions {
+  persistAdvisor?: boolean;
+  persistExecutor?: boolean;
+}
+
+export const saveConfig = (
+  _ctx: ExtensionContext,
+  options: SaveConfigOptions = {}
+) => {
   const path = join(getAgentDir(), "advisor.json");
+  const persistAdvisor = options.persistAdvisor ?? true;
+  const persistExecutor = options.persistExecutor ?? true;
   let existing: Record<string, unknown> = {};
   try {
     const parsed = JSON.parse(readFileSync(path, "utf8"));
@@ -707,7 +743,7 @@ export const saveConfig = (_ctx: ExtensionContext) => {
   }
   const data = {
     ...existing,
-    advisor: advisorRef,
+    ...(persistAdvisor ? { advisor: advisorRef } : {}),
     advisorAutoLoopGate: advisorAutoLoopGateRef,
     advisorBlockOnBlocked: advisorBlockOnBlockedRef,
     advisorCollapseResponses: advisorCollapseResponsesRef,
@@ -718,7 +754,7 @@ export const saveConfig = (_ctx: ExtensionContext) => {
     advisorLoopThreshold: advisorLoopThresholdRef,
     advisorPlanGate: advisorPlanGateRef,
     contextMaxChars: contextMaxCharsRef,
-    executor: executorRef,
+    ...(persistExecutor ? { executor: executorRef } : {}),
     executorEffort: executorEffortRef,
     ...(advisorMaxCallsPerSessionRef === undefined
       ? {}

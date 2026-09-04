@@ -4,14 +4,14 @@ Use `/advisor-models` and `/advisor-settings` to configure pi-advisor. Both comm
 
 Repository-controlled project `advisor.json` files are not applied. Models, prompts, gates, budgets, disclosure, redaction, integrations, and consent remain under the user's global configuration.
 
-`/advisor` also accepts `executor=`, `advisor=`, and `contextMaxChars=` overrides for the current activation. For example, `/advisor contextMaxChars=30000` sets the reconstructed-history limit; use `0` for no history. The `ALL` option in settings represents the complete current branch and remains subject to the Advisor model's context limit.
+`/advisor` also accepts `executor=`, `advisor=`, and `contextMaxChars=` overrides for the current activation. For example, `/advisor contextMaxChars=30000` sets the reconstructed-history limit; use `0` for no history. The `ALL` option in settings represents the complete current branch and remains subject to the Advisor model's context limit. On first use, or when either saved model is missing from Pi's available model list, `/advisor` opens the available-model picker instead of using a fallback. The selected Executor and Advisor refs are persisted only after both models pass activation checks.
 
-All fields are optional. This example shows the available settings and their normal defaults. Disclosure and redaction fields are explained in [Privacy and data handling](privacy.md).
+All fields are optional. The model refs below are examples of models available through your configured providers, not defaults. Disclosure and redaction fields are explained in [Privacy and data handling](privacy.md).
 
 ```json
 {
-  "executor": "openai-codex/gpt-5.6-luna",
-  "advisor": "openai-codex/gpt-5.6-sol",
+  "executor": "your-provider/executor-model",
+  "advisor": "your-provider/advisor-model",
   "executorEffort": "medium",
   "advisorEffort": "xhigh",
   "contextMaxChars": 25000,
@@ -54,7 +54,7 @@ All fields are optional. This example shows the available settings and their nor
 ## Simple mode and persistent activation
 
 - `simpleMode` defaults to `false`. When enabled, `ask_advisor` and `/advisor-manual` remain available for voluntary second opinions, while plan/failure/completion rules, loop gates, blocking, call budgets, and session summaries are disabled. Context limits, result caps, redaction, and tool disclosure policies still apply.
-- `alwaysOn` defaults to `false`. When enabled, Pi restores the configured Executor and activates `ask_advisor` for new, resumed, forked, and reloaded sessions.
+- `alwaysOn` defaults to `false`. When enabled, Pi restores the configured Executor and activates `ask_advisor` for new, resumed, forked, and reloaded sessions. If model refs are missing or unavailable, startup does not choose fallback models; run `/advisor` to choose available models interactively.
 - An explicit `/model` selection made before `/advisor` is held for that session and adopted as the Executor on the next successful activation. While the Advisor flow is active, an explicit `/model` selection is persisted as the Executor immediately. A model restored with a session or selected by cycling does not change the saved Executor.
 - `/advisor-off` turns `alwaysOn` off so the flow stays disabled in later sessions.
 - In Simple mode, settings keeps the Context window/history control alongside Simple mode and Always on. Advanced values remain saved and take effect when Simple mode is disabled.

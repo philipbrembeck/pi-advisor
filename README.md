@@ -47,6 +47,8 @@ Reload Pi after installing.
 /advisor-settings   # Configure behavior, modes, etc.
 ```
 
+On first use, or whenever a saved model is unavailable, `/advisor` opens the same available-model picker as `/advisor-models`; it never silently chooses a fallback model. After activation, `/advisor` explains that the Advisor reviews the Executor's context and invokes itself for the configured plan, failure, completion, and custom gates.
+
 From the Executor, `ask_advisor({})` requests a general review. A targeted `question` or concise `draft` can focus the review on a particular decision.
 
 In the Settings, enable the Simple Mode for a quick start.
@@ -56,7 +58,7 @@ In the Settings, enable the Simple Mode for a quick start.
 
 | Command                   | What it does                                      |
 | ------------------------- | ------------------------------------------------- |
-| `/advisor`                | Enable the flow.                                  |
+| `/advisor`                | Enable the flow; choose available models when needed. |
 | `/advisor-manual [focus]` | Ask for an immediate second opinion.              |
 | `/advisor-models`         | Choose the Executor and Advisor models.           |
 | `/advisor-settings`       | Configure behavior, context, privacy, and limits. |

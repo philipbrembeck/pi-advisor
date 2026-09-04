@@ -14,6 +14,7 @@ import {
   executorRef,
   getAdvisorMaxCallsPerSession,
   getAdvisorSettings,
+  getPersistedModelRefs,
   isSimpleMode,
   loadConfig,
   parseArgs,
@@ -113,14 +114,17 @@ const selectedEffort = (choice: string): string | undefined => {
   return effort === DEFAULT_EFFORT_LEVEL ? undefined : effort;
 };
 const ARGUMENT_WHITESPACE = /\s+/;
-const hasExecutorOverride = (args: string) =>
+const hasModelOverride = (args: string, key: "advisor" | "executor") =>
   args
     .trim()
     .split(ARGUMENT_WHITESPACE)
     .some((token) => {
-      const [key, value] = token.split("=");
-      return key === "executor" && Boolean(value);
+      const [tokenKey, value] = token.split("=");
+      return tokenKey === key && Boolean(value);
     });
+const hasExecutorOverride = (args: string) =>
+  hasModelOverride(args, "executor");
+const hasAdvisorOverride = (args: string) => hasModelOverride(args, "advisor");
 
 const CONTEXT_PRESETS: ContextPreset[] = [
   {
@@ -284,6 +288,182 @@ const findConfiguredModel = (ctx: ExtensionContext, ref: string) => {
   return ctx.modelRegistry.find(provider, modelId);
 };
 
+const getAvailableModelRefs = (ctx: ExtensionContext): string[] | undefined => {
+  if (typeof ctx.modelRegistry.getAvailable !== "function") {
+    return undefined;
+  }
+  return ctx.modelRegistry
+    .getAvailable()
+    .map((model) => `${model.provider}/${model.id}`);
+};
+
+const isSelectableModel = (
+  ctx: ExtensionContext,
+  ref: string,
+  availableRefs: Set<string> | undefined
+) => {
+  if (!ref) {
+    return false;
+  }
+  if (availableRefs) {
+    const [provider, modelId] = splitRef(ref);
+    return availableRefs.has(`${provider}/${modelId}`);
+  }
+  return Boolean(findConfiguredModel(ctx, ref));
+};
+
+const getExplicitModelError = (
+  ctx: ExtensionContext,
+  ref: string,
+  label: "Advisor" | "Executor",
+  overridden: boolean,
+  availableRefs: Set<string> | undefined
+) => {
+  if (overridden) {
+    if (!findConfiguredModel(ctx, ref)) {
+      return `${label} model not found: ${ref}`;
+    }
+    if (availableRefs && !isSelectableModel(ctx, ref, availableRefs)) {
+      return `${label} model unavailable: ${ref}`;
+    }
+  }
+};
+
+interface ActivationModelPlan {
+  pendingExecutor: string | undefined;
+  selectAdvisor: boolean;
+  selectExecutor: boolean;
+}
+
+const planActivationModels = (
+  ctx: ExtensionContext,
+  executor: string,
+  advisor: string,
+  pendingExecutorRef: string | undefined,
+  persisted: ReturnType<typeof getPersistedModelRefs>,
+  executorOverride: boolean,
+  advisorOverride: boolean,
+  availableRefs: Set<string> | undefined
+): ActivationModelPlan => {
+  const pendingExecutor =
+    !executorOverride &&
+    pendingExecutorRef &&
+    isSelectableModel(ctx, pendingExecutorRef, availableRefs)
+      ? pendingExecutorRef
+      : undefined;
+  const executorConfigured =
+    executorOverride ||
+    Boolean(pendingExecutor) ||
+    Boolean(
+      persisted.executor && isSelectableModel(ctx, executor, availableRefs)
+    );
+  const advisorConfigured =
+    advisorOverride ||
+    Boolean(
+      persisted.advisor && isSelectableModel(ctx, advisor, availableRefs)
+    );
+  return {
+    pendingExecutor,
+    selectAdvisor: !advisorConfigured,
+    selectExecutor: !executorConfigured,
+  };
+};
+
+interface AdvisorModelSelection {
+  advisor: string;
+  advisorEffort: string | undefined;
+  executor: string;
+  executorEffort: string | undefined;
+}
+
+interface AdvisorModelPickerOptions extends AdvisorModelSelection {
+  selectAdvisor: boolean;
+  selectExecutor: boolean;
+}
+
+const selectAdvisorModels = async (
+  ctx: ExtensionContext,
+  options: AdvisorModelPickerOptions
+): Promise<AdvisorModelSelection | undefined> => {
+  if (!ctx.hasUI) {
+    return undefined;
+  }
+  const refs = getAvailableModelRefs(ctx);
+  if (refs && refs.length === 0) {
+    notify(
+      ctx,
+      "No selectable models are available. Configure a provider with /login or models.json, then retry.",
+      "error"
+    );
+    return undefined;
+  }
+  const allOptions = [
+    ...new Set(
+      refs ??
+        [options.executor, options.advisor].filter((ref) => ref.length > 0)
+    ),
+  ];
+  let { advisor, advisorEffort, executor, executorEffort } = options;
+
+  if (options.selectExecutor) {
+    const selectedExecutor = await ctx.ui.custom<string | undefined>(
+      (tui, theme, keybindings, done) =>
+        new SearchableModelSelector({
+          allOptions,
+          currentOption: executor || undefined,
+          keybindings,
+          onCancel: () => done(undefined),
+          onSelect: done,
+          theme,
+          title: "Select Executor Model",
+          tui,
+        })
+    );
+    if (!selectedExecutor) {
+      return undefined;
+    }
+    const selectedExecutorEffort = await ctx.ui.select(
+      "Select Executor Reasoning/Thinking Level",
+      effortChoices(executorEffort)
+    );
+    if (!selectedExecutorEffort) {
+      return undefined;
+    }
+    executor = selectedExecutor;
+    executorEffort = selectedEffort(selectedExecutorEffort);
+  }
+
+  if (options.selectAdvisor) {
+    const selectedAdvisor = await ctx.ui.custom<string | undefined>(
+      (tui, theme, keybindings, done) =>
+        new SearchableModelSelector({
+          allOptions,
+          currentOption: advisor || undefined,
+          keybindings,
+          onCancel: () => done(undefined),
+          onSelect: done,
+          theme,
+          title: "Select Advisor Model",
+          tui,
+        })
+    );
+    if (!selectedAdvisor) {
+      return undefined;
+    }
+    const selectedAdvisorEffort = await ctx.ui.select(
+      "Select Advisor Reasoning/Thinking Level",
+      effortChoices(advisorEffort)
+    );
+    if (!selectedAdvisorEffort) {
+      return undefined;
+    }
+    advisor = selectedAdvisor;
+    advisorEffort = selectedEffort(selectedAdvisorEffort);
+  }
+
+  return { advisor, advisorEffort, executor, executorEffort };
+};
+
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: one settings form maps every persisted control.
 const applyAdvisorSettings = (settings: AdvisorSettings) => {
   setAdvisorEffortRef(
@@ -323,7 +503,11 @@ const saveAdvisorSettings = (
   settings: AdvisorSettings
 ) => {
   applyAdvisorSettings(settings);
-  saveConfig(ctx);
+  const persisted = getPersistedModelRefs();
+  saveConfig(ctx, {
+    persistAdvisor: Boolean(persisted.advisor),
+    persistExecutor: Boolean(persisted.executor),
+  });
   saveGlobalOutcomeLogging(settings.outcomeLogging ?? false);
 };
 
@@ -568,6 +752,83 @@ export const registerCommands = (
     }
   };
 
+  const prepareActivationModels = async (
+    ctx: ExtensionContext,
+    announce: boolean,
+    executorOverride: boolean,
+    advisorOverride: boolean
+  ): Promise<
+    { pickedModels: boolean; pendingExecutor?: string } | undefined
+  > => {
+    const persisted = getPersistedModelRefs();
+    const availableRefs = getAvailableModelRefs(ctx);
+    const availableRefSet = availableRefs ? new Set(availableRefs) : undefined;
+    const explicitError =
+      getExplicitModelError(
+        ctx,
+        executorRef,
+        "Executor",
+        executorOverride,
+        availableRefSet
+      ) ??
+      getExplicitModelError(
+        ctx,
+        advisorRef,
+        "Advisor",
+        advisorOverride,
+        availableRefSet
+      );
+    if (explicitError) {
+      notify(ctx, explicitError, "error");
+      return;
+    }
+
+    const plan = planActivationModels(
+      ctx,
+      executorRef,
+      advisorRef,
+      pendingExecutorModelRef,
+      persisted,
+      executorOverride,
+      advisorOverride,
+      availableRefSet
+    );
+    setExecutorRef(plan.pendingExecutor ?? executorRef);
+    if (!(plan.selectExecutor || plan.selectAdvisor)) {
+      return { pendingExecutor: plan.pendingExecutor, pickedModels: false };
+    }
+
+    // Always-on startup must not silently choose a fallback. It has no safe
+    // interactive path, while an explicit `/advisor` can open the picker.
+    if (!announce) {
+      notify(
+        ctx,
+        "Advisor models are not configured or available. Run /advisor to choose them.",
+        "error"
+      );
+      return;
+    }
+    const selection = await selectAdvisorModels(ctx, {
+      advisor: advisorOverride || persisted.advisor ? advisorRef : "",
+      advisorEffort: advisorEffortRef,
+      executor:
+        executorOverride || plan.pendingExecutor || persisted.executor
+          ? executorRef
+          : "",
+      executorEffort: executorEffortRef,
+      selectAdvisor: plan.selectAdvisor,
+      selectExecutor: plan.selectExecutor,
+    });
+    if (!selection) {
+      return;
+    }
+    setAdvisorRef(selection.advisor);
+    setAdvisorEffortRef(selection.advisorEffort);
+    setExecutorRef(selection.executor);
+    setExecutorEffortRef(selection.executorEffort);
+    return { pendingExecutor: plan.pendingExecutor, pickedModels: true };
+  };
+
   const activateAdvisor = async (
     args: string,
     ctx: ExtensionContext,
@@ -578,37 +839,48 @@ export const registerCommands = (
     }
     const previous = {
       advisor: advisorRef,
+      advisorEffort: advisorEffortRef,
       contextMaxChars: contextMaxCharsRef,
       executor: executorRef,
+      executorEffort: executorEffortRef,
     };
     const restoreRefs = () => {
       setAdvisorRef(previous.advisor);
+      setAdvisorEffortRef(previous.advisorEffort);
       setContextMaxCharsRef(previous.contextMaxChars);
       setExecutorRef(previous.executor);
+      setExecutorEffortRef(previous.executorEffort);
     };
     const executorOverride = hasExecutorOverride(args);
+    const advisorOverride = hasAdvisorOverride(args);
     const argumentError = parseArgs(args);
     if (argumentError) {
       restoreRefs();
       notify(ctx, argumentError, "error");
       return;
     }
-    const pendingExecutor = executorOverride
-      ? undefined
-      : pendingExecutorModelRef;
-    setExecutorRef(pendingExecutor ?? executorRef);
+
+    const prepared = await prepareActivationModels(
+      ctx,
+      announce,
+      executorOverride,
+      advisorOverride
+    );
+    if (!prepared) {
+      restoreRefs();
+      return;
+    }
     const { error } = await resolveActivationModels(ctx);
     if (error) {
       restoreRefs();
       notify(ctx, error, "error");
       return;
     }
-    // parseArgs and an inactive `/model` selection only mutate in-memory refs,
-    // and every later loadConfig resets them from disk. Persist supplied
-    // arguments or the pending selection once they are known to resolve, so an
-    // unusable model reference is never written to the configuration.
-    if (args.trim() || pendingExecutor) {
-      saveConfig(ctx);
+    // parseArgs, model picking, and an inactive `/model` selection only mutate
+    // in-memory refs. Persist them once both models are known and authenticated,
+    // so an unusable model reference is never written to the configuration.
+    if (args.trim() || prepared.pickedModels || prepared.pendingExecutor) {
+      saveConfig(ctx, { persistAdvisor: true, persistExecutor: true });
     }
     // A successful activation has committed the effective Executor. Do not let
     // an older inactive selection override an explicit activation argument on a
@@ -625,6 +897,11 @@ export const registerCommands = (
       ]);
     }
     if (announce) {
+      notify(
+        ctx,
+        "The Advisor is a second-opinion model that reviews the Executor's context and returns risks, alternatives, and verification steps without changing files or running tools. It invokes itself before consequential plans, after repeated failures, before completion, and on repeated tool loops when those gates are enabled; custom rules can add triggers, and you can also ask it directly with ask_advisor.",
+        "info"
+      );
       notify(
         ctx,
         `Advisor flow ready — Executor: ${executorRef} (thinking: ${executorEffortRef || "default"}) · Advisor: ${advisorRef} (thinking: ${advisorEffortRef || "default"})`,
@@ -726,8 +1003,12 @@ export const registerCommands = (
     if (selected === executorRef) {
       return;
     }
+    const persisted = getPersistedModelRefs();
     setExecutorRef(selected);
-    saveConfig(ctx);
+    saveConfig(ctx, {
+      persistAdvisor: Boolean(persisted.advisor),
+      persistExecutor: true,
+    });
   });
 
   pi.on("session_shutdown", (_event, ctx) => {
@@ -854,70 +1135,33 @@ export const registerCommands = (
       if (!(loadCommandConfig(ctx) && ctx.hasUI)) {
         return;
       }
-      const refs = ctx.modelRegistry
-        .getAvailable()
-        .map((m) => `${m.provider}/${m.id}`);
       // When `/model` was used before activation, show that session choice as
       // the Executor's current option instead of making the persisted Executor
-      // look like the active selection.
-      const executorOption = pendingExecutorModelRef ?? executorRef;
-
-      const executor = await ctx.ui.custom<string | undefined>(
-        (tui, theme, keybindings, done) =>
-          new SearchableModelSelector({
-            allOptions: refs,
-            currentOption: executorOption,
-            keybindings,
-            onCancel: () => done(undefined),
-            onSelect: done,
-            theme,
-            title: "Select Executor Model",
-            tui,
-          })
-      );
-      if (!executor) {
+      // look like the active selection. Legacy fallback refs are not treated as
+      // a user choice, even when an old advisor.json still contains them.
+      const persisted = getPersistedModelRefs();
+      const selection = await selectAdvisorModels(ctx, {
+        advisor: persisted.advisor ? advisorRef : "",
+        advisorEffort: advisorEffortRef,
+        executor:
+          pendingExecutorModelRef ?? (persisted.executor ? executorRef : ""),
+        executorEffort: executorEffortRef,
+        selectAdvisor: true,
+        selectExecutor: true,
+      });
+      if (!selection) {
         return;
       }
 
-      const executorEffort = await ctx.ui.select(
-        "Select Executor Reasoning/Thinking Level",
-        effortChoices(executorEffortRef)
-      );
-      if (!executorEffort) {
-        return;
-      }
+      setExecutorRef(selection.executor);
+      setAdvisorRef(selection.advisor);
+      setExecutorEffortRef(selection.executorEffort);
+      setAdvisorEffortRef(selection.advisorEffort);
 
-      const advisor = await ctx.ui.custom<string | undefined>(
-        (tui, theme, keybindings, done) =>
-          new SearchableModelSelector({
-            allOptions: refs,
-            currentOption: advisorRef,
-            keybindings,
-            onCancel: () => done(undefined),
-            onSelect: done,
-            theme,
-            title: "Select Advisor Model",
-            tui,
-          })
-      );
-      if (!advisor) {
-        return;
-      }
-
-      const advisorEffort = await ctx.ui.select(
-        "Select Advisor Reasoning/Thinking Level",
-        effortChoices(advisorEffortRef)
-      );
-      if (!advisorEffort) {
-        return;
-      }
-
-      setExecutorRef(executor);
-      setAdvisorRef(advisor);
-      setExecutorEffortRef(selectedEffort(executorEffort));
-      setAdvisorEffortRef(selectedEffort(advisorEffort));
-
-      const path = saveConfig(ctx);
+      const path = saveConfig(ctx, {
+        persistAdvisor: true,
+        persistExecutor: true,
+      });
       pendingExecutorModelRef = undefined;
       ctx.ui.notify(
         `Saved Executor + Advisor configurations to ${path}`,
@@ -975,8 +1219,12 @@ export const registerCommands = (
       // Leaving alwaysOn set would silently reactivate the flow next session.
       const wasAlwaysOn = alwaysOnRef;
       if (wasAlwaysOn) {
+        const persisted = getPersistedModelRefs();
         setAlwaysOnRef(false);
-        saveConfig(ctx);
+        saveConfig(ctx, {
+          persistAdvisor: Boolean(persisted.advisor),
+          persistExecutor: Boolean(persisted.executor),
+        });
       }
       notify(
         ctx,
