@@ -114,7 +114,7 @@ const selectedEffort = (choice: string): string | undefined => {
   return effort === DEFAULT_EFFORT_LEVEL ? undefined : effort;
 };
 const ADVISOR_ACTIVATION_EXPLANATION =
-  "The Advisor is a second-opinion model that reviews the Executor's context and returns risks, alternatives, and verification steps without changing files or running tools. It invokes itself before consequential plans, after repeated failures, before completion, and on repeated tool loops when those gates are enabled; custom rules can add triggers, and you can also ask it directly with ask_advisor.";
+  "The Advisor is a second-opinion model that reviews the Executor's context and returns risks, alternatives, and verification steps without changing files or running tools.";
 const ARGUMENT_WHITESPACE = /\s+/;
 const hasModelOverride = (args: string, key: "advisor" | "executor") =>
   args

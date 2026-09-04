@@ -2904,13 +2904,13 @@ describe("Advisor activation and mode regressions", () => {
         message.startsWith("The Advisor is")
       );
       expect(explanation).toContain(
-        "The Advisor is a second-opinion model that reviews the Executor's context and returns risks, alternatives, and verification steps without changing files or running tools. It invokes itself before consequential plans, after repeated failures, before completion, and on repeated tool loops when those gates are enabled; custom rules can add triggers, and you can also ask it directly with ask_advisor."
+        "The Advisor is a second-opinion model that reviews the Executor's context and returns risks, alternatives, and verification steps without changing files or running tools."
       );
       expect(explanation).toContain("Advisor flow ready");
       expect(notices).toHaveLength(1);
       expect(
         explanation?.split("\n\n")[0].match(/[.!?](?=\s|$)/g)
-      ).toHaveLength(2);
+      ).toHaveLength(1);
     });
   });
 
