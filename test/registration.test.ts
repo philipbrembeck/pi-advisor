@@ -2750,7 +2750,160 @@ describe("Advisor activation and mode regressions", () => {
     });
   });
 
-  test("ignores model selection while the Advisor flow is inactive", async () => {
+  test("preselects an inactive /model choice in advisor-models", async () => {
+    await withAgentDir(
+      { advisor: "provider/sonnet", executor: "provider/sonnet" },
+      async (agentDir) => {
+        const { commands, events, pi, setActiveTools } = harness();
+        const models = [
+          { id: "sonnet", provider: "provider" },
+          { id: "luna", provider: "provider" },
+        ];
+        const selectedModels: string[] = [];
+        let customCall = 0;
+        const theme = {
+          bold: (value: string) => value,
+          fg: (_color: string, value: string) => value,
+        } as any;
+        const ctx = {
+          cwd: agentDir,
+          hasUI: true,
+          isProjectTrusted: () => false,
+          modelRegistry: {
+            find: (provider: string, id: string) =>
+              models.find(
+                (model) => model.provider === provider && model.id === id
+              ),
+            getApiKeyAndHeaders: () =>
+              Promise.resolve({ apiKey: "key", ok: true }),
+            getAvailable: () => models,
+          },
+          ui: {
+            custom: (factory: any) =>
+              new Promise((resolve) => {
+                const selector = factory(
+                  { requestRender: () => undefined },
+                  theme,
+                  { matches: () => false },
+                  (value: string | undefined) => {
+                    if (value) {
+                      selectedModels.push(value);
+                    }
+                    resolve(value);
+                  }
+                );
+                selector.render(100);
+                if (customCall === 1) {
+                  for (const character of "luna") {
+                    selector.handleInput(character);
+                  }
+                  selector.render(100);
+                }
+                customCall += 1;
+                selector.handleInput("\r");
+              }),
+            notify: () => undefined,
+            select: () => Promise.resolve("✓ Default (Model Default)"),
+          },
+        } as any;
+
+        registerCommands(pi);
+        setActiveTools([]);
+        await events.get("session_start")?.({ reason: "startup" }, ctx);
+        events.get("model_select")?.(
+          { model: { id: "luna", provider: "provider" }, source: "set" },
+          ctx
+        );
+
+        await commands.get("advisor-models").handler("", ctx);
+        await commands.get("advisor").handler("", ctx);
+
+        expect(selectedModels).toEqual(["provider/luna", "provider/luna"]);
+        expect(savedConfig(agentDir)).toMatchObject({
+          advisor: "provider/luna",
+          executor: "provider/luna",
+        });
+      }
+    );
+  });
+
+  test("adopts an explicit model selection made before activation", async () => {
+    await withAgentDir(
+      { advisor: "provider/advisor", executor: "configured/executor" },
+      async (agentDir) => {
+        const { commands, events, pi, setActiveTools } = harness();
+        registerCommands(pi);
+        setActiveTools([]);
+        const ctx = context(agentDir);
+        await events.get("session_start")?.({ reason: "startup" }, ctx);
+
+        events.get("model_select")?.(
+          { model: { id: "luna", provider: "provider" }, source: "set" },
+          ctx
+        );
+        // Keep normal `/model` changes out of global config until activation
+        // succeeds.
+        expect(savedConfig(agentDir).executor).toBe("configured/executor");
+
+        await commands.get("advisor").handler("", ctx);
+
+        expect(savedConfig(agentDir)).toMatchObject({
+          advisor: "provider/advisor",
+          executor: "provider/luna",
+        });
+        expect(pi.getActiveTools()).toContain("ask_advisor");
+      }
+    );
+  });
+
+  test("an explicit /advisor Executor override wins over an inactive selection", async () => {
+    await withAgentDir(
+      { advisor: "provider/advisor", executor: "configured/executor" },
+      async (agentDir) => {
+        const { commands, events, pi, setActiveTools } = harness();
+        registerCommands(pi);
+        setActiveTools([]);
+        const ctx = context(agentDir);
+        await events.get("session_start")?.({ reason: "startup" }, ctx);
+
+        events.get("model_select")?.(
+          { model: { id: "luna", provider: "provider" }, source: "set" },
+          ctx
+        );
+        await commands
+          .get("advisor")
+          .handler("executor=provider/explicit", ctx);
+
+        expect(savedConfig(agentDir).executor).toBe("provider/explicit");
+      }
+    );
+  });
+
+  test("does not adopt restored or cycled models on activation", async () => {
+    await withAgentDir(
+      { advisor: "provider/advisor", executor: "configured/executor" },
+      async (agentDir) => {
+        const { commands, events, pi, setActiveTools } = harness();
+        registerCommands(pi);
+        setActiveTools([]);
+        const ctx = context(agentDir);
+        await events.get("session_start")?.({ reason: "startup" }, ctx);
+
+        for (const source of ["restore", "cycle"] as const) {
+          events.get("model_select")?.(
+            { model: { id: "other", provider: "provider" }, source },
+            ctx
+          );
+        }
+        await commands.get("advisor").handler("", ctx);
+
+        expect(savedConfig(agentDir).executor).toBe("configured/executor");
+        expect(pi.getActiveTools()).toContain("ask_advisor");
+      }
+    );
+  });
+
+  test("keeps an inactive model selection out of config until activation", async () => {
     await withAgentDir({ executor: "configured/executor" }, (agentDir) => {
       const { events, pi, setActiveTools } = harness();
       registerCommands(pi);

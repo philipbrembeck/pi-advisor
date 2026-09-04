@@ -31,6 +31,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Ensured configured Advisor reasoning effort reaches the provider-facing
   request field used by current Pi AI adapters.
 
+### Fixed
+
+- Adopted an explicit `/model` selection made before `/advisor` as the Executor on the next successful activation, without persisting ordinary model changes while the flow is off.
+
 ## 0.5.0
 
 ### Changed

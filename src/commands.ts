@@ -111,6 +111,15 @@ const selectedEffort = (choice: string): string | undefined => {
     : choice;
   return effort === DEFAULT_EFFORT_LEVEL ? undefined : effort;
 };
+const ARGUMENT_WHITESPACE = /\s+/;
+const hasExecutorOverride = (args: string) =>
+  args
+    .trim()
+    .split(ARGUMENT_WHITESPACE)
+    .some((token) => {
+      const [key, value] = token.split("=");
+      return key === "executor" && Boolean(value);
+    });
 
 const CONTEXT_PRESETS: ContextPreset[] = [
   {
@@ -353,6 +362,22 @@ export const registerCommands = (
         onScout,
         undefined
       ));
+  // Pi's model_select event reports both built-in `/model` changes and direct
+  // pi.setModel() calls. Keep an inactive user selection transiently so
+  // `/advisor` can adopt it without treating every normal model change as a
+  // global default. The suppression flag covers this extension's own restore.
+  let pendingExecutorModelRef: string | undefined;
+  let suppressModelSelectionSync = false;
+  const setExecutorModel = async (
+    model: Parameters<ExtensionAPI["setModel"]>[0]
+  ) => {
+    suppressModelSelectionSync = true;
+    try {
+      return await pi.setModel(model);
+    } finally {
+      suppressModelSelectionSync = false;
+    }
+  };
   const manualConsultations = new Map<AbortController, symbol>();
   const manualProgressTimers = new Map<
     AbortController,
@@ -528,7 +553,7 @@ export const registerCommands = (
     if (!(advisorAuth.ok && advisorAuth.apiKey)) {
       return { error: `No API key for Advisor ${advisorRef}` };
     }
-    if (!(await pi.setModel(executor))) {
+    if (!(await setExecutorModel(executor))) {
       return { error: `No API key for Executor ${executorRef}` };
     }
     return {};
@@ -567,24 +592,34 @@ export const registerCommands = (
       setContextMaxCharsRef(previous.contextMaxChars);
       setExecutorRef(previous.executor);
     };
+    const executorOverride = hasExecutorOverride(args);
     const argumentError = parseArgs(args);
     if (argumentError) {
       restoreRefs();
       notify(ctx, argumentError, "error");
       return;
     }
+    const pendingExecutor = executorOverride
+      ? undefined
+      : pendingExecutorModelRef;
+    setExecutorRef(pendingExecutor ?? executorRef);
     const { error } = await resolveActivationModels(ctx);
     if (error) {
       restoreRefs();
       notify(ctx, error, "error");
       return;
     }
-    // parseArgs only mutates in-memory refs, and every later loadConfig resets
-    // them from disk. Persist supplied arguments once they are known to resolve,
-    // so an unusable model reference is never written to the configuration.
-    if (args.trim()) {
+    // parseArgs and an inactive `/model` selection only mutate in-memory refs,
+    // and every later loadConfig resets them from disk. Persist supplied
+    // arguments or the pending selection once they are known to resolve, so an
+    // unusable model reference is never written to the configuration.
+    if (args.trim() || pendingExecutor) {
       saveConfig(ctx);
     }
+    // A successful activation has committed the effective Executor. Do not let
+    // an older inactive selection override an explicit activation argument on a
+    // later attempt.
+    pendingExecutorModelRef = undefined;
     if (executorEffortRef) {
       pi.setThinkingLevel(executorEffortRef as ThinkingLevel);
     }
@@ -665,6 +700,7 @@ export const registerCommands = (
   );
 
   pi.on("session_start", async (_event, ctx) => {
+    pendingExecutorModelRef = undefined;
     // A malformed advisor.json or a provider auth failure must not reject a
     // lifecycle handler and break session startup.
     try {
@@ -679,12 +715,20 @@ export const registerCommands = (
   });
 
   pi.on("model_select", (event, ctx) => {
-    // Only an explicit user selection redefines the Executor. "restore" replays a
-    // stored session model and would otherwise overwrite saved configuration.
-    if (event.source !== "set" || !flowEnabled()) {
+    // "restore" replays a stored session model and "cycle" changes the active
+    // model without an explicit `/model` choice. Neither should redefine the
+    // configured Executor.
+    if (event.source !== "set" || suppressModelSelectionSync) {
       return;
     }
     const selected = `${event.model.provider}/${event.model.id}`;
+    if (!flowEnabled()) {
+      // Defer persistence until `/advisor` succeeds. This keeps ordinary model
+      // selection global defaults untouched when the flow is not enabled.
+      pendingExecutorModelRef = selected;
+      return;
+    }
+    pendingExecutorModelRef = undefined;
     if (selected === executorRef) {
       return;
     }
@@ -805,7 +849,7 @@ export const registerCommands = (
 
   pi.registerCommand("advisor", {
     description:
-      "Enable the Executor/Advisor flow and switch to the configured Executor model; accepts contextMaxChars=N",
+      "Enable the Executor/Advisor flow and switch to the configured or explicitly selected Executor model; accepts contextMaxChars=N",
     handler: (args, ctx) => activateAdvisor(args, ctx),
   });
 
@@ -819,12 +863,16 @@ export const registerCommands = (
       const refs = ctx.modelRegistry
         .getAvailable()
         .map((m) => `${m.provider}/${m.id}`);
+      // When `/model` was used before activation, show that session choice as
+      // the Executor's current option instead of making the persisted Executor
+      // look like the active selection.
+      const executorOption = pendingExecutorModelRef ?? executorRef;
 
       const executor = await ctx.ui.custom<string | undefined>(
         (tui, theme, keybindings, done) =>
           new SearchableModelSelector({
             allOptions: refs,
-            currentOption: executorRef,
+            currentOption: executorOption,
             keybindings,
             onCancel: () => done(undefined),
             onSelect: done,
@@ -876,6 +924,7 @@ export const registerCommands = (
       setAdvisorEffortRef(selectedEffort(advisorEffort));
 
       const path = saveConfig(ctx);
+      pendingExecutorModelRef = undefined;
       ctx.ui.notify(
         `Saved Executor + Advisor configurations to ${path}`,
         "info"

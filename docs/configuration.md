@@ -55,7 +55,7 @@ All fields are optional. This example shows the available settings and their nor
 
 - `simpleMode` defaults to `false`. When enabled, `ask_advisor` and `/advisor-manual` remain available for voluntary second opinions, while plan/failure/completion rules, loop gates, blocking, call budgets, and session summaries are disabled. Context limits, result caps, redaction, and tool disclosure policies still apply.
 - `alwaysOn` defaults to `false`. When enabled, Pi restores the configured Executor and activates `ask_advisor` for new, resumed, forked, and reloaded sessions.
-- While the Advisor flow is active, an explicit `/model` selection becomes the persisted Executor for the next activation. A model restored with a session does not change the saved Executor.
+- An explicit `/model` selection made before `/advisor` is held for that session and adopted as the Executor on the next successful activation. While the Advisor flow is active, an explicit `/model` selection is persisted as the Executor immediately. A model restored with a session or selected by cycling does not change the saved Executor.
 - `/advisor-off` turns `alwaysOn` off so the flow stays disabled in later sessions.
 - In Simple mode, settings keeps the Context window/history control alongside Simple mode and Always on. Advanced values remain saved and take effect when Simple mode is disabled.
 - Settings changes are applied and persisted as they happen; Escape closes the screen without a separate Save action.
