@@ -8,7 +8,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
-- Updated development dependencies and Pi compatibility packages to current releases, including Pi 0.85.0.
+- Updated CI and local validation to Bun 1.4.1 and kept the Pi compatibility packages at 0.84.4; Pi 0.85.0 currently adds an eager `/server` import without declaring the `@earendil-works/pi-server` dependency required by its coding-agent entry point.
+- Kept benchmark tests out of the normal test run; use `bun run test:bench` to run them explicitly.
+- Added Socket security dependency overrides and a `socket` script for `bunx socket optimize`.
 
 ### Added
 
