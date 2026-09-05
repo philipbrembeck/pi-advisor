@@ -74,14 +74,14 @@ import {
   type ScoutToolDetails,
   SPINNER_FRAMES,
 } from "./tools.js";
-import {
-  type AdvisorSettings,
-  AdvisorSettingsSelector,
-  type ContextPreset,
-  ManualAdvisorDialog,
-  type ManualAdvisorRequest,
-  SearchableModelSelector,
-} from "./ui.js";
+import { ManualAdvisorDialog } from "./ui/manual-dialog.js";
+import { SearchableModelSelector } from "./ui/model-selector.js";
+import { AdvisorSettingsSelector } from "./ui/settings-selector.js";
+import type {
+  AdvisorSettings,
+  ContextPreset,
+  ManualAdvisorRequest,
+} from "./ui/types.js";
 import {
   advisorUsageCost,
   formatAdvisorUsage,

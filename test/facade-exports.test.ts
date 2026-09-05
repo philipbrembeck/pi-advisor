@@ -20,6 +20,19 @@ import {
   setContextMaxCharsRef as facadeSetContextMaxCharsRef,
   validateConfig as facadeValidateConfig,
 } from "../src/config.js";
+import { ManualAdvisorDialog as leafManualAdvisorDialog } from "../src/ui/manual-dialog.js";
+import { SearchableModelSelector as leafSearchableModelSelector } from "../src/ui/model-selector.js";
+import { AdvisorSettingsSelector as leafAdvisorSettingsSelector } from "../src/ui/settings-selector.js";
+import type {
+  AdvisorSettings,
+  ContextPreset,
+  ManualAdvisorRequest,
+} from "../src/ui.js";
+import {
+  AdvisorSettingsSelector as facadeAdvisorSettingsSelector,
+  ManualAdvisorDialog as facadeManualAdvisorDialog,
+  SearchableModelSelector as facadeSearchableModelSelector,
+} from "../src/ui.js";
 
 export interface ConfigFacadeTypeInventory {
   config: AdvisorConfig;
@@ -29,6 +42,12 @@ export interface ConfigFacadeTypeInventory {
   policy: AdvisorToolPolicy;
 }
 
+export interface UiFacadeTypeInventory {
+  context: ContextPreset;
+  request: ManualAdvisorRequest;
+  settings: AdvisorSettings;
+}
+
 describe("config compatibility facade", () => {
   test("re-exports values from their owning leaf modules", () => {
     expect(facadeDefaultContextMaxChars).toBe(leafDefaultContextMaxChars);
@@ -36,6 +55,12 @@ describe("config compatibility facade", () => {
     expect(facadeSetContextMaxCharsRef).toBe(leafSetContextMaxCharsRef);
     expect(facadeValidateConfig).toBe(leafValidateConfig);
     expect(facadeLoadConfig).toBe(leafLoadConfig);
+  });
+
+  test("re-exports UI constructors from their owning leaf modules", () => {
+    expect(facadeManualAdvisorDialog).toBe(leafManualAdvisorDialog);
+    expect(facadeSearchableModelSelector).toBe(leafSearchableModelSelector);
+    expect(facadeAdvisorSettingsSelector).toBe(leafAdvisorSettingsSelector);
   });
 
   test("keeps facade and direct state imports live after setter mutation", () => {
