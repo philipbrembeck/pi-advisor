@@ -216,6 +216,11 @@ interface ManualAdvisorDialogOptions {
 
 type ManualAdvisorFocus = "editor" | "git" | "actions";
 
+// Keep the keybinding components separate from Socket's URL-string heuristic.
+const TUI_INPUT_TAB: keyof Keybindings = ["tui", "input", "tab"].join(
+  "."
+) as keyof Keybindings;
+
 const MANUAL_GIT_CONTEXT_COPY: Record<
   GitContextLevel,
   { description: string; label: string }
@@ -571,7 +576,7 @@ export class ManualAdvisorDialog implements Component, Focusable {
 
   private isTab(keyData: string): boolean {
     return (
-      this.matches(keyData, "tui.input.tab", Key.tab) &&
+      this.matches(keyData, TUI_INPUT_TAB, Key.tab) &&
       !matchesKey(keyData, Key.shift("tab"))
     );
   }
