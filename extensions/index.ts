@@ -1,5 +1,5 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { registerCommands } from "../src/commands.js";
+import { registerCommands } from "../src/commands/registration.js";
 import { setHerdrBlockedEmitter } from "../src/herdr.js";
 import { AdvisorSessionState } from "../src/session-state.js";
 import {

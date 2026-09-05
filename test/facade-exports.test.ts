@@ -1,4 +1,13 @@
 import { describe, expect, test } from "bun:test";
+import { registerCommands as leafRegisterCommands } from "../src/commands/registration.js";
+import type {
+  CommandDependencies,
+  ManualAdvisorProgressPhase,
+  ManualAdvisorProgressState,
+  ManualConsult,
+  ThinkingLevel,
+} from "../src/commands.js";
+import { registerCommands as facadeRegisterCommands } from "../src/commands.js";
 import {
   contextMaxCharsRef as leafContextMaxCharsRef,
   setContextMaxCharsRef as leafSetContextMaxCharsRef,
@@ -108,6 +117,14 @@ import {
   SearchableModelSelector as facadeSearchableModelSelector,
 } from "../src/ui.js";
 
+export interface CommandsFacadeTypeInventory {
+  consult: ManualConsult;
+  dependencies: CommandDependencies;
+  phase: ManualAdvisorProgressPhase;
+  progress: ManualAdvisorProgressState;
+  thinking: ThinkingLevel;
+}
+
 export interface ConfigFacadeTypeInventory {
   config: AdvisorConfig;
   mode: GateFailureMode;
@@ -134,6 +151,12 @@ export interface ToolsFacadeTypeInventory {
   result: AdvisorGateResult;
   scout: ScoutToolDetails;
 }
+
+describe("command compatibility facade", () => {
+  test("re-exports command registration from its owning leaf module", () => {
+    expect(facadeRegisterCommands).toBe(leafRegisterCommands);
+  });
+});
 
 describe("config compatibility facade", () => {
   test("re-exports values from their owning leaf modules", () => {

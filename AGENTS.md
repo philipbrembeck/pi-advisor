@@ -20,6 +20,10 @@ bun run typecheck
 git -c diff.stat=false diff --no-ext-diff --check --no-stat
 ```
 
+## Source organization
+
+- Keep individual source files below roughly 300 lines where practical, split distinct responsibilities into cohesive modules, and document justified exceptions. This is soft guidance rather than an automated size gate.
+
 ## Rules
 
 - MUST read Pi extension docs before changing lifecycle hooks, tool blocking, messages, or renderers.
