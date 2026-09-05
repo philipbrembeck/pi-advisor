@@ -71,7 +71,7 @@ Advisor Scout is off by default. When enabled, the Executor model first selects 
 
 ## Privacy
 
-Advisor requests can include user messages, tool calls, tool results, and repository information. `/advisor-settings` controls context, tool disclosure, redaction, and explicit file handoff. Secret redaction is off by default, and tools without an explicit policy use full context. Settings are global, so a project cannot silently change them.
+Advisor requests can include user messages, tool calls, tool results, targeted questions, and repository information. `/advisor-settings` controls context, tool disclosure, redaction, and explicit file handoff. Secret redaction is off by default; when enabled, credential-shaped values in targeted questions are redacted before the provider request. Tools without an explicit policy use full context. Settings are global, so a project cannot silently change them.
 
 Read [Privacy and data handling](https://github.com/philipbrembeck/pi-advisor/blob/main/docs/privacy.md) before using pi-advisor with sensitive work.
 

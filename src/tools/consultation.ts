@@ -198,13 +198,19 @@ const collectAdvisorResponse = async (
       24 * 1024 - untracked.reduce((sum, item) => sum + item.bytes, 0)
     )
   );
+  // Keep the original question available to local UI callers, but never send
+  // its credential-shaped values to the provider when redaction is enabled.
+  const outboundQuestion =
+    advisorRedactSecretsRef && question !== undefined
+      ? redactSecrets(question)
+      : question;
   const messages: Message[] = [
     {
       content: [
         {
           text: advisorMessageText(
             conversation,
-            question,
+            outboundQuestion,
             changeText,
             draftText,
             preferences?.text,

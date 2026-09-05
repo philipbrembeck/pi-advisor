@@ -2,8 +2,37 @@ import type { GateDecision } from "../session-state.js";
 import type { AdvisorGateFailure, AdvisorGateResult } from "./types.js";
 
 const DECISION_LINE = /^Decision\s*:\s*(proceed|revise|blocked)\s*$/i;
-const CODE_FENCE = /^(?:```|~~~)/;
+const CODE_FENCE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
 const LINE_BREAK = /\r?\n/;
+
+interface FenceState {
+  character: string;
+  length: number;
+}
+
+const advanceFence = (
+  openingFence: FenceState | undefined,
+  marker: string,
+  suffix: string
+): { closed: boolean; openingFence: FenceState | undefined } => {
+  if (!openingFence) {
+    if (marker[0] === "`" && suffix.includes("`")) {
+      return { closed: false, openingFence: undefined };
+    }
+    return {
+      closed: false,
+      openingFence: { character: marker[0], length: marker.length },
+    };
+  }
+  if (
+    suffix.trim().length > 0 ||
+    marker[0] !== openingFence.character ||
+    marker.length < openingFence.length
+  ) {
+    return { closed: false, openingFence };
+  }
+  return { closed: true, openingFence: undefined };
+};
 
 export const parseAutomaticDecision = (
   text: string
@@ -31,17 +60,25 @@ export const parseAutomaticDecision = (
     };
   }
   const decision = match[1].toLowerCase() as GateDecision;
-  let insideFence = false;
+  let openingFence: FenceState | undefined;
   const decisions: string[] = [];
   let pendingFencedDecisions: string[] = [];
   for (const line of lines.slice(nonEmpty + 1)) {
     const trimmed = line.trim();
-    // Decisions in a balanced fenced example are illustrative. If the fence is
-    // malformed and never closes, retain its decisions so malformed Markdown
-    // cannot hide a blocked verdict and make the gate fail open.
-    if (CODE_FENCE.test(trimmed)) {
-      insideFence = !insideFence;
-      if (!insideFence) {
+    // Decisions in a balanced fenced example are illustrative. Remember the
+    // opening delimiter so mismatched, undersized, or annotated fences cannot
+    // close it and hide a contradictory verdict. If the fence never closes,
+    // retain its decisions so malformed Markdown cannot make the gate fail
+    // open.
+    const fence = CODE_FENCE.exec(line);
+    if (fence) {
+      const { closed, openingFence: nextOpeningFence } = advanceFence(
+        openingFence,
+        fence[1],
+        fence[2]
+      );
+      openingFence = nextOpeningFence;
+      if (closed) {
         pendingFencedDecisions = [];
       }
       continue;
@@ -51,13 +88,13 @@ export const parseAutomaticDecision = (
       continue;
     }
     const repeated = subsequent[1].trim().toLowerCase();
-    if (insideFence) {
+    if (openingFence) {
       pendingFencedDecisions.push(repeated);
     } else {
       decisions.push(repeated);
     }
   }
-  if (insideFence) {
+  if (openingFence) {
     decisions.push(...pendingFencedDecisions);
   }
   for (const repeated of decisions) {

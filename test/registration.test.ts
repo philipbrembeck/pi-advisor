@@ -8,6 +8,10 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import {
+  fauxAssistantMessage,
+  registerFauxProvider,
+} from "@earendil-works/pi-ai/compat";
 import { type ExtensionAPI, initTheme } from "@earendil-works/pi-coding-agent";
 import {
   getKeybindings,
@@ -530,6 +534,33 @@ describe("Advisor consultation and gate contracts", () => {
       "Decision: proceed\n```\nDecision: blocked",
       "contradictory-decision"
     );
+    expectFailure(
+      "Decision: proceed\n```markdown\nDecision: blocked\n~~~",
+      "contradictory-decision"
+    );
+    expectFailure(
+      "Decision: proceed\n```\nDecision: blocked\n``",
+      "contradictory-decision"
+    );
+    expectFailure(
+      "Decision: proceed\n```\nDecision: blocked\n```not-a-close",
+      "contradictory-decision"
+    );
+    expectFailure(
+      "Decision: proceed\n```lang`\nDecision: blocked\n```",
+      "contradictory-decision"
+    );
+    expectFailure(
+      "Decision: proceed\n```\nDecision: blocked\n    ```",
+      "contradictory-decision"
+    );
+    const longerMatchingFence = parseAutomaticDecision(
+      "Decision: proceed\n~~~\nDecision: blocked\n~~~~"
+    );
+    expect(longerMatchingFence).toMatchObject({
+      decision: "proceed",
+      ok: true,
+    });
   });
 
   test("escapes closing tags in every untrusted Advisor prompt region", () => {
@@ -1753,6 +1784,109 @@ describe("Extension Registration", () => {
       setAdvisorRedactSecretsRef(false);
       setAdvisorToolPoliciesRef({});
     }
+  });
+
+  test("fails automatic gates closed for terminal provider failures", async () => {
+    const faux = registerFauxProvider({
+      api: "pi-advisor-gate-test",
+      models: [{ id: "advisor", input: ["text"] }],
+      provider: "pi-advisor-gate-test",
+    });
+    try {
+      await withManualConfig(
+        {
+          advisor: "pi-advisor-gate-test/advisor",
+          advisorGitContext: "off",
+        },
+        async (agentDir) => {
+          faux.setResponses([
+            () =>
+              fauxAssistantMessage("Decision: proceed", {
+                errorMessage: "provider unavailable",
+                stopReason: "error",
+              }),
+            () =>
+              fauxAssistantMessage("Decision: proceed", {
+                errorMessage: "provider aborted",
+                stopReason: "aborted",
+              }),
+          ]);
+          const context = {
+            cwd: agentDir,
+            isProjectTrusted: () => false,
+            modelRegistry: {
+              find: () => faux.models[0],
+              getApiKeyAndHeaders: () =>
+                Promise.resolve({ apiKey: "key", ok: true }),
+            },
+            sessionManager: { getBranch: () => [] },
+          } as any;
+          const outcomes = await Promise.all([
+            runAdvisorGate(context, "Review the repeated action."),
+            runAdvisorGate(context, "Review the repeated action."),
+          ]);
+          expect(outcomes).toMatchObject([
+            {
+              category: "provider-error",
+              message: "provider unavailable",
+              ok: false,
+            },
+            {
+              category: "provider-error",
+              message: "provider aborted",
+              ok: false,
+            },
+          ]);
+        }
+      );
+    } finally {
+      faux.unregister();
+    }
+  });
+
+  test("redacts targeted questions before the provider request", async () => {
+    const captured: string[] = [];
+    const faux = registerFauxProvider({
+      api: "pi-advisor-redaction-test",
+      models: [{ id: "advisor", input: ["text"] }],
+      provider: "pi-advisor-redaction-test",
+    });
+    try {
+      await withManualConfig(
+        {
+          advisor: "pi-advisor-redaction-test/advisor",
+          advisorGitContext: "off",
+          advisorRedactSecrets: true,
+        },
+        async (agentDir) => {
+          faux.setResponses([
+            (context) => {
+              captured.push(JSON.stringify(context.messages));
+              return fauxAssistantMessage("Advice");
+            },
+          ]);
+          const result = await consultAdvisor(
+            {
+              cwd: agentDir,
+              isProjectTrusted: () => false,
+              modelRegistry: {
+                find: () => faux.models[0],
+                getApiKeyAndHeaders: () =>
+                  Promise.resolve({ apiKey: "key", ok: true }),
+              },
+              sessionManager: { getBranch: () => [] },
+            } as any,
+            "password=hunter2"
+          );
+          expect(result.markdown).toBe("Advice");
+        }
+      );
+    } finally {
+      faux.unregister();
+    }
+    expect(captured).toHaveLength(1);
+    expect(captured[0]).not.toContain("hunter2");
+    expect(captured[0]).toContain("[REDACTED SECRET]");
   });
 
   test("injects only the enabled invocation rules into the active prompt", () => {

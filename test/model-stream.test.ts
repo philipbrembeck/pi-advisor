@@ -18,15 +18,21 @@ const model = {
   reasoning: true,
 } as any;
 
-const assistant = (text: string, usage: unknown = { input: 1 }) => ({
+const assistant = (
+  text: string,
+  usage: unknown = { input: 1 },
+  stopReason = "stop",
+  errorMessage?: string
+) => ({
   api: "test-api",
   content: text ? [{ text, type: "text" }] : [],
   model: "model",
   provider: "provider",
   role: "assistant",
-  stopReason: "stop",
+  stopReason,
   timestamp: 1,
   usage,
+  ...(errorMessage ? { errorMessage } : {}),
 });
 
 const fakeStream = (
@@ -242,6 +248,41 @@ describe("model stream", () => {
       })
     );
     expect(optionsSeen).not.toHaveProperty("reasoningEffort");
+  });
+
+  test("rejects partial text from terminal provider failures", async () => {
+    await Promise.all(
+      (["error", "aborted"] as const).map((stopReason) =>
+        expect(
+          collectTextStream(
+            { apiKey: "key", model, ref: "provider/model" },
+            { messages: [], systemPrompt: "system" },
+            fakeStream(
+              [{ delta: "Decision: proceed", type: "text_delta" }],
+              assistant(
+                "Decision: proceed",
+                { input: 1 },
+                stopReason,
+                "provider unavailable"
+              )
+            )
+          )
+        ).rejects.toThrow("provider unavailable")
+      )
+    );
+  });
+
+  test("preserves the caller cancellation reason for an aborted stream", async () => {
+    const controller = new AbortController();
+    const cancellation = new Error("cancelled by user");
+    controller.abort(cancellation);
+    await expect(
+      collectTextStream(
+        { apiKey: "key", model, ref: "provider/model" },
+        { messages: [], signal: controller.signal, systemPrompt: "system" },
+        fakeStream([], assistant("partial", { input: 1 }, "aborted"))
+      )
+    ).rejects.toThrow(cancellation);
   });
 
   test("falls back to streamed text and preserves an empty response", async () => {

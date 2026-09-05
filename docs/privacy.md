@@ -23,7 +23,7 @@ Redaction and output limits reduce accidental disclosure; they are not a data-cl
 
 ## Secret redaction and tool policies
 
-- `advisorRedactSecrets` defaults to `false`. When enabled, pi-advisor locally redacts common credential patterns before including context in an Advisor request.
+- `advisorRedactSecrets` defaults to `false`. When enabled, pi-advisor locally redacts common credential patterns before including context or targeted questions in an Advisor request. The raw targeted question remains available to local UI displays but is not sent to the provider.
 - `advisorToolPolicies` matches an **exact tool name**. Each tool may use `full`, `summary`, or `exclude`:
   - `full` includes call arguments and capped result output.
   - `summary` omits call arguments and result output but includes result status and size metadata.

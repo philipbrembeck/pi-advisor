@@ -12,6 +12,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- Kept failed or aborted Advisor streams from treating partial responses as successful advice or automatic gate permission.
+- Made malformed automatic-gate Markdown fences fail closed when their character or delimiter length does not match.
+- Applied optional secret redaction to targeted Advisor questions before sending provider requests while retaining the raw question for local displays.
 - Kept the TUI tab keybinding out of Socket's URL-string heuristic without changing its runtime behavior.
 - Made benchmark extension attestations follow the root `package.json` version instead of a duplicated constant.
 

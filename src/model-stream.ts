@@ -218,9 +218,23 @@ export const collectTextStream = async (
   }
 
   const response = await eventStream.result();
+  if (options.signal?.aborted) {
+    throw options.signal.reason instanceof Error
+      ? options.signal.reason
+      : new Error("Advisor operation cancelled.");
+  }
   const lastAssistant = [response].find(
     (message): message is AssistantMessage => message.role === "assistant"
   );
+  if (
+    lastAssistant?.stopReason === "error" ||
+    lastAssistant?.stopReason === "aborted"
+  ) {
+    throw new Error(
+      lastAssistant.errorMessage ??
+        `Advisor stream ended with ${lastAssistant.stopReason}.`
+    );
+  }
   const finalText =
     lastAssistant?.content
       .filter(
