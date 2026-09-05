@@ -7,6 +7,7 @@ import {
   harborCommandTimeoutMs,
   parseHarborAgentTimeout,
 } from "./harbor-timeout.js";
+import { PI_ADVISOR_VERSION } from "./package-version.js";
 import type {
   CommandReactBenchRunnerOptions,
   ReactBenchTrialRequest,
@@ -22,7 +23,7 @@ export const ADVISOR_EXTENSION_ID = "pi-advisor-flow";
 const LINE_BREAK = /\r?\n/;
 const DEFAULT_EXTENSION_PATH = resolve(process.cwd(), "extensions/index.ts");
 const DEFAULT_COMMAND = resolve(process.cwd(), "bench/harbor/run-trial");
-const DEFAULT_EXTENSION_VERSION = "0.5.0";
+const DEFAULT_EXTENSION_VERSION = PI_ADVISOR_VERSION;
 const DEFAULT_PI_VERSION = "0.84.4";
 
 export type AdvisorAdapterMode = "executor" | "advisor";

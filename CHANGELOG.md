@@ -9,6 +9,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ### Fixed
 
 - Kept the TUI tab keybinding out of Socket's URL-string heuristic without changing its runtime behavior.
+- Made benchmark extension attestations follow the root `package.json` version instead of a duplicated constant.
 
 ## 0.5.1
 

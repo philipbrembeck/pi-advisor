@@ -99,6 +99,8 @@ Use these optional overrides only when needed:
 export BENCH_REACTBENCH_ROOT=/path/to/reactbench/tasks
 export BENCH_PI_ADVISOR_AUTH_FILE="$HOME/.pi/agent/auth.json"
 export BENCH_PI_ADVISOR_ADAPTER="$PWD/bench/harbor/run-trial"
+# Defaults to the root package.json version; override only for compatibility checks.
+# export BENCH_PI_ADVISOR_VERSION=0.5.1
 # Experimental on Apple silicon; Harbor must support the task's capabilities.
 export BENCH_HARBOR_ENV=apple-container
 # Required once for the host-side broker (choose the documented test IP).
@@ -111,7 +113,7 @@ arm, pinned model/effort values, and artifact directory. It must load the
 pinned `pi-advisor` extension, refuse plain Pi, and print both records:
 
 ```text
-BENCH_ADVISOR_ATTESTATION={"adapter":"pi-advisor-harbor","extension":"pi-advisor-flow","extensionVersion":"0.5.0","loaded":true,"mode":"advisor","advisorCalls":1,"shutdown":true,"smokeProtocol":false}
+BENCH_ADVISOR_ATTESTATION={"adapter":"pi-advisor-harbor","extension":"pi-advisor-flow","extensionVersion":"0.5.1","loaded":true,"mode":"advisor","advisorCalls":1,"shutdown":true,"smokeProtocol":false}
 BENCH_RESULT={"passed":true,"cost":0.12,"consultations":1,"taskId":"...","requests":[...]}
 ```
 

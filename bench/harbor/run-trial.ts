@@ -24,6 +24,7 @@ import {
   MAX_HARBOR_INFRA_RETRIES,
   parseHarborAgentTimeout,
 } from "../src/harbor-timeout.js";
+import { PI_ADVISOR_VERSION } from "../src/package-version.js";
 import { runProcess } from "../src/process.js";
 import type {
   CostValue,
@@ -46,7 +47,7 @@ const DEFAULT_CODEX_BROKER_PATH = resolve(
 const RECORDER_TARGET = "/bench-source/bench/harbor/recorder.ts";
 const CODEX_UPSTREAM_URL = "https://chatgpt.com/backend-api";
 const DEFAULT_PI_VERSION = "0.84.4";
-const DEFAULT_EXTENSION_VERSION = "0.5.0";
+const DEFAULT_EXTENSION_VERSION = PI_ADVISOR_VERSION;
 const DEFAULT_REACTBENCH_COMMIT = "11ff042e60ec83a613053fbd721a54ed4dbfdf6f";
 const BROKER_READY_PREFIX = "BENCH_CODEX_BROKER_PORT=";
 const RUN_ID_PATTERN = /[^A-Za-z0-9._-]/g;
