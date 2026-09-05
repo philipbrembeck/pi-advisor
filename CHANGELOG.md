@@ -4,6 +4,13 @@ All notable changes to this project are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Fixed
+
+- Kept a malformed `advisor.json` from blocking every tool call while the Advisor flow is active: the `tool_call` handler now skips Advisor gating, notifies once per distinct configuration error, and resumes gating once the configuration is valid again.
+- Preserved the one-shot tracked-file handoff across rejected follow-up calls: disabled `advisorTrackedFileContent` consent or an exhausted Advisor call budget now fails the `ask_advisor` call up front without consuming the handoff from the prior Advisor response.
+
 ## 0.5.2 - 2026-09-05
 
 ### Changed

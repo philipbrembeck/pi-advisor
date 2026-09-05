@@ -17,6 +17,32 @@ export const registerToolLifecycle = ({
   scoutStatus,
   session,
 }: ToolRegistrationContext): void => {
+  // A throwing tool_call handler makes pi block that tool call (fail-safe), so
+  // a malformed advisor.json must not escape this handler: gating is skipped
+  // for that call and the failure is surfaced once per distinct outage. Config
+  // errors stay an Advisor concern instead of escalating into a session-wide
+  // outage.
+  let lastConfigErrorNotified: string | undefined;
+  const loadConfigOrSkipGating = (ctx: Parameters<typeof loadConfig>[0]) => {
+    try {
+      loadConfig(ctx);
+      lastConfigErrorNotified = undefined;
+      return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message !== lastConfigErrorNotified) {
+        lastConfigErrorNotified = message;
+        if (ctx.hasUI) {
+          ctx.ui.notify(
+            `Advisor gating skipped; configuration is invalid. ${message} Fix advisor.json.`,
+            "error"
+          );
+        }
+      }
+      return false;
+    }
+  };
+
   pi.on("session_start", (_event, ctx) => {
     session.resetTask();
     reservedCalls.clear();
@@ -57,7 +83,11 @@ export const registerToolLifecycle = ({
     if (!pi.getActiveTools().includes("ask_advisor")) {
       return;
     }
-    loadConfig(ctx);
+    if (!loadConfigOrSkipGating(ctx)) {
+      // The ask_advisor execute path surfaces its own configuration errors as
+      // tool errors; every other tool must proceed without Advisor gating.
+      return;
+    }
     const reservation = reserveAdvisorCall(event, ctx, session, reservedCalls);
     if (event.toolName === "ask_advisor") {
       return reservation;

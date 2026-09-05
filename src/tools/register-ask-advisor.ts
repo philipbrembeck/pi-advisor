@@ -3,6 +3,7 @@ import { Type } from "typebox";
 import {
   advisorRef,
   getAdvisorMaxCallsPerSession,
+  getAdvisorSettings,
   isSimpleMode,
 } from "../config/state.js";
 import { herdrAdvisorActivity, notifyHerdrAdvisorFailure } from "../herdr.js";
@@ -28,6 +29,30 @@ import type {
   ToolRegistrationContext,
 } from "./types.js";
 
+/**
+ * Validates a tracked-file follow-up and consumes the one-shot handoff only
+ * when the call is worth it: consent must be enabled and the session budget
+ * was checked by the caller. A rejected call never burns the claim.
+ */
+const claimTrackedHandoff = (
+  session: ToolRegistrationContext["session"],
+  includeTrackedFiles: string[] | undefined
+) => {
+  if (!includeTrackedFiles?.length) {
+    return;
+  }
+  if (!getAdvisorSettings().trackedFileContent) {
+    throw new Error(
+      "Tracked file attachments are disabled: enable the global advisorTrackedFileContent setting (Tracked file content in /advisor-settings) and retry."
+    );
+  }
+  if (!session.claimTrackedFiles(includeTrackedFiles)) {
+    throw new Error(
+      "Tracked file handoff requires a prior Advisor response that explicitly names every requested path and is consumed once."
+    );
+  }
+};
+
 export const registerAskAdvisorTool = ({
   consult: requestAdvisor,
   pi,
@@ -39,18 +64,15 @@ export const registerAskAdvisorTool = ({
       "Consult the on-demand Advisor model for strategic guidance. Call with an empty object for a contextual review; attach an optional draft for concrete plan or completion review. If the Advisor explicitly names a missing file, you may make a sequential follow-up call with includeTrackedFiles when enabled and relevant.",
     async execute(_id, params, signal, onUpdate, ctx) {
       reservedCalls.delete(_id);
+      // The budget check precedes the handoff claim so a rejected call never
+      // consumes the one-shot tracked-file handoff.
       if (
-        params.includeTrackedFiles?.length &&
-        !session.claimTrackedFiles(params.includeTrackedFiles)
+        !(isSimpleMode() || session.canConsult(getAdvisorMaxCallsPerSession()))
       ) {
-        throw new Error(
-          "Tracked file handoff requires a prior Advisor response that explicitly names every requested path and is consumed once."
-        );
+        throw new Error("Advisor call budget exhausted for this session.");
       }
+      claimTrackedHandoff(session, params.includeTrackedFiles);
       if (!isSimpleMode()) {
-        if (!session.canConsult(getAdvisorMaxCallsPerSession())) {
-          throw new Error("Advisor call budget exhausted for this session.");
-        }
         session.consumeCall();
       }
       herdrAdvisorActivity.start();

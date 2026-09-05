@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { execFileSync } from "node:child_process";
 import {
   mkdirSync,
   mkdtempSync,
@@ -4125,6 +4126,367 @@ describe("Command configuration errors", () => {
       }
       resetConfigCache();
       rmSync(agentDir, { force: true, recursive: true });
+    }
+  });
+});
+
+describe("Tool lifecycle configuration errors", () => {
+  test("fails open on invalid advisor.json and resumes gating once fixed", async () => {
+    const agentDir = mkdtempSync(join(tmpdir(), "pi-advisor-agent-"));
+    const previousAgentDir = process.env.PI_CODING_AGENT_DIR;
+    process.env.PI_CODING_AGENT_DIR = agentDir;
+    const configPath = join(agentDir, "advisor.json");
+    const notifications: Array<{ level: string; message: string }> = [];
+    let gateRuns = 0;
+    let toolCall: any;
+    const mockPi = {
+      getActiveTools: () => ["ask_advisor"],
+      on(event: string, handler: any) {
+        if (event === "tool_call") {
+          toolCall = handler;
+        }
+      },
+      registerCommand: () => undefined,
+      registerEntryRenderer: () => undefined,
+      registerMessageRenderer: () => undefined,
+      registerTool: () => undefined,
+      sendMessage: () => undefined,
+    } as unknown as ExtensionAPI;
+    registerAdvisorTool(mockPi, new AdvisorSessionState(), {
+      runGate: (() => {
+        gateRuns += 1;
+        return {
+          decision: "proceed",
+          markdown: "Decision: proceed\nContinue.",
+          model: "provider/advisor",
+          ok: true as const,
+          thinkingText: "",
+          trigger: "repeated-tool-call" as const,
+        };
+      }) as unknown as typeof runAdvisorGate,
+    });
+    const ctx = {
+      cwd: tmpdir(),
+      hasUI: true,
+      isProjectTrusted: () => false,
+      signal: new AbortController().signal,
+      ui: {
+        notify: (message: string, level: string) =>
+          notifications.push({ level, message }),
+        setStatus: () => undefined,
+      },
+    } as any;
+    const readEvent = {
+      input: { path: "src/foo.ts" },
+      toolCallId: "read-1",
+      toolName: "read",
+    };
+
+    try {
+      // An invalid value must not block the tool call; the failure is
+      // notified once per outage.
+      writeFileSync(configPath, JSON.stringify({ simpleMode: "yes" }));
+      resetConfigCache();
+      expect(await toolCall(readEvent, ctx)).toBeUndefined();
+      expect(await toolCall(readEvent, ctx)).toBeUndefined();
+      expect(notifications).toHaveLength(1);
+      expect(notifications[0].level).toBe("error");
+      expect(notifications[0].message).toContain("simpleMode");
+      expect(notifications[0].message).toContain("Fix advisor.json");
+
+      expect(
+        await toolCall(
+          { input: {}, toolCallId: "advisor-1", toolName: "ask_advisor" },
+          ctx
+        )
+      ).toBeUndefined();
+
+      // Malformed JSON is a new outage and notifies again.
+      writeFileSync(configPath, "{ not valid json");
+      resetConfigCache();
+      expect(await toolCall(readEvent, ctx)).toBeUndefined();
+      expect(notifications).toHaveLength(2);
+
+      // A valid configuration resumes automatic gating and stays quiet.
+      writeFileSync(configPath, JSON.stringify({ advisorLoopThreshold: 2 }));
+      resetConfigCache();
+      expect(await toolCall(readEvent, ctx)).toBeUndefined();
+      expect(await toolCall(readEvent, ctx)).toBeUndefined();
+      expect(gateRuns).toBe(1);
+      expect(notifications).toHaveLength(2);
+    } finally {
+      if (previousAgentDir === undefined) {
+        delete process.env.PI_CODING_AGENT_DIR;
+      } else {
+        process.env.PI_CODING_AGENT_DIR = previousAgentDir;
+      }
+      resetConfigCache();
+      rmSync(agentDir, { force: true, recursive: true });
+    }
+  });
+});
+
+describe("Tracked file handoff", () => {
+  const registerHandoffTool = (
+    state: AdvisorSessionState,
+    consulted: Array<string[] | undefined>
+  ) => {
+    let advisorTool: any;
+    const mockPi = {
+      getActiveTools: () => [],
+      on: () => undefined,
+      registerCommand: () => undefined,
+      registerEntryRenderer: () => undefined,
+      registerMessageRenderer: () => undefined,
+      registerTool(tool: any) {
+        if (tool.name === "ask_advisor") {
+          advisorTool = tool;
+        }
+      },
+    } as unknown as ExtensionAPI;
+    registerAdvisorTool(mockPi, state, {
+      consult: (
+        _ctx: unknown,
+        _question: unknown,
+        _signal: unknown,
+        _onChunk: unknown,
+        _trigger: unknown,
+        _gitContext: unknown,
+        _draft: unknown,
+        _untracked: string[] | undefined,
+        includeTracked: string[] | undefined
+      ) => {
+        consulted.push(includeTracked);
+        return Promise.resolve({
+          adviceId: "advice-2",
+          markdown: "Done.",
+          model: "provider/advisor",
+          thinkingText: "",
+          trigger: "executor-requested" as const,
+        });
+      },
+    });
+    return () => advisorTool;
+  };
+  const handoffContext = () =>
+    ({
+      cwd: tmpdir(),
+      hasUI: false,
+      isProjectTrusted: () => false,
+    }) as any;
+
+  test("rejects disabled consent without consuming the one-shot handoff", async () => {
+    const agentDir = mkdtempSync(join(tmpdir(), "pi-advisor-agent-"));
+    const previousAgentDir = process.env.PI_CODING_AGENT_DIR;
+    process.env.PI_CODING_AGENT_DIR = agentDir;
+    const configPath = join(agentDir, "advisor.json");
+    writeFileSync(
+      configPath,
+      JSON.stringify({ advisorTrackedFileContent: false })
+    );
+    resetConfigCache();
+    const consulted: Array<string[] | undefined> = [];
+    const state = new AdvisorSessionState();
+    const getTool = registerHandoffTool(state, consulted);
+    const ctx = handoffContext();
+    const handoff = { includeTrackedFiles: ["src/foo.ts"] };
+    state.issueAdvice("advice-1", "Review src/foo.ts", "executor-requested");
+
+    try {
+      loadConfig(ctx);
+      await expect(
+        getTool().execute(
+          "call-1",
+          handoff,
+          new AbortController().signal,
+          undefined,
+          ctx
+        )
+      ).rejects.toThrow("advisorTrackedFileContent");
+      expect(consulted).toHaveLength(0);
+
+      // The same handoff claim still works once consent is enabled.
+      writeFileSync(
+        configPath,
+        JSON.stringify({ advisorTrackedFileContent: true })
+      );
+      resetConfigCache();
+      loadConfig(ctx);
+      await getTool().execute(
+        "call-2",
+        handoff,
+        new AbortController().signal,
+        undefined,
+        ctx
+      );
+      expect(consulted).toEqual([["src/foo.ts"]]);
+
+      // The successful call consumed the one-shot handoff.
+      await expect(
+        getTool().execute(
+          "call-3",
+          handoff,
+          new AbortController().signal,
+          undefined,
+          ctx
+        )
+      ).rejects.toThrow("Tracked file handoff requires a prior");
+      expect(consulted).toHaveLength(1);
+    } finally {
+      if (previousAgentDir === undefined) {
+        delete process.env.PI_CODING_AGENT_DIR;
+      } else {
+        process.env.PI_CODING_AGENT_DIR = previousAgentDir;
+      }
+      resetConfigCache();
+      rmSync(agentDir, { force: true, recursive: true });
+    }
+  });
+
+  test("a budget-exhausted handoff call keeps the claim for a later retry", async () => {
+    const agentDir = mkdtempSync(join(tmpdir(), "pi-advisor-agent-"));
+    const previousAgentDir = process.env.PI_CODING_AGENT_DIR;
+    process.env.PI_CODING_AGENT_DIR = agentDir;
+    const configPath = join(agentDir, "advisor.json");
+    writeFileSync(
+      configPath,
+      JSON.stringify({
+        advisorMaxCallsPerSession: 1,
+        advisorTrackedFileContent: true,
+      })
+    );
+    resetConfigCache();
+    const consulted: Array<string[] | undefined> = [];
+    const state = new AdvisorSessionState();
+    const getTool = registerHandoffTool(state, consulted);
+    const ctx = handoffContext();
+    const handoff = { includeTrackedFiles: ["src/foo.ts"] };
+    state.issueAdvice("advice-1", "Review src/foo.ts", "executor-requested");
+
+    try {
+      loadConfig(ctx);
+      state.consumeCall();
+      await expect(
+        getTool().execute(
+          "call-1",
+          handoff,
+          new AbortController().signal,
+          undefined,
+          ctx
+        )
+      ).rejects.toThrow("Advisor call budget exhausted for this session.");
+      expect(consulted).toHaveLength(0);
+
+      // Raising the budget lets the preserved claim reach the Advisor.
+      writeFileSync(
+        configPath,
+        JSON.stringify({
+          advisorMaxCallsPerSession: 2,
+          advisorTrackedFileContent: true,
+        })
+      );
+      resetConfigCache();
+      loadConfig(ctx);
+      await getTool().execute(
+        "call-2",
+        handoff,
+        new AbortController().signal,
+        undefined,
+        ctx
+      );
+      expect(consulted).toEqual([["src/foo.ts"]]);
+    } finally {
+      if (previousAgentDir === undefined) {
+        delete process.env.PI_CODING_AGENT_DIR;
+      } else {
+        process.env.PI_CODING_AGENT_DIR = previousAgentDir;
+      }
+      resetConfigCache();
+      rmSync(agentDir, { force: true, recursive: true });
+    }
+  });
+
+  test("attaches a claimed tracked file through the real consultation path", async () => {
+    const repoDir = mkdtempSync(join(tmpdir(), "pi-advisor-handoff-repo-"));
+    mkdirSync(join(repoDir, "notes"), { recursive: true });
+    execFileSync("git", ["init"], { cwd: repoDir, stdio: "ignore" });
+    writeFileSync(
+      join(repoDir, "notes", "review.md"),
+      "tracked body for the advisor"
+    );
+    execFileSync("git", ["add", "notes/review.md"], {
+      cwd: repoDir,
+      stdio: "ignore",
+    });
+    const faux = registerFauxProvider({
+      api: "pi-advisor-handoff-test",
+      models: [{ id: "advisor", input: ["text"] }],
+      provider: "pi-advisor-handoff-test",
+    });
+    let advisorTool: any;
+    const mockPi = {
+      getActiveTools: () => [],
+      on: () => undefined,
+      registerCommand: () => undefined,
+      registerEntryRenderer: () => undefined,
+      registerMessageRenderer: () => undefined,
+      registerTool(tool: any) {
+        if (tool.name === "ask_advisor") {
+          advisorTool = tool;
+        }
+      },
+    } as unknown as ExtensionAPI;
+    const state = new AdvisorSessionState();
+    // The real consultAdvisor runs; only the provider is faked.
+    registerAdvisorTool(mockPi, state);
+    const captured: string[] = [];
+    state.issueAdvice(
+      "advice-1",
+      "Review notes/review.md",
+      "executor-requested"
+    );
+
+    try {
+      await withManualConfig(
+        {
+          advisor: "pi-advisor-handoff-test/advisor",
+          advisorGitContext: "off",
+          advisorTrackedFileContent: true,
+        },
+        async () => {
+          faux.setResponses([
+            (fauxContext) => {
+              captured.push(JSON.stringify(fauxContext.messages));
+              return fauxAssistantMessage("Advice after review.");
+            },
+          ]);
+          const ctx = {
+            cwd: repoDir,
+            hasUI: false,
+            isProjectTrusted: () => false,
+            modelRegistry: {
+              find: () => faux.models[0],
+              getApiKeyAndHeaders: () =>
+                Promise.resolve({ apiKey: "key", ok: true }),
+            },
+            sessionManager: { getBranch: () => [] },
+          } as any;
+          loadConfig(ctx);
+          const result = await advisorTool.execute(
+            "call-1",
+            { includeTrackedFiles: ["notes/review.md"] },
+            new AbortController().signal,
+            undefined,
+            ctx
+          );
+          expect(result.details.trackedBytes).toBeGreaterThan(0);
+          expect(captured).toHaveLength(1);
+          expect(captured[0]).toContain("tracked body for the advisor");
+        }
+      );
+    } finally {
+      faux.unregister();
+      rmSync(repoDir, { force: true, recursive: true });
     }
   });
 });
