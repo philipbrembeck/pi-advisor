@@ -8,7 +8,8 @@ A configurable second-opinion workflow for <a href="https://github.com/earendil-
 
 </div>
 
-![d18m Downloads](https://img.shields.io/npm/d18m/pi-advisor-flow?style=flat) ![NPM Version](https://img.shields.io/npm/v/pi-advisor-flow?style=flat)
+![d18m Downloads](https://img.shields.io/npm/d18m/pi-advisor-flow?style=flat) ![NPM Version](https://img.shields.io/npm/v/pi-advisor-flow?style=flat) ![Pi Advisor Flow badge](https://img.shields.io/badge/advisor%20flow-fff?logo=pi&logoColor=000)
+
 
 `pi-advisor-flow` keeps one model focused on execution and makes a second, smarter model available for consequential decisions, stalled work, and final reviews. The Executor still owns the work. The Advisor challenges assumptions, exposes risks, and suggests verification steps without taking over or running tools.
 
