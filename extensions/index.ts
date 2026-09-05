@@ -10,7 +10,7 @@ import {
   ScoutStatusManager,
 } from "../src/tools.js";
 
-export type { AdvisorConfig, GateFailureMode } from "../src/config.js";
+export type { AdvisorConfig, GateFailureMode } from "../src/config/types.js";
 export type {
   AdvisorConsultationResult,
   AdvisorGateFailure,

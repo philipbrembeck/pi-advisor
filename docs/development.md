@@ -15,6 +15,7 @@ Run the full project checks before opening a pull request:
 ```bash
 bun test
 bun run typecheck
+bun run check:boundaries
 bun run lint
 bun run package:check
 bun audit --audit-level=high

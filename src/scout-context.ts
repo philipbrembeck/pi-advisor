@@ -1,12 +1,12 @@
 import { createHash } from "node:crypto";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
-  type AdvisorToolPolicies,
   advisorRedactSecretsRef,
   advisorToolPoliciesRef,
   advisorToolResultMaxBytesRef,
   advisorToolResultMaxLinesRef,
-} from "./config.js";
+} from "./config/state.js";
+import type { AdvisorToolPolicies } from "./config/types.js";
 import { conversationEntry, textFrom } from "./conversation.js";
 
 export const SCOUT_MANIFEST_MAX_BYTES = 64 * 1024;

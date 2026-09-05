@@ -32,6 +32,7 @@
     "bench:evaluate": "bun bench/src/cli.ts evaluate",
     "bench:replay": "bun bench/src/cli.ts replay",
     "bench:screen": "bun bench/src/cli.ts screen",
+    "check:boundaries": "node scripts/check-module-boundaries.mjs",
     "format": "bunx ultracite fix --linter-enabled=false",
     "lint": "bunx ultracite check",
     "lint:fix": "bunx ultracite fix",

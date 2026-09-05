@@ -1,6 +1,6 @@
 import type { Message } from "@earendil-works/pi-ai/compat";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { executorEffortRef, executorRef } from "./config.js";
+import { executorEffortRef, executorRef } from "./config/state.js";
 import {
   type CollectedTextStream,
   collectTextStream,

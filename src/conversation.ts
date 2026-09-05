@@ -1,13 +1,15 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
-  type AdvisorToolPolicies,
   advisorRedactSecretsRef,
   advisorToolPoliciesRef,
   advisorToolResultMaxBytesRef,
   advisorToolResultMaxLinesRef,
+} from "./config/state.js";
+import type { AdvisorToolPolicies } from "./config/types.js";
+import {
   DEFAULT_ADVISOR_TOOL_RESULT_MAX_BYTES,
   DEFAULT_ADVISOR_TOOL_RESULT_MAX_LINES,
-} from "./config.js";
+} from "./config/types.js";
 
 type RecordValue = Record<string, unknown>;
 

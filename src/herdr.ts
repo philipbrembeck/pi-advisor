@@ -1,5 +1,5 @@
 import net from "node:net";
-import { getAdvisorSettings } from "./config.js";
+import { getAdvisorSettings } from "./config/state.js";
 import { redactSecrets } from "./conversation.js";
 
 // Keep the JSON-RPC method components separate from Socket's URL-string heuristic.

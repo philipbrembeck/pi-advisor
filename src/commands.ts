@@ -5,6 +5,7 @@ import {
   type Theme,
 } from "@earendil-works/pi-coding-agent";
 import { Box, type Component, Markdown, Text } from "@earendil-works/pi-tui";
+import { parseArgs } from "./config/args.js";
 import {
   advisorEffortRef,
   advisorRef,
@@ -16,10 +17,6 @@ import {
   getAdvisorSettings,
   getPersistedModelRefs,
   isSimpleMode,
-  loadConfig,
-  parseArgs,
-  saveConfig,
-  saveGlobalOutcomeLogging,
   setAdvisorAutoLoopGateRef,
   setAdvisorBlockOnBlockedRef,
   setAdvisorCollapseResponsesRef,
@@ -52,7 +49,12 @@ import {
   setShowUsageFooterRef,
   setSimpleModeRef,
   splitRef,
-} from "./config.js";
+} from "./config/state.js";
+import {
+  loadConfig,
+  saveConfig,
+  saveGlobalOutcomeLogging,
+} from "./config/storage.js";
 import type { GitContextLevel } from "./git.js";
 import { herdrAdvisorActivity, notifyHerdrAdvisorFailure } from "./herdr.js";
 import type { ScoutLifecycleEvent } from "./scout.js";

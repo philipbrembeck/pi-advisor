@@ -21,7 +21,7 @@ import {
   visibleWidth,
   wrapTextWithAnsi,
 } from "@earendil-works/pi-tui";
-import { isValidAdvisorToolPolicies } from "./config.js";
+import { isValidAdvisorToolPolicies } from "./config/validation.js";
 import {
   clampGitContextLevel,
   GIT_CONTEXT_LEVELS,

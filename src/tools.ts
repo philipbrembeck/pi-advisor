@@ -44,8 +44,8 @@ import {
   getAdvisorMaxCallsPerSession,
   getAdvisorSettings,
   isSimpleMode,
-  loadConfig,
-} from "./config.js";
+} from "./config/state.js";
+import { loadConfig } from "./config/storage.js";
 import {
   recentConversation,
   redactAndCapText,
