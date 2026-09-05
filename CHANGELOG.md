@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## Unreleased
 
+### Changed
+
+- Reorganized configuration, UI, Advisor tool, and command code into smaller modules behind the existing public facades without changing the extension's public API.
+
 ### Fixed
 
 - Kept the TUI tab keybinding out of Socket's URL-string heuristic without changing its runtime behavior.
