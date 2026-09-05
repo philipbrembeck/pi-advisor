@@ -59,21 +59,23 @@ import type { GitContextLevel } from "./git.js";
 import { herdrAdvisorActivity, notifyHerdrAdvisorFailure } from "./herdr.js";
 import type { ScoutLifecycleEvent } from "./scout.js";
 import type { AdvisorSessionState } from "./session-state.js";
+import { consultAdvisor } from "./tools/consultation.js";
 import {
   adviceForDisplay,
-  appendScoutLifecycleEntry,
-  consultAdvisor,
-  advisorSessionState as defaultAdvisorSessionState,
   hasSoundVerdict,
   renderAdvisorCallBox,
   renderAdvisorResponseHeader,
-  renderScoutDetails,
   renderThinkingMarkdown,
   resolveAdvisorRequest,
-  ScoutStatusManager,
-  type ScoutToolDetails,
   SPINNER_FRAMES,
-} from "./tools.js";
+} from "./tools/render-common.js";
+import {
+  appendScoutLifecycleEntry,
+  renderScoutDetails,
+  ScoutStatusManager,
+} from "./tools/scout-status.js";
+import { advisorSessionState as defaultAdvisorSessionState } from "./tools/session.js";
+import type { ScoutToolDetails } from "./tools/types.js";
 import { ManualAdvisorDialog } from "./ui/manual-dialog.js";
 import { SearchableModelSelector } from "./ui/model-selector.js";
 import { AdvisorSettingsSelector } from "./ui/settings-selector.js";

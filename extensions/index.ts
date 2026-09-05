@@ -4,11 +4,11 @@ import { setHerdrBlockedEmitter } from "../src/herdr.js";
 import { AdvisorSessionState } from "../src/session-state.js";
 import {
   consultAdvisor as consultAdvisorImplementation,
-  parseAutomaticDecision as parseAutomaticDecisionImplementation,
-  registerAdvisorTool,
   runAdvisorGate as runAdvisorGateImplementation,
-  ScoutStatusManager,
-} from "../src/tools.js";
+} from "../src/tools/consultation.js";
+import { parseAutomaticDecision as parseAutomaticDecisionImplementation } from "../src/tools/gate-protocol.js";
+import { registerAdvisorTool } from "../src/tools/registration.js";
+import { ScoutStatusManager } from "../src/tools/scout-status.js";
 
 export type { AdvisorConfig, GateFailureMode } from "../src/config/types.js";
 export type {
@@ -19,7 +19,7 @@ export type {
   ConsultationTrigger,
   GateDecision,
   GateTrigger,
-} from "../src/tools.js";
+} from "../src/tools/types.js";
 export const consultAdvisor = (
   ...args: Parameters<typeof consultAdvisorImplementation>
 ) => consultAdvisorImplementation(...args);
