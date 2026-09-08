@@ -4,6 +4,12 @@ All notable changes to this project are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Fixed
+
+- Pinned the Socket security dependency overrides for `is-unicode-supported` and `safe-buffer` to exact published versions instead of floating `^1` ranges, keeping the resolved dependency tree unchanged while avoiding floating ranges in the published manifest.
+
 ## 0.5.3 - 2026-09-08
 
 ### Fixed
