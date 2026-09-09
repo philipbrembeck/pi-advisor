@@ -11,6 +11,7 @@ import { join } from "node:path";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
   setAdvisorEffortRef,
+  setAdvisorRef,
   setExecutorEffortRef,
   setExecutorRef,
   setShowUsageFooterRef,
@@ -112,6 +113,41 @@ describe("Advisor config persistence", () => {
     expect(readSavedConfig().executor).toBe("openai-codex/executor");
 
     saveConfig(context, { persistExecutor: true });
+    expect(readSavedConfig().executor).toBe("openai-codex/new-executor");
+  });
+
+  test("keeps a model dirty after an initial restricted save", () => {
+    setAdvisorRef("openai-codex/new-advisor");
+    setExecutorRef("openai-codex/new-executor");
+    setShowUsageFooterRef(true);
+
+    saveConfig(context, { persistAdvisor: false, persistExecutor: false });
+    expect(readSavedConfig()).not.toHaveProperty("advisor");
+    expect(readSavedConfig()).not.toHaveProperty("executor");
+
+    saveConfig(context, { persistAdvisor: true, persistExecutor: true });
+    expect(readSavedConfig().advisor).toBe("openai-codex/new-advisor");
+    expect(readSavedConfig().executor).toBe("openai-codex/new-executor");
+  });
+
+  test("uses existing models as the baseline for an initial restricted save", () => {
+    writeFileSync(
+      configPath(),
+      JSON.stringify({
+        advisor: "openai-codex/old-advisor",
+        executor: "openai-codex/old-executor",
+      })
+    );
+    setAdvisorRef("openai-codex/new-advisor");
+    setExecutorRef("openai-codex/new-executor");
+    setShowUsageFooterRef(true);
+
+    saveConfig(context, { persistAdvisor: false, persistExecutor: false });
+    expect(readSavedConfig().advisor).toBe("openai-codex/old-advisor");
+    expect(readSavedConfig().executor).toBe("openai-codex/old-executor");
+
+    saveConfig(context, { persistAdvisor: true, persistExecutor: true });
+    expect(readSavedConfig().advisor).toBe("openai-codex/new-advisor");
     expect(readSavedConfig().executor).toBe("openai-codex/new-executor");
   });
 

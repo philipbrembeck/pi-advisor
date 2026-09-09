@@ -722,11 +722,11 @@ var saveConfig = (_ctx, options = {}) => {
 `);
   resetConfigCache();
   const nextLoadedState = { ...current };
-  if (!persistAdvisor && baseline) {
-    nextLoadedState.advisor = baseline.advisor;
+  if (!persistAdvisor) {
+    nextLoadedState.advisor = baseline ? baseline.advisor : configuredModelRef(typeof existing.advisor === "string" ? existing.advisor : undefined);
   }
-  if (!persistExecutor && baseline) {
-    nextLoadedState.executor = baseline.executor;
+  if (!persistExecutor) {
+    nextLoadedState.executor = baseline ? baseline.executor : configuredModelRef(typeof existing.executor === "string" ? existing.executor : undefined);
   }
   loadedConfigState = nextLoadedState;
   loadedConfigPath = path;
