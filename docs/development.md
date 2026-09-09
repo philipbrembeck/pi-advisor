@@ -6,7 +6,13 @@
 git clone git@github.com:philipbrembeck/pi-advisor.git
 cd pi-advisor
 bun install
+bun run build
 ```
+
+Pi loads `dist/index.js`, which bundles internal modules so settings controls and
+persistence share the same runtime state. Re-run `bun run build` after editing
+source files, then reload Pi. Commit the refreshed bundle with source changes;
+`prepack` also rebuilds it for npm packaging.
 
 ## Checks
 
