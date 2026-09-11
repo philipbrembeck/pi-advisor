@@ -61,6 +61,11 @@ export class TextSettingSubmenu implements Component, Focusable {
   }
 
   handleInput(keyData: string): void {
+    const before = this.input.getValue();
     this.input.handleInput(keyData);
+    // A failed submit leaves the error visible; the first value change clears it.
+    if (this.error && this.input.getValue() !== before) {
+      this.error = undefined;
+    }
   }
 }

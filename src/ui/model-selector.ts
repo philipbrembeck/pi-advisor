@@ -6,6 +6,7 @@ import {
   Input,
   type Keybindings,
   type KeybindingsManager,
+  truncateToWidth,
 } from "@earendil-works/pi-tui";
 import type { SearchableModelSelectorOptions } from "./types.js";
 
@@ -58,9 +59,9 @@ export class SearchableModelSelector implements Component, Focusable {
   }
 
   render(width: number): string[] {
-    const lines: string[] = ["═".repeat(width)];
+    const lines: string[] = [this.theme.fg("border", "─".repeat(width))];
     lines.push(`  ${this.theme.fg("accent", this.theme.bold(this.title))}`);
-    const inputLines = this.searchInput.render(width - 12);
+    const inputLines = this.searchInput.render(Math.max(1, width - 10));
     lines.push(
       `  ${this.theme.fg("accent", "Search: ")}${inputLines[0] || ""}`
     );
@@ -108,10 +109,10 @@ export class SearchableModelSelector implements Component, Focusable {
     }
     lines.push("");
     lines.push(
-      `  ${this.theme.fg("muted", "Type to search · ↑↓: navigate · Enter: select · Esc: cancel")}`
+      `  ${this.theme.fg("dim", "Type to search · ↑↓: navigate · Enter: select · Esc: cancel")}`
     );
-    lines.push("═".repeat(width));
-    return lines;
+    lines.push(this.theme.fg("border", "─".repeat(width)));
+    return lines.map((line) => truncateToWidth(line, width));
   }
 
   handleInput(keyData: string): void {

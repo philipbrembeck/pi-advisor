@@ -4,6 +4,9 @@ import type { ContextPreset } from "./types.js";
 export const DEFAULT_EFFORT_LEVEL = "Default (Model Default)";
 export const TOGGLE_VALUES = ["On", "Off"];
 export const SIMPLE_MODE_GRADIENT_INTERVAL_MS = 100;
+// One full shine sweep across the label, then the label rests on static accent.
+export const SIMPLE_MODE_CELEBRATION_MS =
+  SIMPLE_MODE_GRADIENT_INTERVAL_MS * 2 * "Simple mode".length;
 // Purple steps with a moving light highlight, retained from the original UI.
 const SIMPLE_MODE_GRADIENT_COLORS = [
   [125, 79, 205],
@@ -106,6 +109,31 @@ export const contextDescription = (
 
 export const currentEffort = (effort: string | undefined): string =>
   effort || DEFAULT_EFFORT_LEVEL;
+
+export interface SimpleModeLabel {
+  settled: boolean;
+  text: string;
+}
+
+/**
+ * Renders the Simple mode label: shine sweep while the flip celebration runs,
+ * static accent text once it settles (or when simple mode was already on).
+ */
+export const simpleModeLabel = (
+  celebrationStartedAt: number | undefined,
+  accent: (text: string) => string
+): SimpleModeLabel => {
+  if (
+    celebrationStartedAt !== undefined &&
+    Date.now() - celebrationStartedAt < SIMPLE_MODE_CELEBRATION_MS
+  ) {
+    return {
+      settled: false,
+      text: rainbowGradient("Simple mode", celebrationStartedAt),
+    };
+  }
+  return { settled: true, text: accent("Simple mode") };
+};
 
 export const rainbowGradient = (text: string, startedAt: number): string => {
   const frame = Math.floor(

@@ -135,9 +135,7 @@ export const renderManualAdvisorDialog = (
   const cancelLabel = cancel
     ? theme.fg("accent", "[Cancel]")
     : theme.fg("text", "[Cancel]");
-  addLine(
-    `${focusMarker("actions")}                 ${submitLabel}  ${cancelLabel}`
-  );
+  addLine(`${focusMarker("actions")}${submitLabel}  ${cancelLabel}`);
   addWrapped(interactionHint, "dim");
   addLine("");
 

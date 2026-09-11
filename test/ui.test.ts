@@ -7,7 +7,14 @@ import {
   type TUI,
   visibleWidth,
 } from "@earendil-works/pi-tui";
-import { ManualAdvisorDialog, type ManualAdvisorRequest } from "../src/ui.js";
+import {
+  AdvisorSettingsSelector,
+  ManualAdvisorDialog,
+  SearchableModelSelector,
+  type ManualAdvisorRequest,
+} from "../src/ui.js";
+import { SIMPLE_MODE_CELEBRATION_MS } from "../src/ui/settings-formatting.js";
+import { TextSettingSubmenu } from "../src/ui/text-setting-submenu.js";
 
 const theme = {
   bold: (value: string) => value,
@@ -227,6 +234,189 @@ describe("ManualAdvisorDialog", () => {
           expect(lineWidth).toBe(width);
         }
       }
+    }
+  });
+
+  test("aligns the action buttons to the label column", () => {
+    const { dialog } = makeDialog();
+    const actionsRow = (lines: string[]) =>
+      lines.map((line) => stripTerminalSequences(line)).find((line) =>
+        line.includes("[Submit]")
+      );
+
+    const unfocused = actionsRow(dialog.render(90));
+    expect(unfocused?.startsWith("│   [Submit]  [Cancel]")).toBe(true);
+
+    dialog.handleInput("\t");
+    dialog.handleInput("\t");
+    const focused = actionsRow(dialog.render(90));
+    expect(focused?.startsWith("│ ▸ [Submit]  [Cancel]")).toBe(true);
+  });
+});
+
+describe("SearchableModelSelector", () => {
+  const makeSelector = (
+    allOptions: string[],
+    currentOption?: string,
+    testTheme: any = theme
+  ) => {
+    let selected: string | undefined;
+    const selector = new SearchableModelSelector({
+      allOptions,
+      currentOption,
+      keybindings: { matches: () => false } as any,
+      onCancel: () => undefined,
+      onSelect: (value) => {
+        selected = value;
+      },
+      theme: testTheme,
+      title: "Select Model",
+      tui: { requestRender: () => undefined },
+    });
+    return { selected: () => selected, selector };
+  };
+
+  test("keeps every rendered line within the terminal width", () => {
+    const { selector } = makeSelector(
+      [
+        "some-very-long-provider/with-an-extremely-long-model-identifier-name",
+        "provider/short",
+      ],
+      "provider/short"
+    );
+
+    for (const width of [20, 40, 79]) {
+      for (const line of selector.render(width)) {
+        expect(visibleWidth(line)).toBeLessThanOrEqual(width);
+      }
+    }
+  });
+
+  test("frames the list with single border rules and a dim hint row", () => {
+    const recordingTheme = {
+      bold: (value: string) => value,
+      fg: (color: string, value: string) => `[${color}]${value}`,
+    } as any;
+    const { selector } = makeSelector(["provider/one"], undefined, recordingTheme);
+
+    const lines = selector.render(60);
+    expect(lines[0]).toBe(`[border]${"─".repeat(60)}`);
+    expect(lines[lines.length - 1]).toBe(`[border]${"─".repeat(60)}`);
+    expect(lines.some((line) => line.includes("[dim]Type to search"))).toBe(
+      true
+    );
+    expect(lines.some((line) => line.includes("═"))).toBe(false);
+  });
+
+  test("still selects the highlighted model after truncation", () => {
+    const { selected, selector } = makeSelector([
+      "a-very-long-provider-name/and-a-very-long-model-name",
+    ]);
+    selector.render(30);
+    selector.handleInput("\r");
+    expect(selected()).toBe(
+      "a-very-long-provider-name/and-a-very-long-model-name"
+    );
+  });
+});
+
+describe("TextSettingSubmenu", () => {
+  test("shows a validation error and clears it on the next input change", () => {
+    const submitted: string[] = [];
+    const submenu = new TextSettingSubmenu({
+      description: "Enter a value.",
+      initial: "",
+      onCancel: () => undefined,
+      onSubmit: (value) => {
+        if (value.includes("@")) {
+          submitted.push(value);
+          return { value };
+        }
+        return { error: "Needs an @." };
+      },
+      theme,
+      title: "Target",
+      tui: { requestRender: () => undefined },
+    });
+
+    submenu.handleInput("x");
+    submenu.handleInput("\r");
+    expect(submenu.render(60).join("\n")).toContain("Needs an @.");
+
+    submenu.handleInput("@");
+    expect(submenu.render(60).join("\n")).not.toContain("Needs an @.");
+
+    submenu.handleInput("\r");
+    expect(submitted).toEqual(["x@"]);
+  });
+});
+
+describe("AdvisorSettingsSelector simple mode celebration", () => {
+  const presets = [
+    {
+      description: "Everything",
+      label: "Full",
+      value: Number.MAX_SAFE_INTEGER,
+    },
+    { description: "20k chars", label: "20k", value: 20_000 },
+  ];
+  const makeSelector = (simpleMode: boolean) => {
+    let renders = 0;
+    const selector = new AdvisorSettingsSelector({
+      effortLevels: ["Default (Model Default)"],
+      initial: {
+        collapseResponses: false,
+        completionGate: true,
+        contextMaxChars: 20_000,
+        failureGate: true,
+        planGate: true,
+        simpleMode,
+      },
+      onCancel: () => undefined,
+      onChange: () => undefined,
+      presets,
+      theme: {
+        bold: (value: string) => value,
+        fg: (color: string, value: string) => `[${color}]${value}`,
+      } as any,
+      tui: {
+        requestRender: () => {
+          renders += 1;
+        },
+      },
+    });
+    selector.focused = true;
+    return { renders: () => renders, selector };
+  };
+
+  test("rests on a static accent label when simple mode is already on", () => {
+    const { selector } = makeSelector(true);
+    try {
+      expect(selector.render(80).join("\n")).toContain("[accent]Simple mode");
+    } finally {
+      selector.dispose();
+    }
+  });
+
+  test("plays one shine sweep after flipping On, then settles and stops redrawing", async () => {
+    const { renders, selector } = makeSelector(false);
+    try {
+      selector.handleInput("\u001b[B");
+      selector.handleInput("\u001b[C");
+
+      const during = selector.render(80).join("\n");
+      expect(during).toContain("\u001b[38;2;");
+      expect(during).not.toContain("[accent]Simple mode");
+
+      await Bun.sleep(SIMPLE_MODE_CELEBRATION_MS + 250);
+      const settled = selector.render(80).join("\n");
+      expect(settled).toContain("[accent]Simple mode");
+
+      const before = renders();
+      await Bun.sleep(300);
+      expect(renders()).toBe(before);
+    } finally {
+      selector.dispose();
     }
   });
 });
