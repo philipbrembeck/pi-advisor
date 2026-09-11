@@ -4,6 +4,12 @@ All notable changes to this project are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Changed
+
+- Raised the Pi compatibility dev/test baseline to 0.85.1 and widened the peer ranges to `^0.84.1 || ^0.85.1`, keeping Pi 0.84.x supported while excluding Pi 0.85.0, whose undeclared `/server` import broke extension loading.
+
 ## 0.5.5 - 2026-09-08
 
 ### Changed
