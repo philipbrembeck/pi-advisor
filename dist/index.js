@@ -855,7 +855,8 @@ var planActivationModels = (ctx, executor, advisor, pendingExecutorRef, persiste
 // src/ui/model-selector.ts
 import {
   fuzzyFilter,
-  Input
+  Input,
+  truncateToWidth
 } from "@earendil-works/pi-tui";
 
 class SearchableModelSelector {
@@ -897,9 +898,9 @@ class SearchableModelSelector {
     this.searchInput.invalidate();
   }
   render(width) {
-    const lines = ["═".repeat(width)];
+    const lines = [this.theme.fg("border", "─".repeat(width))];
     lines.push(`  ${this.theme.fg("accent", this.theme.bold(this.title))}`);
-    const inputLines = this.searchInput.render(width - 12);
+    const inputLines = this.searchInput.render(Math.max(1, width - 10));
     lines.push(`  ${this.theme.fg("accent", "Search: ")}${inputLines[0] || ""}`);
     lines.push("");
     const query = this.searchInput.getValue().trim();
@@ -926,9 +927,9 @@ class SearchableModelSelector {
       }
     }
     lines.push("");
-    lines.push(`  ${this.theme.fg("muted", "Type to search · ↑↓: navigate · Enter: select · Esc: cancel")}`);
-    lines.push("═".repeat(width));
-    return lines;
+    lines.push(`  ${this.theme.fg("dim", "Type to search · ↑↓: navigate · Enter: select · Esc: cancel")}`);
+    lines.push(this.theme.fg("border", "─".repeat(width)));
+    return lines.map((line) => truncateToWidth(line, width));
   }
   handleInput(keyData) {
     if (this.matchesAction(keyData, "tui.select.up", "\x1B[A")) {
@@ -1122,9 +1123,9 @@ var capToolResult = (value, maxLines = DEFAULT_ADVISOR_TOOL_RESULT_MAX_LINES, ma
   const marker = "[... omitted tool-result section ...]";
   const markerBytes = byteLength(marker);
   if (maxBytes < markerBytes || maxLines === 1) {
-    const content2 = [...marker].reduce((result, character) => byteLength(result + character) <= maxBytes ? result + character : result, "");
+    const content = [...marker].reduce((result, character) => byteLength(result + character) <= maxBytes ? result + character : result, "");
     return {
-      content: content2,
+      content,
       omittedLines: totalLines,
       totalBytes,
       totalLines,
@@ -1195,8 +1196,8 @@ var toolResultEntry = (message, toolResultMaxLines, toolResultMaxBytes, policies
     return `[Tool Result for ${toolName}] (excluded by Advisor tool policy)`;
   }
   if (policy === "summary") {
-    const capped2 = capToolResult(source, toolResultMaxLines, toolResultMaxBytes);
-    return `[Tool Result for ${toolName}] (output omitted by Advisor tool policy: summary; status: ${status}; ${capped2.totalLines} lines, ${capped2.totalBytes} bytes; source output was${capped2.truncated ? "" : " not"} truncated)`;
+    const capped = capToolResult(source, toolResultMaxLines, toolResultMaxBytes);
+    return `[Tool Result for ${toolName}] (output omitted by Advisor tool policy: summary; status: ${status}; ${capped.totalLines} lines, ${capped.totalBytes} bytes; source output was${capped.truncated ? "" : " not"} truncated)`;
   }
   const disclosed = redact ? redactSecrets(source) : source;
   const capped = capToolResult(disclosed, toolResultMaxLines, toolResultMaxBytes);
@@ -1235,18 +1236,18 @@ var selectRecentEntries = (entries, maxChars) => {
   }
   const newestTruncated = "[Newest entry truncated]";
   if (entries.length === 1) {
-    const prefix2 = `${newestTruncated}${separator}`;
-    return `${prefix2}${entries[0].slice(0, Math.max(0, maxChars - prefix2.length))}`.slice(0, maxChars);
+    const prefix = `${newestTruncated}${separator}`;
+    return `${prefix}${entries[0].slice(0, Math.max(0, maxChars - prefix.length))}`.slice(0, maxChars);
   }
   const selected = [];
   let selectedLength = 0;
   for (let index = entries.length - 1;index >= 0; index -= 1) {
     const entry = entries[index];
     const candidateCount = selected.length + 1;
-    const omitted2 = entries.length - candidateCount;
-    const marker2 = `[Older context omitted: ${omitted2} complete entr${omitted2 === 1 ? "y" : "ies"}]`;
+    const omitted = entries.length - candidateCount;
+    const marker = `[Older context omitted: ${omitted} complete entr${omitted === 1 ? "y" : "ies"}]`;
     const candidateLength = selectedLength + entry.length + (selected.length > 0 ? separator.length : 0);
-    if (marker2.length + separator.length + candidateLength > maxChars) {
+    if (marker.length + separator.length + candidateLength > maxChars) {
       break;
     }
     selected.unshift(entry);
@@ -2209,15 +2210,15 @@ var runAdvisorScout = async (ctx, manifest, parentSignal, onEvent, timeoutMs = S
       return { cancelled: true, ok: false };
     }
     const message = error instanceof Error ? error.message : String(error);
-    const outcome2 = {
+    const outcome = {
       category: classifyResolutionError(message),
       message,
       metrics: baseMetrics(manifest, startedAt),
       model: executorRef,
       ok: false
     };
-    publish({ outcome: outcome2, type: "fallback" });
-    return outcome2;
+    publish({ outcome, type: "fallback" });
+    return outcome;
   }
   if (parentSignal?.aborted) {
     publish({ type: "cancelled" });
@@ -2264,15 +2265,15 @@ var runAdvisorScout = async (ctx, manifest, parentSignal, onEvent, timeoutMs = S
       return { cancelled: true, ok: false };
     }
     const message = error instanceof Error ? error.message : String(error);
-    const outcome2 = {
+    const outcome = {
       category: timedOut ? "timeout" : "provider-error",
       message: timedOut ? `Scout timed out after ${timeoutMs} ms.` : message,
       metrics: baseMetrics(manifest, startedAt),
       model: executorRef,
       ok: false
     };
-    publish({ outcome: outcome2, type: "fallback" });
-    return outcome2;
+    publish({ outcome, type: "fallback" });
+    return outcome;
   }
   clearTimeout(timer);
   parentSignal?.removeEventListener("abort", abortFromParent);
@@ -2286,7 +2287,7 @@ var runAdvisorScout = async (ctx, manifest, parentSignal, onEvent, timeoutMs = S
     selection = parseScoutSelection(streamed.text, manifest);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    const outcome2 = {
+    const outcome = {
       category: streamed.text.trim() ? "invalid-selection" : "empty-response",
       message,
       metrics: {
@@ -2296,8 +2297,8 @@ var runAdvisorScout = async (ctx, manifest, parentSignal, onEvent, timeoutMs = S
       model: executorRef,
       ok: false
     };
-    publish({ outcome: outcome2, type: "fallback" });
-    return outcome2;
+    publish({ outcome, type: "fallback" });
+    return outcome;
   }
   const outcome = {
     conversation: reconstructScoutConversation(manifest, selection.selectedIds, selection.synthesis),
@@ -2548,12 +2549,12 @@ var adviceForGateText = (result) => `**Decision: ${result.decision}**
 ${result.markdown}`;
 
 // src/tools/prompts.ts
-var advisorMessageText = (conversation, question, changes, draft, preferences, untracked2, tracked2) => {
+var advisorMessageText = (conversation, question, changes, draft, preferences, untracked, tracked) => {
   const safeConversation = escapeRepositoryText(conversation);
   const safeDraft = draft ? escapeRepositoryText(draft) : undefined;
   const safePreferences = preferences ? escapeRepositoryText(preferences) : undefined;
-  const safeUntracked = (untracked2 ?? []).map(escapeRepositoryText);
-  const safeTracked = (tracked2 ?? []).map(escapeRepositoryText);
+  const safeUntracked = (untracked ?? []).map(escapeRepositoryText);
+  const safeTracked = (tracked ?? []).map(escapeRepositoryText);
   const text = `${safeConversation ? `<conversation>
 ${safeConversation}
 </conversation>` : ""}${changes ? `
@@ -2710,16 +2711,16 @@ var collectAdvisorResponse = async (ctx, systemPrompt, question, signal, onChunk
   const { conversation, scout } = curated;
   const preferences = await readProjectPreferences(ctx, 8 * 1024, advisorRedactSecretsRef);
   const draftText = draft ? redactAndCapText(draft, 8 * 1024, advisorRedactSecretsRef) : undefined;
-  const untracked2 = await readUntrackedFiles(ctx.cwd, includeUntracked ?? [], advisorUntrackedContentRef, advisorRedactSecretsRef);
-  const tracked2 = await readTrackedFiles(ctx.cwd, includeTracked ?? [], advisorTrackedFileContentRef, advisorRedactSecretsRef, Math.max(0, 24 * 1024 - untracked2.reduce((sum, item) => sum + item.bytes, 0)));
+  const untracked = await readUntrackedFiles(ctx.cwd, includeUntracked ?? [], advisorUntrackedContentRef, advisorRedactSecretsRef);
+  const tracked = await readTrackedFiles(ctx.cwd, includeTracked ?? [], advisorTrackedFileContentRef, advisorRedactSecretsRef, Math.max(0, 24 * 1024 - untracked.reduce((sum, item) => sum + item.bytes, 0)));
   const outboundQuestion = advisorRedactSecretsRef && question !== undefined ? redactSecrets(question) : question;
   const messages = [
     {
       content: [
         {
-          text: advisorMessageText(conversation, outboundQuestion, changeText, draftText, preferences?.text, untracked2.map((item) => `<file path=${JSON.stringify(item.path)}>
+          text: advisorMessageText(conversation, outboundQuestion, changeText, draftText, preferences?.text, untracked.map((item) => `<file path=${JSON.stringify(item.path)}>
 ${item.text}
-</file>`), tracked2.map((item) => `<file path=${JSON.stringify(item.path)}>
+</file>`), tracked.map((item) => `<file path=${JSON.stringify(item.path)}>
 ${item.text}
 </file>`)),
           type: "text"
@@ -2746,8 +2747,8 @@ ${item.text}
     model: advisorRef,
     preferenceBytes: preferences?.bytes,
     thinkingText: streamed.thinking,
-    trackedBytes: tracked2.reduce((sum, item) => sum + item.bytes, 0) || undefined,
-    untrackedBytes: untracked2.reduce((sum, item) => sum + item.bytes, 0) || undefined,
+    trackedBytes: tracked.reduce((sum, item) => sum + item.bytes, 0) || undefined,
+    untrackedBytes: untracked.reduce((sum, item) => sum + item.bytes, 0) || undefined,
     usage: streamed.usage,
     ...scout ? { scout } : {}
   };
@@ -2792,7 +2793,7 @@ import {
   Box,
   Markdown,
   Text,
-  truncateToWidth,
+  truncateToWidth as truncateToWidth2,
   visibleWidth
 } from "@earendil-works/pi-tui";
 var SPINNER_FRAMES = [
@@ -2824,7 +2825,7 @@ class ThinkingMarkdown {
     const renderWidth = Math.max(1, Math.floor(width));
     const contentWidth = Math.max(1, renderWidth - THINKING_PREFIX_WIDTH);
     const lines = this.markdown.render(contentWidth);
-    return lines.map((line, index) => truncateToWidth(index === 0 ? `${this.prefix}${line}` : line, renderWidth, ""));
+    return lines.map((line, index) => truncateToWidth2(index === 0 ? `${this.prefix}${line}` : line, renderWidth, ""));
   }
   invalidate() {
     this.markdown.invalidate();
@@ -3434,13 +3435,13 @@ Advisor flow ready — Executor: ${executorRef} (thinking: ${executorEffortRef |
 };
 
 // src/commands/lifecycle.ts
-var registerCommandLifecycle = (runtime, activateAdvisor2) => {
+var registerCommandLifecycle = (runtime, activateAdvisor) => {
   runtime.pi.on("session_start", async (_event, ctx) => {
     runtime.pendingExecutorModelRef = undefined;
     try {
       loadConfig(ctx);
       if (alwaysOnRef) {
-        await activateAdvisor2("", ctx, false);
+        await activateAdvisor("", ctx, false);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -3497,7 +3498,7 @@ import {
 
 // src/ui/manual-dialog-render.ts
 import {
-  truncateToWidth as truncateToWidth2,
+  truncateToWidth as truncateToWidth3,
   visibleWidth as visibleWidth2,
   wrapTextWithAnsi
 } from "@earendil-works/pi-tui";
@@ -3524,10 +3525,10 @@ var renderManualAdvisorDialog = (view) => {
   const focusMarker = (target) => focusTarget === target ? theme.fg("accent", "▸ ") : "  ";
   const addLine = (text) => {
     if (renderWidth < 2) {
-      lines.push(truncateToWidth2(text, renderWidth, ""));
+      lines.push(truncateToWidth3(text, renderWidth, ""));
       return;
     }
-    lines.push(`${theme.fg("border", "│")}${" ".repeat(horizontalPadding)}${truncateToWidth2(text, contentWidth, "", true)}${" ".repeat(horizontalPadding)}${theme.fg("border", "│")}`);
+    lines.push(`${theme.fg("border", "│")}${" ".repeat(horizontalPadding)}${truncateToWidth3(text, contentWidth, "", true)}${" ".repeat(horizontalPadding)}${theme.fg("border", "│")}`);
   };
   const addWrapped = (text, color = "text") => {
     const content = theme.fg(color, text);
@@ -3537,7 +3538,7 @@ var renderManualAdvisorDialog = (view) => {
     }
   };
   if (renderWidth >= 2) {
-    const title = truncateToWidth2(" Ask Advisor ", Math.max(0, innerWidth), "", false);
+    const title = truncateToWidth3(" Ask Advisor ", Math.max(0, innerWidth), "", false);
     const titleWidth = visibleWidth2(title);
     const remaining = Math.max(0, innerWidth - titleWidth);
     const left = Math.floor(remaining / 2);
@@ -3576,13 +3577,15 @@ var renderManualAdvisorDialog = (view) => {
   const submitLabel = submit ? theme.fg("accent", "[Submit]") : theme.fg("text", "[Submit]");
   const cancel = focusTarget === "actions" && actionIndex === 1;
   const cancelLabel = cancel ? theme.fg("accent", "[Cancel]") : theme.fg("text", "[Cancel]");
-  addLine(`${focusMarker("actions")}                 ${submitLabel}  ${cancelLabel}`);
+  const actionButtons = `${submitLabel}  ${cancelLabel}`;
+  const buttonOffset = Math.max(0, Math.floor((contentWidth - visibleWidth2(actionButtons)) / 2) - 2);
+  addLine(`${focusMarker("actions")}${" ".repeat(buttonOffset)}${actionButtons}`);
   addWrapped(interactionHint, "dim");
   addLine("");
   if (renderWidth >= 2) {
     lines.push(theme.fg("border", `╰${"─".repeat(Math.max(0, renderWidth - 2))}╯`));
   }
-  return lines.map((line) => truncateToWidth2(line, renderWidth, ""));
+  return lines.map((line) => truncateToWidth3(line, renderWidth, ""));
 };
 
 // src/ui/manual-dialog.ts
@@ -4091,7 +4094,7 @@ var registerCommandRenderers = (runtime) => {
 import { getSettingsListTheme } from "@earendil-works/pi-coding-agent";
 import {
   SettingsList,
-  truncateToWidth as truncateToWidth4
+  truncateToWidth as truncateToWidth5
 } from "@earendil-works/pi-tui";
 
 // src/ui/settings-formatting.ts
@@ -4176,7 +4179,7 @@ var rainbowGradient = (text, startedAt) => {
 // src/ui/text-setting-submenu.ts
 import {
   Input as Input2,
-  truncateToWidth as truncateToWidth3
+  truncateToWidth as truncateToWidth4
 } from "@earendil-works/pi-tui";
 
 class TextSettingSubmenu {
@@ -4224,10 +4227,14 @@ class TextSettingSubmenu {
       lines.push(theme.fg("error", `  ${this.error}`));
     }
     lines.push("", theme.fg("dim", "  Enter: apply · Esc: cancel"));
-    return lines.map((line) => truncateToWidth3(line, width));
+    return lines.map((line) => truncateToWidth4(line, width));
   }
   handleInput(keyData) {
+    const before = this.input.getValue();
     this.input.handleInput(keyData);
+    if (this.error && this.input.getValue() !== before) {
+      this.error = undefined;
+    }
   }
 }
 
@@ -4561,7 +4568,7 @@ class AdvisorSettingsSelector {
   }
   render(width) {
     const border = this.options.theme.fg("border", "─".repeat(Math.max(1, width)));
-    return [border, ...this.settingsList.render(width), border].map((line) => truncateToWidth4(line, width));
+    return [border, ...this.settingsList.render(width), border].map((line) => truncateToWidth5(line, width));
   }
   handleInput(keyData) {
     if (!this.settingsList.changeWithArrow(keyData, (id, value) => this.change(id, value))) {
@@ -4826,7 +4833,7 @@ var withOutcomeLock = async (run) => {
         }
         continue;
       }
-      await new Promise((resolve2) => setTimeout(resolve2, 5));
+      await new Promise((resolve) => setTimeout(resolve, 5));
     }
   }
   throw new Error("Timed out waiting to append an Advisor outcome.");
@@ -5529,8 +5536,8 @@ function extensions_default(pi) {
   });
 }
 export {
-  runAdvisorGate2 as runAdvisorGate,
-  parseAutomaticDecision2 as parseAutomaticDecision,
+  consultAdvisor2 as consultAdvisor,
   extensions_default as default,
-  consultAdvisor2 as consultAdvisor
+  parseAutomaticDecision2 as parseAutomaticDecision,
+  runAdvisorGate2 as runAdvisorGate
 };
