@@ -9,9 +9,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ### Changed
 
 - Raised the Pi compatibility dev/test baseline to 0.85.1 and widened the peer ranges to `^0.84.1 || ^0.85.1`, keeping Pi 0.84.x supported while excluding Pi 0.85.0, whose undeclared `/server` import broke extension loading.
-- The Simple mode label now plays a single shine sweep when the toggle is switched on, then rests on a static accent instead of animating continuously while settings are open.
 - The model picker frames its list with single border rules matching the other Advisor surfaces, normalizes every rendered line to the terminal width so long model identifiers no longer wrap the layout, and dims its hint row like the other hint rows.
-- The `/advisor-manual` dialog aligns its Submit and Cancel buttons with the form's label column.
+- The `/advisor-manual` dialog centers its Submit and Cancel buttons between the dialog borders at supported overlay widths.
 - Settings text submenus clear a validation error as soon as the value changes instead of leaving it until the next submit.
 
 ## 0.5.5 - 2026-09-08

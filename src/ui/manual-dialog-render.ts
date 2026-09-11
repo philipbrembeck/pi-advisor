@@ -135,7 +135,16 @@ export const renderManualAdvisorDialog = (
   const cancelLabel = cancel
     ? theme.fg("accent", "[Cancel]")
     : theme.fg("text", "[Cancel]");
-  addLine(`${focusMarker("actions")}${submitLabel}  ${cancelLabel}`);
+  const actionButtons = `${submitLabel}  ${cancelLabel}`;
+  // Center the buttons in the content area; the 2-column focus marker sits
+  // left of the computed offset.
+  const buttonOffset = Math.max(
+    0,
+    Math.floor((contentWidth - visibleWidth(actionButtons)) / 2) - 2
+  );
+  addLine(
+    `${focusMarker("actions")}${" ".repeat(buttonOffset)}${actionButtons}`
+  );
   addWrapped(interactionHint, "dim");
   addLine("");
 

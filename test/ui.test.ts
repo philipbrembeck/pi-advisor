@@ -13,7 +13,6 @@ import {
   SearchableModelSelector,
   type ManualAdvisorRequest,
 } from "../src/ui.js";
-import { SIMPLE_MODE_CELEBRATION_MS } from "../src/ui/settings-formatting.js";
 import { TextSettingSubmenu } from "../src/ui/text-setting-submenu.js";
 
 const theme = {
@@ -237,20 +236,24 @@ describe("ManualAdvisorDialog", () => {
     }
   });
 
-  test("aligns the action buttons to the label column", () => {
+  test("centers the action buttons between the borders", () => {
     const { dialog } = makeDialog();
     const actionsRow = (lines: string[]) =>
       lines.map((line) => stripTerminalSequences(line)).find((line) =>
         line.includes("[Submit]")
       );
+    const buttons = "[Submit]  [Cancel]".length;
+    // Row structure: border(1) + pad(1) + content + pad(1) + border(1), so the
+    // centered start is 1 + (width - 2 - buttons) / 2 regardless of focus.
+    const centeredStart = 1 + Math.floor((90 - 2 - buttons) / 2);
 
     const unfocused = actionsRow(dialog.render(90));
-    expect(unfocused?.startsWith("│   [Submit]  [Cancel]")).toBe(true);
+    expect(unfocused?.indexOf("[Submit]")).toBe(centeredStart);
 
     dialog.handleInput("\t");
     dialog.handleInput("\t");
     const focused = actionsRow(dialog.render(90));
-    expect(focused?.startsWith("│ ▸ [Submit]  [Cancel]")).toBe(true);
+    expect(focused?.indexOf("[Submit]")).toBe(centeredStart);
   });
 });
 
@@ -293,19 +296,33 @@ describe("SearchableModelSelector", () => {
   });
 
   test("frames the list with single border rules and a dim hint row", () => {
+    // The mock must emit real ANSI escapes: the component's final
+    // truncateToWidth treats them as zero-width, unlike literal text.
+    const codes: Record<string, number> = {
+      accent: 36,
+      border: 90,
+      dim: 2,
+      muted: 37,
+      text: 39,
+    };
     const recordingTheme = {
-      bold: (value: string) => value,
-      fg: (color: string, value: string) => `[${color}]${value}`,
+      bold: (value: string) => `\u001b[1m${value}\u001b[22m`,
+      fg: (color: string, value: string) =>
+        `\u001b[${codes[color] ?? 39}m${value}\u001b[39m`,
     } as any;
-    const { selector } = makeSelector(["provider/one"], undefined, recordingTheme);
+    const { selector } = makeSelector(
+      ["provider/one"],
+      undefined,
+      recordingTheme
+    );
 
     const lines = selector.render(60);
-    expect(lines[0]).toBe(`[border]${"─".repeat(60)}`);
-    expect(lines[lines.length - 1]).toBe(`[border]${"─".repeat(60)}`);
-    expect(lines.some((line) => line.includes("[dim]Type to search"))).toBe(
-      true
+    expect(stripTerminalSequences(lines[0])).toBe("─".repeat(60));
+    expect(stripTerminalSequences(lines[lines.length - 1])).toBe(
+      "─".repeat(60)
     );
-    expect(lines.some((line) => line.includes("═"))).toBe(false);
+    expect(lines.join("\n")).toContain("\u001b[2mType to search");
+    expect(lines.join("\n")).not.toContain("═");
   });
 
   test("still selects the highlighted model after truncation", () => {
@@ -351,7 +368,7 @@ describe("TextSettingSubmenu", () => {
   });
 });
 
-describe("AdvisorSettingsSelector simple mode celebration", () => {
+describe("AdvisorSettingsSelector simple mode label", () => {
   const presets = [
     {
       description: "Everything",
@@ -389,32 +406,22 @@ describe("AdvisorSettingsSelector simple mode celebration", () => {
     return { renders: () => renders, selector };
   };
 
-  test("rests on a static accent label when simple mode is already on", () => {
+  test("shimmers the Simple mode label while simple mode is on", () => {
     const { selector } = makeSelector(true);
     try {
-      expect(selector.render(80).join("\n")).toContain("[accent]Simple mode");
+      // Per-character gradient escapes fragment the label text.
+      const screen = selector.render(80).join("\n");
+      expect(screen).not.toContain("Simple mode");
+      expect(screen).toContain("38;2;");
     } finally {
       selector.dispose();
     }
   });
 
-  test("plays one shine sweep after flipping On, then settles and stops redrawing", async () => {
-    const { renders, selector } = makeSelector(false);
+  test("leaves the label plain when simple mode is off", () => {
+    const { selector } = makeSelector(false);
     try {
-      selector.handleInput("\u001b[B");
-      selector.handleInput("\u001b[C");
-
-      const during = selector.render(80).join("\n");
-      expect(during).toContain("\u001b[38;2;");
-      expect(during).not.toContain("[accent]Simple mode");
-
-      await Bun.sleep(SIMPLE_MODE_CELEBRATION_MS + 250);
-      const settled = selector.render(80).join("\n");
-      expect(settled).toContain("[accent]Simple mode");
-
-      const before = renders();
-      await Bun.sleep(300);
-      expect(renders()).toBe(before);
+      expect(selector.render(80).join("\n")).toContain("Simple mode");
     } finally {
       selector.dispose();
     }

@@ -6,9 +6,8 @@ import {
   truncateToWidth,
 } from "@earendil-works/pi-tui";
 import {
-  SIMPLE_MODE_CELEBRATION_MS,
+  rainbowGradient,
   SIMPLE_MODE_GRADIENT_INTERVAL_MS,
-  simpleModeLabel,
 } from "./settings-formatting.js";
 import { createSettingsItems } from "./settings-items.js";
 import { SettingsListAdapter } from "./settings-list-adapter.js";
@@ -24,8 +23,8 @@ export class AdvisorSettingsSelector implements Component, Focusable {
   private readonly settings: AdvisorSettings;
   private readonly presets: ContextPreset[];
   private settingsList: SettingsListAdapter;
-  private simpleModeCelebrationStartedAt: number | undefined;
-  private simpleModeCelebrationTimer: ReturnType<typeof setInterval> | undefined;
+  private simpleModeGradientStartedAt: number | undefined;
+  private simpleModeGradientTimer: ReturnType<typeof setInterval> | undefined;
   private _focused = false;
 
   get focused(): boolean {
@@ -53,6 +52,9 @@ export class AdvisorSettingsSelector implements Component, Focusable {
             value: configuredContext,
           },
         ].sort((a, b) => a.value - b.value);
+    if (this.settings.simpleMode) {
+      this.startSimpleModeGradient();
+    }
     this.settingsList = this.createSettingsList();
   }
 
@@ -61,7 +63,7 @@ export class AdvisorSettingsSelector implements Component, Focusable {
   }
 
   dispose(): void {
-    this.stopSimpleModeCelebration();
+    this.stopSimpleModeGradient();
   }
 
   render(width: number): string[] {
@@ -90,11 +92,7 @@ export class AdvisorSettingsSelector implements Component, Focusable {
     const defaultLabel = listTheme.label;
     listTheme.label = (text, selected) => {
       if (this.settings.simpleMode && text.startsWith("Simple mode")) {
-        const label = simpleModeLabel(
-          this.simpleModeCelebrationStartedAt,
-          (value) => this.options.theme.fg("accent", value)
-        );
-        return `${label.text}${text.slice("Simple mode".length)}`;
+        return `${rainbowGradient("Simple mode", this.simpleModeGradientStartedAt ?? 0)}${text.slice("Simple mode".length)}`;
       }
       return defaultLabel(text, selected);
     };
@@ -120,37 +118,30 @@ export class AdvisorSettingsSelector implements Component, Focusable {
     return adapter;
   }
 
-  private startSimpleModeCelebration(): void {
-    this.stopSimpleModeCelebration();
-    this.simpleModeCelebrationStartedAt = Date.now();
-    this.simpleModeCelebrationTimer = setInterval(() => {
-      if (
-        this.simpleModeCelebrationStartedAt !== undefined &&
-        Date.now() - this.simpleModeCelebrationStartedAt >=
-          SIMPLE_MODE_CELEBRATION_MS
-      ) {
-        this.stopSimpleModeCelebration();
-      }
+  private startSimpleModeGradient(): void {
+    this.stopSimpleModeGradient();
+    this.simpleModeGradientStartedAt = Date.now();
+    this.simpleModeGradientTimer = setInterval(() => {
       this.options.tui.requestRender();
     }, SIMPLE_MODE_GRADIENT_INTERVAL_MS);
-    this.simpleModeCelebrationTimer.unref?.();
+    this.simpleModeGradientTimer.unref?.();
   }
 
-  private stopSimpleModeCelebration(): void {
-    if (this.simpleModeCelebrationTimer) {
-      clearInterval(this.simpleModeCelebrationTimer);
-      this.simpleModeCelebrationTimer = undefined;
+  private stopSimpleModeGradient(): void {
+    if (this.simpleModeGradientTimer) {
+      clearInterval(this.simpleModeGradientTimer);
+      this.simpleModeGradientTimer = undefined;
     }
-    this.simpleModeCelebrationStartedAt = undefined;
+    this.simpleModeGradientStartedAt = undefined;
   }
 
   private change(id: string, value: string): void {
     mutateAdvisorSettings(this.settings, id, value, this.presets);
     if (id === "simpleMode") {
       if (this.settings.simpleMode) {
-        this.startSimpleModeCelebration();
+        this.startSimpleModeGradient();
       } else {
-        this.stopSimpleModeCelebration();
+        this.stopSimpleModeGradient();
       }
     }
     (this.options.onChange ?? this.options.onSave)?.({
