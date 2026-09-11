@@ -7,13 +7,13 @@ import {
   type TUI,
   visibleWidth,
 } from "@earendil-works/pi-tui";
+import { TextSettingSubmenu } from "../src/ui/text-setting-submenu.js";
 import {
   AdvisorSettingsSelector,
   ManualAdvisorDialog,
-  SearchableModelSelector,
   type ManualAdvisorRequest,
+  SearchableModelSelector,
 } from "../src/ui.js";
-import { TextSettingSubmenu } from "../src/ui/text-setting-submenu.js";
 
 const theme = {
   bold: (value: string) => value,
@@ -239,9 +239,9 @@ describe("ManualAdvisorDialog", () => {
   test("centers the action buttons between the borders", () => {
     const { dialog } = makeDialog();
     const actionsRow = (lines: string[]) =>
-      lines.map((line) => stripTerminalSequences(line)).find((line) =>
-        line.includes("[Submit]")
-      );
+      lines
+        .map((line) => stripTerminalSequences(line))
+        .find((line) => line.includes("[Submit]"));
     const buttons = "[Submit]  [Cancel]".length;
     // Row structure: border(1) + pad(1) + content + pad(1) + border(1), so the
     // centered start is 1 + (width - 2 - buttons) / 2 regardless of focus.
@@ -318,9 +318,7 @@ describe("SearchableModelSelector", () => {
 
     const lines = selector.render(60);
     expect(stripTerminalSequences(lines[0])).toBe("─".repeat(60));
-    expect(stripTerminalSequences(lines[lines.length - 1])).toBe(
-      "─".repeat(60)
-    );
+    expect(stripTerminalSequences(lines.at(-1))).toBe("─".repeat(60));
     expect(lines.join("\n")).toContain("\u001b[2mType to search");
     expect(lines.join("\n")).not.toContain("═");
   });
