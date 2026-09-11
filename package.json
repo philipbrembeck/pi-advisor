@@ -42,7 +42,7 @@
     "package:check": "node scripts/check-package.mjs",
     "prepare": "husky",
     "socket": "bunx socket optimize",
-    "test": "bun test && npm run test:node-loader",
+    "test": "bun test && bun run test:node-loader",
     "test:bench": "bun --config=./bunfig.bench.toml test ./bench/test/",
     "test:node-loader": "node --test test/default-resource-loader.node.mjs",
     "typecheck": "tsc --noEmit"
