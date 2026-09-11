@@ -18,9 +18,10 @@
   "license": "MIT",
   "author": "Philip Brembeck",
   "type": "module",
-  "main": "extensions/index.ts",
+  "main": "dist/index.js",
   "types": "extensions/index.ts",
   "files": [
+    "dist",
     "extensions",
     "src",
     "CHANGELOG.md",
@@ -32,15 +33,18 @@
     "bench:evaluate": "bun bench/src/cli.ts evaluate",
     "bench:replay": "bun bench/src/cli.ts replay",
     "bench:screen": "bun bench/src/cli.ts screen",
+    "build": "bun build ./extensions/index.ts --outfile dist/index.js --target node --format esm --external @earendil-works/pi-ai --external @earendil-works/pi-coding-agent --external @earendil-works/pi-tui --external typebox",
     "check:boundaries": "node scripts/check-module-boundaries.mjs",
     "format": "bunx ultracite fix --linter-enabled=false",
     "lint": "bunx ultracite check",
     "lint:fix": "bunx ultracite fix",
+    "prepack": "bun run build >/dev/null",
     "package:check": "node scripts/check-package.mjs",
     "prepare": "husky",
     "socket": "bunx socket optimize",
-    "test": "bun test",
+    "test": "bun test && npm run test:node-loader",
     "test:bench": "bun --config=./bunfig.bench.toml test ./bench/test/",
+    "test:node-loader": "node --test test/default-resource-loader.node.mjs",
     "typecheck": "tsc --noEmit"
   },
   "lint-staged": {
@@ -91,7 +95,7 @@
   },
   "pi": {
     "extensions": [
-      "./extensions/index.ts"
+      "./dist/index.js"
     ],
     "image": "https://raw.githubusercontent.com/philipbrembeck/pi-advisor/refs/heads/main/assets/hero.png"
   }

@@ -53,6 +53,125 @@ export const configPaths = (ctx: ExtensionContext) => [
 const configuredModelRef = (value: string | undefined): string | undefined =>
   value?.trim() || undefined;
 
+const SAVED_CONFIG_KEYS = [
+  "advisor",
+  "advisorAutoLoopGate",
+  "advisorBlockOnBlocked",
+  "advisorCollapseResponses",
+  "advisorCompletionGate",
+  "advisorCustomInvocation",
+  "advisorEffort",
+  "advisorFailureGate",
+  "advisorGitContext",
+  "advisorGitContextMaxChars",
+  "advisorHerdrIntegration",
+  "advisorLoopThreshold",
+  "advisorMaxCallsPerSession",
+  "advisorPlanGate",
+  "advisorRedactSecrets",
+  "advisorScoutEnabled",
+  "advisorSessionSummary",
+  "advisorToolPolicies",
+  "advisorToolResultMaxBytes",
+  "advisorToolResultMaxLines",
+  "advisorTrackedFileContent",
+  "advisorUntrackedContent",
+  "alwaysOn",
+  "contextMaxChars",
+  "executor",
+  "executorEffort",
+  "gateFailureMode",
+  "showUsageDetails",
+  "showUsageFooter",
+  "simpleMode",
+] as const satisfies readonly (keyof AdvisorConfig)[];
+type SavedConfigKey = (typeof SAVED_CONFIG_KEYS)[number];
+type ConfigState = {
+  [Key in SavedConfigKey]: AdvisorConfig[Key];
+};
+
+const currentConfigState = (): ConfigState => ({
+  advisor: configuredModelRef(advisorRef),
+  advisorAutoLoopGate: advisorAutoLoopGateRef,
+  advisorBlockOnBlocked: advisorBlockOnBlockedRef,
+  advisorCollapseResponses: advisorCollapseResponsesRef,
+  advisorCompletionGate: advisorCompletionGateRef,
+  advisorCustomInvocation: advisorCustomInvocationRef,
+  advisorEffort: advisorEffortRef,
+  advisorFailureGate: advisorFailureGateRef,
+  advisorGitContext: advisorGitContextRef,
+  advisorGitContextMaxChars: advisorGitContextMaxCharsRef,
+  advisorHerdrIntegration: advisorHerdrIntegrationRef,
+  advisorLoopThreshold: advisorLoopThresholdRef,
+  advisorMaxCallsPerSession: advisorMaxCallsPerSessionRef,
+  advisorPlanGate: advisorPlanGateRef,
+  advisorRedactSecrets: advisorRedactSecretsRef,
+  advisorScoutEnabled: advisorScoutEnabledRef,
+  advisorSessionSummary: advisorSessionSummaryRef,
+  advisorToolPolicies: { ...advisorToolPoliciesRef },
+  advisorToolResultMaxBytes: advisorToolResultMaxBytesRef,
+  advisorToolResultMaxLines: advisorToolResultMaxLinesRef,
+  advisorTrackedFileContent: advisorTrackedFileContentRef,
+  advisorUntrackedContent: advisorUntrackedContentRef,
+  alwaysOn: alwaysOnRef,
+  contextMaxChars: contextMaxCharsRef,
+  executor: configuredModelRef(executorRef),
+  executorEffort: executorEffortRef,
+  gateFailureMode: advisorFailureModeRef,
+  showUsageDetails: showUsageDetailsRef,
+  showUsageFooter: showUsageFooterRef,
+  simpleMode: simpleModeRef,
+});
+
+const sameConfigValue = <Value>(left: Value, right: Value) =>
+  JSON.stringify(left) === JSON.stringify(right);
+
+const readExistingConfig = (path: string): Record<string, unknown> => {
+  try {
+    const parsed = JSON.parse(readFileSync(path, "utf8"));
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {};
+  } catch {
+    return {};
+  }
+};
+
+const shouldPersistConfigKey = (
+  key: SavedConfigKey,
+  persistAdvisor: boolean,
+  persistExecutor: boolean
+) =>
+  (key !== "advisor" || persistAdvisor) &&
+  (key !== "executor" || persistExecutor);
+
+const applyChangedConfigValues = (
+  data: Record<string, unknown>,
+  current: ConfigState,
+  changedKeys: readonly SavedConfigKey[],
+  persistAdvisor: boolean,
+  persistExecutor: boolean
+) => {
+  for (const key of changedKeys) {
+    if (!shouldPersistConfigKey(key, persistAdvisor, persistExecutor)) {
+      continue;
+    }
+    const value = current[key];
+    const isEmptyModelRef = (key === "advisor" || key === "executor") && !value;
+    if (value === undefined || isEmptyModelRef) {
+      delete data[key];
+    } else {
+      data[key] = value;
+    }
+  }
+};
+
+// Tracks the runtime state represented by the last successful load/save. A
+// save can then merge fresh disk contents without treating untouched in-memory
+// values as an instruction to overwrite an external edit.
+let loadedConfigState: ConfigState | undefined;
+let loadedConfigPath: string | undefined;
+
 const readConfig = (path: string): AdvisorConfig => {
   try {
     const config = JSON.parse(readFileSync(path, "utf8"));
@@ -135,10 +254,17 @@ export const loadConfig = (_ctx: ExtensionContext) => {
   // prompts, gates, budgets, disclosure, redaction, integrations, and consent
   // remain under the user's global Pi configuration.
   setAdvisorOutcomeLoggingRef(globalConfig?.advisorOutcomeLogging === true);
+  loadedConfigState = currentConfigState();
+  loadedConfigPath = global;
   return existsSync(global) ? global : null;
 };
 
-/** Saves user-controlled configuration globally without outcome consent. */
+/**
+ * Saves user-controlled configuration globally without outcome consent.
+ *
+ * Only values changed since the last load/save are written. This lets an
+ * external edit to advisor.json coexist with a later settings or model save.
+ */
 export interface SaveConfigOptions {
   persistAdvisor?: boolean;
   persistExecutor?: boolean;
@@ -151,70 +277,51 @@ export const saveConfig = (
   const path = join(getAgentDir(), "advisor.json");
   const persistAdvisor = options.persistAdvisor ?? true;
   const persistExecutor = options.persistExecutor ?? true;
-  let existing: Record<string, unknown> = {};
-  try {
-    const parsed = JSON.parse(readFileSync(path, "utf8"));
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      existing = parsed as Record<string, unknown>;
-    }
-  } catch {
-    /* replace a missing or malformed file */
+  const existing = readExistingConfig(path);
+  const current = currentConfigState();
+  const baseline = loadedConfigPath === path ? loadedConfigState : undefined;
+  const changedKeys = baseline
+    ? SAVED_CONFIG_KEYS.filter(
+        (key) => !sameConfigValue(current[key], baseline[key])
+      )
+    : [...SAVED_CONFIG_KEYS];
+  if (changedKeys.length === 0) {
+    return path;
   }
-  if (advisorMaxCallsPerSessionRef === undefined) {
-    existing.advisorMaxCallsPerSession = undefined;
-  }
-  const data = {
-    ...existing,
-    ...(persistAdvisor && advisorRef ? { advisor: advisorRef } : {}),
-    advisorAutoLoopGate: advisorAutoLoopGateRef,
-    advisorBlockOnBlocked: advisorBlockOnBlockedRef,
-    advisorCollapseResponses: advisorCollapseResponsesRef,
-    advisorCompletionGate: advisorCompletionGateRef,
-    advisorCustomInvocation: advisorCustomInvocationRef,
-    advisorEffort: advisorEffortRef,
-    advisorFailureGate: advisorFailureGateRef,
-    advisorLoopThreshold: advisorLoopThresholdRef,
-    advisorPlanGate: advisorPlanGateRef,
-    contextMaxChars: contextMaxCharsRef,
-    ...(persistExecutor && executorRef ? { executor: executorRef } : {}),
-    executorEffort: executorEffortRef,
-    ...(advisorMaxCallsPerSessionRef === undefined
-      ? {}
-      : { advisorMaxCallsPerSession: advisorMaxCallsPerSessionRef }),
-    advisorGitContext: advisorGitContextRef,
-    advisorGitContextMaxChars: advisorGitContextMaxCharsRef,
-    advisorHerdrIntegration: advisorHerdrIntegrationRef,
-    advisorRedactSecrets: advisorRedactSecretsRef,
-    advisorScoutEnabled: advisorScoutEnabledRef,
-    advisorSessionSummary: advisorSessionSummaryRef,
-    advisorToolPolicies: advisorToolPoliciesRef,
-    advisorToolResultMaxBytes: advisorToolResultMaxBytesRef,
-    advisorToolResultMaxLines: advisorToolResultMaxLinesRef,
-    advisorTrackedFileContent: advisorTrackedFileContentRef,
-    advisorUntrackedContent: advisorUntrackedContentRef,
-    alwaysOn: alwaysOnRef,
-    gateFailureMode: advisorFailureModeRef,
-    showUsageDetails: showUsageDetailsRef,
-    showUsageFooter: showUsageFooterRef,
-    simpleMode: simpleModeRef,
-  };
+  const data = { ...existing };
+  applyChangedConfigValues(
+    data,
+    current,
+    changedKeys,
+    persistAdvisor,
+    persistExecutor
+  );
   writeFileSync(path, `${JSON.stringify(data, null, 2)}\n`);
   resetConfigCache();
+  const nextLoadedState = { ...current };
+  if (!persistAdvisor) {
+    nextLoadedState.advisor = baseline
+      ? baseline.advisor
+      : configuredModelRef(
+          typeof existing.advisor === "string" ? existing.advisor : undefined
+        );
+  }
+  if (!persistExecutor) {
+    nextLoadedState.executor = baseline
+      ? baseline.executor
+      : configuredModelRef(
+          typeof existing.executor === "string" ? existing.executor : undefined
+        );
+  }
+  loadedConfigState = nextLoadedState;
+  loadedConfigPath = path;
   return path;
 };
 
 /** Outcome logging is deliberately written only to the global Pi configuration. */
 export const saveGlobalOutcomeLogging = (enabled: boolean) => {
   const path = join(getAgentDir(), "advisor.json");
-  let existing: Record<string, unknown> = {};
-  try {
-    const parsed = JSON.parse(readFileSync(path, "utf8"));
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      existing = parsed as Record<string, unknown>;
-    }
-  } catch {
-    /* create it */
-  }
+  const existing = readExistingConfig(path);
   writeFileSync(
     path,
     `${JSON.stringify({ ...existing, advisorOutcomeLogging: enabled }, null, 2)}\n`

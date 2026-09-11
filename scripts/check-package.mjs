@@ -13,6 +13,7 @@ const expectedFiles = [
   "CHANGELOG.md",
   "LICENSE",
   "README.md",
+  "dist/index.js",
   "extensions/index.ts",
   "package.json",
   "src/commands.ts",
