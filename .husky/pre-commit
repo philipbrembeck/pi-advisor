@@ -1,1 +1,4 @@
+set -e
 bunx lint-staged
+bun run build
+git add dist/index.js
