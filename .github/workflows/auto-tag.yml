@@ -39,9 +39,14 @@ jobs:
       - name: Run release gates
         run: |
           bun run typecheck
-          bun test
+          bun run test
           bun run lint
+          bun run build
+          git diff --exit-code -- dist/index.js
+          test -z "$(git status --porcelain --untracked-files=all -- dist/index.js)"
           bun run package:check
+          git diff --exit-code -- dist/index.js
+          test -z "$(git status --porcelain --untracked-files=all -- dist/index.js)"
           bun audit --audit-level=high
 
   tag:
