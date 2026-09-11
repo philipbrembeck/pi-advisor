@@ -10,16 +10,16 @@ bun run build
 ```
 
 Pi loads `dist/index.js`, which bundles internal modules so settings controls and
-persistence share the same runtime state. Re-run `bun run build` after editing
-source files, then reload Pi. Commit the refreshed bundle with source changes;
-`prepack` also rebuilds it for npm packaging.
+persistence share the same runtime state. Run `bun run build` once after
+checkout, then reload Pi. The pre-commit hook rebuilds and stages the bundle
+after linting source changes; `prepack` also rebuilds it for npm packaging.
 
 ## Checks
 
 Run the full project checks before opening a pull request:
 
 ```bash
-bun test
+bun run test
 bun run typecheck
 bun run check:boundaries
 bun run lint
