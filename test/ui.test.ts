@@ -318,7 +318,7 @@ describe("SearchableModelSelector", () => {
 
     const lines = selector.render(60);
     expect(stripTerminalSequences(lines[0])).toBe("─".repeat(60));
-    expect(stripTerminalSequences(lines.at(-1))).toBe("─".repeat(60));
+    expect(stripTerminalSequences(lines.at(-1) ?? "")).toBe("─".repeat(60));
     expect(lines.join("\n")).toContain("\u001b[2mType to search");
     expect(lines.join("\n")).not.toContain("═");
   });
