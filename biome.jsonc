@@ -16,6 +16,14 @@
   },
   "overrides": [
     {
+      "includes": ["test/helpers/**"],
+      "linter": {
+        "rules": {
+          "suspicious": { "noExplicitAny": "off" }
+        }
+      }
+    },
+    {
       "includes": ["scripts/**", "bench/**"],
       "linter": { "rules": { "suspicious": { "noConsole": "off" } } }
     }

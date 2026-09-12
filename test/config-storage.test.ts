@@ -9,6 +9,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { registerCommands } from "../src/commands.ts";
 import {
   setAdvisorEffortRef,
   setAdvisorRef,
@@ -21,6 +22,8 @@ import {
   resetConfigCache,
   saveConfig,
 } from "../src/config/storage.ts";
+import { savedConfig, withAgentDir } from "./helpers/config-fixture.ts";
+import { mockPi } from "./helpers/mock-pi.ts";
 
 const context = { hasUI: false } as unknown as ExtensionContext;
 const originalAgentDir = process.env.PI_CODING_AGENT_DIR;
@@ -180,5 +183,56 @@ describe("Advisor config persistence", () => {
     const saved = readSavedConfig();
     expect(saved.showUsageFooter).toBe(true);
     expect(saved.externallyEdited).toBe(true);
+  });
+});
+
+describe("Advisor argument persistence", () => {
+  test("does not persist arguments that name an unusable model", async () => {
+    await withAgentDir(
+      {
+        alwaysOn: true,
+        contextMaxChars: 15_000,
+        executor: "good/executor",
+      },
+      async (dir) => {
+        const commands = new Map<string, any>();
+        const notes: string[] = [];
+        registerCommands(
+          mockPi(
+            { activeTools: ["ask_advisor"], commands },
+            {
+              on: () => undefined,
+              registerEntryRenderer: () => undefined,
+              registerMessageRenderer: () => undefined,
+              setActiveTools: () => undefined,
+              setModel: () => Promise.resolve(true),
+              setThinkingLevel: () => undefined,
+            }
+          )
+        );
+
+        await commands.get("advisor").handler("executor=missing/model", {
+          cwd: dir,
+          hasUI: true,
+          isProjectTrusted: () => false,
+          modelRegistry: {
+            find: (provider: string) =>
+              provider === "missing" ? undefined : { id: "x", provider },
+            getApiKeyAndHeaders: () =>
+              Promise.resolve({ apiKey: "key", ok: true }),
+          },
+          ui: { notify: (message: string) => notes.push(message) },
+        } as any);
+
+        expect(notes.join("\n")).toContain("Executor model not found");
+        await commands.get("advisor-off").handler("", {
+          cwd: dir,
+          hasUI: true,
+          isProjectTrusted: () => false,
+          ui: { notify: () => undefined },
+        } as any);
+        expect(savedConfig(dir).executor).toBe("good/executor");
+      }
+    );
   });
 });

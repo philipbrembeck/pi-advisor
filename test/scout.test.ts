@@ -8,6 +8,7 @@ import {
   SCOUT_SYSTEM,
 } from "../src/scout.ts";
 import type { ScoutManifest } from "../src/scout-context.ts";
+import { ScoutStatusManager } from "../src/tools.ts";
 
 const manifest = (): ScoutManifest => ({
   availableBytes: 100,
@@ -364,5 +365,93 @@ describe("Advisor Scout", () => {
       metrics: { availableCount: 3, omittedBeforeScout: 1, selectedCount: 0 },
       ok: false,
     });
+  });
+});
+
+describe("Scout status ownership", () => {
+  const context = (statuses: Array<string | undefined>) =>
+    ({
+      hasUI: true,
+      ui: {
+        setStatus: (_key: string, value: string | undefined) =>
+          statuses.push(value),
+      },
+    }) as any;
+
+  test("keeps a newer active status when an older invocation releases", () => {
+    const statuses: Array<string | undefined> = [];
+    const manager = new ScoutStatusManager();
+    const ctx = context(statuses);
+    const older = Symbol("older");
+    const newer = Symbol("newer");
+    manager.update(ctx, older, { model: "executor", type: "call" });
+    manager.update(ctx, newer, { model: "executor", type: "call" });
+    manager.release(ctx, older);
+    expect(statuses.at(-1)).toBe("Scout curating…");
+    manager.release(ctx, newer);
+    expect(statuses.at(-1)).toBeUndefined();
+  });
+
+  test("shutdown clear prevents late callbacks from reacquiring status", () => {
+    const statuses: Array<string | undefined> = [];
+    const manager = new ScoutStatusManager();
+    const ctx = context(statuses);
+    const token = Symbol("old-session");
+    manager.update(ctx, token, { model: "executor", type: "call" });
+    manager.clear(ctx);
+    manager.update(ctx, token, {
+      model: "executor",
+      text: "",
+      thinking: "",
+      type: "chunk",
+    });
+    expect(statuses).toEqual(["Scout curating…", undefined]);
+  });
+
+  test("success, fallback, and cancellation release their status", () => {
+    for (const event of [
+      {
+        outcome: {
+          conversation: "selected",
+          metrics: {
+            availableCount: 1,
+            inputBytes: 1,
+            latencyMs: 1,
+            omittedBeforeScout: 0,
+            selectedCount: 1,
+          },
+          model: "executor",
+          ok: true,
+          selectedLabels: [],
+          selection: { selectedIds: [], synthesis: "" },
+        },
+        type: "success",
+      },
+      {
+        outcome: {
+          category: "timeout",
+          message: "timeout",
+          metrics: {
+            availableCount: 1,
+            inputBytes: 1,
+            latencyMs: 1,
+            omittedBeforeScout: 0,
+            selectedCount: 0,
+          },
+          model: "executor",
+          ok: false,
+        },
+        type: "fallback",
+      },
+      { type: "cancelled" },
+    ] as const) {
+      const statuses: Array<string | undefined> = [];
+      const manager = new ScoutStatusManager();
+      const ctx = context(statuses);
+      const token = Symbol("invocation");
+      manager.update(ctx, token, { model: "executor", type: "call" });
+      manager.update(ctx, token, event as any);
+      expect(statuses.at(-1)).toBeUndefined();
+    }
   });
 });
