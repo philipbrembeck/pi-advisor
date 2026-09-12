@@ -5,13 +5,13 @@ import {
   BudgetGuard,
   formatBudgetEstimate,
   validateBudgetPlan,
-} from "./budget.js";
-import { DEFAULT_CONFIG, defaultPricingFor, modelPin } from "./config.js";
-import { defaultControlAdvice, runControls } from "./controls.js";
-import { hashTree } from "./fixture.js";
-import { createPiAdvisorHarborAdapter } from "./pi-advisor-adapter.js";
-import { assertPinnedLiveModelConfiguration } from "./pins.js";
-import { requireCommittedPreregistration } from "./preregistration.js";
+} from "./budget.ts";
+import { DEFAULT_CONFIG, defaultPricingFor, modelPin } from "./config.ts";
+import { defaultControlAdvice, runControls } from "./controls.ts";
+import { hashTree } from "./fixture.ts";
+import { createPiAdvisorHarborAdapter } from "./pi-advisor-adapter.ts";
+import { assertPinnedLiveModelConfiguration } from "./pins.ts";
+import { requireCommittedPreregistration } from "./preregistration.ts";
 import {
   assertNoSmokeProtocol,
   assertReactBenchCheckout,
@@ -19,16 +19,16 @@ import {
   ensurePinnedReactBenchCheckout,
   type ReactBenchTrialResult,
   type ReactBenchTrialRunner,
-} from "./reactbench.js";
-import { reportFor, writeReport } from "./report.js";
+} from "./reactbench.ts";
+import { reportFor, writeReport } from "./report.ts";
 import {
   candidateBandPrevalence,
   classifyScreeningPool,
   selectTrivialStratum,
   validateEvaluationSeeds,
-} from "./screening.js";
-import { EVALUATION_SEEDS, SCREENING_SEEDS } from "./seeds.js";
-import type { BenchmarkConfig, BenchmarkReport, ModelPin } from "./types.js";
+} from "./screening.ts";
+import { EVALUATION_SEEDS, SCREENING_SEEDS } from "./seeds.ts";
+import type { BenchmarkConfig, BenchmarkReport, ModelPin } from "./types.ts";
 
 const SCREENING_TASK_COUNT = 30;
 const TRIVIAL_STRATUM_SIZE = 3;

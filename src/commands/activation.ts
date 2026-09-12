@@ -1,5 +1,5 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { parseArgs } from "../config/args.js";
+import { parseArgs } from "../config/args.ts";
 import {
   advisorEffortRef,
   advisorRef,
@@ -11,20 +11,20 @@ import {
   setContextMaxCharsRef,
   setExecutorEffortRef,
   setExecutorRef,
-} from "../config/state.js";
-import { saveConfig } from "../config/storage.js";
+} from "../config/state.ts";
+import { saveConfig } from "../config/storage.ts";
 import {
   loadCommandConfig,
   prepareActivationModels,
-} from "./activation-preparation.js";
+} from "./activation-preparation.ts";
 import {
   ADVISOR_ACTIVATION_EXPLANATION,
   findConfiguredModel,
   hasAdvisorOverride,
   hasExecutorOverride,
-} from "./model-options.js";
-import { notify } from "./runtime.js";
-import type { CommandRuntime, ThinkingLevel } from "./types.js";
+} from "./model-options.ts";
+import { notify } from "./runtime.ts";
+import type { CommandRuntime, ThinkingLevel } from "./types.ts";
 
 const resolveActivationModels = async (
   runtime: CommandRuntime,

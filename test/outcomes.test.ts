@@ -10,7 +10,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { appendOutcome, outcomeLogPath } from "../src/outcomes.js";
+import { appendOutcome, outcomeLogPath } from "../src/outcomes.ts";
 
 describe("outcome log", () => {
   test("writes only the versioned allowlisted privacy-minimal record", async () => {

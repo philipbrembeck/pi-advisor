@@ -19,11 +19,11 @@ import {
   pruneDockerBuildCache,
   validateHarborArtifacts,
   validateHarborTrialPricing,
-} from "../harbor/run-trial.js";
+} from "../harbor/run-trial.ts";
 import {
   createHarborTaskOverlay,
   patchGitHubCloneCommands,
-} from "../harbor/task-compat.js";
+} from "../harbor/task-compat.ts";
 import {
   DEFAULT_HARBOR_AGENT_TIMEOUT_SEC,
   HARBOR_INFRA_RETRY_BACKOFF_MS,
@@ -31,7 +31,7 @@ import {
   harborCommandTimeoutMs,
   MAX_HARBOR_INFRA_RETRIES,
   parseHarborAgentTimeout,
-} from "../src/harbor-timeout.js";
+} from "../src/harbor-timeout.ts";
 
 const requestFor = (arm: "E" | "E+A" = "E+A"): HarborTrialRequest => ({
   ...(arm === "E+A"

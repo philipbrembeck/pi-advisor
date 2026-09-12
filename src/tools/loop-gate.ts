@@ -12,24 +12,24 @@ import {
   advisorScoutEnabledRef,
   getAdvisorMaxCallsPerSession,
   isSimpleMode,
-} from "../config/state.js";
-import { herdrAdvisorActivity } from "../herdr.js";
-import type { AdvisorSessionState } from "../session-state.js";
-import { advisorUsageCost, snapshotAdvisorUsage } from "../usage.js";
-import type { runAdvisorGate } from "./consultation.js";
+} from "../config/state.ts";
+import { herdrAdvisorActivity } from "../herdr.ts";
+import type { AdvisorSessionState } from "../session-state.ts";
+import { advisorUsageCost, snapshotAdvisorUsage } from "../usage.ts";
+import type { runAdvisorGate } from "./consultation.ts";
 import {
   blockedDecisionEffect,
   failureEffect,
   gateDecisionEffect,
   gateFailureEffectForMode,
   updateAdvisorUsageStatus,
-} from "./gate-policy.js";
-import { adviceForGateText } from "./gate-protocol.js";
+} from "./gate-policy.ts";
+import { adviceForGateText } from "./gate-protocol.ts";
 import {
   appendScoutLifecycleEntry,
   type ScoutStatusManager,
-} from "./scout-status.js";
-import type { AdvisorGateResult, ScoutToolDetails } from "./types.js";
+} from "./scout-status.ts";
+import type { AdvisorGateResult, ScoutToolDetails } from "./types.ts";
 
 const sendAutomaticGateCall = (pi: ExtensionAPI, event: ToolCallEvent) => {
   pi.sendMessage(

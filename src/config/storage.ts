@@ -5,7 +5,7 @@ import {
   type ExtensionContext,
   getAgentDir,
 } from "@earendil-works/pi-coding-agent";
-import { applyConfig, resetDefaults } from "./defaults.js";
+import { applyConfig, resetDefaults } from "./defaults.ts";
 import {
   advisorAutoLoopGateRef,
   advisorBlockOnBlockedRef,
@@ -39,9 +39,9 @@ import {
   showUsageDetailsRef,
   showUsageFooterRef,
   simpleModeRef,
-} from "./state.js";
-import type { AdvisorConfig } from "./types.js";
-import { unknownConfigKeys, validateConfig } from "./validation.js";
+} from "./state.ts";
+import type { AdvisorConfig } from "./types.ts";
+import { unknownConfigKeys, validateConfig } from "./validation.ts";
 
 export const configPaths = (ctx: ExtensionContext) => [
   ctx.isProjectTrusted()

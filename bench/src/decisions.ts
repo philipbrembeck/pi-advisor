@@ -6,37 +6,37 @@ import {
   BudgetGuard,
   formatBudgetEstimate,
   validateBudgetPlan,
-} from "./budget.js";
+} from "./budget.ts";
 import {
   armModelPins,
   DEFAULT_CONFIG,
   defaultPricingFor,
   modelPin,
-} from "./config.js";
-import { controlJudge, defaultControlAdvice, runControls } from "./controls.js";
+} from "./config.ts";
+import { controlJudge, defaultControlAdvice, runControls } from "./controls.ts";
 import {
   CostMeter,
   configuredCost,
   estimateCost,
   normalizeUsage,
-} from "./cost.js";
+} from "./cost.ts";
 import {
   advisorContextForItem,
   assertAdvisorPayloadExcludesKey,
-} from "./decision-context.js";
-import { discoverDecisionItems, hashTree } from "./fixture.js";
-import { LiveModelClient, readLiveClientConfig } from "./live-client.js";
-import { assertPinnedLiveModelConfiguration } from "./pins.js";
-import { reportFor, writeReport } from "./report.js";
-import { scoreAdvice } from "./score/index.js";
-import { buildJudgePrompt, type JudgeInvoker } from "./score/judge.js";
+} from "./decision-context.ts";
+import { discoverDecisionItems, hashTree } from "./fixture.ts";
+import { LiveModelClient, readLiveClientConfig } from "./live-client.ts";
+import { assertPinnedLiveModelConfiguration } from "./pins.ts";
+import { reportFor, writeReport } from "./report.ts";
+import { scoreAdvice } from "./score/index.ts";
+import { buildJudgePrompt, type JudgeInvoker } from "./score/judge.ts";
 import type {
   BenchmarkConfig,
   BenchmarkReport,
   DecisionItem,
   DecisionScore,
   ModelPin,
-} from "./types.js";
+} from "./types.ts";
 
 const DECISION_REPEATS = 3;
 const DECISION_ITEM_COUNT = 24;

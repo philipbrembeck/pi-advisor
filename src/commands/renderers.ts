@@ -1,15 +1,15 @@
 import { getMarkdownTheme } from "@earendil-works/pi-coding-agent";
 import { Box, Markdown, Text } from "@earendil-works/pi-tui";
-import { getAdvisorSettings } from "../config/state.js";
+import { getAdvisorSettings } from "../config/state.ts";
 import {
   adviceForDisplay,
   hasSoundVerdict,
   renderAdvisorCallBox,
   renderAdvisorResponseHeader,
-} from "../tools/render-common.js";
-import { formatAdvisorUsage } from "../usage.js";
-import { ManualAdvisorProgressComponent } from "./manual-progress.js";
-import type { CommandRuntime } from "./types.js";
+} from "../tools/render-common.ts";
+import { formatAdvisorUsage } from "../usage.ts";
+import { ManualAdvisorProgressComponent } from "./manual-progress.ts";
+import type { CommandRuntime } from "./types.ts";
 
 export const registerCommandRenderers = (runtime: CommandRuntime) => {
   runtime.pi.registerEntryRenderer?.(

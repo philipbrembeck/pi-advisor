@@ -7,7 +7,7 @@ import {
   readTrackedFiles,
   readUntrackedFiles,
   UNTRACKED_FILE_MAX_BYTES,
-} from "../src/untracked.js";
+} from "../src/untracked.ts";
 
 const git = (cwd: string, args: string[]) =>
   execFileSync("git", args, { cwd, stdio: "ignore" });

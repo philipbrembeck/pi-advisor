@@ -1,4 +1,4 @@
-import type { GateDecision, GateFailureMode, ReplayCase } from "./types.js";
+import type { GateDecision, GateFailureMode, ReplayCase } from "./types.ts";
 
 export const GATE_FAILURE_MODES: GateFailureMode[] = [
   "block-session",

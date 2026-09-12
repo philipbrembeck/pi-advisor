@@ -1,19 +1,19 @@
 import type { Message } from "@earendil-works/pi-ai/compat";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { executorEffortRef, executorRef } from "./config/state.js";
+import { executorEffortRef, executorRef } from "./config/state.ts";
 import {
   type CollectedTextStream,
   collectTextStream,
   type ResolvedConfiguredModel,
   resolveConfiguredModel,
-} from "./model-stream.js";
+} from "./model-stream.ts";
 import {
   reconstructScoutConversation,
   SCOUT_SELECTION_MAX_IDS,
   SCOUT_SYNTHESIS_MAX_BYTES,
   type ScoutManifest,
-} from "./scout-context.js";
-import { snapshotAdvisorUsage } from "./usage.js";
+} from "./scout-context.ts";
+import { snapshotAdvisorUsage } from "./usage.ts";
 
 export const SCOUT_TIMEOUT_MS = 30_000;
 

@@ -3,8 +3,8 @@ import {
   visibleWidth,
   wrapTextWithAnsi,
 } from "@earendil-works/pi-tui";
-import type { GitContextLevel } from "../git.js";
-import type { ManualAdvisorDialogView } from "./types.js";
+import type { GitContextLevel } from "../git.ts";
+import type { ManualAdvisorDialogView } from "./types.ts";
 
 const MANUAL_GIT_CONTEXT_COPY: Record<
   GitContextLevel,

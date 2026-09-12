@@ -12,12 +12,12 @@ import {
   clampGitContextLevel,
   GIT_CONTEXT_LEVELS,
   type GitContextLevel,
-} from "../git.js";
-import { renderManualAdvisorDialog } from "./manual-dialog-render.js";
+} from "../git.ts";
+import { renderManualAdvisorDialog } from "./manual-dialog-render.ts";
 import type {
   ManualAdvisorDialogOptions,
   ManualAdvisorFocus,
-} from "./types.js";
+} from "./types.ts";
 
 // Keep the keybinding components separate from Socket's URL-string heuristic.
 const TUI_INPUT_TAB: keyof Keybindings = ["tui", "input", "tab"].join(

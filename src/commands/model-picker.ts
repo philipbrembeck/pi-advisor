@@ -1,10 +1,10 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { SearchableModelSelector } from "../ui/model-selector.js";
+import { SearchableModelSelector } from "../ui/model-selector.ts";
 import {
   effortChoices,
   getAvailableModelRefs,
   selectedEffort,
-} from "./model-options.js";
+} from "./model-options.ts";
 
 export interface AdvisorModelSelection {
   advisor: string;

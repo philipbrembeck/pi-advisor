@@ -1,6 +1,6 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { type getPersistedModelRefs, splitRef } from "../config/state.js";
-import type { ContextPreset } from "../ui/types.js";
+import { type getPersistedModelRefs, splitRef } from "../config/state.ts";
+import type { ContextPreset } from "../ui/types.ts";
 
 export const DEFAULT_EFFORT_LEVEL = "Default (Model Default)";
 export const SELECTED_PREFIX = "✓ ";

@@ -1,21 +1,21 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import type { appendOutcome } from "../outcomes.js";
-import type { ScoutOutcome } from "../scout.js";
+import type { appendOutcome } from "../outcomes.ts";
+import type { ScoutOutcome } from "../scout.ts";
 import type {
   AdvisorSessionState,
   ConsultationTrigger,
   GateDecision,
   GateTrigger,
-} from "../session-state.js";
-import type { consultAdvisor, runAdvisorGate } from "./consultation.js";
-import type { ScoutStatusManager } from "./scout-status.js";
+} from "../session-state.ts";
+import type { consultAdvisor, runAdvisorGate } from "./consultation.ts";
+import type { ScoutStatusManager } from "./scout-status.ts";
 
 export type {
   AdvisorInvocationRecord,
   ConsultationTrigger,
   GateDecision,
   GateTrigger,
-} from "../session-state.js";
+} from "../session-state.ts";
 
 export interface ScoutToolDetails {
   availableCount?: number;

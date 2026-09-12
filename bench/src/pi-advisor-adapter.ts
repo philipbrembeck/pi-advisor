@@ -1,20 +1,20 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
-import { normalizeUsage } from "./cost.js";
+import { normalizeUsage } from "./cost.ts";
 import {
   DEFAULT_HARBOR_AGENT_TIMEOUT_SEC,
   harborCommandTimeoutMs,
   parseHarborAgentTimeout,
-} from "./harbor-timeout.js";
-import { PI_ADVISOR_VERSION } from "./package-version.js";
+} from "./harbor-timeout.ts";
+import { PI_ADVISOR_VERSION } from "./package-version.ts";
 import type {
   CommandReactBenchRunnerOptions,
   ReactBenchTrialRequest,
   ReactBenchTrialResult,
   TrialArm,
-} from "./reactbench.js";
-import { CommandReactBenchRunner } from "./reactbench.js";
+} from "./reactbench.ts";
+import { CommandReactBenchRunner } from "./reactbench.ts";
 
 export const ADVISOR_ATTESTATION_PREFIX = "BENCH_ADVISOR_ATTESTATION=";
 export const ADVISOR_ADAPTER_ID = "pi-advisor-harbor";

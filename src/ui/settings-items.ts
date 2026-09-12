@@ -1,6 +1,6 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import type { SettingItem } from "@earendil-works/pi-tui";
-import { isValidAdvisorToolPolicies } from "../config/validation.js";
+import { isValidAdvisorToolPolicies } from "../config/validation.ts";
 import {
   contextDescription,
   currentContextLabel,
@@ -10,13 +10,13 @@ import {
   settingValue,
   TOGGLE_VALUES,
   withCurrentValue,
-} from "./settings-formatting.js";
-import { TextSettingSubmenu } from "./text-setting-submenu.js";
+} from "./settings-formatting.ts";
+import { TextSettingSubmenu } from "./text-setting-submenu.ts";
 import type {
   AdvisorSettings,
   ContextPreset,
   RenderRequester,
-} from "./types.js";
+} from "./types.ts";
 
 export interface SettingsItemsOptions {
   effortLevels: string[];

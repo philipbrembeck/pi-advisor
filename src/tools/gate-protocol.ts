@@ -1,5 +1,5 @@
-import type { GateDecision } from "../session-state.js";
-import type { AdvisorGateFailure, AdvisorGateResult } from "./types.js";
+import type { GateDecision } from "../session-state.ts";
+import type { AdvisorGateFailure, AdvisorGateResult } from "./types.ts";
 
 const DECISION_LINE = /^Decision\s*:\s*(proceed|revise|blocked)\s*$/i;
 const CODE_FENCE = /^ {0,3}(`{3,}|~{3,})(.*)$/;

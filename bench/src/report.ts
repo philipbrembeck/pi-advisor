@@ -1,13 +1,13 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
-import { capturePins } from "./pins.js";
+import { capturePins } from "./pins.ts";
 import type {
   BenchmarkConfig,
   BenchmarkPins,
   BenchmarkReport,
   BudgetEstimate,
-} from "./types.js";
-import { BENCHMARK_SCHEMA_VERSION } from "./types.js";
+} from "./types.ts";
+import { BENCHMARK_SCHEMA_VERSION } from "./types.ts";
 
 export const reportFor = (
   tier: BenchmarkReport["tier"],

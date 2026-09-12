@@ -5,8 +5,8 @@ import {
   type Model,
   stream,
 } from "@earendil-works/pi-ai/compat";
-import { assertRecordedRequestPin } from "./pins.js";
-import type { ModelPin, RecordedProviderRequest } from "./types.js";
+import { assertRecordedRequestPin } from "./pins.ts";
+import type { ModelPin, RecordedProviderRequest } from "./types.ts";
 
 export class LiveProviderUnavailableError extends Error {
   constructor(message: string) {

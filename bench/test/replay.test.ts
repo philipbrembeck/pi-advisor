@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { runReplay } from "../src/replay/runner.js";
+import { runReplay } from "../src/replay/runner.ts";
 
 const SHA256 = /^sha256:[0-9a-f]{64}$/;
 

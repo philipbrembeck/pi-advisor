@@ -5,7 +5,7 @@ import type {
   DecisionKey,
   DecisionPolarity,
   DecisionTrap,
-} from "./types.js";
+} from "./types.ts";
 
 export interface HarvestTrajectory {
   answer: DecisionKey;

@@ -3,11 +3,11 @@ import type {
   ExtensionContext,
   Theme,
 } from "@earendil-works/pi-coding-agent";
-import type { GitContextLevel } from "../git.js";
-import type { ScoutLifecycleEvent } from "../scout.js";
-import type { AdvisorSessionState } from "../session-state.js";
-import type { ScoutStatusManager } from "../tools/scout-status.js";
-import type { ScoutToolDetails } from "../tools/types.js";
+import type { GitContextLevel } from "../git.ts";
+import type { ScoutLifecycleEvent } from "../scout.ts";
+import type { AdvisorSessionState } from "../session-state.ts";
+import type { ScoutStatusManager } from "../tools/scout-status.ts";
+import type { ScoutToolDetails } from "../tools/types.ts";
 
 export type ManualConsult = (
   ctx: ExtensionContext,

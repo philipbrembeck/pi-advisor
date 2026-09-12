@@ -82,7 +82,7 @@ import {
   simpleModeRef,
   splitRef,
   validateConfig,
-} from "../src/config.js";
+} from "../src/config.ts";
 
 describe("Config Module", () => {
   test("splitRef should split provider/model", () => {

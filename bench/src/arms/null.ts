@@ -1,4 +1,4 @@
-import type { DecisionItem } from "../types.js";
+import type { DecisionItem } from "../types.ts";
 
 /** Fixed control text: it names no target choice and makes no decision. */
 export const NULL_ADVICE =

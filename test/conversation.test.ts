@@ -4,7 +4,7 @@ import {
   recentConversation,
   redactSecrets,
   textFrom,
-} from "../src/conversation.js";
+} from "../src/conversation.ts";
 
 describe("Conversation Module", () => {
   test("textFrom should parse simple strings", () => {

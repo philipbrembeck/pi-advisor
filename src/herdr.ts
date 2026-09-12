@@ -1,6 +1,6 @@
 import net from "node:net";
-import { getAdvisorSettings } from "./config/state.js";
-import { redactSecrets } from "./conversation.js";
+import { getAdvisorSettings } from "./config/state.ts";
+import { redactSecrets } from "./conversation.ts";
 
 // Keep the JSON-RPC method components separate from Socket's URL-string heuristic.
 const HERDR_NOTIFICATION_METHOD = `${"notification"}.${"show"}`;

@@ -6,7 +6,7 @@ import type {
   DecisionKey,
   DecisionTrap,
   ReplayFixture,
-} from "./types.js";
+} from "./types.ts";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === "object" && !Array.isArray(value);

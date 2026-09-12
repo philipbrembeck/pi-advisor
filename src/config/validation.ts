@@ -1,10 +1,10 @@
-import { GIT_CONTEXT_LEVELS, isValidGitContextLevel } from "../git.js";
+import { GIT_CONTEXT_LEVELS, isValidGitContextLevel } from "../git.ts";
 import {
   ADVISOR_TOOL_POLICIES,
   type AdvisorConfig,
   GATE_FAILURE_MODES,
   MAX_CONTEXT_MAX_CHARS,
-} from "./types.js";
+} from "./types.ts";
 
 const CONFIG_KEYS = new Set<keyof AdvisorConfig>([
   "advisor",

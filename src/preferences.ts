@@ -1,7 +1,7 @@
 import { lstat, open, realpath } from "node:fs/promises";
 import { join, relative } from "node:path";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { redactAndCapText } from "./conversation.js";
+import { redactAndCapText } from "./conversation.ts";
 
 export const PREFERENCES_MAX_BYTES = 8 * 1024;
 // Keep the local filename components separate from Socket's URL-string heuristic.

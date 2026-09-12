@@ -1,13 +1,13 @@
 import { resolve } from "node:path";
-import { DEFAULT_CONFIG, loadBenchmarkConfig } from "./config.js";
-import { defaultControlAdvice, runControls } from "./controls.js";
-import { runDecisions as runDecisionBenchmark } from "./decisions.js";
-import { runEvaluation } from "./evaluate-runner.js";
-import { hashTree } from "./fixture.js";
-import { runReplay } from "./replay/runner.js";
-import { reportFor, writeReport } from "./report.js";
-import { runScreening } from "./screen.js";
-import type { BenchmarkReport, BenchmarkTier } from "./types.js";
+import { DEFAULT_CONFIG, loadBenchmarkConfig } from "./config.ts";
+import { defaultControlAdvice, runControls } from "./controls.ts";
+import { runDecisions as runDecisionBenchmark } from "./decisions.ts";
+import { runEvaluation } from "./evaluate-runner.ts";
+import { hashTree } from "./fixture.ts";
+import { runReplay } from "./replay/runner.ts";
+import { reportFor, writeReport } from "./report.ts";
+import { runScreening } from "./screen.ts";
+import type { BenchmarkReport, BenchmarkTier } from "./types.ts";
 
 const help = () => `Usage: bun bench/src/cli.ts <command> [options]
 

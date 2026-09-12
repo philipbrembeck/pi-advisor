@@ -3,20 +3,20 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { redactSecrets } from "../src/conversation.js";
+import { redactSecrets } from "../src/conversation.ts";
 import {
   capRepositoryContext,
   clampGitContextLevel,
   collectGitContext,
   escapeRepositoryText,
   type GitContextLevel,
-} from "../src/git.js";
+} from "../src/git.ts";
 import {
   advisorGitContextBudget,
   advisorMessageText,
   advisorRepositoryContext,
   gitContextNote,
-} from "../src/tools.js";
+} from "../src/tools.ts";
 
 const SECRET = "sk_live_51H8xQ2eZvKYlo2C0aBcDeFgHiJkLmNoP";
 

@@ -7,7 +7,7 @@ import {
   truncateToWidth,
   visibleWidth,
 } from "@earendil-works/pi-tui";
-import { advisorCollapseResponsesRef } from "../config/state.js";
+import { advisorCollapseResponsesRef } from "../config/state.ts";
 
 export const SPINNER_FRAMES = [
   "⠋",

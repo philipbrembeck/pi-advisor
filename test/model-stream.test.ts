@@ -3,7 +3,7 @@ import {
   collectTextStream,
   createCoalescedUpdate,
   resolveConfiguredModel,
-} from "../src/model-stream.js";
+} from "../src/model-stream.ts";
 
 const model = {
   api: "test-api",

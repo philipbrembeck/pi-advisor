@@ -1,4 +1,4 @@
-import type { DecisionItem, ModelPin } from "../types.js";
+import type { DecisionItem, ModelPin } from "../types.ts";
 
 export interface JudgeRequest {
   advice: string;

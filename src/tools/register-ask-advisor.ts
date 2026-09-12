@@ -5,29 +5,29 @@ import {
   getAdvisorMaxCallsPerSession,
   getAdvisorSettings,
   isSimpleMode,
-} from "../config/state.js";
-import { herdrAdvisorActivity, notifyHerdrAdvisorFailure } from "../herdr.js";
+} from "../config/state.ts";
+import { herdrAdvisorActivity, notifyHerdrAdvisorFailure } from "../herdr.ts";
 import {
   ADVISOR_STREAM_UPDATE_INTERVAL_MS,
   createCoalescedUpdate,
-} from "../model-stream.js";
+} from "../model-stream.ts";
 import {
   advisorUsageCost,
   advisorUsageForPi,
   snapshotAdvisorUsage,
-} from "../usage.js";
-import { notifyLocalFailure, updateAdvisorUsageStatus } from "./gate-policy.js";
-import { renderAdvisorResult } from "./render-advisor-result.js";
+} from "../usage.ts";
+import { notifyLocalFailure, updateAdvisorUsageStatus } from "./gate-policy.ts";
+import { renderAdvisorResult } from "./render-advisor-result.ts";
 import {
   renderAdvisorCallBox,
   resolveAdvisorRequest,
-} from "./render-common.js";
-import { scoutDetailsFromEvent } from "./scout-status.js";
+} from "./render-common.ts";
+import { scoutDetailsFromEvent } from "./scout-status.ts";
 import type {
   AdvisorToolContext,
   AdvisorToolDetails,
   ToolRegistrationContext,
-} from "./types.js";
+} from "./types.ts";
 
 /**
  * Validates a tracked-file follow-up and consumes the one-shot handoff only

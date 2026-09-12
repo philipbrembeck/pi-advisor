@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { constants } from "node:fs";
 import { lstat, open, realpath } from "node:fs/promises";
 import { isAbsolute, relative, resolve } from "node:path";
-import { redactAndCapText } from "./conversation.js";
+import { redactAndCapText } from "./conversation.ts";
 
 export const ADVISOR_FILE_MAX_BYTES = 8 * 1024;
 export const ADVISOR_FILES_TOTAL_MAX_BYTES = 24 * 1024;

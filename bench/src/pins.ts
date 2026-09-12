@@ -8,13 +8,13 @@ import {
   PINNED_EXECUTOR,
   PINNED_EXECUTOR_EFFORT,
   PINNED_JUDGE_EFFORT,
-} from "./config.js";
+} from "./config.ts";
 import type {
   BenchmarkConfig,
   BenchmarkPins,
   ModelPin,
   RecordedProviderRequest,
-} from "./types.js";
+} from "./types.ts";
 
 const readPackageVersion = (path: string, fallback: string) => {
   try {

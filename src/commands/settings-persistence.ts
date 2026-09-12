@@ -29,9 +29,9 @@ import {
   setShowUsageDetailsRef,
   setShowUsageFooterRef,
   setSimpleModeRef,
-} from "../config/state.js";
-import { saveConfig, saveGlobalOutcomeLogging } from "../config/storage.js";
-import type { AdvisorSettings } from "../ui/types.js";
+} from "../config/state.ts";
+import { saveConfig, saveGlobalOutcomeLogging } from "../config/storage.ts";
+import type { AdvisorSettings } from "../ui/types.ts";
 
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: one settings form maps every persisted control.
 export const applyAdvisorSettings = (settings: AdvisorSettings) => {

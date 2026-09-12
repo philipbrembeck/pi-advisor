@@ -1,4 +1,4 @@
-import type { DecisionItem } from "../types.js";
+import type { DecisionItem } from "../types.ts";
 
 const includesToken = (text: string, token: string) =>
   text.toLocaleLowerCase().includes(token.toLocaleLowerCase());

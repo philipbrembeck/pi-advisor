@@ -1,4 +1,23 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
-  "extends": ["ultracite/biome/core"]
+  "extends": ["ultracite/biome/core"],
+  "linter": {
+    "rules": {
+      "correctness": {
+        "noPrivateImports": "error",
+        "noUndeclaredDependencies": "error",
+        "useImportExtensions": "error"
+      },
+      "nursery": { "noFloatingPromises": "error" },
+      "suspicious": {
+        "noConsole": { "level": "error", "options": { "allow": ["log"] } }
+      }
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["scripts/**", "bench/**"],
+      "linter": { "rules": { "suspicious": { "noConsole": "off" } } }
+    }
+  ]
 }

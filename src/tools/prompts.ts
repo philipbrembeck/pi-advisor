@@ -6,14 +6,14 @@ import {
   advisorPlanGateRef,
   contextMaxCharsRef,
   isSimpleMode,
-} from "../config/state.js";
-import { recentConversation } from "../conversation.js";
+} from "../config/state.ts";
+import { recentConversation } from "../conversation.ts";
 import {
   capRepositoryContext,
   escapeRepositoryText,
   type GitContextLevel,
   type GitContextResult,
-} from "../git.js";
+} from "../git.ts";
 
 export const advisorMessageText = (
   conversation: string,

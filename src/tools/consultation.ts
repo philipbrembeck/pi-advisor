@@ -12,29 +12,29 @@ import {
   advisorUntrackedContentRef,
   contextMaxCharsRef,
   executorRef,
-} from "../config/state.js";
-import { loadConfig } from "../config/storage.js";
-import { redactAndCapText, redactSecrets } from "../conversation.js";
+} from "../config/state.ts";
+import { loadConfig } from "../config/storage.ts";
+import { redactAndCapText, redactSecrets } from "../conversation.ts";
 import {
   clampGitContextLevel,
   collectGitContext,
   type GitContextLevel,
-} from "../git.js";
-import { collectTextStream, resolveConfiguredModel } from "../model-stream.js";
-import { readProjectPreferences } from "../preferences.js";
+} from "../git.ts";
+import { collectTextStream, resolveConfiguredModel } from "../model-stream.ts";
+import { readProjectPreferences } from "../preferences.ts";
 import {
   runAdvisorScout,
   type ScoutLifecycleEvent,
   type ScoutOutcome,
-} from "../scout.js";
+} from "../scout.ts";
 import {
   buildScoutManifest,
   reconstructScoutConversation,
   SCOUT_MANIFEST_MAX_BYTES,
-} from "../scout-context.js";
-import type { ConsultationTrigger, GateTrigger } from "../session-state.js";
-import { readTrackedFiles, readUntrackedFiles } from "../untracked.js";
-import { parseAutomaticDecision } from "./gate-protocol.js";
+} from "../scout-context.ts";
+import type { ConsultationTrigger, GateTrigger } from "../session-state.ts";
+import { readTrackedFiles, readUntrackedFiles } from "../untracked.ts";
+import { parseAutomaticDecision } from "./gate-protocol.ts";
 import {
   ADVISOR_DECISION_SYSTEM,
   ADVISOR_SYSTEM,
@@ -42,8 +42,8 @@ import {
   advisorMessageText,
   advisorRepositoryContext,
   advisorRequestConversation,
-} from "./prompts.js";
-import type { AdvisorConsultationResult, AdvisorGateOutcome } from "./types.js";
+} from "./prompts.ts";
+import type { AdvisorConsultationResult, AdvisorGateOutcome } from "./types.ts";
 
 export const curateAdvisorConversation = async (
   ctx: ExtensionContext,

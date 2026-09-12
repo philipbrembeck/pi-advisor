@@ -1,9 +1,9 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { redactSecrets } from "../../../src/conversation.js";
-import { replayCaseFor } from "../gates.js";
-import type { ReplayFixture } from "../types.js";
-import type { CapturedRequest } from "./mock-provider.js";
+import { redactSecrets } from "../../../src/conversation.ts";
+import { replayCaseFor } from "../gates.ts";
+import type { ReplayFixture } from "../types.ts";
+import type { CapturedRequest } from "./mock-provider.ts";
 
 export const DEFAULT_VOLATILE_FIELDS = ["timestamp"] as const;
 

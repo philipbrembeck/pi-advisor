@@ -7,13 +7,13 @@ import {
   type TUI,
   visibleWidth,
 } from "@earendil-works/pi-tui";
-import { TextSettingSubmenu } from "../src/ui/text-setting-submenu.js";
+import { TextSettingSubmenu } from "../src/ui/text-setting-submenu.ts";
 import {
   AdvisorSettingsSelector,
   ManualAdvisorDialog,
   type ManualAdvisorRequest,
   SearchableModelSelector,
-} from "../src/ui.js";
+} from "../src/ui.ts";
 
 const theme = {
   bold: (value: string) => value,

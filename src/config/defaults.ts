@@ -31,14 +31,14 @@ import {
   setShowUsageDetailsRef,
   setShowUsageFooterRef,
   setSimpleModeRef,
-} from "./state.js";
-import type { AdvisorConfig } from "./types.js";
+} from "./state.ts";
+import type { AdvisorConfig } from "./types.ts";
 import {
   DEFAULT_ADVISOR_GIT_CONTEXT_MAX_CHARS,
   DEFAULT_ADVISOR_TOOL_RESULT_MAX_BYTES,
   DEFAULT_ADVISOR_TOOL_RESULT_MAX_LINES,
   DEFAULT_CONTEXT_MAX_CHARS,
-} from "./types.js";
+} from "./types.ts";
 
 export const resetDefaults = () => {
   setExecutorRef("");

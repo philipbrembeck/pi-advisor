@@ -4,11 +4,11 @@ import type {
   Theme,
 } from "@earendil-works/pi-coding-agent";
 import { type Box, Text } from "@earendil-works/pi-tui";
-import { executorRef, getAdvisorSettings } from "../config/state.js";
-import type { ScoutLifecycleEvent } from "../scout.js";
-import { formatAdvisorUsage, snapshotAdvisorUsage } from "../usage.js";
-import { renderThinkingMarkdown, SPINNER_FRAMES } from "./render-common.js";
-import type { ScoutToolDetails } from "./types.js";
+import { executorRef, getAdvisorSettings } from "../config/state.ts";
+import type { ScoutLifecycleEvent } from "../scout.ts";
+import { formatAdvisorUsage, snapshotAdvisorUsage } from "../usage.ts";
+import { renderThinkingMarkdown, SPINNER_FRAMES } from "./render-common.ts";
+import type { ScoutToolDetails } from "./types.ts";
 
 export const scoutDetailsFromEvent = (
   event: ScoutLifecycleEvent,

@@ -1,12 +1,12 @@
-import { snapshotAdvisorUsage } from "../../src/usage.js";
+import { snapshotAdvisorUsage } from "../../src/usage.ts";
 import type {
   CostValue,
   ModelRole,
   PricingRates,
   RoleCost,
   UsageSnapshot,
-} from "./types.js";
-import { UNAVAILABLE } from "./types.js";
+} from "./types.ts";
+import { UNAVAILABLE } from "./types.ts";
 
 const finite = (value: unknown): number | null =>
   typeof value === "number" && Number.isFinite(value) && value >= 0

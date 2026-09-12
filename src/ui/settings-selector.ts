@@ -8,15 +8,15 @@ import {
 import {
   rainbowGradient,
   SIMPLE_MODE_GRADIENT_INTERVAL_MS,
-} from "./settings-formatting.js";
-import { createSettingsItems } from "./settings-items.js";
-import { SettingsListAdapter } from "./settings-list-adapter.js";
-import { mutateAdvisorSettings } from "./settings-mutations.js";
+} from "./settings-formatting.ts";
+import { createSettingsItems } from "./settings-items.ts";
+import { SettingsListAdapter } from "./settings-list-adapter.ts";
+import { mutateAdvisorSettings } from "./settings-mutations.ts";
 import type {
   AdvisorSettings,
   AdvisorSettingsSelectorOptions,
   ContextPreset,
-} from "./types.js";
+} from "./types.ts";
 
 export class AdvisorSettingsSelector implements Component, Focusable {
   private readonly options: AdvisorSettingsSelectorOptions;

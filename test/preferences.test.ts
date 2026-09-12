@@ -8,8 +8,8 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readProjectPreferences } from "../src/preferences.js";
-import { advisorMessageText } from "../src/tools.js";
+import { readProjectPreferences } from "../src/preferences.ts";
+import { advisorMessageText } from "../src/tools.ts";
 
 const context = (cwd: string, trusted: boolean) =>
   ({

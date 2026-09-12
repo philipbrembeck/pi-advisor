@@ -1,5 +1,5 @@
 import { visibleWidth } from "@earendil-works/pi-tui";
-import type { ContextPreset } from "./types.js";
+import type { ContextPreset } from "./types.ts";
 
 export const DEFAULT_EFFORT_LEVEL = "Default (Model Default)";
 export const TOGGLE_VALUES = ["On", "Off"];

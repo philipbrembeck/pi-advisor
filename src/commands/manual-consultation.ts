@@ -1,12 +1,12 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { advisorRef } from "../config/state.js";
-import type { GitContextLevel } from "../git.js";
-import { herdrAdvisorActivity, notifyHerdrAdvisorFailure } from "../herdr.js";
-import { appendScoutLifecycleEntry } from "../tools/scout-status.js";
-import type { ScoutToolDetails } from "../tools/types.js";
-import { advisorUsageCost, snapshotAdvisorUsage } from "../usage.js";
-import { notify } from "./runtime.js";
-import type { CommandRuntime, ManualAdvisorProgressState } from "./types.js";
+import { advisorRef } from "../config/state.ts";
+import type { GitContextLevel } from "../git.ts";
+import { herdrAdvisorActivity, notifyHerdrAdvisorFailure } from "../herdr.ts";
+import { appendScoutLifecycleEntry } from "../tools/scout-status.ts";
+import type { ScoutToolDetails } from "../tools/types.ts";
+import { advisorUsageCost, snapshotAdvisorUsage } from "../usage.ts";
+import { notify } from "./runtime.ts";
+import type { CommandRuntime, ManualAdvisorProgressState } from "./types.ts";
 
 export const startManualConsultation = (
   runtime: CommandRuntime,

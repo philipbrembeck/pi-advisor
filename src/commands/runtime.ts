@@ -2,18 +2,18 @@ import type {
   ExtensionAPI,
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
-import { getAdvisorSettings } from "../config/state.js";
-import { notifyHerdrAdvisorFailure } from "../herdr.js";
-import type { AdvisorSessionState } from "../session-state.js";
-import { consultAdvisor } from "../tools/consultation.js";
-import { ScoutStatusManager } from "../tools/scout-status.js";
-import { advisorSessionState as defaultAdvisorSessionState } from "../tools/session.js";
+import { getAdvisorSettings } from "../config/state.ts";
+import { notifyHerdrAdvisorFailure } from "../herdr.ts";
+import type { AdvisorSessionState } from "../session-state.ts";
+import { consultAdvisor } from "../tools/consultation.ts";
+import { ScoutStatusManager } from "../tools/scout-status.ts";
+import { advisorSessionState as defaultAdvisorSessionState } from "../tools/session.ts";
 import type {
   CommandDependencies,
   CommandRuntime as CommandRuntimeContract,
   ManualAdvisorProgressState,
   ManualConsult,
-} from "./types.js";
+} from "./types.ts";
 
 export const notify = (
   ctx: ExtensionContext,

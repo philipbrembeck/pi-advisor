@@ -5,9 +5,9 @@ import {
   advisorToolPoliciesRef,
   advisorToolResultMaxBytesRef,
   advisorToolResultMaxLinesRef,
-} from "./config/state.js";
-import type { AdvisorToolPolicies } from "./config/types.js";
-import { conversationEntry, textFrom } from "./conversation.js";
+} from "./config/state.ts";
+import type { AdvisorToolPolicies } from "./config/types.ts";
+import { conversationEntry, textFrom } from "./conversation.ts";
 
 export const SCOUT_MANIFEST_MAX_BYTES = 64 * 1024;
 export const SCOUT_MANIFEST_MAX_GROUPS = 64;

@@ -8,14 +8,14 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
-import { assertRecordedRequestPins } from "./pins.js";
-import { runProcess } from "./process.js";
+import { assertRecordedRequestPins } from "./pins.ts";
+import { runProcess } from "./process.ts";
 import type {
   CostValue,
   ModelPin,
   PricingRates,
   RecordedProviderRequest,
-} from "./types.js";
+} from "./types.ts";
 
 const DEFAULT_COMMAND_TIMEOUT_MS = 2_400_000;
 

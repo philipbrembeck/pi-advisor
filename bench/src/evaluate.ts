@@ -1,4 +1,4 @@
-import type { ArmName, CostValue, DiscordantPairs } from "./types.js";
+import type { ArmName, CostValue, DiscordantPairs } from "./types.ts";
 
 export type EvaluationArm = "E" | "E+A" | "F" | "F′";
 

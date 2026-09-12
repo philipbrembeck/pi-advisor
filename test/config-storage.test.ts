@@ -15,12 +15,12 @@ import {
   setExecutorEffortRef,
   setExecutorRef,
   setShowUsageFooterRef,
-} from "../src/config/state.js";
+} from "../src/config/state.ts";
 import {
   loadConfig,
   resetConfigCache,
   saveConfig,
-} from "../src/config/storage.js";
+} from "../src/config/storage.ts";
 
 const context = { hasUI: false } as unknown as ExtensionContext;
 const originalAgentDir = process.env.PI_CODING_AGENT_DIR;

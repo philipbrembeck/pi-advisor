@@ -1,6 +1,6 @@
-import type { ArmName, DecisionItem, DecisionScore } from "../types.js";
-import { type JudgeInvoker, judgeAdvice, type ScoredJudge } from "./judge.js";
-import { mechanicalScore } from "./mechanical.js";
+import type { ArmName, DecisionItem, DecisionScore } from "../types.ts";
+import { type JudgeInvoker, judgeAdvice, type ScoredJudge } from "./judge.ts";
+import { mechanicalScore } from "./mechanical.ts";
 
 export interface ScoreAdviceOptions {
   advice: string;

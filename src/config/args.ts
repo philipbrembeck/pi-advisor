@@ -5,9 +5,9 @@ import {
   setAdvisorRef,
   setContextMaxCharsRef,
   setExecutorRef,
-} from "./state.js";
-import { MAX_CONTEXT_MAX_CHARS } from "./types.js";
-import { isValidContextMaxChars } from "./validation.js";
+} from "./state.ts";
+import { MAX_CONTEXT_MAX_CHARS } from "./types.ts";
+import { isValidContextMaxChars } from "./validation.ts";
 
 const ARGUMENT_WHITESPACE = /\s+/;
 

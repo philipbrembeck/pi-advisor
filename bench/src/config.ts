@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { GATE_FAILURE_MODES } from "./gates.js";
+import { GATE_FAILURE_MODES } from "./gates.ts";
 import type {
   ArmName,
   BenchmarkConfig,
@@ -9,7 +9,7 @@ import type {
   ModelPin,
   ModelRole,
   PricingRates,
-} from "./types.js";
+} from "./types.ts";
 
 export const PINNED_EXECUTOR = "openai-codex/gpt-5.6-luna";
 export const PINNED_ADVISOR = "openai-codex/gpt-5.6-sol";

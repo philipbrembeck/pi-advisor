@@ -7,7 +7,7 @@ import {
   formatAdvisorUsageStatus,
   formatAdvisorUsageTotals,
   snapshotAdvisorUsage,
-} from "../src/usage.js";
+} from "../src/usage.ts";
 
 describe("Advisor usage", () => {
   test("normalizes complete and legacy provider usage", () => {

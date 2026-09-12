@@ -1,17 +1,17 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { appendOutcome } from "../outcomes.js";
-import type { AdvisorSessionState } from "../session-state.js";
-import { consultAdvisor, runAdvisorGate } from "./consultation.js";
-import { registerAskAdvisorTool } from "./register-ask-advisor.js";
-import { registerToolLifecycle } from "./register-lifecycle.js";
-import { registerOutcomeTool } from "./register-outcome.js";
-import { registerToolRenderers } from "./register-renderers.js";
-import { ScoutStatusManager } from "./scout-status.js";
-import { advisorSessionState } from "./session.js";
+import { appendOutcome } from "../outcomes.ts";
+import type { AdvisorSessionState } from "../session-state.ts";
+import { consultAdvisor, runAdvisorGate } from "./consultation.ts";
+import { registerAskAdvisorTool } from "./register-ask-advisor.ts";
+import { registerToolLifecycle } from "./register-lifecycle.ts";
+import { registerOutcomeTool } from "./register-outcome.ts";
+import { registerToolRenderers } from "./register-renderers.ts";
+import { ScoutStatusManager } from "./scout-status.ts";
+import { advisorSessionState } from "./session.ts";
 import type {
   ToolRegistrationContext,
   ToolRegistrationDependencies,
-} from "./types.js";
+} from "./types.ts";
 
 export const registerAdvisorTool = (
   pi: ExtensionAPI,

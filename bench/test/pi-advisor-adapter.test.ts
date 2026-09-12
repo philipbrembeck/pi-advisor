@@ -12,7 +12,7 @@ import {
   PiAdvisorAdapterUnavailableError,
   PiAdvisorHarborAdapter,
   parseAdvisorAttestation,
-} from "../src/pi-advisor-adapter.js";
+} from "../src/pi-advisor-adapter.ts";
 
 const prerequisites = (extensionPath: string) => ({
   authFile: join(extensionPath, "../auth.json"),

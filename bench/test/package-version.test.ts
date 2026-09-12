@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { PI_ADVISOR_VERSION } from "../src/package-version.js";
+import { PI_ADVISOR_VERSION } from "../src/package-version.ts";
 
 interface PackageManifest {
   version: string;

@@ -4,7 +4,7 @@ import {
   Input,
   truncateToWidth,
 } from "@earendil-works/pi-tui";
-import type { TextSettingSubmenuOptions } from "./types.js";
+import type { TextSettingSubmenuOptions } from "./types.ts";
 
 /** Small inline editor used by SettingsList for the two free-form settings. */
 export class TextSettingSubmenu implements Component, Focusable {

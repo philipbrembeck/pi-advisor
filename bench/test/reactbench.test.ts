@@ -12,7 +12,7 @@ import {
   buildReactBenchArgs,
   CommandReactBenchRunner,
   parseReactBenchResult,
-} from "../src/reactbench.js";
+} from "../src/reactbench.ts";
 
 describe("ReactBench adapter boundary", () => {
   test("forwards seed, arm, pins, and pricing as structured arguments", () => {

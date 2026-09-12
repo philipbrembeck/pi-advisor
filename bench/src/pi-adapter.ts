@@ -4,7 +4,7 @@ import {
   type ReactBenchTrialRequest,
   type ReactBenchTrialResult,
   type ReactBenchTrialRunner,
-} from "./reactbench.js";
+} from "./reactbench.ts";
 
 /**
  * The adapter protocol used by the Harbor task container (or the approved

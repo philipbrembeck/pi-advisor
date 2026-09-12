@@ -3,7 +3,7 @@ import {
   AdvisorSessionState,
   normalizedToolSignature,
   normalizeToolInput,
-} from "../src/session-state.js";
+} from "../src/session-state.ts";
 
 describe("AdvisorSessionState", () => {
   test("blocks the third equivalent normalized tool action and resets for a new action", () => {

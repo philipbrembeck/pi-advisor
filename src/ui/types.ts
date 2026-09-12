@@ -1,7 +1,7 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import type { KeybindingsManager, TUI } from "@earendil-works/pi-tui";
-import type { GateFailureMode } from "../config/types.js";
-import type { GitContextLevel } from "../git.js";
+import type { GateFailureMode } from "../config/types.ts";
+import type { GitContextLevel } from "../git.ts";
 
 export interface RenderRequester {
   requestRender: () => void;

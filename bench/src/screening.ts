@@ -1,5 +1,5 @@
-import { assertDisjointSeeds } from "./seeds.js";
-import type { BandScreenResult, CandidateBand } from "./types.js";
+import { assertDisjointSeeds } from "./seeds.ts";
+import type { BandScreenResult, CandidateBand } from "./types.ts";
 
 export interface ScreeningTaskResult {
   executorPasses: boolean[];

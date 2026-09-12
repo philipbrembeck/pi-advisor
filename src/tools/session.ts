@@ -1,3 +1,3 @@
-import { AdvisorSessionState } from "../session-state.js";
+import { AdvisorSessionState } from "../session-state.ts";
 
 export const advisorSessionState = new AdvisorSessionState();

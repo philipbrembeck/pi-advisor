@@ -1,4 +1,4 @@
-import type { GitContextLevel } from "../git.js";
+import type { GitContextLevel } from "../git.ts";
 import {
   type AdvisorToolPolicies,
   DEFAULT_ADVISOR_GIT_CONTEXT_MAX_CHARS,
@@ -6,7 +6,7 @@ import {
   DEFAULT_ADVISOR_TOOL_RESULT_MAX_LINES,
   DEFAULT_CONTEXT_MAX_CHARS,
   type GateFailureMode,
-} from "./types.js";
+} from "./types.ts";
 
 // An empty ref means no model has been selected yet.
 export let executorRef = "";

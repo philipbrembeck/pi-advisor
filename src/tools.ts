@@ -3,9 +3,9 @@ export {
   consultAdvisor,
   curateAdvisorConversation,
   runAdvisorGate,
-} from "./tools/consultation.js";
-export { gateFailureEffectForMode } from "./tools/gate-policy.js";
-export { parseAutomaticDecision } from "./tools/gate-protocol.js";
+} from "./tools/consultation.ts";
+export { gateFailureEffectForMode } from "./tools/gate-policy.ts";
+export { parseAutomaticDecision } from "./tools/gate-protocol.ts";
 export {
   ADVISOR_DECISION_SYSTEM,
   ADVISOR_SYSTEM,
@@ -15,8 +15,8 @@ export {
   advisorRepositoryContext,
   advisorRequestConversation,
   gitContextNote,
-} from "./tools/prompts.js";
-export { registerAdvisorTool } from "./tools/registration.js";
+} from "./tools/prompts.ts";
+export { registerAdvisorTool } from "./tools/registration.ts";
 export {
   adviceForDisplay,
   hasSoundVerdict,
@@ -25,14 +25,14 @@ export {
   renderThinkingMarkdown,
   resolveAdvisorRequest,
   SPINNER_FRAMES,
-} from "./tools/render-common.js";
+} from "./tools/render-common.ts";
 export {
   appendScoutLifecycleEntry,
   renderScoutDetails,
   ScoutStatusManager,
   scoutDetailsFromEvent,
-} from "./tools/scout-status.js";
-export { advisorSessionState } from "./tools/session.js";
+} from "./tools/scout-status.ts";
+export { advisorSessionState } from "./tools/session.ts";
 export type {
   AdvisorConsultationResult,
   AdvisorGateFailure,
@@ -44,4 +44,4 @@ export type {
   GateFailureCategory,
   GateTrigger,
   ScoutToolDetails,
-} from "./tools/types.js";
+} from "./tools/types.ts";

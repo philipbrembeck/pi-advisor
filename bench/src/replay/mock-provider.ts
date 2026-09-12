@@ -5,7 +5,7 @@ import {
   type ServerResponse,
 } from "node:http";
 import type { ProviderConfig } from "@earendil-works/pi-coding-agent";
-import type { RecordedProviderRequest } from "../types.js";
+import type { RecordedProviderRequest } from "../types.ts";
 
 export interface MockReply {
   text: string;

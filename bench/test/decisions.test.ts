@@ -1,15 +1,15 @@
 import { describe, expect, test } from "bun:test";
-import { DEFAULT_CONFIG } from "../src/config.js";
-import { controlJudge, defaultControlAdvice } from "../src/controls.js";
+import { DEFAULT_CONFIG } from "../src/config.ts";
+import { controlJudge, defaultControlAdvice } from "../src/controls.ts";
 import {
   advisorContextForItem,
   assertAdvisorPayloadExcludesKey,
-} from "../src/decision-context.js";
-import { runDecisions } from "../src/decisions.js";
-import { discoverDecisionItems } from "../src/fixture.js";
-import { MockProviderServer } from "../src/replay/mock-provider.js";
-import { parseJudgeResponse } from "../src/score/judge.js";
-import { mechanicalScore } from "../src/score/mechanical.js";
+} from "../src/decision-context.ts";
+import { runDecisions } from "../src/decisions.ts";
+import { discoverDecisionItems } from "../src/fixture.ts";
+import { MockProviderServer } from "../src/replay/mock-provider.ts";
+import { parseJudgeResponse } from "../src/score/judge.ts";
+import { mechanicalScore } from "../src/score/mechanical.ts";
 
 const items = discoverDecisionItems("bench/tasks");
 

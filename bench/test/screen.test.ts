@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { DEFAULT_CONFIG } from "../src/config.js";
+import { DEFAULT_CONFIG } from "../src/config.ts";
 import type {
   ReactBenchTrialRequest,
   ReactBenchTrialResult,
-} from "../src/reactbench.js";
-import { runScreening } from "../src/screen.js";
+} from "../src/reactbench.ts";
+import { runScreening } from "../src/screen.ts";
 
 describe("Stage 1 screening", () => {
   test("classifies every task and selects a seeded trivial stratum", async () => {

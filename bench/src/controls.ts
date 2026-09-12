@@ -1,8 +1,8 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { nullAdvice } from "./arms/null.js";
-import { oracleAdvice } from "./arms/oracle.js";
-import { mechanicalPositiveCatch } from "./score/mechanical.js";
+import { nullAdvice } from "./arms/null.ts";
+import { oracleAdvice } from "./arms/oracle.ts";
+import { mechanicalPositiveCatch } from "./score/mechanical.ts";
 
 import type {
   DecisionItem,
@@ -10,7 +10,7 @@ import type {
   DecisionPolarity,
   DecisionScore,
   DecisionTrap,
-} from "./types.js";
+} from "./types.ts";
 
 interface ControlFile {
   id: string;

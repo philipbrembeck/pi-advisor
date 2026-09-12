@@ -4,12 +4,12 @@ import {
   advisorToolPoliciesRef,
   advisorToolResultMaxBytesRef,
   advisorToolResultMaxLinesRef,
-} from "./config/state.js";
-import type { AdvisorToolPolicies } from "./config/types.js";
+} from "./config/state.ts";
+import type { AdvisorToolPolicies } from "./config/types.ts";
 import {
   DEFAULT_ADVISOR_TOOL_RESULT_MAX_BYTES,
   DEFAULT_ADVISOR_TOOL_RESULT_MAX_LINES,
-} from "./config/types.js";
+} from "./config/types.ts";
 
 type RecordValue = Record<string, unknown>;
 

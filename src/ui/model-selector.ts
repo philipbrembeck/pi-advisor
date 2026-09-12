@@ -8,7 +8,7 @@ import {
   type KeybindingsManager,
   truncateToWidth,
 } from "@earendil-works/pi-tui";
-import type { SearchableModelSelectorOptions } from "./types.js";
+import type { SearchableModelSelectorOptions } from "./types.ts";
 
 export class SearchableModelSelector implements Component, Focusable {
   private readonly tui: SearchableModelSelectorOptions["tui"];

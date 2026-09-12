@@ -5,18 +5,18 @@ import {
   type ToolRenderResultOptions,
 } from "@earendil-works/pi-coding-agent";
 import { Box, Markdown, Text } from "@earendil-works/pi-tui";
-import { getAdvisorSettings } from "../config/state.js";
-import { textFrom } from "../conversation.js";
-import { formatAdvisorUsage } from "../usage.js";
+import { getAdvisorSettings } from "../config/state.ts";
+import { textFrom } from "../conversation.ts";
+import { formatAdvisorUsage } from "../usage.ts";
 import {
   adviceForDisplay,
   hasSoundVerdict,
   renderAdvisorResponseHeader,
   renderThinkingMarkdown,
   SPINNER_FRAMES,
-} from "./render-common.js";
-import { renderScoutDetails } from "./scout-status.js";
-import type { AdvisorToolContext, AdvisorToolDetails } from "./types.js";
+} from "./render-common.ts";
+import { renderScoutDetails } from "./scout-status.ts";
+import type { AdvisorToolContext, AdvisorToolDetails } from "./types.ts";
 
 const advisorResultDetails = (result: AgentToolResult<AdvisorToolDetails>) =>
   result.details;

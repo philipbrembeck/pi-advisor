@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   buildScoutManifest,
   reconstructScoutConversation,
-} from "../src/scout-context.js";
+} from "../src/scout-context.ts";
 
 const entry = (id: string, message: unknown) => ({
   id,

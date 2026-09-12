@@ -3,14 +3,14 @@ import {
   getAdvisorSettings,
   getPersistedModelRefs,
   setAlwaysOnRef,
-} from "../config/state.js";
-import { saveConfig } from "../config/storage.js";
-import { AdvisorSettingsSelector } from "../ui/settings-selector.js";
-import { loadCommandConfig } from "./activation-preparation.js";
-import { CONTEXT_PRESETS, EFFORT_LEVELS } from "./model-options.js";
-import { notify } from "./runtime.js";
-import { saveAdvisorSettings } from "./settings-persistence.js";
-import type { CommandRuntime } from "./types.js";
+} from "../config/state.ts";
+import { saveConfig } from "../config/storage.ts";
+import { AdvisorSettingsSelector } from "../ui/settings-selector.ts";
+import { loadCommandConfig } from "./activation-preparation.ts";
+import { CONTEXT_PRESETS, EFFORT_LEVELS } from "./model-options.ts";
+import { notify } from "./runtime.ts";
+import { saveAdvisorSettings } from "./settings-persistence.ts";
+import type { CommandRuntime } from "./types.ts";
 
 export const registerSettingsCommands = (runtime: CommandRuntime) => {
   runtime.pi.registerCommand("advisor-settings", {

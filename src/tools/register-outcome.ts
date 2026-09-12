@@ -1,10 +1,10 @@
 import { Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
-import { advisorOutcomeLoggingRef } from "../config/state.js";
-import { loadConfig } from "../config/storage.js";
-import { textFrom } from "../conversation.js";
-import { ADOPTIONS, VALIDATIONS } from "../outcomes.js";
-import type { ToolRegistrationContext } from "./types.js";
+import { advisorOutcomeLoggingRef } from "../config/state.ts";
+import { loadConfig } from "../config/storage.ts";
+import { textFrom } from "../conversation.ts";
+import { ADOPTIONS, VALIDATIONS } from "../outcomes.ts";
+import type { ToolRegistrationContext } from "./types.ts";
 
 export const registerOutcomeTool = ({
   appendOutcome: appendAdvisorOutcome,

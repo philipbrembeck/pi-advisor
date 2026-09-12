@@ -2,14 +2,14 @@ import {
   getAdvisorMaxCallsPerSession,
   getAdvisorSettings,
   isSimpleMode,
-} from "../config/state.js";
-import type { GitContextLevel } from "../git.js";
-import { resolveAdvisorRequest } from "../tools/render-common.js";
-import { ManualAdvisorDialog } from "../ui/manual-dialog.js";
-import type { ManualAdvisorRequest } from "../ui/types.js";
-import { loadCommandConfig } from "./activation-preparation.js";
-import { startManualConsultation } from "./manual-consultation.js";
-import type { CommandRuntime, ManualAdvisorProgressState } from "./types.js";
+} from "../config/state.ts";
+import type { GitContextLevel } from "../git.ts";
+import { resolveAdvisorRequest } from "../tools/render-common.ts";
+import { ManualAdvisorDialog } from "../ui/manual-dialog.ts";
+import type { ManualAdvisorRequest } from "../ui/types.ts";
+import { loadCommandConfig } from "./activation-preparation.ts";
+import { startManualConsultation } from "./manual-consultation.ts";
+import type { CommandRuntime, ManualAdvisorProgressState } from "./types.ts";
 
 export const registerManualCommand = (runtime: CommandRuntime) => {
   runtime.pi.registerCommand("advisor-manual", {
@@ -93,7 +93,11 @@ export const registerManualCommand = (runtime: CommandRuntime) => {
       runtime.scoutStatus.register(scoutStatusToken);
       runtime.manualConsultations.set(controller, scoutStatusToken);
       runtime.pi.appendEntry?.("advisor-manual-call", { progressId, question });
-      startManualConsultation(
+      // Intentional fire-and-forget: the consultation streams after the command
+      // handler returns. void satisfies noFloatingPromises; noVoid is ignored here
+      // because this Biome version offers no ignoreVoidAsExpression option.
+      // biome-ignore lint/complexity/noVoid: marks an intentional fire-and-forget promise
+      void startManualConsultation(
         runtime,
         ctx,
         question,

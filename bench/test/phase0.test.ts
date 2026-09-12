@@ -6,21 +6,21 @@ import {
   BudgetExceededError,
   BudgetGuard,
   validateBudgetPlan,
-} from "../src/budget.js";
+} from "../src/budget.ts";
 import {
   DEFAULT_CONFIG,
   validateBenchmarkConfig,
   validatePricing,
-} from "../src/config.js";
-import { CostMeter, configuredCost, normalizeUsage } from "../src/cost.js";
-import { hashTree } from "../src/fixture.js";
+} from "../src/config.ts";
+import { CostMeter, configuredCost, normalizeUsage } from "../src/cost.ts";
+import { hashTree } from "../src/fixture.ts";
 import {
   assertPinnedLiveModelConfiguration,
   assertRecordedRequestPin,
   capturePins,
-} from "../src/pins.js";
-import { readReport, reportFor, writeReport } from "../src/report.js";
-import { UNAVAILABLE } from "../src/types.js";
+} from "../src/pins.ts";
+import { readReport, reportFor, writeReport } from "../src/report.ts";
+import { UNAVAILABLE } from "../src/types.ts";
 
 describe("benchmark Phase 0 infrastructure", () => {
   test("validates the pinned default configuration and pricing", () => {

@@ -5,9 +5,9 @@ import {
   renderAdvisorCallBox,
   renderThinkingMarkdown,
   SPINNER_FRAMES,
-} from "../tools/render-common.js";
-import { renderScoutDetails } from "../tools/scout-status.js";
-import type { ManualAdvisorProgressState } from "./types.js";
+} from "../tools/render-common.ts";
+import { renderScoutDetails } from "../tools/scout-status.ts";
+import type { ManualAdvisorProgressState } from "./types.ts";
 
 export class ManualAdvisorProgressComponent implements Component {
   private readonly question: string | undefined;

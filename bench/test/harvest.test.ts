@@ -1,13 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import { loadDecisionItem } from "../src/fixture.js";
+import { loadDecisionItem } from "../src/fixture.ts";
 import {
   compareDiscrimination,
   harvestTrajectory,
   reharvestNotice,
   writeHarvestedItem,
-} from "../src/harvest.js";
+} from "../src/harvest.ts";
 
 const trajectory = {
   answer: {

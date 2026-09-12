@@ -10,44 +10,44 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { capToolResult } from "../../../src/conversation.js";
-import { runAdvisorGate } from "../../../src/tools.js";
+import { capToolResult } from "../../../src/conversation.ts";
+import { runAdvisorGate } from "../../../src/tools.ts";
 import {
   BudgetGuard,
   formatBudgetEstimate,
   validateBudgetPlan,
-} from "../budget.js";
-import { DEFAULT_CONFIG } from "../config.js";
-import { defaultControlAdvice, runControls } from "../controls.js";
+} from "../budget.ts";
+import { DEFAULT_CONFIG } from "../config.ts";
+import { defaultControlAdvice, runControls } from "../controls.ts";
 import {
   advisorContextForItem,
   assertAdvisorPayloadExcludesKey,
-} from "../decision-context.js";
+} from "../decision-context.ts";
 import {
   discoverDecisionItems,
   hashTree,
   loadReplayFixture,
-} from "../fixture.js";
+} from "../fixture.ts";
 import {
   decisionEffect,
   failureEffect,
   GATE_FAILURE_MODES,
   parseGateResponse,
-} from "../gates.js";
+} from "../gates.ts";
 import {
   assertRecordedRequestPins,
   capturePins,
   normalizeVolatileFields,
-} from "../pins.js";
-import { reportFor, writeReport } from "../report.js";
+} from "../pins.ts";
+import { reportFor, writeReport } from "../report.ts";
 import type {
   BenchmarkConfig,
   BenchmarkReport,
   GateFailureMode,
   ReplayCapture,
   ReplayFixture,
-} from "../types.js";
-import { MockProviderServer, registerMockProvider } from "./mock-provider.js";
+} from "../types.ts";
+import { MockProviderServer, registerMockProvider } from "./mock-provider.ts";
 
 const jsonHash = (value: unknown) =>
   `sha256:${createHash("sha256").update(JSON.stringify(value)).digest("hex")}`;

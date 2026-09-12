@@ -2,13 +2,13 @@ import {
   advisorSessionSummaryRef,
   getAdvisorMaxCallsPerSession,
   isSimpleMode,
-} from "../config/state.js";
-import { loadConfig } from "../config/storage.js";
-import { herdrAdvisorBlock } from "../herdr.js";
-import { reserveAdvisorCall } from "./gate-policy.js";
-import { handleAutomaticGate } from "./loop-gate.js";
-import { advisorInvocationGuidelines } from "./prompts.js";
-import type { ToolRegistrationContext } from "./types.js";
+} from "../config/state.ts";
+import { loadConfig } from "../config/storage.ts";
+import { herdrAdvisorBlock } from "../herdr.ts";
+import { reserveAdvisorCall } from "./gate-policy.ts";
+import { handleAutomaticGate } from "./loop-gate.ts";
+import { advisorInvocationGuidelines } from "./prompts.ts";
+import type { ToolRegistrationContext } from "./types.ts";
 
 export const registerToolLifecycle = ({
   pi,

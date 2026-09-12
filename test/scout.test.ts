@@ -1,13 +1,13 @@
 /* biome-ignore-all lint/performance/noAwaitInLoops: table-driven async failure cases intentionally run serially. */
 /* biome-ignore-all lint/suspicious/useAwait: async dependency stubs mirror the production contract. */
 import { describe, expect, test } from "bun:test";
-import { setExecutorEffortRef, setExecutorRef } from "../src/config.js";
+import { setExecutorEffortRef, setExecutorRef } from "../src/config.ts";
 import {
   parseScoutSelection,
   runAdvisorScout,
   SCOUT_SYSTEM,
-} from "../src/scout.js";
-import type { ScoutManifest } from "../src/scout-context.js";
+} from "../src/scout.ts";
+import type { ScoutManifest } from "../src/scout-context.ts";
 
 const manifest = (): ScoutManifest => ({
   availableBytes: 100,

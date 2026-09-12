@@ -4,11 +4,11 @@ import {
   executorRef,
   getPersistedModelRefs,
   setExecutorRef,
-} from "../config/state.js";
-import { loadConfig, saveConfig } from "../config/storage.js";
-import { herdrAdvisorActivity } from "../herdr.js";
-import { notify } from "./runtime.js";
-import type { CommandRuntime } from "./types.js";
+} from "../config/state.ts";
+import { loadConfig, saveConfig } from "../config/storage.ts";
+import { herdrAdvisorActivity } from "../herdr.ts";
+import { notify } from "./runtime.ts";
+import type { CommandRuntime } from "./types.ts";
 
 export type ActivateAdvisor = (
   args: string,

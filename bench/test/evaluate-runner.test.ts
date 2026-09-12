@@ -1,13 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { DEFAULT_CONFIG } from "../src/config.js";
+import { DEFAULT_CONFIG } from "../src/config.ts";
 import {
   type EvaluationRunOptions,
   latestScreeningReport,
   runEvaluation,
-} from "../src/evaluate-runner.js";
-import { reportFor, writeReport } from "../src/report.js";
+} from "../src/evaluate-runner.ts";
+import { reportFor, writeReport } from "../src/report.ts";
 
 const trialCost = (arm: string) => {
   if (arm === "F") {

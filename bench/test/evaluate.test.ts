@@ -9,14 +9,14 @@ import {
   q2Report,
   renderCostQualityPlot,
   reweightCostQuality,
-} from "../src/evaluate.js";
-import { parseReactBenchResult } from "../src/reactbench.js";
+} from "../src/evaluate.ts";
+import { parseReactBenchResult } from "../src/reactbench.ts";
 import {
   candidateBandPrevalence,
   classifyCandidateBand,
   classifyScreeningPool,
   selectTrivialStratum,
-} from "../src/screening.js";
+} from "../src/screening.ts";
 
 const outcome = (
   taskId: string,

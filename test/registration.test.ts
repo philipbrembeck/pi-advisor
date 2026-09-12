@@ -22,8 +22,8 @@ import {
 import registerExtension, {
   consultAdvisor,
   runAdvisorGate,
-} from "../extensions/index.js";
-import { registerCommands } from "../src/commands.js";
+} from "../extensions/index.ts";
+import { registerCommands } from "../src/commands.ts";
 import {
   advisorScoutEnabledRef,
   contextMaxCharsRef,
@@ -34,15 +34,15 @@ import {
   setAdvisorRedactSecretsRef,
   setAdvisorToolPoliciesRef,
   setShowUsageDetailsRef,
-} from "../src/config.js";
-import { clampGitContextLevel, type GitContextLevel } from "../src/git.js";
+} from "../src/config.ts";
+import { clampGitContextLevel, type GitContextLevel } from "../src/git.ts";
 import {
   createHerdrNotificationRequest,
   HerdrAdvisorActivity,
   HerdrAdvisorBlock,
   setHerdrBlockedEmitter,
-} from "../src/herdr.js";
-import { AdvisorSessionState } from "../src/session-state.js";
+} from "../src/herdr.ts";
+import { AdvisorSessionState } from "../src/session-state.ts";
 import {
   ADVISOR_DECISION_SYSTEM,
   ADVISOR_SYSTEM,
@@ -57,8 +57,8 @@ import {
   renderThinkingMarkdown,
   resolveAdvisorRequest,
   ScoutStatusManager,
-} from "../src/tools.js";
-import { AdvisorSettingsSelector, SearchableModelSelector } from "../src/ui.js";
+} from "../src/tools.ts";
+import { AdvisorSettingsSelector, SearchableModelSelector } from "../src/ui.ts";
 
 initTheme();
 

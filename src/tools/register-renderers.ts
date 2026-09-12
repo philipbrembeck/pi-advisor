@@ -3,11 +3,11 @@ import {
   getMarkdownTheme,
 } from "@earendil-works/pi-coding-agent";
 import { Box, Markdown, Text } from "@earendil-works/pi-tui";
-import { getAdvisorSettings } from "../config/state.js";
-import { formatAdvisorUsage } from "../usage.js";
-import { adviceForDisplay, renderAdvisorCallBox } from "./render-common.js";
-import { renderScoutDetails } from "./scout-status.js";
-import type { GateDecision, ScoutToolDetails } from "./types.js";
+import { getAdvisorSettings } from "../config/state.ts";
+import { formatAdvisorUsage } from "../usage.ts";
+import { adviceForDisplay, renderAdvisorCallBox } from "./render-common.ts";
+import { renderScoutDetails } from "./scout-status.ts";
+import type { GateDecision, ScoutToolDetails } from "./types.ts";
 
 export const registerToolRenderers = (pi: ExtensionAPI): void => {
   pi.registerEntryRenderer?.(

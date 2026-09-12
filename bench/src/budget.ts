@@ -1,4 +1,4 @@
-import type { BudgetEstimate } from "./types.js";
+import type { BudgetEstimate } from "./types.ts";
 
 export class BudgetExceededError extends Error {
   constructor(message: string) {

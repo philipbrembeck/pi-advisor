@@ -8,11 +8,11 @@ import {
   getAdvisorMaxCallsPerSession,
   getAdvisorSettings,
   isSimpleMode,
-} from "../config/state.js";
-import type { GateFailureMode } from "../config/types.js";
-import { herdrAdvisorBlock, notifyHerdrAdvisorFailure } from "../herdr.js";
-import type { AdvisorSessionState } from "../session-state.js";
-import type { AdvisorGateResult, GateFailureCategory } from "./types.js";
+} from "../config/state.ts";
+import type { GateFailureMode } from "../config/types.ts";
+import { herdrAdvisorBlock, notifyHerdrAdvisorFailure } from "../herdr.ts";
+import type { AdvisorSessionState } from "../session-state.ts";
+import type { AdvisorGateResult, GateFailureCategory } from "./types.ts";
 
 export const updateAdvisorUsageStatus = (
   ctx: ExtensionContext,

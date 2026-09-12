@@ -17,21 +17,21 @@ import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { normalizeUsage } from "../src/cost.js";
+import { normalizeUsage } from "../src/cost.ts";
 import {
   HARBOR_INFRA_RETRY_BACKOFF_MS,
   harborAttemptTimeoutMs,
   MAX_HARBOR_INFRA_RETRIES,
   parseHarborAgentTimeout,
-} from "../src/harbor-timeout.js";
-import { PI_ADVISOR_VERSION } from "../src/package-version.js";
-import { runProcess } from "../src/process.js";
+} from "../src/harbor-timeout.ts";
+import { PI_ADVISOR_VERSION } from "../src/package-version.ts";
+import { runProcess } from "../src/process.ts";
 import type {
   CostValue,
   PricingRates,
   RecordedProviderRequest,
-} from "../src/types.js";
-import { createHarborTaskOverlay } from "./task-compat.js";
+} from "../src/types.ts";
+import { createHarborTaskOverlay } from "./task-compat.ts";
 
 const execFileAsync = promisify(execFile);
 const RESULT_PREFIX = "BENCH_RESULT=";

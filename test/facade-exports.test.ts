@@ -1,41 +1,41 @@
 import { describe, expect, test } from "bun:test";
-import { registerCommands as leafRegisterCommands } from "../src/commands/registration.js";
+import { registerCommands as leafRegisterCommands } from "../src/commands/registration.ts";
 import type {
   CommandDependencies,
   ManualAdvisorProgressPhase,
   ManualAdvisorProgressState,
   ManualConsult,
   ThinkingLevel,
-} from "../src/commands.js";
-import { registerCommands as facadeRegisterCommands } from "../src/commands.js";
+} from "../src/commands.ts";
+import { registerCommands as facadeRegisterCommands } from "../src/commands.ts";
 import {
   contextMaxCharsRef as leafContextMaxCharsRef,
   setContextMaxCharsRef as leafSetContextMaxCharsRef,
-} from "../src/config/state.js";
-import { loadConfig as leafLoadConfig } from "../src/config/storage.js";
-import { DEFAULT_CONTEXT_MAX_CHARS as leafDefaultContextMaxChars } from "../src/config/types.js";
-import { validateConfig as leafValidateConfig } from "../src/config/validation.js";
+} from "../src/config/state.ts";
+import { loadConfig as leafLoadConfig } from "../src/config/storage.ts";
+import { DEFAULT_CONTEXT_MAX_CHARS as leafDefaultContextMaxChars } from "../src/config/types.ts";
+import { validateConfig as leafValidateConfig } from "../src/config/validation.ts";
 import type {
   AdvisorConfig,
   AdvisorToolPolicies,
   AdvisorToolPolicy,
   GateFailureMode,
   SaveConfigOptions,
-} from "../src/config.js";
+} from "../src/config.ts";
 import {
   contextMaxCharsRef as facadeContextMaxCharsRef,
   DEFAULT_CONTEXT_MAX_CHARS as facadeDefaultContextMaxChars,
   loadConfig as facadeLoadConfig,
   setContextMaxCharsRef as facadeSetContextMaxCharsRef,
   validateConfig as facadeValidateConfig,
-} from "../src/config.js";
+} from "../src/config.ts";
 import {
   consultAdvisor as leafConsultAdvisor,
   curateAdvisorConversation as leafCurateAdvisorConversation,
   runAdvisorGate as leafRunAdvisorGate,
-} from "../src/tools/consultation.js";
-import { gateFailureEffectForMode as leafGateFailureEffectForMode } from "../src/tools/gate-policy.js";
-import { parseAutomaticDecision as leafParseAutomaticDecision } from "../src/tools/gate-protocol.js";
+} from "../src/tools/consultation.ts";
+import { gateFailureEffectForMode as leafGateFailureEffectForMode } from "../src/tools/gate-policy.ts";
+import { parseAutomaticDecision as leafParseAutomaticDecision } from "../src/tools/gate-protocol.ts";
 import {
   ADVISOR_DECISION_SYSTEM as leafAdvisorDecisionSystem,
   advisorGitContextBudget as leafAdvisorGitContextBudget,
@@ -45,8 +45,8 @@ import {
   advisorRequestConversation as leafAdvisorRequestConversation,
   ADVISOR_SYSTEM as leafAdvisorSystem,
   gitContextNote as leafGitContextNote,
-} from "../src/tools/prompts.js";
-import { registerAdvisorTool as leafRegisterAdvisorTool } from "../src/tools/registration.js";
+} from "../src/tools/prompts.ts";
+import { registerAdvisorTool as leafRegisterAdvisorTool } from "../src/tools/registration.ts";
 import {
   adviceForDisplay as leafAdviceForDisplay,
   hasSoundVerdict as leafHasSoundVerdict,
@@ -55,14 +55,14 @@ import {
   renderThinkingMarkdown as leafRenderThinkingMarkdown,
   resolveAdvisorRequest as leafResolveAdvisorRequest,
   SPINNER_FRAMES as leafSpinnerFrames,
-} from "../src/tools/render-common.js";
+} from "../src/tools/render-common.ts";
 import {
   appendScoutLifecycleEntry as leafAppendScoutLifecycleEntry,
   renderScoutDetails as leafRenderScoutDetails,
   scoutDetailsFromEvent as leafScoutDetailsFromEvent,
   ScoutStatusManager as leafScoutStatusManager,
-} from "../src/tools/scout-status.js";
-import { advisorSessionState as leafAdvisorSessionState } from "../src/tools/session.js";
+} from "../src/tools/scout-status.ts";
+import { advisorSessionState as leafAdvisorSessionState } from "../src/tools/session.ts";
 import type {
   AdvisorConsultationResult,
   AdvisorGateFailure,
@@ -74,7 +74,7 @@ import type {
   GateFailureCategory,
   GateTrigger,
   ScoutToolDetails,
-} from "../src/tools.js";
+} from "../src/tools.ts";
 import {
   adviceForDisplay as facadeAdviceForDisplay,
   ADVISOR_DECISION_SYSTEM as facadeAdvisorDecisionSystem,
@@ -102,20 +102,20 @@ import {
   scoutDetailsFromEvent as facadeScoutDetailsFromEvent,
   ScoutStatusManager as facadeScoutStatusManager,
   SPINNER_FRAMES as facadeSpinnerFrames,
-} from "../src/tools.js";
-import { ManualAdvisorDialog as leafManualAdvisorDialog } from "../src/ui/manual-dialog.js";
-import { SearchableModelSelector as leafSearchableModelSelector } from "../src/ui/model-selector.js";
-import { AdvisorSettingsSelector as leafAdvisorSettingsSelector } from "../src/ui/settings-selector.js";
+} from "../src/tools.ts";
+import { ManualAdvisorDialog as leafManualAdvisorDialog } from "../src/ui/manual-dialog.ts";
+import { SearchableModelSelector as leafSearchableModelSelector } from "../src/ui/model-selector.ts";
+import { AdvisorSettingsSelector as leafAdvisorSettingsSelector } from "../src/ui/settings-selector.ts";
 import type {
   AdvisorSettings,
   ContextPreset,
   ManualAdvisorRequest,
-} from "../src/ui.js";
+} from "../src/ui.ts";
 import {
   AdvisorSettingsSelector as facadeAdvisorSettingsSelector,
   ManualAdvisorDialog as facadeManualAdvisorDialog,
   SearchableModelSelector as facadeSearchableModelSelector,
-} from "../src/ui.js";
+} from "../src/ui.ts";
 
 export interface CommandsFacadeTypeInventory {
   consult: ManualConsult;

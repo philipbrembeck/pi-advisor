@@ -8,12 +8,12 @@ import {
   setAdvisorRef,
   setExecutorEffortRef,
   setExecutorRef,
-} from "../config/state.js";
-import { saveConfig } from "../config/storage.js";
-import { activateAdvisor } from "./activation.js";
-import { loadCommandConfig } from "./activation-preparation.js";
-import { selectAdvisorModels } from "./model-picker.js";
-import type { CommandRuntime } from "./types.js";
+} from "../config/state.ts";
+import { saveConfig } from "../config/storage.ts";
+import { activateAdvisor } from "./activation.ts";
+import { loadCommandConfig } from "./activation-preparation.ts";
+import { selectAdvisorModels } from "./model-picker.ts";
+import type { CommandRuntime } from "./types.ts";
 
 export const registerModelCommands = (runtime: CommandRuntime) => {
   runtime.pi.registerCommand("advisor", {

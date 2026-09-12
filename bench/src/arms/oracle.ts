@@ -1,4 +1,4 @@
-import type { DecisionItem } from "../types.js";
+import type { DecisionItem } from "../types.ts";
 
 export const oracleAdvice = (item: DecisionItem) => {
   if (item.polarity === "negative") {

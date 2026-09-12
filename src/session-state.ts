@@ -4,7 +4,7 @@ import {
   emptyAdvisorUsageTotals,
   formatAdvisorUsageStatus,
   formatAdvisorUsageTotals,
-} from "./usage.js";
+} from "./usage.ts";
 
 export type GateDecision = "proceed" | "revise" | "blocked";
 export type ConsultationTrigger = "manual" | "executor-requested";

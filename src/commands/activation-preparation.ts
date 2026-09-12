@@ -9,16 +9,16 @@ import {
   setAdvisorRef,
   setExecutorEffortRef,
   setExecutorRef,
-} from "../config/state.js";
-import { loadConfig } from "../config/storage.js";
+} from "../config/state.ts";
+import { loadConfig } from "../config/storage.ts";
 import {
   getAvailableModelRefs,
   getExplicitModelError,
   planActivationModels,
-} from "./model-options.js";
-import { selectAdvisorModels } from "./model-picker.js";
-import { notify } from "./runtime.js";
-import type { CommandRuntime } from "./types.js";
+} from "./model-options.ts";
+import { selectAdvisorModels } from "./model-picker.ts";
+import { notify } from "./runtime.ts";
+import type { CommandRuntime } from "./types.ts";
 
 export interface PreparedActivationModels {
   pendingExecutor?: string;

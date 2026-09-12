@@ -6,9 +6,9 @@ import {
   BudgetGuard,
   formatBudgetEstimate,
   validateBudgetPlan,
-} from "./budget.js";
-import { DEFAULT_CONFIG, defaultPricingFor, modelPin } from "./config.js";
-import { defaultControlAdvice, runControls } from "./controls.js";
+} from "./budget.ts";
+import { DEFAULT_CONFIG, defaultPricingFor, modelPin } from "./config.ts";
+import { defaultControlAdvice, runControls } from "./controls.ts";
 import {
   aggregateEvaluation,
   breakEvenConsultations,
@@ -19,11 +19,11 @@ import {
   q2Report,
   renderCostQualityPlot,
   reweightCostQuality,
-} from "./evaluate.js";
-import { hashFile, hashTree } from "./fixture.js";
-import { createPiAdvisorHarborAdapter } from "./pi-advisor-adapter.js";
-import { assertPinnedLiveModelConfiguration } from "./pins.js";
-import { requireCommittedPreregistration } from "./preregistration.js";
+} from "./evaluate.ts";
+import { hashFile, hashTree } from "./fixture.ts";
+import { createPiAdvisorHarborAdapter } from "./pi-advisor-adapter.ts";
+import { assertPinnedLiveModelConfiguration } from "./pins.ts";
+import { requireCommittedPreregistration } from "./preregistration.ts";
 import {
   assertNoSmokeProtocol,
   assertReactBenchCheckout,
@@ -31,16 +31,16 @@ import {
   ensurePinnedReactBenchCheckout,
   type ReactBenchTrialResult,
   type ReactBenchTrialRunner,
-} from "./reactbench.js";
-import { readReport, reportFor, writeReport } from "./report.js";
-import { classifyCandidateBand, validateEvaluationSeeds } from "./screening.js";
-import { EVALUATION_SEEDS, SCREENING_SEEDS } from "./seeds.js";
+} from "./reactbench.ts";
+import { readReport, reportFor, writeReport } from "./report.ts";
+import { classifyCandidateBand, validateEvaluationSeeds } from "./screening.ts";
+import { EVALUATION_SEEDS, SCREENING_SEEDS } from "./seeds.ts";
 import type {
   BandScreenResult,
   BenchmarkConfig,
   BenchmarkReport,
   ModelPin,
-} from "./types.js";
+} from "./types.ts";
 
 const TOKEN_ASSUMPTION = { input: 12_000, output: 4000 };
 const MIN_TRIVIAL_TASKS = 3;
