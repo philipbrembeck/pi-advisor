@@ -138,3 +138,14 @@ describe("AdvisorSessionState", () => {
     expect(state.summary(3)).toContain("normalized tool signatures");
   });
 });
+
+describe("resetRepetition", () => {
+  test("keeps cumulative gate interventions while clearing the signature", () => {
+    const state = new AdvisorSessionState();
+    expect(state.recordToolCall("bash", { command: "pwd" }, 2)).toBe(false);
+    expect(state.recordToolCall("bash", { command: "pwd" }, 2)).toBe(true);
+    state.resetRepetition();
+    expect(state.recordToolCall("bash", { command: "pwd" }, 2)).toBe(false);
+    expect(state.summary(undefined)).toContain("1 gate intervention");
+  });
+});

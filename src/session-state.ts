@@ -168,7 +168,9 @@ export class AdvisorSessionState {
     this.#blockedReason = undefined;
   }
   resetRepetition() {
-    this.#repetition = freshRepetition();
+    // Cumulative interventions feed the session summary and must survive this reset.
+    this.#repetition.count = 0;
+    this.#repetition.previousSignature = undefined;
   }
   get blocked() {
     return this.#blockedReason !== undefined;
