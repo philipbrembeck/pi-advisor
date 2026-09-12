@@ -4,6 +4,18 @@ All notable changes to this project are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
+## Unreleased
+
+### Fixed
+
+- Advisor and Scout thinking previews now respect Pi's `hide_thinking` setting, collapsing to a one-line `Thinking…` cue the way Pi renders the Executor's own hidden thinking.
+- The `ask_advisor` result no longer renders a doubled blank gap between the request and the first Scout line; Pi already frames the result inside its padded tool box.
+- Session summaries keep the cumulative gate-intervention count when the loop gate resets repetition after a proceed decision.
+
+### Changed
+
+- Internal code-quality remediation with no behavior change: Biome scanner rules (`noConsole`, `noFloatingPromises`, `noPrivateImports`, `noUndeclaredDependencies`, `useImportExtensions`) activated and all import specifiers normalized to `.ts`; knip-verified dead exports removed; `src/untracked.ts` renamed to `src/attachments.ts` (deep imports of the old path must switch; the four `src/config.ts`, `src/ui.ts`, `src/tools.ts`, and `src/commands.ts` facades are unchanged and now pinned by `test/facade-exports.test.ts`); the registration test suite split into fifteen focused files under 500 lines each with shared mock/config/harness helpers; Scout context building decomposed into `scout-types`, `scout-protocol`, `scout-groups`, and `scout-reconstruct` modules with a single invalid-protocol failure constructor; configuration key lists derived from one declarative `src/config/schema.ts` table; conversation redaction and tool-result capping extracted into `redaction.ts` and `tool-result-cap.ts` with linear-time byte capping; and repeated cancellation/teardown/fallback blocks collapsed in the Scout runner.
+
 ## 0.5.6 - 2026-09-11
 
 ### Fixed

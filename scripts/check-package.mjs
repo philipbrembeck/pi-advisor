@@ -47,6 +47,7 @@ const expectedFiles = [
   "src/herdr.ts",
   "src/model-stream.ts",
   "src/outcomes.ts",
+  "src/pi-settings.ts",
   "src/preferences.ts",
   "src/redaction.ts",
   "src/scout-context.ts",
