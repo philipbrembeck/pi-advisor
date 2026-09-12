@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { registerCommands } from "../src/commands.ts";
+import { CONFIG_SCHEMA, SAVED_CONFIG_KEYS } from "../src/config/schema.ts";
 import {
   setAdvisorEffortRef,
   setAdvisorRef,
@@ -234,5 +235,84 @@ describe("Advisor argument persistence", () => {
         expect(savedConfig(dir).executor).toBe("good/executor");
       }
     );
+  });
+});
+
+describe("Config schema consistency", () => {
+  test("every AdvisorConfig key has exactly one schema entry", () => {
+    // Compile-time coverage (satisfies Record<keyof AdvisorConfig, ...>)
+    // guarantees no missing or extra keys; this pins the exact 31-key set.
+    const schemaKeys = Object.keys(CONFIG_SCHEMA).sort();
+    expect(schemaKeys).toEqual([
+      "advisor",
+      "advisorAutoLoopGate",
+      "advisorBlockOnBlocked",
+      "advisorCollapseResponses",
+      "advisorCompletionGate",
+      "advisorCustomInvocation",
+      "advisorEffort",
+      "advisorFailureGate",
+      "advisorGitContext",
+      "advisorGitContextMaxChars",
+      "advisorHerdrIntegration",
+      "advisorLoopThreshold",
+      "advisorMaxCallsPerSession",
+      "advisorOutcomeLogging",
+      "advisorPlanGate",
+      "advisorRedactSecrets",
+      "advisorScoutEnabled",
+      "advisorSessionSummary",
+      "advisorToolPolicies",
+      "advisorToolResultMaxBytes",
+      "advisorToolResultMaxLines",
+      "advisorTrackedFileContent",
+      "advisorUntrackedContent",
+      "alwaysOn",
+      "contextMaxChars",
+      "executor",
+      "executorEffort",
+      "gateFailureMode",
+      "showUsageDetails",
+      "showUsageFooter",
+      "simpleMode",
+    ]);
+    expect(new Set(schemaKeys).size).toBe(schemaKeys.length);
+  });
+
+  test("persisted schema keys match the historical SAVED_CONFIG_KEYS list", () => {
+    expect([...SAVED_CONFIG_KEYS].sort()).toEqual([
+      "advisor",
+      "advisorAutoLoopGate",
+      "advisorBlockOnBlocked",
+      "advisorCollapseResponses",
+      "advisorCompletionGate",
+      "advisorCustomInvocation",
+      "advisorEffort",
+      "advisorFailureGate",
+      "advisorGitContext",
+      "advisorGitContextMaxChars",
+      "advisorHerdrIntegration",
+      "advisorLoopThreshold",
+      "advisorMaxCallsPerSession",
+      "advisorPlanGate",
+      "advisorRedactSecrets",
+      "advisorScoutEnabled",
+      "advisorSessionSummary",
+      "advisorToolPolicies",
+      "advisorToolResultMaxBytes",
+      "advisorToolResultMaxLines",
+      "advisorTrackedFileContent",
+      "advisorUntrackedContent",
+      "alwaysOn",
+      "contextMaxChars",
+      "executor",
+      "executorEffort",
+      "gateFailureMode",
+      "showUsageDetails",
+      "showUsageFooter",
+      "simpleMode",
+    ]);
+    expect(SAVED_CONFIG_KEYS).toHaveLength(30);
+    expect(CONFIG_SCHEMA.advisorOutcomeLogging.persisted).toBe(false);
   });
 });

@@ -7,39 +7,12 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { applyConfig, resetDefaults } from "./defaults.ts";
 import {
-  advisorAutoLoopGateRef,
-  advisorBlockOnBlockedRef,
-  advisorCollapseResponsesRef,
-  advisorCompletionGateRef,
-  advisorCustomInvocationRef,
-  advisorEffortRef,
-  advisorFailureGateRef,
-  advisorFailureModeRef,
-  advisorGitContextMaxCharsRef,
-  advisorGitContextRef,
-  advisorHerdrIntegrationRef,
-  advisorLoopThresholdRef,
-  advisorMaxCallsPerSessionRef,
-  advisorPlanGateRef,
-  advisorRedactSecretsRef,
-  advisorRef,
-  advisorScoutEnabledRef,
-  advisorSessionSummaryRef,
-  advisorToolPoliciesRef,
-  advisorToolResultMaxBytesRef,
-  advisorToolResultMaxLinesRef,
-  advisorTrackedFileContentRef,
-  advisorUntrackedContentRef,
-  alwaysOnRef,
-  contextMaxCharsRef,
-  executorEffortRef,
-  executorRef,
-  setAdvisorOutcomeLoggingRef,
-  setPersistedModelRefs,
-  showUsageDetailsRef,
-  showUsageFooterRef,
-  simpleModeRef,
-} from "./state.ts";
+  CONFIG_SCHEMA,
+  configuredModelRef,
+  type PersistedConfigKey,
+  SAVED_CONFIG_KEYS,
+} from "./schema.ts";
+import { setAdvisorOutcomeLoggingRef, setPersistedModelRefs } from "./state.ts";
 import type { AdvisorConfig } from "./types.ts";
 import { unknownConfigKeys, validateConfig } from "./validation.ts";
 
@@ -50,78 +23,15 @@ export const configPaths = (ctx: ExtensionContext) => [
   join(getAgentDir(), "advisor.json"),
 ];
 
-const configuredModelRef = (value: string | undefined): string | undefined =>
-  value?.trim() || undefined;
-
-const SAVED_CONFIG_KEYS = [
-  "advisor",
-  "advisorAutoLoopGate",
-  "advisorBlockOnBlocked",
-  "advisorCollapseResponses",
-  "advisorCompletionGate",
-  "advisorCustomInvocation",
-  "advisorEffort",
-  "advisorFailureGate",
-  "advisorGitContext",
-  "advisorGitContextMaxChars",
-  "advisorHerdrIntegration",
-  "advisorLoopThreshold",
-  "advisorMaxCallsPerSession",
-  "advisorPlanGate",
-  "advisorRedactSecrets",
-  "advisorScoutEnabled",
-  "advisorSessionSummary",
-  "advisorToolPolicies",
-  "advisorToolResultMaxBytes",
-  "advisorToolResultMaxLines",
-  "advisorTrackedFileContent",
-  "advisorUntrackedContent",
-  "alwaysOn",
-  "contextMaxChars",
-  "executor",
-  "executorEffort",
-  "gateFailureMode",
-  "showUsageDetails",
-  "showUsageFooter",
-  "simpleMode",
-] as const satisfies readonly (keyof AdvisorConfig)[];
-type SavedConfigKey = (typeof SAVED_CONFIG_KEYS)[number];
+type SavedConfigKey = PersistedConfigKey;
 type ConfigState = {
   [Key in SavedConfigKey]: AdvisorConfig[Key];
 };
 
-const currentConfigState = (): ConfigState => ({
-  advisor: configuredModelRef(advisorRef),
-  advisorAutoLoopGate: advisorAutoLoopGateRef,
-  advisorBlockOnBlocked: advisorBlockOnBlockedRef,
-  advisorCollapseResponses: advisorCollapseResponsesRef,
-  advisorCompletionGate: advisorCompletionGateRef,
-  advisorCustomInvocation: advisorCustomInvocationRef,
-  advisorEffort: advisorEffortRef,
-  advisorFailureGate: advisorFailureGateRef,
-  advisorGitContext: advisorGitContextRef,
-  advisorGitContextMaxChars: advisorGitContextMaxCharsRef,
-  advisorHerdrIntegration: advisorHerdrIntegrationRef,
-  advisorLoopThreshold: advisorLoopThresholdRef,
-  advisorMaxCallsPerSession: advisorMaxCallsPerSessionRef,
-  advisorPlanGate: advisorPlanGateRef,
-  advisorRedactSecrets: advisorRedactSecretsRef,
-  advisorScoutEnabled: advisorScoutEnabledRef,
-  advisorSessionSummary: advisorSessionSummaryRef,
-  advisorToolPolicies: { ...advisorToolPoliciesRef },
-  advisorToolResultMaxBytes: advisorToolResultMaxBytesRef,
-  advisorToolResultMaxLines: advisorToolResultMaxLinesRef,
-  advisorTrackedFileContent: advisorTrackedFileContentRef,
-  advisorUntrackedContent: advisorUntrackedContentRef,
-  alwaysOn: alwaysOnRef,
-  contextMaxChars: contextMaxCharsRef,
-  executor: configuredModelRef(executorRef),
-  executorEffort: executorEffortRef,
-  gateFailureMode: advisorFailureModeRef,
-  showUsageDetails: showUsageDetailsRef,
-  showUsageFooter: showUsageFooterRef,
-  simpleMode: simpleModeRef,
-});
+const currentConfigState = (): ConfigState =>
+  Object.fromEntries(
+    SAVED_CONFIG_KEYS.map((key) => [key, CONFIG_SCHEMA[key].current()])
+  ) as ConfigState;
 
 const sameConfigValue = <Value>(left: Value, right: Value) =>
   JSON.stringify(left) === JSON.stringify(right);

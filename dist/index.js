@@ -297,66 +297,226 @@ ${patch}` : "Patch: (no tracked-file content changes)");
   }
 };
 
+// src/config/schema.ts
+var configuredModelRef = (value) => value?.trim() || undefined;
+var isValidAdvisorToolPolicies = (value) => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  return Object.entries(value).every(([toolName, policy]) => toolName.trim().length > 0 && typeof policy === "string" && ADVISOR_TOOL_POLICIES.includes(policy));
+};
+var nonNegativeSafeInteger = (value) => typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+var isValidContextMaxChars = (value) => typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && value <= MAX_CONTEXT_MAX_CHARS;
+var isValidLoopThreshold = (value) => typeof value === "number" && Number.isSafeInteger(value) && value >= 2;
+var isValidMaxCallsPerSession = (value) => nonNegativeSafeInteger(value);
+var isValidGateFailureMode = (value) => typeof value === "string" && GATE_FAILURE_MODES.includes(value);
+var isValidToolResultMaxLines = (value) => nonNegativeSafeInteger(value);
+var isValidToolResultMaxBytes = (value) => nonNegativeSafeInteger(value);
+var CONFIG_SCHEMA = {
+  advisor: {
+    accepted: "a provider/model string",
+    current: () => configuredModelRef(advisorRef),
+    persisted: true,
+    type: "string"
+  },
+  advisorAutoLoopGate: {
+    accepted: "true or false",
+    current: () => advisorAutoLoopGateRef,
+    persisted: true,
+    type: "boolean"
+  },
+  advisorBlockOnBlocked: {
+    accepted: "true or false",
+    current: () => advisorBlockOnBlockedRef,
+    persisted: true,
+    type: "boolean"
+  },
+  advisorCollapseResponses: {
+    accepted: "true or false",
+    current: () => advisorCollapseResponsesRef,
+    persisted: true,
+    type: "boolean"
+  },
+  advisorCompletionGate: {
+    accepted: "true or false",
+    current: () => advisorCompletionGateRef,
+    persisted: true,
+    type: "boolean"
+  },
+  advisorCustomInvocation: {
+    accepted: "a string",
+    current: () => advisorCustomInvocationRef,
+    persisted: true,
+    type: "string"
+  },
+  advisorEffort: {
+    accepted: "a string",
+    current: () => advisorEffortRef,
+    persisted: true,
+    type: "string"
+  },
+  advisorFailureGate: {
+    accepted: "true or false",
+    current: () => advisorFailureGateRef,
+    persisted: true,
+    type: "boolean"
+  },
+  advisorGitContext: {
+    accepted: GIT_CONTEXT_LEVELS.join(", "),
+    current: () => advisorGitContextRef,
+    persisted: true,
+    type: "enum",
+    validate: isValidGitContextLevel
+  },
+  advisorGitContextMaxChars: {
+    accepted: "a non-negative safe integer",
+    current: () => advisorGitContextMaxCharsRef,
+    persisted: true,
+    type: "number",
+    validate: nonNegativeSafeInteger
+  },
+  advisorHerdrIntegration: {
+    accepted: "true or false",
+    current: () => advisorHerdrIntegrationRef,
+    persisted: true,
+    type: "boolean"
+  },
+  advisorLoopThreshold: {
+    accepted: "a safe integer of at least 2",
+    current: () => advisorLoopThresholdRef,
+    persisted: true,
+    type: "number",
+    validate: isValidLoopThreshold
+  },
+  advisorMaxCallsPerSession: {
+    accepted: "a non-negative safe integer",
+    current: () => advisorMaxCallsPerSessionRef,
+    persisted: true,
+    type: "number",
+    validate: isValidMaxCallsPerSession
+  },
+  advisorOutcomeLogging: {
+    accepted: "true or false",
+    current: () => advisorOutcomeLoggingRef,
+    persisted: false,
+    type: "boolean"
+  },
+  advisorPlanGate: {
+    accepted: "true or false",
+    current: () => advisorPlanGateRef,
+    persisted: true,
+    type: "boolean"
+  },
+  advisorRedactSecrets: {
+    accepted: "true or false",
+    current: () => advisorRedactSecretsRef,
+    persisted: true,
+    type: "boolean"
+  },
+  advisorScoutEnabled: {
+    accepted: "true or false",
+    current: () => advisorScoutEnabledRef,
+    persisted: true,
+    type: "boolean"
+  },
+  advisorSessionSummary: {
+    accepted: "true or false",
+    current: () => advisorSessionSummaryRef,
+    persisted: true,
+    type: "boolean"
+  },
+  advisorToolPolicies: {
+    accepted: "a JSON object with non-empty tool names and full, summary, or exclude values",
+    current: () => ({ ...advisorToolPoliciesRef }),
+    persisted: true,
+    type: "object",
+    validate: isValidAdvisorToolPolicies
+  },
+  advisorToolResultMaxBytes: {
+    accepted: "a non-negative safe integer",
+    current: () => advisorToolResultMaxBytesRef,
+    persisted: true,
+    type: "number",
+    validate: isValidToolResultMaxBytes
+  },
+  advisorToolResultMaxLines: {
+    accepted: "a non-negative safe integer",
+    current: () => advisorToolResultMaxLinesRef,
+    persisted: true,
+    type: "number",
+    validate: isValidToolResultMaxLines
+  },
+  advisorTrackedFileContent: {
+    accepted: "true or false",
+    current: () => advisorTrackedFileContentRef,
+    persisted: true,
+    type: "boolean"
+  },
+  advisorUntrackedContent: {
+    accepted: "true or false",
+    current: () => advisorUntrackedContentRef,
+    persisted: true,
+    type: "boolean"
+  },
+  alwaysOn: {
+    accepted: "true or false",
+    current: () => alwaysOnRef,
+    persisted: true,
+    type: "boolean"
+  },
+  contextMaxChars: {
+    accepted: `a safe integer from 0 through ${MAX_CONTEXT_MAX_CHARS}`,
+    current: () => contextMaxCharsRef,
+    persisted: true,
+    type: "number",
+    validate: isValidContextMaxChars
+  },
+  executor: {
+    accepted: "a provider/model string",
+    current: () => configuredModelRef(executorRef),
+    persisted: true,
+    type: "string"
+  },
+  executorEffort: {
+    accepted: "a string",
+    current: () => executorEffortRef,
+    persisted: true,
+    type: "string"
+  },
+  gateFailureMode: {
+    accepted: GATE_FAILURE_MODES.join(", "),
+    current: () => advisorFailureModeRef,
+    persisted: true,
+    type: "enum",
+    validate: isValidGateFailureMode
+  },
+  showUsageDetails: {
+    accepted: "true or false",
+    current: () => showUsageDetailsRef,
+    persisted: true,
+    type: "boolean"
+  },
+  showUsageFooter: {
+    accepted: "true or false",
+    current: () => showUsageFooterRef,
+    persisted: true,
+    type: "boolean"
+  },
+  simpleMode: {
+    accepted: "true or false",
+    current: () => simpleModeRef,
+    persisted: true,
+    type: "boolean"
+  }
+};
+var SAVED_CONFIG_KEYS = Object.keys(CONFIG_SCHEMA).filter((key) => CONFIG_SCHEMA[key].persisted);
+var SCHEMA_BY_KEY = CONFIG_SCHEMA;
+
 // src/config/validation.ts
-var CONFIG_KEYS = new Set([
-  "advisor",
-  "advisorAutoLoopGate",
-  "advisorBlockOnBlocked",
-  "advisorCollapseResponses",
-  "advisorCompletionGate",
-  "advisorCustomInvocation",
-  "advisorEffort",
-  "advisorFailureGate",
-  "advisorGitContext",
-  "advisorGitContextMaxChars",
-  "advisorHerdrIntegration",
-  "advisorLoopThreshold",
-  "advisorMaxCallsPerSession",
-  "advisorPlanGate",
-  "advisorSessionSummary",
-  "advisorScoutEnabled",
-  "showUsageDetails",
-  "showUsageFooter",
-  "simpleMode",
-  "alwaysOn",
-  "advisorToolResultMaxBytes",
-  "advisorToolResultMaxLines",
-  "advisorTrackedFileContent",
-  "advisorRedactSecrets",
-  "advisorUntrackedContent",
-  "advisorOutcomeLogging",
-  "advisorToolPolicies",
-  "contextMaxChars",
-  "executor",
-  "executorEffort",
-  "gateFailureMode"
-]);
-var BOOLEAN_CONFIG_KEYS = [
-  "advisorPlanGate",
-  "advisorFailureGate",
-  "advisorCompletionGate",
-  "advisorCollapseResponses",
-  "advisorBlockOnBlocked",
-  "advisorAutoLoopGate",
-  "advisorSessionSummary",
-  "advisorScoutEnabled",
-  "showUsageDetails",
-  "showUsageFooter",
-  "simpleMode",
-  "alwaysOn",
-  "advisorHerdrIntegration",
-  "advisorTrackedFileContent",
-  "advisorRedactSecrets",
-  "advisorUntrackedContent",
-  "advisorOutcomeLogging"
-];
-var STRING_CONFIG_KEYS = [
-  "executor",
-  "advisor",
-  "executorEffort",
-  "advisorEffort",
-  "advisorCustomInvocation"
-];
+var CONFIG_KEYS = new Set(Object.keys(CONFIG_SCHEMA));
+var keysOfType = (type) => Object.keys(CONFIG_SCHEMA).filter((key) => SCHEMA_BY_KEY[key].type === type);
+var BOOLEAN_CONFIG_KEYS = keysOfType("boolean");
+var STRING_CONFIG_KEYS = keysOfType("string");
 var invalidConfigValue = (path, key, accepted) => {
   throw new TypeError(`Invalid advisor configuration at ${path}, key ${JSON.stringify(key)}: expected ${accepted}.`);
 };
@@ -364,65 +524,38 @@ var unknownConfigKeys = (config) => Object.keys(config).filter((key) => !CONFIG_
 var validateStringValues = (config, path) => {
   for (const key of STRING_CONFIG_KEYS) {
     if (config[key] !== undefined && typeof config[key] !== "string") {
-      invalidConfigValue(path, key, key === "executor" || key === "advisor" ? "a provider/model string" : "a string");
+      invalidConfigValue(path, key, SCHEMA_BY_KEY[key].accepted);
     }
   }
 };
 var validateBooleanValues = (config, path) => {
   for (const key of BOOLEAN_CONFIG_KEYS) {
     if (config[key] !== undefined && typeof config[key] !== "boolean") {
-      invalidConfigValue(path, key, "true or false");
+      invalidConfigValue(path, key, SCHEMA_BY_KEY[key].accepted);
     }
   }
 };
-var isValidAdvisorToolPolicies = (value) => {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return false;
-  }
-  return Object.entries(value).every(([toolName, policy]) => toolName.trim().length > 0 && typeof policy === "string" && ADVISOR_TOOL_POLICIES.includes(policy));
-};
-var isValidContextMaxChars = (value) => typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && value <= MAX_CONTEXT_MAX_CHARS;
-var isValidLoopThreshold = (value) => typeof value === "number" && Number.isSafeInteger(value) && value >= 2;
-var isValidMaxCallsPerSession = (value) => typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
-var isValidGateFailureMode = (value) => typeof value === "string" && GATE_FAILURE_MODES.includes(value);
-var isValidToolResultMaxLines = (value) => typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
-var isValidToolResultMaxBytes = (value) => typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 var validateNumericValues = (config, path) => {
-  const numericRules = [
-    [
-      "contextMaxChars",
-      isValidContextMaxChars,
-      `a safe integer from 0 through ${MAX_CONTEXT_MAX_CHARS}`
-    ],
-    [
-      "advisorLoopThreshold",
-      isValidLoopThreshold,
-      "a safe integer of at least 2"
-    ],
-    [
-      "advisorMaxCallsPerSession",
-      isValidMaxCallsPerSession,
-      "a non-negative safe integer"
-    ],
-    [
-      "advisorToolResultMaxLines",
-      isValidToolResultMaxLines,
-      "a non-negative safe integer"
-    ],
-    [
-      "advisorToolResultMaxBytes",
-      isValidToolResultMaxBytes,
-      "a non-negative safe integer"
-    ],
-    [
-      "advisorGitContextMaxChars",
-      isValidToolResultMaxBytes,
-      "a non-negative safe integer"
-    ]
-  ];
-  for (const [key, isValid, description] of numericRules) {
-    if (config[key] !== undefined && !isValid(config[key])) {
-      invalidConfigValue(path, key, description);
+  for (const key of keysOfType("number")) {
+    const isValid = SCHEMA_BY_KEY[key].validate;
+    if (config[key] !== undefined && isValid !== undefined && !isValid(config[key])) {
+      invalidConfigValue(path, key, SCHEMA_BY_KEY[key].accepted);
+    }
+  }
+};
+var validateEnumValues = (config, path) => {
+  for (const key of keysOfType("enum")) {
+    const isValid = SCHEMA_BY_KEY[key].validate;
+    if (config[key] !== undefined && isValid !== undefined && !isValid(config[key])) {
+      invalidConfigValue(path, key, SCHEMA_BY_KEY[key].accepted);
+    }
+  }
+};
+var validateObjectValues = (config, path) => {
+  for (const key of keysOfType("object")) {
+    const isValid = SCHEMA_BY_KEY[key].validate;
+    if (config[key] !== undefined && isValid !== undefined && !isValid(config[key])) {
+      invalidConfigValue(path, key, SCHEMA_BY_KEY[key].accepted);
     }
   }
 };
@@ -434,15 +567,8 @@ var validateConfig = (value, path = "advisor.json") => {
   validateStringValues(config, path);
   validateBooleanValues(config, path);
   validateNumericValues(config, path);
-  if (config.advisorToolPolicies !== undefined && !isValidAdvisorToolPolicies(config.advisorToolPolicies)) {
-    invalidConfigValue(path, "advisorToolPolicies", "a JSON object with non-empty tool names and full, summary, or exclude values");
-  }
-  if (config.gateFailureMode !== undefined && !isValidGateFailureMode(config.gateFailureMode)) {
-    invalidConfigValue(path, "gateFailureMode", GATE_FAILURE_MODES.join(", "));
-  }
-  if (config.advisorGitContext !== undefined && !isValidGitContextLevel(config.advisorGitContext)) {
-    invalidConfigValue(path, "advisorGitContext", GIT_CONTEXT_LEVELS.join(", "));
-  }
+  validateObjectValues(config, path);
+  validateEnumValues(config, path);
   return true;
 };
 
@@ -562,71 +688,7 @@ var applyConfig = (config) => {
 };
 
 // src/config/storage.ts
-var configuredModelRef = (value) => value?.trim() || undefined;
-var SAVED_CONFIG_KEYS = [
-  "advisor",
-  "advisorAutoLoopGate",
-  "advisorBlockOnBlocked",
-  "advisorCollapseResponses",
-  "advisorCompletionGate",
-  "advisorCustomInvocation",
-  "advisorEffort",
-  "advisorFailureGate",
-  "advisorGitContext",
-  "advisorGitContextMaxChars",
-  "advisorHerdrIntegration",
-  "advisorLoopThreshold",
-  "advisorMaxCallsPerSession",
-  "advisorPlanGate",
-  "advisorRedactSecrets",
-  "advisorScoutEnabled",
-  "advisorSessionSummary",
-  "advisorToolPolicies",
-  "advisorToolResultMaxBytes",
-  "advisorToolResultMaxLines",
-  "advisorTrackedFileContent",
-  "advisorUntrackedContent",
-  "alwaysOn",
-  "contextMaxChars",
-  "executor",
-  "executorEffort",
-  "gateFailureMode",
-  "showUsageDetails",
-  "showUsageFooter",
-  "simpleMode"
-];
-var currentConfigState = () => ({
-  advisor: configuredModelRef(advisorRef),
-  advisorAutoLoopGate: advisorAutoLoopGateRef,
-  advisorBlockOnBlocked: advisorBlockOnBlockedRef,
-  advisorCollapseResponses: advisorCollapseResponsesRef,
-  advisorCompletionGate: advisorCompletionGateRef,
-  advisorCustomInvocation: advisorCustomInvocationRef,
-  advisorEffort: advisorEffortRef,
-  advisorFailureGate: advisorFailureGateRef,
-  advisorGitContext: advisorGitContextRef,
-  advisorGitContextMaxChars: advisorGitContextMaxCharsRef,
-  advisorHerdrIntegration: advisorHerdrIntegrationRef,
-  advisorLoopThreshold: advisorLoopThresholdRef,
-  advisorMaxCallsPerSession: advisorMaxCallsPerSessionRef,
-  advisorPlanGate: advisorPlanGateRef,
-  advisorRedactSecrets: advisorRedactSecretsRef,
-  advisorScoutEnabled: advisorScoutEnabledRef,
-  advisorSessionSummary: advisorSessionSummaryRef,
-  advisorToolPolicies: { ...advisorToolPoliciesRef },
-  advisorToolResultMaxBytes: advisorToolResultMaxBytesRef,
-  advisorToolResultMaxLines: advisorToolResultMaxLinesRef,
-  advisorTrackedFileContent: advisorTrackedFileContentRef,
-  advisorUntrackedContent: advisorUntrackedContentRef,
-  alwaysOn: alwaysOnRef,
-  contextMaxChars: contextMaxCharsRef,
-  executor: configuredModelRef(executorRef),
-  executorEffort: executorEffortRef,
-  gateFailureMode: advisorFailureModeRef,
-  showUsageDetails: showUsageDetailsRef,
-  showUsageFooter: showUsageFooterRef,
-  simpleMode: simpleModeRef
-});
+var currentConfigState = () => Object.fromEntries(SAVED_CONFIG_KEYS.map((key) => [key, CONFIG_SCHEMA[key].current()]));
 var sameConfigValue = (left, right) => JSON.stringify(left) === JSON.stringify(right);
 var readExistingConfig = (path) => {
   try {
