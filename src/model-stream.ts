@@ -141,6 +141,8 @@ export const createCoalescedUpdate = <T>(
         : scheduler.now() - lastPublishedAt;
     const delay = Math.max(0, intervalMs - elapsed);
     if (delay === 0) {
+      // A zero delay publishes synchronously rather than through the timer,
+      // so the first update of a burst lands before the caller continues.
       publishPending();
       return;
     }

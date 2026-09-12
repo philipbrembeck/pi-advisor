@@ -1,203 +1,62 @@
 import { randomUUID } from "node:crypto";
 import type { Message } from "@earendil-works/pi-ai/compat";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { readTrackedFiles, readUntrackedFiles } from "../attachments.ts";
 import {
   advisorEffortRef,
-  advisorGitContextMaxCharsRef,
-  advisorGitContextRef,
   advisorRedactSecretsRef,
   advisorRef,
-  advisorScoutEnabledRef,
-  advisorTrackedFileContentRef,
-  advisorUntrackedContentRef,
-  contextMaxCharsRef,
-  executorRef,
 } from "../config/state.ts";
 import { loadConfig } from "../config/storage.ts";
-import { redactAndCapText, redactSecrets } from "../conversation.ts";
-import {
-  clampGitContextLevel,
-  collectGitContext,
-  type GitContextLevel,
-} from "../git.ts";
+import type { GitContextLevel } from "../git.ts";
 import { collectTextStream, resolveConfiguredModel } from "../model-stream.ts";
-import { readProjectPreferences } from "../preferences.ts";
-import {
-  runAdvisorScout,
-  type ScoutLifecycleEvent,
-  type ScoutOutcome,
-} from "../scout.ts";
-import {
-  buildScoutManifest,
-  reconstructScoutConversation,
-  SCOUT_MANIFEST_MAX_BYTES,
-} from "../scout-context.ts";
+import { redactSecrets } from "../redaction.ts";
+import type { ScoutLifecycleEvent } from "../scout.ts";
 import type { ConsultationTrigger, GateTrigger } from "../session-state.ts";
+import { assembleConsultationContext } from "./consult-context.ts";
 import { parseAutomaticDecision } from "./gate-protocol.ts";
 import {
   ADVISOR_DECISION_SYSTEM,
   ADVISOR_SYSTEM,
-  advisorGitContextBudget,
   advisorMessageText,
-  advisorRepositoryContext,
-  advisorRequestConversation,
 } from "./prompts.ts";
 import type { AdvisorConsultationResult, AdvisorGateOutcome } from "./types.ts";
 
-export const curateAdvisorConversation = async (
-  ctx: ExtensionContext,
-  legacyConversation: string,
-  signal?: AbortSignal,
-  onScout?: (event: ScoutLifecycleEvent) => void,
-  enabled = advisorScoutEnabledRef,
-  runScout: typeof runAdvisorScout = runAdvisorScout,
-  currentInvocationId?: string,
-  maxChars?: number
-): Promise<{
-  conversation: string;
-  scout?: Exclude<ScoutOutcome, { cancelled: true }>;
-}> => {
-  if (!enabled) {
-    return { conversation: legacyConversation };
+// biome-ignore lint/performance/noBarrelFile: preserves the tools facade's historical re-export of the moved curation entry point.
+export { curateAdvisorConversation } from "../scout-curation.ts";
+
+/** Thrown when the Advisor produced an empty response body. */
+class AdvisorNoAdviceError extends Error {
+  constructor() {
+    super("Advisor returned no advice.");
+    this.name = "AdvisorNoAdviceError";
   }
-  if (maxChars !== undefined && maxChars <= 0) {
-    return { conversation: "" };
-  }
-  const built = buildScoutManifest(ctx, {
-    currentInvocationId,
-    maxConversationChars: maxChars,
-    maxManifestBytes: SCOUT_MANIFEST_MAX_BYTES,
-  });
-  if (!built.ok) {
-    const scout: Exclude<ScoutOutcome, { cancelled: true }> = {
-      category: built.reason,
-      message: built.message,
-      metrics: {
-        availableCount: 0,
-        inputBytes: 0,
-        latencyMs: 0,
-        omittedBeforeScout: 0,
-        selectedCount: 0,
-      },
-      model: executorRef,
-      ok: false,
-    };
-    onScout?.({ outcome: scout, type: "fallback" });
-    return { conversation: legacyConversation, scout };
-  }
-  const outcome = await runScout(
-    ctx,
-    built.manifest,
-    signal,
-    onScout,
-    undefined,
-    undefined
-  );
-  if (!outcome.ok && outcome.cancelled) {
-    throw signal?.reason instanceof Error
-      ? signal.reason
-      : new Error("Advisor operation cancelled during Scout.");
-  }
-  let conversation = legacyConversation;
-  if (outcome.ok) {
-    conversation =
-      maxChars === undefined
-        ? outcome.conversation
-        : reconstructScoutConversation(
-            built.manifest,
-            outcome.selection.selectedIds,
-            outcome.selection.synthesis,
-            maxChars
-          );
-  }
-  return { conversation, scout: outcome };
-};
+}
+
+interface CollectAdvisorResponseOptions {
+  ctx: ExtensionContext;
+  currentInvocationId?: string;
+  draft?: string;
+  gitContext?: GitContextLevel;
+  includeTracked?: string[];
+  includeUntracked?: string[];
+  onChunk?: (thinking: string, text: string) => void;
+  onScout?: (event: ScoutLifecycleEvent) => void;
+  question?: string;
+  signal?: AbortSignal;
+  systemPrompt: string;
+}
+
+const fileTag = (item: { path: string; text: string }) =>
+  `<file path=${JSON.stringify(item.path)}>\n${item.text}\n</file>`;
 
 const collectAdvisorResponse = async (
-  ctx: ExtensionContext,
-  systemPrompt: string,
-  question: string | undefined,
-  signal: AbortSignal | undefined,
-  onChunk: ((thinking: string, text: string) => void) | undefined,
-  gitContext?: GitContextLevel,
-  draft?: string,
-  includeUntracked?: string[],
-  includeTracked?: string[],
-  onScout?: (event: ScoutLifecycleEvent) => void,
-  currentInvocationId?: string
+  options: CollectAdvisorResponseOptions
 ) => {
+  const { ctx, question, signal, systemPrompt } = options;
   loadConfig(ctx);
   const resolved = await resolveConfiguredModel(ctx, advisorRef, "Advisor");
+  const context = await assembleConsultationContext(options);
 
-  // The user setting is the ceiling; the Executor may only narrow it.
-  const allowed = advisorGitContextRef;
-  const level = clampGitContextLevel(gitContext ?? allowed, allowed);
-  const gitBudget = advisorGitContextBudget(
-    contextMaxCharsRef,
-    advisorGitContextMaxCharsRef
-  );
-  const changes = collectGitContext(
-    ctx.cwd,
-    level,
-    gitBudget,
-    advisorRedactSecretsRef ? redactSecrets : undefined
-  );
-  // The note is placed first so a cap can never drop the statement that the
-  // Advisor's view of the repository is limited.
-  // The disclosure warning is control metadata, not repository payload. Keep it
-  // outside the zero-byte Git budget so disabling disclosure cannot erase it.
-  const changeText = advisorRepositoryContext(
-    changes,
-    gitContext ?? allowed,
-    level,
-    gitBudget
-  );
-  // Repository context spends part of the shared budget, so a large patch
-  // cannot silently push the conversation past the model's context window.
-  const conversationBudget = Math.max(
-    0,
-    contextMaxCharsRef - changeText.length
-  );
-  const legacyConversation = advisorRequestConversation(
-    ctx,
-    conversationBudget
-  );
-  const curated = await curateAdvisorConversation(
-    ctx,
-    legacyConversation,
-    signal,
-    onScout,
-    advisorScoutEnabledRef,
-    runAdvisorScout,
-    currentInvocationId,
-    conversationBudget
-  );
-  const { conversation, scout } = curated;
-  const preferences = await readProjectPreferences(
-    ctx,
-    8 * 1024,
-    advisorRedactSecretsRef
-  );
-  const draftText = draft
-    ? redactAndCapText(draft, 8 * 1024, advisorRedactSecretsRef)
-    : undefined;
-  const untracked = await readUntrackedFiles(
-    ctx.cwd,
-    includeUntracked ?? [],
-    advisorUntrackedContentRef,
-    advisorRedactSecretsRef
-  );
-  const tracked = await readTrackedFiles(
-    ctx.cwd,
-    includeTracked ?? [],
-    advisorTrackedFileContentRef,
-    advisorRedactSecretsRef,
-    Math.max(
-      0,
-      24 * 1024 - untracked.reduce((sum, item) => sum + item.bytes, 0)
-    )
-  );
   // Keep the original question available to local UI callers, but never send
   // its credential-shaped values to the provider when redaction is enabled.
   const outboundQuestion =
@@ -209,19 +68,13 @@ const collectAdvisorResponse = async (
       content: [
         {
           text: advisorMessageText(
-            conversation,
+            context.conversation,
             outboundQuestion,
-            changeText,
-            draftText,
-            preferences?.text,
-            untracked.map(
-              (item) =>
-                `<file path=${JSON.stringify(item.path)}>\n${item.text}\n</file>`
-            ),
-            tracked.map(
-              (item) =>
-                `<file path=${JSON.stringify(item.path)}>\n${item.text}\n</file>`
-            )
+            context.changeText,
+            context.draftText,
+            context.preferences?.text,
+            context.untracked.map(fileTag),
+            context.tracked.map(fileTag)
           ),
           type: "text",
         },
@@ -233,27 +86,29 @@ const collectAdvisorResponse = async (
 
   const streamed = await collectTextStream(resolved, {
     messages,
-    onChunk,
+    onChunk: options.onChunk,
     reasoning: advisorEffortRef,
     signal,
     systemPrompt,
   });
   const markdown = streamed.text;
   if (!markdown.trim()) {
-    throw new Error("Advisor returned no advice.");
+    throw new AdvisorNoAdviceError();
   }
   return {
-    draftBytes: draftText ? Buffer.byteLength(draftText, "utf8") : undefined,
+    draftBytes: context.draftText
+      ? Buffer.byteLength(context.draftText, "utf8")
+      : undefined,
     markdown,
     model: advisorRef,
-    preferenceBytes: preferences?.bytes,
+    preferenceBytes: context.preferences?.bytes,
     thinkingText: streamed.thinking,
     trackedBytes:
-      tracked.reduce((sum, item) => sum + item.bytes, 0) || undefined,
+      context.tracked.reduce((sum, item) => sum + item.bytes, 0) || undefined,
     untrackedBytes:
-      untracked.reduce((sum, item) => sum + item.bytes, 0) || undefined,
+      context.untracked.reduce((sum, item) => sum + item.bytes, 0) || undefined,
     usage: streamed.usage,
-    ...(scout ? { scout } : {}),
+    ...(context.scout ? { scout: context.scout } : {}),
   };
 };
 
@@ -270,19 +125,19 @@ export const consultAdvisor = async (
   onScout?: (event: ScoutLifecycleEvent) => void,
   currentInvocationId?: string
 ): Promise<AdvisorConsultationResult> => {
-  const result = await collectAdvisorResponse(
+  const result = await collectAdvisorResponse({
     ctx,
-    ADVISOR_SYSTEM,
+    currentInvocationId,
+    draft,
+    gitContext,
+    includeTracked,
+    includeUntracked,
+    onChunk,
+    onScout,
     question,
     signal,
-    onChunk,
-    gitContext,
-    draft,
-    includeUntracked,
-    includeTracked,
-    onScout,
-    currentInvocationId
-  );
+    systemPrompt: ADVISOR_SYSTEM,
+  });
   return { ...result, adviceId: randomUUID(), trigger };
 };
 
@@ -296,19 +151,15 @@ export const runAdvisorGate = async (
   currentInvocationId?: string
 ): Promise<AdvisorGateOutcome> => {
   try {
-    const result = await collectAdvisorResponse(
+    const result = await collectAdvisorResponse({
       ctx,
-      ADVISOR_DECISION_SYSTEM,
+      currentInvocationId,
+      onChunk,
+      onScout,
       question,
       signal,
-      onChunk,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      onScout,
-      currentInvocationId
-    );
+      systemPrompt: ADVISOR_DECISION_SYSTEM,
+    });
     const parsed = parseAutomaticDecision(result.markdown);
     if (!parsed.ok) {
       return { ...parsed, usage: result.usage };
@@ -327,7 +178,7 @@ export const runAdvisorGate = async (
     const message = error instanceof Error ? error.message : String(error);
     return {
       category:
-        message === "Advisor returned no advice."
+        error instanceof AdvisorNoAdviceError
           ? "empty-response"
           : "provider-error",
       message,

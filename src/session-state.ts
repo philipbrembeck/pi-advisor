@@ -113,46 +113,62 @@ export const normalizeToolInput = (
 export const normalizedToolSignature = (toolName: string, input: unknown) =>
   `${toolName}:${JSON.stringify(normalizeToolInput(toolName, input))}`;
 
+interface RepetitionState {
+  count: number;
+  interventions: number;
+  previousSignature?: string;
+}
+
+interface AdviceLedger {
+  draftConsultations: number;
+  issued: Map<string, { advice: string; trigger: ConsultationTrigger }>;
+  lastAdvice?: string;
+  outcomes: number;
+  pending: Set<string>;
+  reported: Set<string>;
+}
+
+interface UsageState {
+  invocations: AdvisorInvocationRecord[];
+  totals: AdvisorUsageTotals;
+}
+
+const freshRepetition = (): RepetitionState => ({
+  count: 0,
+  interventions: 0,
+});
+const freshAdviceLedger = (): AdviceLedger => ({
+  draftConsultations: 0,
+  issued: new Map(),
+  outcomes: 0,
+  pending: new Set(),
+  reported: new Set(),
+});
+const freshUsage = (): UsageState => ({
+  invocations: [],
+  totals: emptyAdvisorUsageTotals(),
+});
+
 export class AdvisorSessionState {
-  #previousSignature?: string;
-  #repetitions = 0;
+  #repetition = freshRepetition();
   #blockedReason?: string;
-  #invocations: AdvisorInvocationRecord[] = [];
-  #loopInterventions = 0;
+  #ledger = freshAdviceLedger();
+  #usage = freshUsage();
   #consumedCalls = 0;
-  readonly #issuedAdvice = new Map<
-    string,
-    { advice: string; trigger: ConsultationTrigger }
-  >();
-  readonly #pendingAdvice = new Set<string>();
-  readonly #reportedAdvice = new Set<string>();
-  #draftConsultations = 0;
-  #outcomes = 0;
-  #lastAdvice?: string;
-  #usage = emptyAdvisorUsageTotals();
 
   resetTask() {
-    this.#previousSignature = undefined;
-    this.#repetitions = 0;
+    this.#repetition = freshRepetition();
     this.#blockedReason = undefined;
-    this.#invocations = [];
-    this.#loopInterventions = 0;
+    this.#ledger = freshAdviceLedger();
+    this.#usage = freshUsage();
     this.#consumedCalls = 0;
-    this.#issuedAdvice.clear();
-    this.#pendingAdvice.clear();
-    this.#reportedAdvice.clear();
-    this.#draftConsultations = 0;
-    this.#outcomes = 0;
-    this.#lastAdvice = undefined;
-    this.#usage = emptyAdvisorUsageTotals();
   }
 
   clearBlocked() {
     this.#blockedReason = undefined;
   }
   resetRepetition() {
-    this.#previousSignature = undefined;
-    this.#repetitions = 0;
+    this.#repetition = freshRepetition();
   }
   get blocked() {
     return this.#blockedReason !== undefined;
@@ -169,13 +185,15 @@ export class AdvisorSessionState {
       return false;
     }
     const signature = normalizedToolSignature(toolName, input);
-    this.#repetitions =
-      signature === this.#previousSignature ? this.#repetitions + 1 : 1;
-    this.#previousSignature = signature;
-    if (this.#repetitions < threshold) {
+    this.#repetition.count =
+      signature === this.#repetition.previousSignature
+        ? this.#repetition.count + 1
+        : 1;
+    this.#repetition.previousSignature = signature;
+    if (this.#repetition.count < threshold) {
       return false;
     }
-    this.#loopInterventions += 1;
+    this.#repetition.interventions += 1;
     return true;
   }
 
@@ -196,17 +214,17 @@ export class AdvisorSessionState {
 
   /** Returns a copy of cumulative direct Advisor usage for this session. */
   get usageTotals(): AdvisorUsageTotals {
-    return { ...this.#usage };
+    return { ...this.#usage.totals };
   }
 
   /** Returns the footer-ready direct Advisor usage status for this session. */
   usageStatus() {
-    return formatAdvisorUsageStatus(this.#usage);
+    return formatAdvisorUsageStatus(this.#usage.totals);
   }
 
   recordInvocation(record: AdvisorInvocationRecord) {
-    this.#invocations.push(record);
-    addAdvisorUsage(this.#usage, record.usage);
+    this.#usage.invocations.push(record);
+    addAdvisorUsage(this.#usage.totals, record.usage);
   }
   issueAdvice(
     id: string,
@@ -214,14 +232,15 @@ export class AdvisorSessionState {
     trigger: ConsultationTrigger,
     draft = false
   ) {
-    this.#issuedAdvice.set(id, { advice, trigger });
-    this.#lastAdvice = advice;
+    this.#ledger.issued.set(id, { advice, trigger });
+    this.#ledger.lastAdvice = advice;
     if (draft) {
-      this.#draftConsultations += 1;
+      this.#ledger.draftConsultations += 1;
     }
   }
   claimTrackedFiles(paths: string[]) {
-    if (!this.#lastAdvice || paths.length === 0) {
+    const advice = this.#ledger.lastAdvice;
+    if (!advice || paths.length === 0) {
       return false;
     }
     const mentioned = paths.every((path) => {
@@ -230,38 +249,38 @@ export class AdvisorSessionState {
         "(^|[\\s\\\"'`()\\[])" +
         escaped +
         "(?=$|[\\s\\\"'`),;:!?\\]]|\\.(?=\\s|$))";
-      return new RegExp(boundary).test(this.#lastAdvice as string);
+      return new RegExp(boundary).test(advice);
     });
     if (!mentioned) {
       return false;
     }
-    this.#lastAdvice = undefined;
+    this.#ledger.lastAdvice = undefined;
     return true;
   }
 
   reserveAdvice(id: string) {
-    if (this.#reportedAdvice.has(id) || this.#pendingAdvice.has(id)) {
+    if (this.#ledger.reported.has(id) || this.#ledger.pending.has(id)) {
       return;
     }
-    const advice = this.#issuedAdvice.get(id);
+    const advice = this.#ledger.issued.get(id);
     if (!advice) {
       return;
     }
-    this.#pendingAdvice.add(id);
+    this.#ledger.pending.add(id);
     return advice;
   }
 
   commitAdvice(id: string) {
-    if (!this.#pendingAdvice.delete(id)) {
+    if (!this.#ledger.pending.delete(id)) {
       return false;
     }
-    this.#reportedAdvice.add(id);
-    this.#outcomes += 1;
+    this.#ledger.reported.add(id);
+    this.#ledger.outcomes += 1;
     return true;
   }
 
   releaseAdvice(id: string) {
-    this.#pendingAdvice.delete(id);
+    this.#ledger.pending.delete(id);
   }
 
   /** Compatibility helper for synchronous callers that can commit immediately. */
@@ -274,17 +293,11 @@ export class AdvisorSessionState {
     return advice;
   }
 
-  summary(limit: number | undefined) {
-    if (this.#invocations.length === 0 && this.#loopInterventions === 0) {
-      return;
-    }
-    const markdown = this.#invocations.filter(
-      (item) => item.kind === "markdown"
+  #decisionsLine() {
+    const gates = this.#usage.invocations.filter(
+      (item) => item.kind === "gate"
     );
-    const gates = this.#invocations.filter((item) => item.kind === "gate");
-    const countTrigger = (trigger: AdvisorTrigger) =>
-      this.#invocations.filter((item) => item.trigger === trigger).length;
-    const decisions =
+    return (
       (["proceed", "revise", "blocked"] as GateDecision[])
         .map(
           (decision) =>
@@ -295,32 +308,60 @@ export class AdvisorSessionState {
         )
         .filter(([, count]) => count > 0)
         .map(([decision, count]) => `${count} ${decision}`)
-        .join(", ") || "none";
+        .join(", ") || "none"
+    );
+  }
+
+  #countTrigger(trigger: AdvisorTrigger) {
+    return this.#usage.invocations.filter((item) => item.trigger === trigger)
+      .length;
+  }
+
+  #triggersLine() {
+    return (
+      [
+        "manual",
+        "executor-requested",
+        "repeated-tool-call",
+        "completion-review",
+        "custom-rule",
+      ]
+        .filter((trigger) => this.#countTrigger(trigger as AdvisorTrigger) > 0)
+        .join(", ") || "none"
+    );
+  }
+
+  summary(limit: number | undefined) {
+    const { invocations, totals } = this.#usage;
+    if (invocations.length === 0 && this.#repetition.interventions === 0) {
+      return;
+    }
+    const markdown = invocations.filter((item) => item.kind === "markdown");
+    const gates = invocations.filter((item) => item.kind === "gate");
     const effects = (effect: ExecutionEffect) =>
-      this.#invocations.filter((item) => item.executionEffect === effect)
-        .length;
-    const failures = this.#invocations
+      invocations.filter((item) => item.executionEffect === effect).length;
+    const failures = invocations
       .filter((item) => item.failure)
       .map((item) => item.failure);
     const models =
-      [
-        ...new Set(this.#invocations.map((item) => item.model).filter(Boolean)),
-      ].join(", ") || "unknown";
+      [...new Set(invocations.map((item) => item.model).filter(Boolean))].join(
+        ", "
+      ) || "unknown";
     const budget =
       limit === undefined
         ? `${this.#consumedCalls} used; unlimited remaining`
         : `${this.#consumedCalls} / ${limit} used; ${Math.max(0, limit - this.#consumedCalls)} remaining`;
     return [
       "[Session Advisor Summary]",
-      `Consultations: ${markdown.length} Markdown (${countTrigger("manual")} manual, ${countTrigger("executor-requested")} executor-requested), automatic gates: ${gates.length}`,
-      `Triggers: ${["manual", "executor-requested", "repeated-tool-call", "completion-review", "custom-rule"].filter((trigger) => countTrigger(trigger as AdvisorTrigger) > 0).join(", ") || "none"}`,
+      `Consultations: ${markdown.length} Markdown (${this.#countTrigger("manual")} manual, ${this.#countTrigger("executor-requested")} executor-requested), automatic gates: ${gates.length}`,
+      `Triggers: ${this.#triggersLine()}`,
       `Models: ${models}`,
       `Budget: ${budget}`,
-      `Usage: ${formatAdvisorUsageTotals(this.#usage)}`,
-      `Markdown advice: ${markdown.length} responses (${this.#draftConsultations} with drafts)`,
-      `Outcome reports: ${this.#outcomes}`,
-      `Gate decisions: ${decisions}`,
-      `Loop matching: normalized tool signatures; ${this.#loopInterventions} gate intervention${this.#loopInterventions === 1 ? "" : "s"}`,
+      `Usage: ${formatAdvisorUsageTotals(totals)}`,
+      `Markdown advice: ${markdown.length} responses (${this.#ledger.draftConsultations} with drafts)`,
+      `Outcome reports: ${this.#ledger.outcomes}`,
+      `Gate decisions: ${this.#decisionsLine()}`,
+      `Loop matching: normalized tool signatures; ${this.#repetition.interventions} gate intervention${this.#repetition.interventions === 1 ? "" : "s"}`,
       `Execution effects: ${effects("tool-blocked")} tool blocked, ${effects("session-blocked")} sessions blocked, ${effects("continued")} continued`,
       `Failures: ${failures.length ? failures.join(", ") : "none"}`,
     ].join("\n");

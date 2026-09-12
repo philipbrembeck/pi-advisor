@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { redactSecrets } from "../../src/conversation.ts";
+import { redactSecrets } from "../../src/redaction.ts";
 import type { DecisionItem } from "./types.ts";
 
 const region = (name: string, value: string) =>

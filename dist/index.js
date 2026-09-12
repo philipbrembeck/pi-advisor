@@ -1097,26 +1097,30 @@ var selectAdvisorModels = async (ctx, options) => {
 // src/herdr.ts
 import net from "node:net";
 
-// src/conversation.ts
-var isRecord = (value) => Boolean(value) && typeof value === "object";
+// src/content-utils.ts
+var isRecord = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
+var byteLength = (value) => Buffer.byteLength(value, "utf8");
 var contentParts = (content) => {
   if (typeof content === "string") {
     return [content];
   }
   return Array.isArray(content) ? content : [];
 };
-var textFromPart = (part) => {
-  if (typeof part === "string") {
-    return part;
+var capUtf8Bytes = (value, maxBytes) => {
+  let result = "";
+  let used = 0;
+  for (const character of value) {
+    const characterBytes = byteLength(character);
+    if (used + characterBytes > maxBytes) {
+      break;
+    }
+    result += character;
+    used += characterBytes;
   }
-  if (!isRecord(part) || part.type !== "text") {
-    return "";
-  }
-  return typeof part.text === "string" ? part.text : "";
+  return result;
 };
-var textFrom = (content) => contentParts(content).map(textFromPart).join(`
-`).trim();
-var byteLength = (value) => Buffer.byteLength(value, "utf8");
+
+// src/redaction.ts
 var REDACTION_MARKER = "[REDACTED SECRET]";
 var PEM_BEGIN_PATTERN = /-----BEGIN(?: [A-Z0-9]+)? PRIVATE KEY-----/gi;
 var PEM_END_PATTERN = /-----END(?: [A-Z0-9]+)? PRIVATE KEY-----/i;
@@ -1146,185 +1150,7 @@ var redactSecrets = (value) => {
 };
 var redactAndCapText = (value, maxBytes, redact = true) => {
   const source = redact ? redactSecrets(value) : value;
-  let result = "";
-  for (const character of source) {
-    if (byteLength(result + character) > maxBytes) {
-      break;
-    }
-    result += character;
-  }
-  return result;
-};
-var capToolResult = (value, maxLines = DEFAULT_ADVISOR_TOOL_RESULT_MAX_LINES, maxBytes = DEFAULT_ADVISOR_TOOL_RESULT_MAX_BYTES) => {
-  const lines = value.split(`
-`);
-  const totalLines = lines.length;
-  const totalBytes = byteLength(value);
-  if ((maxLines === 0 || maxBytes === 0) && value.length > 0) {
-    return {
-      content: "[Tool result omitted: configured limit is zero]",
-      omittedLines: totalLines,
-      totalBytes,
-      totalLines,
-      truncated: true
-    };
-  }
-  if (totalLines <= maxLines && totalBytes <= maxBytes) {
-    return {
-      content: value,
-      omittedLines: 0,
-      totalBytes,
-      totalLines,
-      truncated: false
-    };
-  }
-  const marker = "[... omitted tool-result section ...]";
-  const markerBytes = byteLength(marker);
-  if (maxBytes < markerBytes || maxLines === 1) {
-    const content = [...marker].reduce((result, character) => byteLength(result + character) <= maxBytes ? result + character : result, "");
-    return {
-      content,
-      omittedLines: totalLines,
-      totalBytes,
-      totalLines,
-      truncated: true
-    };
-  }
-  const headCount = Math.floor((maxLines - 1) / 2);
-  const tailCount = maxLines - 1 - headCount;
-  const collect = (candidates, maxEntries, maxContentBytes) => {
-    const selected = [];
-    let used = 0;
-    for (const line of candidates.slice(0, maxEntries)) {
-      const next = used + byteLength(line) + (selected.length ? 1 : 0);
-      if (next > maxContentBytes) {
-        break;
-      }
-      selected.push(line);
-      used = next;
-    }
-    return selected;
-  };
-  const availableBytes = maxBytes - markerBytes - 2;
-  const head = collect(lines, headCount, Math.floor(availableBytes / 2));
-  const tail = collect(lines.slice(Math.max(head.length, lines.length - tailCount)), tailCount, availableBytes - byteLength(head.join(`
-`)));
-  const content = [...head, marker, ...tail].join(`
-`);
-  return {
-    content,
-    omittedLines: Math.max(0, totalLines - head.length - tail.length),
-    totalBytes,
-    totalLines,
-    truncated: true
-  };
-};
-var assistantEntry = (message, policies, redact) => {
-  const parts = [];
-  const text = textFrom(message.content);
-  if (text) {
-    parts.push(redact ? redactSecrets(text) : text);
-  }
-  for (const part of contentParts(message.content)) {
-    if (!isRecord(part) || part.type !== "toolCall") {
-      continue;
-    }
-    const toolName = typeof part.name === "string" ? part.name : "unknown";
-    const policy = policies[toolName] ?? "full";
-    if (policy === "exclude") {
-      parts.push(`[Tool Call: ${toolName}] (excluded by Advisor tool policy)`);
-      continue;
-    }
-    if (policy === "summary") {
-      parts.push(`[Tool Call: ${toolName}] (arguments omitted by Advisor tool policy: summary)`);
-      continue;
-    }
-    const argumentsText = JSON.stringify(part.arguments) ?? "undefined";
-    parts.push(`[Tool Call: ${toolName}(${redact ? redactSecrets(argumentsText) : argumentsText})]`);
-  }
-  return parts.length > 0 ? `Executor: ${parts.join(`
-`)}` : undefined;
-};
-var toolResultEntry = (message, toolResultMaxLines, toolResultMaxBytes, policies, redact) => {
-  const status = message.isError ? "error" : "success";
-  const toolName = typeof message.toolName === "string" ? message.toolName : "unknown";
-  const policy = policies[toolName] ?? "full";
-  const source = textFrom(message.content);
-  if (policy === "exclude") {
-    return `[Tool Result for ${toolName}] (excluded by Advisor tool policy)`;
-  }
-  if (policy === "summary") {
-    const capped = capToolResult(source, toolResultMaxLines, toolResultMaxBytes);
-    return `[Tool Result for ${toolName}] (output omitted by Advisor tool policy: summary; status: ${status}; ${capped.totalLines} lines, ${capped.totalBytes} bytes; source output was${capped.truncated ? "" : " not"} truncated)`;
-  }
-  const disclosed = redact ? redactSecrets(source) : source;
-  const capped = capToolResult(disclosed, toolResultMaxLines, toolResultMaxBytes);
-  return `[Tool Result for ${toolName}] (${message.isError ? "Error " : ""}output):
-${capped.content}`;
-};
-var conversationEntry = (entry, toolResultMaxLines, toolResultMaxBytes, policies, redact) => {
-  if (!isRecord(entry)) {
-    return;
-  }
-  if (entry.type === "compaction" && typeof entry.summary === "string") {
-    return `[System Compaction Summary]: ${redact ? redactSecrets(entry.summary) : entry.summary}`;
-  }
-  if (entry.type !== "message" || !isRecord(entry.message)) {
-    return;
-  }
-  const { message } = entry;
-  if (message.role === "user") {
-    const text = textFrom(message.content);
-    return text ? `User: ${redact ? redactSecrets(text) : text}` : undefined;
-  }
-  if (message.role === "assistant") {
-    return assistantEntry(message, policies, redact);
-  }
-  if (message.role === "toolResult" || message.role === "tool") {
-    return toolResultEntry(message, toolResultMaxLines, toolResultMaxBytes, policies, redact);
-  }
-};
-var selectRecentEntries = (entries, maxChars) => {
-  const separator = `
-
-`;
-  const joined = entries.join(separator);
-  if (joined.length <= maxChars || maxChars === Number.MAX_SAFE_INTEGER) {
-    return joined;
-  }
-  const newestTruncated = "[Newest entry truncated]";
-  if (entries.length === 1) {
-    const prefix = `${newestTruncated}${separator}`;
-    return `${prefix}${entries[0].slice(0, Math.max(0, maxChars - prefix.length))}`.slice(0, maxChars);
-  }
-  const selected = [];
-  let selectedLength = 0;
-  for (let index = entries.length - 1;index >= 0; index -= 1) {
-    const entry = entries[index];
-    const candidateCount = selected.length + 1;
-    const omitted = entries.length - candidateCount;
-    const marker = `[Older context omitted: ${omitted} complete entr${omitted === 1 ? "y" : "ies"}]`;
-    const candidateLength = selectedLength + entry.length + (selected.length > 0 ? separator.length : 0);
-    if (marker.length + separator.length + candidateLength > maxChars) {
-      break;
-    }
-    selected.unshift(entry);
-    selectedLength = candidateLength;
-  }
-  const omitted = entries.length - Math.max(1, selected.length);
-  const marker = `[Older context omitted: ${omitted} complete entr${omitted === 1 ? "y" : "ies"}]`;
-  if (selected.length > 0) {
-    return `${marker}${separator}${selected.join(separator)}`;
-  }
-  const prefix = `${marker}${separator}${newestTruncated}${separator}`;
-  return `${prefix}${entries.at(-1)?.slice(0, Math.max(0, maxChars - prefix.length)) ?? ""}`.slice(0, maxChars);
-};
-var recentConversation = (ctx, maxChars = 15000, toolResultMaxLines = advisorToolResultMaxLinesRef, toolResultMaxBytes = advisorToolResultMaxBytesRef, policies = advisorToolPoliciesRef, redact = advisorRedactSecretsRef) => {
-  if (maxChars === 0) {
-    return "";
-  }
-  const entries = ctx.sessionManager.getBranch().map((entry) => conversationEntry(entry, toolResultMaxLines, toolResultMaxBytes, policies, redact)).filter((entry) => entry !== undefined);
-  return selectRecentEntries(entries, maxChars);
+  return capUtf8Bytes(source, maxBytes);
 };
 
 // src/herdr.ts
@@ -1506,138 +1332,6 @@ var herdrAdvisorBlock = new HerdrAdvisorBlock(sendToHerdr, () => getAdvisorSetti
 // src/tools/consultation.ts
 import { randomUUID } from "node:crypto";
 
-// src/attachments.ts
-import { execFileSync as execFileSync2 } from "node:child_process";
-import { constants } from "node:fs";
-import { lstat, open, realpath } from "node:fs/promises";
-import { isAbsolute, relative, resolve } from "node:path";
-var ADVISOR_FILE_MAX_BYTES = 8 * 1024;
-var ADVISOR_FILES_TOTAL_MAX_BYTES = 24 * 1024;
-var PATH_SEGMENTS = /[\\/]/;
-var within = (root, candidate) => {
-  const path = relative(root, candidate);
-  return path !== "" && !path.startsWith("..") && !path.includes("../");
-};
-var normalizeRelativePath = (root, path) => relative(root, resolve(root, path));
-var normalizeRequestedPath = (root, value) => {
-  if (typeof value !== "string" || !value || isAbsolute(value) || value.split(PATH_SEGMENTS).includes("..")) {
-    return;
-  }
-  return normalizeRelativePath(root, value);
-};
-var git = (cwd, args) => execFileSync2("git", args, {
-  cwd,
-  encoding: "utf8",
-  maxBuffer: 16 * 1024 * 1024,
-  shell: false,
-  stdio: ["ignore", "pipe", "pipe"],
-  timeout: 5000,
-  windowsHide: true
-});
-var repositoryRoot = (cwd) => {
-  try {
-    return realpath(git(cwd, ["rev-parse", "--show-toplevel"]).trim());
-  } catch {
-    return Promise.resolve(undefined);
-  }
-};
-var untracked = (cwd, path) => {
-  const output = git(cwd, [
-    "ls-files",
-    "--others",
-    "--exclude-standard",
-    "-z",
-    "--",
-    path
-  ]);
-  const expected = normalizeRelativePath(cwd, path);
-  return output.split("\x00").filter(Boolean).some((entry) => normalizeRelativePath(cwd, entry) === expected);
-};
-var tracked = (cwd, path) => {
-  const output = git(cwd, ["ls-files", "--stage", "-z", "--", path]);
-  const expected = normalizeRelativePath(cwd, path);
-  return output.split("\x00").some((entry) => {
-    if (!entry) {
-      return false;
-    }
-    const [metadata, name] = entry.split("\t");
-    return name && normalizeRelativePath(cwd, name) === expected && !metadata.startsWith("160000 ");
-  });
-};
-var isPermitted = (root, path, kind) => kind === "tracked" ? tracked(root, path) : untracked(root, path);
-var readAttachment = async (root, normalizedName, redact, available) => {
-  const absolute = resolve(root, normalizedName);
-  if (!(within(root, absolute) && available > 0)) {
-    return;
-  }
-  const stats = await lstat(absolute);
-  if (stats.isSymbolicLink() || !stats.isFile()) {
-    return;
-  }
-  const resolved = await realpath(absolute);
-  if (!within(root, resolved)) {
-    return;
-  }
-  const flags = constants.O_NOFOLLOW ? constants.O_RDONLY | constants.O_NOFOLLOW : constants.O_RDONLY;
-  const file = await open(resolved, flags);
-  try {
-    const openedStats = await file.stat();
-    if (!openedStats.isFile()) {
-      return;
-    }
-    const buffer = Buffer.alloc(available + 1);
-    const { bytesRead } = await file.read(buffer, 0, buffer.length, 0);
-    const raw = buffer.subarray(0, bytesRead).toString("utf8");
-    if (raw.includes("\x00")) {
-      return;
-    }
-    const text = redactAndCapText(raw, available, redact);
-    return {
-      bytes: Buffer.byteLength(text, "utf8"),
-      path: normalizedName,
-      text
-    };
-  } finally {
-    await file.close();
-  }
-};
-var readFiles = async (cwd, requested, enabled, redact, kind, totalLimit = ADVISOR_FILES_TOTAL_MAX_BYTES) => {
-  if (!(enabled && Array.isArray(requested))) {
-    return [];
-  }
-  const root = await repositoryRoot(cwd);
-  if (!root) {
-    return [];
-  }
-  const unique = new Set;
-  const attachments = [];
-  let total = 0;
-  for (const name of requested) {
-    const normalizedName = normalizeRequestedPath(root, name);
-    if (!normalizedName || unique.has(normalizedName)) {
-      continue;
-    }
-    unique.add(normalizedName);
-    try {
-      if (!isPermitted(root, normalizedName, kind)) {
-        continue;
-      }
-      const available = Math.min(ADVISOR_FILE_MAX_BYTES, totalLimit - total);
-      if (available <= 0) {
-        break;
-      }
-      const attachment = await readAttachment(root, normalizedName, redact, available);
-      if (attachment) {
-        attachments.push(attachment);
-        total += attachment.bytes;
-      }
-    } catch {}
-  }
-  return attachments;
-};
-var readTrackedFiles = (cwd, requested, enabled, redact, totalLimit = ADVISOR_FILES_TOTAL_MAX_BYTES) => readFiles(cwd, requested, enabled, redact, "tracked", totalLimit);
-var readUntrackedFiles = (cwd, requested, enabled, redact, totalLimit = ADVISOR_FILES_TOTAL_MAX_BYTES) => readFiles(cwd, requested, enabled, redact, "untracked", totalLimit);
-
 // src/model-stream.ts
 import {
   stream
@@ -1786,6 +1480,138 @@ var collectTextStream = async (resolved, options, streamModel = stream) => {
   };
 };
 
+// src/attachments.ts
+import { execFileSync as execFileSync2 } from "node:child_process";
+import { constants } from "node:fs";
+import { lstat, open, realpath } from "node:fs/promises";
+import { isAbsolute, relative, resolve } from "node:path";
+var ADVISOR_FILE_MAX_BYTES = 8 * 1024;
+var ADVISOR_FILES_TOTAL_MAX_BYTES = 24 * 1024;
+var PATH_SEGMENTS = /[\\/]/;
+var within = (root, candidate) => {
+  const path = relative(root, candidate);
+  return path !== "" && !path.startsWith("..") && !path.includes("../");
+};
+var normalizeRelativePath = (root, path) => relative(root, resolve(root, path));
+var normalizeRequestedPath = (root, value) => {
+  if (typeof value !== "string" || !value || isAbsolute(value) || value.split(PATH_SEGMENTS).includes("..")) {
+    return;
+  }
+  return normalizeRelativePath(root, value);
+};
+var git = (cwd, args) => execFileSync2("git", args, {
+  cwd,
+  encoding: "utf8",
+  maxBuffer: 16 * 1024 * 1024,
+  shell: false,
+  stdio: ["ignore", "pipe", "pipe"],
+  timeout: 5000,
+  windowsHide: true
+});
+var repositoryRoot = (cwd) => {
+  try {
+    return realpath(git(cwd, ["rev-parse", "--show-toplevel"]).trim());
+  } catch {
+    return Promise.resolve(undefined);
+  }
+};
+var untracked = (cwd, path) => {
+  const output = git(cwd, [
+    "ls-files",
+    "--others",
+    "--exclude-standard",
+    "-z",
+    "--",
+    path
+  ]);
+  const expected = normalizeRelativePath(cwd, path);
+  return output.split("\x00").filter(Boolean).some((entry) => normalizeRelativePath(cwd, entry) === expected);
+};
+var tracked = (cwd, path) => {
+  const output = git(cwd, ["ls-files", "--stage", "-z", "--", path]);
+  const expected = normalizeRelativePath(cwd, path);
+  return output.split("\x00").some((entry) => {
+    if (!entry) {
+      return false;
+    }
+    const [metadata, name] = entry.split("\t");
+    return name && normalizeRelativePath(cwd, name) === expected && !metadata.startsWith("160000 ");
+  });
+};
+var isPermitted = (root, path, kind) => kind === "tracked" ? tracked(root, path) : untracked(root, path);
+var readAttachment = async (root, normalizedName, redact, available) => {
+  const absolute = resolve(root, normalizedName);
+  if (!(within(root, absolute) && available > 0)) {
+    return;
+  }
+  const stats = await lstat(absolute);
+  if (stats.isSymbolicLink() || !stats.isFile()) {
+    return;
+  }
+  const resolved = await realpath(absolute);
+  if (!within(root, resolved)) {
+    return;
+  }
+  const flags = constants.O_NOFOLLOW ? constants.O_RDONLY | constants.O_NOFOLLOW : constants.O_RDONLY;
+  const file = await open(resolved, flags);
+  try {
+    const openedStats = await file.stat();
+    if (!openedStats.isFile()) {
+      return;
+    }
+    const buffer = Buffer.alloc(available + 1);
+    const { bytesRead } = await file.read(buffer, 0, buffer.length, 0);
+    const raw = buffer.subarray(0, bytesRead).toString("utf8");
+    if (raw.includes("\x00")) {
+      return;
+    }
+    const text = redactAndCapText(raw, available, redact);
+    return {
+      bytes: Buffer.byteLength(text, "utf8"),
+      path: normalizedName,
+      text
+    };
+  } finally {
+    await file.close();
+  }
+};
+var readFiles = async (cwd, requested, enabled, redact, kind, totalLimit = ADVISOR_FILES_TOTAL_MAX_BYTES) => {
+  if (!(enabled && Array.isArray(requested))) {
+    return [];
+  }
+  const root = await repositoryRoot(cwd);
+  if (!root) {
+    return [];
+  }
+  const unique = new Set;
+  const attachments = [];
+  let total = 0;
+  for (const name of requested) {
+    const normalizedName = normalizeRequestedPath(root, name);
+    if (!normalizedName || unique.has(normalizedName)) {
+      continue;
+    }
+    unique.add(normalizedName);
+    try {
+      if (!isPermitted(root, normalizedName, kind)) {
+        continue;
+      }
+      const available = Math.min(ADVISOR_FILE_MAX_BYTES, totalLimit - total);
+      if (available <= 0) {
+        break;
+      }
+      const attachment = await readAttachment(root, normalizedName, redact, available);
+      if (attachment) {
+        attachments.push(attachment);
+        total += attachment.bytes;
+      }
+    } catch {}
+  }
+  return attachments;
+};
+var readTrackedFiles = (cwd, requested, enabled, redact, totalLimit = ADVISOR_FILES_TOTAL_MAX_BYTES) => readFiles(cwd, requested, enabled, redact, "tracked", totalLimit);
+var readUntrackedFiles = (cwd, requested, enabled, redact, totalLimit = ADVISOR_FILES_TOTAL_MAX_BYTES) => readFiles(cwd, requested, enabled, redact, "untracked", totalLimit);
+
 // src/preferences.ts
 import { lstat as lstat2, open as open2, realpath as realpath2 } from "node:fs/promises";
 import { join as join2, relative as relative2 } from "node:path";
@@ -1826,10 +1652,190 @@ var readProjectPreferences = async (ctx, maxBytes = PREFERENCES_MAX_BYTES, redac
 // src/scout-groups.ts
 import { createHash } from "node:crypto";
 
-// src/content-utils.ts
-var isRecord2 = (value) => Boolean(value) && typeof value === "object";
-var byteLength2 = (value) => Buffer.byteLength(value, "utf8");
-var contentParts2 = (content) => Array.isArray(content) ? content : [];
+// src/tool-result-cap.ts
+var OMITTED_MARKER = "[... omitted tool-result section ...]";
+var capToolResult = (value, maxLines = DEFAULT_ADVISOR_TOOL_RESULT_MAX_LINES, maxBytes = DEFAULT_ADVISOR_TOOL_RESULT_MAX_BYTES) => {
+  const lines = value.split(`
+`);
+  const totalLines = lines.length;
+  const totalBytes = byteLength(value);
+  if ((maxLines === 0 || maxBytes === 0) && value.length > 0) {
+    return {
+      content: "[Tool result omitted: configured limit is zero]",
+      omittedLines: totalLines,
+      totalBytes,
+      totalLines,
+      truncated: true
+    };
+  }
+  if (totalLines <= maxLines && totalBytes <= maxBytes) {
+    return {
+      content: value,
+      omittedLines: 0,
+      totalBytes,
+      totalLines,
+      truncated: false
+    };
+  }
+  const markerBytes = byteLength(OMITTED_MARKER);
+  if (maxBytes < markerBytes || maxLines === 1) {
+    return {
+      content: capUtf8Bytes(OMITTED_MARKER, maxBytes),
+      omittedLines: totalLines,
+      totalBytes,
+      totalLines,
+      truncated: true
+    };
+  }
+  const headCount = Math.floor((maxLines - 1) / 2);
+  const tailCount = maxLines - 1 - headCount;
+  const collect = (candidates, maxEntries, maxContentBytes) => {
+    const selected = [];
+    let used = 0;
+    for (const line of candidates.slice(0, maxEntries)) {
+      const next = used + byteLength(line) + (selected.length ? 1 : 0);
+      if (next > maxContentBytes) {
+        break;
+      }
+      selected.push(line);
+      used = next;
+    }
+    return selected;
+  };
+  const availableBytes = maxBytes - markerBytes - 2;
+  const head = collect(lines, headCount, Math.floor(availableBytes / 2));
+  const tail = collect(lines.slice(Math.max(head.length, lines.length - tailCount)), tailCount, availableBytes - byteLength(head.join(`
+`)));
+  const content = [...head, OMITTED_MARKER, ...tail].join(`
+`);
+  return {
+    content,
+    omittedLines: Math.max(0, totalLines - head.length - tail.length),
+    totalBytes,
+    totalLines,
+    truncated: true
+  };
+};
+
+// src/conversation.ts
+var textFromPart = (part) => {
+  if (typeof part === "string") {
+    return part;
+  }
+  if (!isRecord(part) || part.type !== "text") {
+    return "";
+  }
+  return typeof part.text === "string" ? part.text : "";
+};
+var textFrom = (content) => contentParts(content).map(textFromPart).join(`
+`).trim();
+var assistantEntry = (message, policies, redact) => {
+  const parts = [];
+  const text = textFrom(message.content);
+  if (text) {
+    parts.push(redact ? redactSecrets(text) : text);
+  }
+  for (const part of contentParts(message.content)) {
+    if (!isRecord(part) || part.type !== "toolCall") {
+      continue;
+    }
+    const toolName = typeof part.name === "string" ? part.name : "unknown";
+    const policy = policies[toolName] ?? "full";
+    if (policy === "exclude") {
+      parts.push(`[Tool Call: ${toolName}] (excluded by Advisor tool policy)`);
+      continue;
+    }
+    if (policy === "summary") {
+      parts.push(`[Tool Call: ${toolName}] (arguments omitted by Advisor tool policy: summary)`);
+      continue;
+    }
+    const argumentsText = JSON.stringify(part.arguments) ?? "undefined";
+    parts.push(`[Tool Call: ${toolName}(${redact ? redactSecrets(argumentsText) : argumentsText})]`);
+  }
+  return parts.length > 0 ? `Executor: ${parts.join(`
+`)}` : undefined;
+};
+var toolResultEntry = (message, toolResultMaxLines, toolResultMaxBytes, policies, redact) => {
+  const status = message.isError ? "error" : "success";
+  const toolName = typeof message.toolName === "string" ? message.toolName : "unknown";
+  const policy = policies[toolName] ?? "full";
+  const source = textFrom(message.content);
+  if (policy === "exclude") {
+    return `[Tool Result for ${toolName}] (excluded by Advisor tool policy)`;
+  }
+  if (policy === "summary") {
+    const capped = capToolResult(source, toolResultMaxLines, toolResultMaxBytes);
+    return `[Tool Result for ${toolName}] (output omitted by Advisor tool policy: summary; status: ${status}; ${capped.totalLines} lines, ${capped.totalBytes} bytes; source output was${capped.truncated ? "" : " not"} truncated)`;
+  }
+  const disclosed = redact ? redactSecrets(source) : source;
+  const capped = capToolResult(disclosed, toolResultMaxLines, toolResultMaxBytes);
+  return `[Tool Result for ${toolName}] (${message.isError ? "Error " : ""}output):
+${capped.content}`;
+};
+var conversationEntry = (entry, toolResultMaxLines, toolResultMaxBytes, policies, redact) => {
+  if (!isRecord(entry)) {
+    return;
+  }
+  if (entry.type === "compaction" && typeof entry.summary === "string") {
+    return `[System Compaction Summary]: ${redact ? redactSecrets(entry.summary) : entry.summary}`;
+  }
+  if (entry.type !== "message" || !isRecord(entry.message)) {
+    return;
+  }
+  const { message } = entry;
+  if (message.role === "user") {
+    const text = textFrom(message.content);
+    return text ? `User: ${redact ? redactSecrets(text) : text}` : undefined;
+  }
+  if (message.role === "assistant") {
+    return assistantEntry(message, policies, redact);
+  }
+  if (message.role === "toolResult" || message.role === "tool") {
+    return toolResultEntry(message, toolResultMaxLines, toolResultMaxBytes, policies, redact);
+  }
+};
+var omissionMarker = (omitted) => `[Older context omitted: ${omitted} complete entr${omitted === 1 ? "y" : "ies"}]`;
+var selectRecentEntries = (entries, maxChars) => {
+  const separator = `
+
+`;
+  const joined = entries.join(separator);
+  if (joined.length <= maxChars || maxChars === Number.MAX_SAFE_INTEGER) {
+    return joined;
+  }
+  const newestTruncated = "[Newest entry truncated]";
+  if (entries.length === 1) {
+    const prefix = `${newestTruncated}${separator}`;
+    return `${prefix}${entries[0].slice(0, Math.max(0, maxChars - prefix.length))}`.slice(0, maxChars);
+  }
+  const selected = [];
+  let selectedLength = 0;
+  for (let index = entries.length - 1;index >= 0; index -= 1) {
+    const entry = entries[index];
+    const candidateCount = selected.length + 1;
+    const omitted = entries.length - candidateCount;
+    const candidateLength = selectedLength + entry.length + (selected.length > 0 ? separator.length : 0);
+    if (omissionMarker(omitted).length + separator.length + candidateLength > maxChars) {
+      break;
+    }
+    selected.unshift(entry);
+    selectedLength = candidateLength;
+  }
+  const omitted = entries.length - Math.max(1, selected.length);
+  const marker = omissionMarker(omitted);
+  if (selected.length > 0) {
+    return `${marker}${separator}${selected.join(separator)}`;
+  }
+  const prefix = `${marker}${separator}${newestTruncated}${separator}`;
+  return `${prefix}${entries.at(-1)?.slice(0, Math.max(0, maxChars - prefix.length)) ?? ""}`.slice(0, maxChars);
+};
+var recentConversation = (ctx, maxChars = 15000, toolResultMaxLines = advisorToolResultMaxLinesRef, toolResultMaxBytes = advisorToolResultMaxBytesRef, policies = advisorToolPoliciesRef, redact = advisorRedactSecretsRef) => {
+  if (maxChars === 0) {
+    return "";
+  }
+  const entries = ctx.sessionManager.getBranch().map((entry) => conversationEntry(entry, toolResultMaxLines, toolResultMaxBytes, policies, redact)).filter((entry) => entry !== undefined);
+  return selectRecentEntries(entries, maxChars);
+};
 
 // src/scout-protocol.ts
 var invalid = (message) => ({
@@ -1837,7 +1843,7 @@ var invalid = (message) => ({
   ok: false,
   reason: "invalid-protocol"
 });
-var toolCalls = (message) => contentParts2(message.content).filter((part) => isRecord2(part) && part.type === "toolCall");
+var toolCalls = (message) => contentParts(message.content).filter((part) => isRecord(part) && part.type === "toolCall");
 var toolCallId = (part) => typeof part.id === "string" ? part.id : undefined;
 var indexToolCalls = (entries) => {
   const callOwners = new Map;
@@ -1864,7 +1870,7 @@ var indexToolCalls = (entries) => {
   };
 };
 var indexEntry = (entry, index, callOwners, resultsByCall, state) => {
-  if (entry.type !== "message" || !isRecord2(entry.message)) {
+  if (entry.type !== "message" || !isRecord(entry.message)) {
     return;
   }
   if (entry.message.role === "user" && textFrom(entry.message.content)) {
@@ -1933,9 +1939,9 @@ var groupWire = (group) => ({
   label: group.label,
   required: group.required
 });
-var groupWireBytes = (group) => byteLength2(JSON.stringify(groupWire(group)));
+var groupWireBytes = (group) => byteLength(JSON.stringify(groupWire(group)));
 var createGroup = (originalIndex, entryIds, kind, content, required) => ({
-  bytes: byteLength2(content),
+  bytes: byteLength(content),
   content,
   id: stableId(originalIndex, entryIds, kind, content),
   kind,
@@ -1944,7 +1950,7 @@ var createGroup = (originalIndex, entryIds, kind, content, required) => ({
   required
 });
 var pendingAdvisorArguments = (value) => {
-  if (!isRecord2(value)) {
+  if (!isRecord(value)) {
     return {};
   }
   const allowed = {};
@@ -1956,11 +1962,11 @@ var pendingAdvisorArguments = (value) => {
   return allowed;
 };
 var pendingInvocationDisclosure = (entry, invocationId, toolResultMaxLines, toolResultMaxBytes, policies, redact, disclosed) => {
-  if (!isRecord2(entry.message)) {
+  if (!isRecord(entry.message)) {
     return disclosed;
   }
-  const content = contentParts2(entry.message.content).map((part) => {
-    if (!isRecord2(part) || part.type !== "toolCall" || toolCallId(part) !== invocationId || part.name !== "ask_advisor") {
+  const content = contentParts(entry.message.content).map((part) => {
+    if (!isRecord(part) || part.type !== "toolCall" || toolCallId(part) !== invocationId || part.name !== "ask_advisor") {
       return part;
     }
     return { ...part, arguments: pendingAdvisorArguments(part.arguments) };
@@ -1993,7 +1999,7 @@ var toolExchangeGroup = (entry, index, entryId, disclosed, immediate, indexed, c
 };
 var adjacentResultMismatch = (immediate, index, callIds, callOwners) => {
   const next = immediate;
-  if (next?.type === "message" && isRecord2(next.message) && next.message.role === "toolResult" && typeof next.message.toolCallId === "string" && !callIds.includes(next.message.toolCallId) && !callOwners.has(next.message.toolCallId)) {
+  if (next?.type === "message" && isRecord(next.message) && next.message.role === "toolResult" && typeof next.message.toolCallId === "string" && !callIds.includes(next.message.toolCallId) && !callOwners.has(next.message.toolCallId)) {
     return `Tool result at context entry ${index + 1} does not match its adjacent assistant group.`;
   }
   return;
@@ -2010,7 +2016,7 @@ var collectResults = (calls, callIds, index, resultsByCall, consumedResultIndexe
     }
     const resultMessage = resultMatch.entry.message;
     const expectedName = typeof calls[callIndex].name === "string" ? calls[callIndex].name : "unknown";
-    if (!isRecord2(resultMessage) || resultMessage.toolName !== expectedName) {
+    if (!isRecord(resultMessage) || resultMessage.toolName !== expectedName) {
       return `Tool result at context entry ${resultMatch.index} conflicts with call ${callId}.`;
     }
     consumedResultIndexes.add(resultMatch.index);
@@ -2027,7 +2033,7 @@ var missingOutcome = (entry, index, entryId, disclosed, callIds, missing, result
   const pendingCurrentInvocation = currentInvocationId !== undefined && missing.size === 1 && missing.has(currentInvocationId) && callIds.includes(currentInvocationId);
   if (!pendingCurrentInvocation) {
     return {
-      bytes: byteLength2([disclosed, ...resultParts].join(`
+      bytes: byteLength([disclosed, ...resultParts].join(`
 
 `)),
       kind: "omitted"
@@ -2072,7 +2078,7 @@ var buildGroups = (entries, indexed, caps) => {
 };
 var groupForEntry = (entry, index, disclosed, immediate, indexed, consumedResultIndexes, caps) => {
   const entryId = typeof entry.id === "string" ? entry.id : String(index);
-  if (entry.type !== "message" || !isRecord2(entry.message)) {
+  if (entry.type !== "message" || !isRecord(entry.message)) {
     return {
       group: createGroup(index, [entryId], "compaction", disclosed, false),
       kind: "group"
@@ -2109,10 +2115,10 @@ var toolResultOutcome = (message, index, disclosed, callOwners, consumedResultIn
       message: `Tool result at context entry ${index} precedes or conflicts with its retained call.`
     };
   }
-  return { bytes: byteLength2(disclosed), kind: "omitted" };
+  return { bytes: byteLength(disclosed), kind: "omitted" };
 };
 var ownerOf = (message, callOwners) => typeof message.toolCallId === "string" ? callOwners.get(message.toolCallId) : undefined;
-var hasCalls = (message) => contentPartsOf(message).some((part) => isRecord2(part) && part.type === "toolCall");
+var hasCalls = (message) => contentPartsOf(message).some((part) => isRecord(part) && part.type === "toolCall");
 var contentPartsOf = (message) => Array.isArray(message.content) ? message.content : [];
 
 // src/scout-reconstruct.ts
@@ -2156,13 +2162,12 @@ ${synthesis.trim()}` : undefined;
 // src/usage.ts
 var finite = (value) => typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : undefined;
 var add = (left, right) => left === undefined || right === undefined ? left ?? right : left + right;
-var isRecord3 = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
 var costFields = ["input", "output", "cacheRead", "cacheWrite", "total"];
 var snapshotAdvisorUsage = (usage) => {
-  if (!isRecord3(usage)) {
+  if (!isRecord(usage)) {
     return;
   }
-  const cost = isRecord3(usage.cost) ? usage.cost : undefined;
+  const cost = isRecord(usage.cost) ? usage.cost : undefined;
   const snapshot = {
     cacheRead: finite(usage.cacheRead),
     cacheWrite: finite(usage.cacheWrite),
@@ -2177,10 +2182,10 @@ var snapshotAdvisorUsage = (usage) => {
 var advisorUsageCost = (usage) => snapshotAdvisorUsage(usage)?.cost;
 var advisorUsageForPi = (usage) => {
   const snapshot = snapshotAdvisorUsage(usage);
-  if (!(snapshot && isRecord3(usage))) {
+  if (!(snapshot && isRecord(usage))) {
     return;
   }
-  const cost = isRecord3(usage.cost) ? usage.cost : undefined;
+  const cost = isRecord(usage.cost) ? usage.cost : undefined;
   const input = snapshot.input ?? 0;
   const output = snapshot.output ?? 0;
   const cacheRead = snapshot.cacheRead ?? 0;
@@ -2296,7 +2301,7 @@ var defaultDependencies = {
   collect: collectTextStream,
   resolve: resolveConfiguredModel
 };
-var byteLength3 = (value) => Buffer.byteLength(value, "utf8");
+var byteLength2 = (value) => Buffer.byteLength(value, "utf8");
 var AUTH_ERROR_PATTERN = /api key|auth|login|credential/i;
 var manifestMessage = (manifest) => ({
   content: [
@@ -2352,7 +2357,7 @@ var parseScoutSelection = (text, manifest) => {
   if (typeof record.synthesis !== "string") {
     throw new Error("Scout synthesis must be a string.");
   }
-  if (byteLength3(record.synthesis) > SCOUT_SYNTHESIS_MAX_BYTES) {
+  if (byteLength2(record.synthesis) > SCOUT_SYNTHESIS_MAX_BYTES) {
     throw new Error(`Scout synthesis exceeds ${SCOUT_SYNTHESIS_MAX_BYTES} UTF-8 bytes.`);
   }
   return {
@@ -2381,32 +2386,36 @@ var runAdvisorScout = async (ctx, manifest, parentSignal, onEvent, timeoutMs = S
   const publish = (event) => {
     onEvent?.(event);
   };
-  if (parentSignal?.aborted) {
+  const cancelled = () => {
     publish({ type: "cancelled" });
     return { cancelled: true, ok: false };
+  };
+  const fallback = (category, message, usage) => {
+    const outcome = {
+      category,
+      message,
+      metrics: usage === undefined ? baseMetrics(manifest, startedAt) : { ...baseMetrics(manifest, startedAt), usage },
+      model: executorRef,
+      ok: false
+    };
+    publish({ outcome, type: "fallback" });
+    return outcome;
+  };
+  if (parentSignal?.aborted) {
+    return cancelled();
   }
   let resolved;
   try {
     resolved = await dependencies.resolve(ctx, executorRef, "Scout");
   } catch (error) {
     if (parentSignal?.aborted) {
-      publish({ type: "cancelled" });
-      return { cancelled: true, ok: false };
+      return cancelled();
     }
     const message = error instanceof Error ? error.message : String(error);
-    const outcome = {
-      category: classifyResolutionError(message),
-      message,
-      metrics: baseMetrics(manifest, startedAt),
-      model: executorRef,
-      ok: false
-    };
-    publish({ outcome, type: "fallback" });
-    return outcome;
+    return fallback(classifyResolutionError(message), message);
   }
   if (parentSignal?.aborted) {
-    publish({ type: "cancelled" });
-    return { cancelled: true, ok: false };
+    return cancelled();
   }
   publish({ model: executorRef, type: "call" });
   const controller = new AbortController;
@@ -2426,6 +2435,11 @@ var runAdvisorScout = async (ctx, manifest, parentSignal, onEvent, timeoutMs = S
       once: true
     });
   });
+  const teardown = () => {
+    clearTimeout(timer);
+    parentSignal?.removeEventListener("abort", abortFromParent);
+    controller.signal.removeEventListener("abort", onControllerAbort);
+  };
   let streamed;
   try {
     const collection = dependencies.collect(resolved, {
@@ -2441,48 +2455,23 @@ var runAdvisorScout = async (ctx, manifest, parentSignal, onEvent, timeoutMs = S
     });
     streamed = await Promise.race([collection, abortPromise]);
   } catch (error) {
-    clearTimeout(timer);
-    parentSignal?.removeEventListener("abort", abortFromParent);
-    controller.signal.removeEventListener("abort", onControllerAbort);
+    teardown();
     if (parentSignal?.aborted) {
-      publish({ type: "cancelled" });
-      return { cancelled: true, ok: false };
+      return cancelled();
     }
     const message = error instanceof Error ? error.message : String(error);
-    const outcome = {
-      category: timedOut ? "timeout" : "provider-error",
-      message: timedOut ? `Scout timed out after ${timeoutMs} ms.` : message,
-      metrics: baseMetrics(manifest, startedAt),
-      model: executorRef,
-      ok: false
-    };
-    publish({ outcome, type: "fallback" });
-    return outcome;
+    return timedOut ? fallback("timeout", `Scout timed out after ${timeoutMs} ms.`) : fallback("provider-error", message);
   }
-  clearTimeout(timer);
-  parentSignal?.removeEventListener("abort", abortFromParent);
-  controller.signal.removeEventListener("abort", onControllerAbort);
+  teardown();
   if (parentSignal?.aborted) {
-    publish({ type: "cancelled" });
-    return { cancelled: true, ok: false };
+    return cancelled();
   }
   let selection;
   try {
     selection = parseScoutSelection(streamed.text, manifest);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    const outcome = {
-      category: streamed.text.trim() ? "invalid-selection" : "empty-response",
-      message,
-      metrics: {
-        ...baseMetrics(manifest, startedAt),
-        usage: snapshotAdvisorUsage(streamed.usage)
-      },
-      model: executorRef,
-      ok: false
-    };
-    publish({ outcome, type: "fallback" });
-    return outcome;
+    return fallback(streamed.text.trim() ? "invalid-selection" : "empty-response", message, snapshotAdvisorUsage(streamed.usage));
   }
   const outcome = {
     conversation: reconstructScoutConversation(manifest, selection.selectedIds, selection.synthesis),
@@ -2594,102 +2583,46 @@ var requiredOverflow = (required, caps) => {
   return;
 };
 
-// src/tools/gate-protocol.ts
-var DECISION_LINE = /^Decision\s*:\s*(proceed|revise|blocked)\s*$/i;
-var CODE_FENCE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
-var LINE_BREAK = /\r?\n/;
-var advanceFence = (openingFence, marker, suffix) => {
-  if (!openingFence) {
-    if (marker[0] === "`" && suffix.includes("`")) {
-      return { closed: false, openingFence: undefined };
-    }
-    return {
-      closed: false,
-      openingFence: { character: marker[0], length: marker.length }
+// src/scout-curation.ts
+var curateAdvisorConversation = async (ctx, legacyConversation, signal, onScout, enabled = advisorScoutEnabledRef, runScout = runAdvisorScout, currentInvocationId, maxChars) => {
+  if (!enabled) {
+    return { conversation: legacyConversation };
+  }
+  if (maxChars !== undefined && maxChars <= 0) {
+    return { conversation: "" };
+  }
+  const built = buildScoutManifest(ctx, {
+    currentInvocationId,
+    maxConversationChars: maxChars,
+    maxManifestBytes: SCOUT_MANIFEST_MAX_BYTES
+  });
+  if (!built.ok) {
+    const scout = {
+      category: built.reason,
+      message: built.message,
+      metrics: {
+        availableCount: 0,
+        inputBytes: 0,
+        latencyMs: 0,
+        omittedBeforeScout: 0,
+        selectedCount: 0
+      },
+      model: executorRef,
+      ok: false
     };
+    onScout?.({ outcome: scout, type: "fallback" });
+    return { conversation: legacyConversation, scout };
   }
-  if (suffix.trim().length > 0 || marker[0] !== openingFence.character || marker.length < openingFence.length) {
-    return { closed: false, openingFence };
+  const outcome = await runScout(ctx, built.manifest, signal, onScout, undefined, undefined);
+  if (!outcome.ok && outcome.cancelled) {
+    throw signal?.reason instanceof Error ? signal.reason : new Error("Advisor operation cancelled during Scout.");
   }
-  return { closed: true, openingFence: undefined };
+  let conversation = legacyConversation;
+  if (outcome.ok) {
+    conversation = maxChars === undefined ? outcome.conversation : reconstructScoutConversation(built.manifest, outcome.selection.selectedIds, outcome.selection.synthesis, maxChars);
+  }
+  return { conversation, scout: outcome };
 };
-var parseAutomaticDecision = (text) => {
-  const lines = text.split(LINE_BREAK);
-  const nonEmpty = lines.findIndex((line) => line.trim().length > 0);
-  if (nonEmpty === -1) {
-    return {
-      category: "empty-response",
-      message: "Advisor returned an empty gate response.",
-      ok: false
-    };
-  }
-  const first = lines[nonEmpty].trim();
-  const match = DECISION_LINE.exec(first);
-  if (!match) {
-    return {
-      category: first.toLowerCase().startsWith("decision:") ? "malformed-decision" : "missing-decision",
-      markdown: text,
-      message: "Advisor gate response must begin with Decision: proceed, Decision: revise, or Decision: blocked.",
-      ok: false
-    };
-  }
-  const decision = match[1].toLowerCase();
-  let openingFence;
-  const decisions = [];
-  let pendingFencedDecisions = [];
-  for (const line of lines.slice(nonEmpty + 1)) {
-    const trimmed = line.trim();
-    const fence = CODE_FENCE.exec(line);
-    if (fence) {
-      const { closed, openingFence: nextOpeningFence } = advanceFence(openingFence, fence[1], fence[2]);
-      openingFence = nextOpeningFence;
-      if (closed) {
-        pendingFencedDecisions = [];
-      }
-      continue;
-    }
-    const subsequent = DECISION_LINE.exec(trimmed);
-    if (!subsequent) {
-      continue;
-    }
-    const repeated = subsequent[1].trim().toLowerCase();
-    if (openingFence) {
-      pendingFencedDecisions.push(repeated);
-    } else {
-      decisions.push(repeated);
-    }
-  }
-  if (openingFence) {
-    decisions.push(...pendingFencedDecisions);
-  }
-  for (const repeated of decisions) {
-    if (repeated === decision) {
-      return {
-        category: "duplicate-decision",
-        markdown: text,
-        message: "Advisor gate response contains duplicate decision lines.",
-        ok: false
-      };
-    }
-    return {
-      category: "contradictory-decision",
-      markdown: text,
-      message: "Advisor gate response contains contradictory decision lines.",
-      ok: false
-    };
-  }
-  return {
-    decision,
-    markdown: text,
-    model: "",
-    ok: true,
-    thinkingText: "",
-    trigger: "repeated-tool-call"
-  };
-};
-var adviceForGateText = (result) => `**Decision: ${result.decision}**
-
-${result.markdown}`;
 
 // src/tools/prompts.ts
 var advisorMessageText = (conversation, question, changes, draft, preferences, untracked, tracked) => {
@@ -2800,72 +2733,152 @@ var ADVISOR_DECISION_SYSTEM = [
   "Use blocked only for a critical issue requiring the user. Never claim verification that the supplied evidence does not show."
 ].join(" ");
 
-// src/tools/consultation.ts
-var curateAdvisorConversation = async (ctx, legacyConversation, signal, onScout, enabled = advisorScoutEnabledRef, runScout = runAdvisorScout, currentInvocationId, maxChars) => {
-  if (!enabled) {
-    return { conversation: legacyConversation };
-  }
-  if (maxChars !== undefined && maxChars <= 0) {
-    return { conversation: "" };
-  }
-  const built = buildScoutManifest(ctx, {
-    currentInvocationId,
-    maxConversationChars: maxChars,
-    maxManifestBytes: SCOUT_MANIFEST_MAX_BYTES
-  });
-  if (!built.ok) {
-    const scout = {
-      category: built.reason,
-      message: built.message,
-      metrics: {
-        availableCount: 0,
-        inputBytes: 0,
-        latencyMs: 0,
-        omittedBeforeScout: 0,
-        selectedCount: 0
-      },
-      model: executorRef,
-      ok: false
-    };
-    onScout?.({ outcome: scout, type: "fallback" });
-    return { conversation: legacyConversation, scout };
-  }
-  const outcome = await runScout(ctx, built.manifest, signal, onScout, undefined, undefined);
-  if (!outcome.ok && outcome.cancelled) {
-    throw signal?.reason instanceof Error ? signal.reason : new Error("Advisor operation cancelled during Scout.");
-  }
-  let conversation = legacyConversation;
-  if (outcome.ok) {
-    conversation = maxChars === undefined ? outcome.conversation : reconstructScoutConversation(built.manifest, outcome.selection.selectedIds, outcome.selection.synthesis, maxChars);
-  }
-  return { conversation, scout: outcome };
-};
-var collectAdvisorResponse = async (ctx, systemPrompt, question, signal, onChunk, gitContext, draft, includeUntracked, includeTracked, onScout, currentInvocationId) => {
-  loadConfig(ctx);
-  const resolved = await resolveConfiguredModel(ctx, advisorRef, "Advisor");
+// src/tools/consult-context.ts
+var ATTACHMENT_TEXT_MAX_BYTES = 8 * 1024;
+var ATTACHMENTS_TOTAL_MAX_BYTES = 24 * 1024;
+var assembleConsultationContext = async (options) => {
+  const { ctx } = options;
   const allowed = advisorGitContextRef;
-  const level = clampGitContextLevel(gitContext ?? allowed, allowed);
+  const level = clampGitContextLevel(options.gitContext ?? allowed, allowed);
   const gitBudget = advisorGitContextBudget(contextMaxCharsRef, advisorGitContextMaxCharsRef);
   const changes = collectGitContext(ctx.cwd, level, gitBudget, advisorRedactSecretsRef ? redactSecrets : undefined);
-  const changeText = advisorRepositoryContext(changes, gitContext ?? allowed, level, gitBudget);
+  const changeText = advisorRepositoryContext(changes, options.gitContext ?? allowed, level, gitBudget);
   const conversationBudget = Math.max(0, contextMaxCharsRef - changeText.length);
   const legacyConversation = advisorRequestConversation(ctx, conversationBudget);
-  const curated = await curateAdvisorConversation(ctx, legacyConversation, signal, onScout, advisorScoutEnabledRef, runAdvisorScout, currentInvocationId, conversationBudget);
-  const { conversation, scout } = curated;
-  const preferences = await readProjectPreferences(ctx, 8 * 1024, advisorRedactSecretsRef);
-  const draftText = draft ? redactAndCapText(draft, 8 * 1024, advisorRedactSecretsRef) : undefined;
-  const untracked = await readUntrackedFiles(ctx.cwd, includeUntracked ?? [], advisorUntrackedContentRef, advisorRedactSecretsRef);
-  const tracked = await readTrackedFiles(ctx.cwd, includeTracked ?? [], advisorTrackedFileContentRef, advisorRedactSecretsRef, Math.max(0, 24 * 1024 - untracked.reduce((sum, item) => sum + item.bytes, 0)));
+  const curated = await curateAdvisorConversation(ctx, legacyConversation, options.signal, options.onScout, advisorScoutEnabledRef, runAdvisorScout, options.currentInvocationId, conversationBudget);
+  const preferences = await readProjectPreferences(ctx, ATTACHMENT_TEXT_MAX_BYTES, advisorRedactSecretsRef);
+  const draftText = options.draft ? redactAndCapText(options.draft, ATTACHMENT_TEXT_MAX_BYTES, advisorRedactSecretsRef) : undefined;
+  const untracked = await readUntrackedFiles(ctx.cwd, options.includeUntracked ?? [], advisorUntrackedContentRef, advisorRedactSecretsRef);
+  const tracked = await readTrackedFiles(ctx.cwd, options.includeTracked ?? [], advisorTrackedFileContentRef, advisorRedactSecretsRef, Math.max(0, ATTACHMENTS_TOTAL_MAX_BYTES - untracked.reduce((sum, item) => sum + item.bytes, 0)));
+  return {
+    changeText,
+    conversation: curated.conversation,
+    draftText,
+    preferences,
+    scout: curated.scout,
+    tracked,
+    untracked
+  };
+};
+
+// src/tools/gate-protocol.ts
+var DECISION_LINE = /^Decision\s*:\s*(proceed|revise|blocked)\s*$/i;
+var CODE_FENCE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
+var LINE_BREAK = /\r?\n/;
+var advanceFence = (openingFence, marker, suffix) => {
+  if (!openingFence) {
+    if (marker[0] === "`" && suffix.includes("`")) {
+      return { closed: false, openingFence: undefined };
+    }
+    return {
+      closed: false,
+      openingFence: { character: marker[0], length: marker.length }
+    };
+  }
+  if (suffix.trim().length > 0 || marker[0] !== openingFence.character || marker.length < openingFence.length) {
+    return { closed: false, openingFence };
+  }
+  return { closed: true, openingFence: undefined };
+};
+var parseAutomaticDecision = (text) => {
+  const lines = text.split(LINE_BREAK);
+  const nonEmpty = lines.findIndex((line) => line.trim().length > 0);
+  if (nonEmpty === -1) {
+    return {
+      category: "empty-response",
+      message: "Advisor returned an empty gate response.",
+      ok: false
+    };
+  }
+  const first = lines[nonEmpty].trim();
+  const match = DECISION_LINE.exec(first);
+  if (!match) {
+    return {
+      category: first.toLowerCase().startsWith("decision:") ? "malformed-decision" : "missing-decision",
+      markdown: text,
+      message: "Advisor gate response must begin with Decision: proceed, Decision: revise, or Decision: blocked.",
+      ok: false
+    };
+  }
+  const decision = match[1].toLowerCase();
+  let openingFence;
+  const decisions = [];
+  let pendingFencedDecisions = [];
+  for (const line of lines.slice(nonEmpty + 1)) {
+    const trimmed = line.trim();
+    const fence = CODE_FENCE.exec(line);
+    if (fence) {
+      const { closed, openingFence: nextOpeningFence } = advanceFence(openingFence, fence[1], fence[2]);
+      openingFence = nextOpeningFence;
+      if (closed) {
+        pendingFencedDecisions = [];
+      }
+      continue;
+    }
+    const subsequent = DECISION_LINE.exec(trimmed);
+    if (!subsequent) {
+      continue;
+    }
+    const repeated = subsequent[1].trim().toLowerCase();
+    if (openingFence) {
+      pendingFencedDecisions.push(repeated);
+    } else {
+      decisions.push(repeated);
+    }
+  }
+  if (openingFence) {
+    decisions.push(...pendingFencedDecisions);
+  }
+  for (const repeated of decisions) {
+    if (repeated === decision) {
+      return {
+        category: "duplicate-decision",
+        markdown: text,
+        message: "Advisor gate response contains duplicate decision lines.",
+        ok: false
+      };
+    }
+    return {
+      category: "contradictory-decision",
+      markdown: text,
+      message: "Advisor gate response contains contradictory decision lines.",
+      ok: false
+    };
+  }
+  return {
+    decision,
+    markdown: text,
+    model: "",
+    ok: true,
+    thinkingText: "",
+    trigger: "repeated-tool-call"
+  };
+};
+var adviceForGateText = (result) => `**Decision: ${result.decision}**
+
+${result.markdown}`;
+
+// src/tools/consultation.ts
+class AdvisorNoAdviceError extends Error {
+  constructor() {
+    super("Advisor returned no advice.");
+    this.name = "AdvisorNoAdviceError";
+  }
+}
+var fileTag = (item) => `<file path=${JSON.stringify(item.path)}>
+${item.text}
+</file>`;
+var collectAdvisorResponse = async (options) => {
+  const { ctx, question, signal, systemPrompt } = options;
+  loadConfig(ctx);
+  const resolved = await resolveConfiguredModel(ctx, advisorRef, "Advisor");
+  const context = await assembleConsultationContext(options);
   const outboundQuestion = advisorRedactSecretsRef && question !== undefined ? redactSecrets(question) : question;
   const messages = [
     {
       content: [
         {
-          text: advisorMessageText(conversation, outboundQuestion, changeText, draftText, preferences?.text, untracked.map((item) => `<file path=${JSON.stringify(item.path)}>
-${item.text}
-</file>`), tracked.map((item) => `<file path=${JSON.stringify(item.path)}>
-${item.text}
-</file>`)),
+          text: advisorMessageText(context.conversation, outboundQuestion, context.changeText, context.draftText, context.preferences?.text, context.untracked.map(fileTag), context.tracked.map(fileTag)),
           type: "text"
         }
       ],
@@ -2875,34 +2888,54 @@ ${item.text}
   ];
   const streamed = await collectTextStream(resolved, {
     messages,
-    onChunk,
+    onChunk: options.onChunk,
     reasoning: advisorEffortRef,
     signal,
     systemPrompt
   });
   const markdown = streamed.text;
   if (!markdown.trim()) {
-    throw new Error("Advisor returned no advice.");
+    throw new AdvisorNoAdviceError;
   }
   return {
-    draftBytes: draftText ? Buffer.byteLength(draftText, "utf8") : undefined,
+    draftBytes: context.draftText ? Buffer.byteLength(context.draftText, "utf8") : undefined,
     markdown,
     model: advisorRef,
-    preferenceBytes: preferences?.bytes,
+    preferenceBytes: context.preferences?.bytes,
     thinkingText: streamed.thinking,
-    trackedBytes: tracked.reduce((sum, item) => sum + item.bytes, 0) || undefined,
-    untrackedBytes: untracked.reduce((sum, item) => sum + item.bytes, 0) || undefined,
+    trackedBytes: context.tracked.reduce((sum, item) => sum + item.bytes, 0) || undefined,
+    untrackedBytes: context.untracked.reduce((sum, item) => sum + item.bytes, 0) || undefined,
     usage: streamed.usage,
-    ...scout ? { scout } : {}
+    ...context.scout ? { scout: context.scout } : {}
   };
 };
 var consultAdvisor = async (ctx, question, signal, onChunk, trigger = "executor-requested", gitContext, draft, includeUntracked, includeTracked, onScout, currentInvocationId) => {
-  const result = await collectAdvisorResponse(ctx, ADVISOR_SYSTEM, question, signal, onChunk, gitContext, draft, includeUntracked, includeTracked, onScout, currentInvocationId);
+  const result = await collectAdvisorResponse({
+    ctx,
+    currentInvocationId,
+    draft,
+    gitContext,
+    includeTracked,
+    includeUntracked,
+    onChunk,
+    onScout,
+    question,
+    signal,
+    systemPrompt: ADVISOR_SYSTEM
+  });
   return { ...result, adviceId: randomUUID(), trigger };
 };
 var runAdvisorGate = async (ctx, question, trigger = "repeated-tool-call", signal, onChunk, onScout, currentInvocationId) => {
   try {
-    const result = await collectAdvisorResponse(ctx, ADVISOR_DECISION_SYSTEM, question, signal, onChunk, undefined, undefined, undefined, undefined, onScout, currentInvocationId);
+    const result = await collectAdvisorResponse({
+      ctx,
+      currentInvocationId,
+      onChunk,
+      onScout,
+      question,
+      signal,
+      systemPrompt: ADVISOR_DECISION_SYSTEM
+    });
     const parsed = parseAutomaticDecision(result.markdown);
     if (!parsed.ok) {
       return { ...parsed, usage: result.usage };
@@ -2920,7 +2953,7 @@ var runAdvisorGate = async (ctx, question, trigger = "repeated-tool-call", signa
     }
     const message = error instanceof Error ? error.message : String(error);
     return {
-      category: message === "Advisor returned no advice." ? "empty-response" : "provider-error",
+      category: error instanceof AdvisorNoAdviceError ? "empty-response" : "provider-error",
       message,
       ok: false
     };
@@ -3221,42 +3254,40 @@ var normalizeToolInput = (toolName, input) => {
   return visit(input);
 };
 var normalizedToolSignature = (toolName, input) => `${toolName}:${JSON.stringify(normalizeToolInput(toolName, input))}`;
+var freshRepetition = () => ({
+  count: 0,
+  interventions: 0
+});
+var freshAdviceLedger = () => ({
+  draftConsultations: 0,
+  issued: new Map,
+  outcomes: 0,
+  pending: new Set,
+  reported: new Set
+});
+var freshUsage = () => ({
+  invocations: [],
+  totals: emptyAdvisorUsageTotals()
+});
 
 class AdvisorSessionState {
-  #previousSignature;
-  #repetitions = 0;
+  #repetition = freshRepetition();
   #blockedReason;
-  #invocations = [];
-  #loopInterventions = 0;
+  #ledger = freshAdviceLedger();
+  #usage = freshUsage();
   #consumedCalls = 0;
-  #issuedAdvice = new Map;
-  #pendingAdvice = new Set;
-  #reportedAdvice = new Set;
-  #draftConsultations = 0;
-  #outcomes = 0;
-  #lastAdvice;
-  #usage = emptyAdvisorUsageTotals();
   resetTask() {
-    this.#previousSignature = undefined;
-    this.#repetitions = 0;
+    this.#repetition = freshRepetition();
     this.#blockedReason = undefined;
-    this.#invocations = [];
-    this.#loopInterventions = 0;
+    this.#ledger = freshAdviceLedger();
+    this.#usage = freshUsage();
     this.#consumedCalls = 0;
-    this.#issuedAdvice.clear();
-    this.#pendingAdvice.clear();
-    this.#reportedAdvice.clear();
-    this.#draftConsultations = 0;
-    this.#outcomes = 0;
-    this.#lastAdvice = undefined;
-    this.#usage = emptyAdvisorUsageTotals();
   }
   clearBlocked() {
     this.#blockedReason = undefined;
   }
   resetRepetition() {
-    this.#previousSignature = undefined;
-    this.#repetitions = 0;
+    this.#repetition = freshRepetition();
   }
   get blocked() {
     return this.#blockedReason !== undefined;
@@ -3272,12 +3303,12 @@ class AdvisorSessionState {
       return false;
     }
     const signature = normalizedToolSignature(toolName, input);
-    this.#repetitions = signature === this.#previousSignature ? this.#repetitions + 1 : 1;
-    this.#previousSignature = signature;
-    if (this.#repetitions < threshold) {
+    this.#repetition.count = signature === this.#repetition.previousSignature ? this.#repetition.count + 1 : 1;
+    this.#repetition.previousSignature = signature;
+    if (this.#repetition.count < threshold) {
       return false;
     }
-    this.#loopInterventions += 1;
+    this.#repetition.interventions += 1;
     return true;
   }
   canConsult(limit) {
@@ -3293,58 +3324,59 @@ class AdvisorSessionState {
     return this.#consumedCalls;
   }
   get usageTotals() {
-    return { ...this.#usage };
+    return { ...this.#usage.totals };
   }
   usageStatus() {
-    return formatAdvisorUsageStatus(this.#usage);
+    return formatAdvisorUsageStatus(this.#usage.totals);
   }
   recordInvocation(record) {
-    this.#invocations.push(record);
-    addAdvisorUsage(this.#usage, record.usage);
+    this.#usage.invocations.push(record);
+    addAdvisorUsage(this.#usage.totals, record.usage);
   }
   issueAdvice(id, advice, trigger, draft = false) {
-    this.#issuedAdvice.set(id, { advice, trigger });
-    this.#lastAdvice = advice;
+    this.#ledger.issued.set(id, { advice, trigger });
+    this.#ledger.lastAdvice = advice;
     if (draft) {
-      this.#draftConsultations += 1;
+      this.#ledger.draftConsultations += 1;
     }
   }
   claimTrackedFiles(paths) {
-    if (!this.#lastAdvice || paths.length === 0) {
+    const advice = this.#ledger.lastAdvice;
+    if (!advice || paths.length === 0) {
       return false;
     }
     const mentioned = paths.every((path) => {
       const escaped = path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       const boundary = "(^|[\\s\\\"'`()\\[])" + escaped + "(?=$|[\\s\\\"'`),;:!?\\]]|\\.(?=\\s|$))";
-      return new RegExp(boundary).test(this.#lastAdvice);
+      return new RegExp(boundary).test(advice);
     });
     if (!mentioned) {
       return false;
     }
-    this.#lastAdvice = undefined;
+    this.#ledger.lastAdvice = undefined;
     return true;
   }
   reserveAdvice(id) {
-    if (this.#reportedAdvice.has(id) || this.#pendingAdvice.has(id)) {
+    if (this.#ledger.reported.has(id) || this.#ledger.pending.has(id)) {
       return;
     }
-    const advice = this.#issuedAdvice.get(id);
+    const advice = this.#ledger.issued.get(id);
     if (!advice) {
       return;
     }
-    this.#pendingAdvice.add(id);
+    this.#ledger.pending.add(id);
     return advice;
   }
   commitAdvice(id) {
-    if (!this.#pendingAdvice.delete(id)) {
+    if (!this.#ledger.pending.delete(id)) {
       return false;
     }
-    this.#reportedAdvice.add(id);
-    this.#outcomes += 1;
+    this.#ledger.reported.add(id);
+    this.#ledger.outcomes += 1;
     return true;
   }
   releaseAdvice(id) {
-    this.#pendingAdvice.delete(id);
+    this.#ledger.pending.delete(id);
   }
   claimAdvice(id) {
     const advice = this.reserveAdvice(id);
@@ -3354,34 +3386,47 @@ class AdvisorSessionState {
     this.commitAdvice(id);
     return advice;
   }
-  summary(limit) {
-    if (this.#invocations.length === 0 && this.#loopInterventions === 0) {
-      return;
-    }
-    const markdown = this.#invocations.filter((item) => item.kind === "markdown");
-    const gates = this.#invocations.filter((item) => item.kind === "gate");
-    const countTrigger = (trigger) => this.#invocations.filter((item) => item.trigger === trigger).length;
-    const decisions = ["proceed", "revise", "blocked"].map((decision) => [
+  #decisionsLine() {
+    const gates = this.#usage.invocations.filter((item) => item.kind === "gate");
+    return ["proceed", "revise", "blocked"].map((decision) => [
       decision,
       gates.filter((item) => item.decision === decision).length
     ]).filter(([, count]) => count > 0).map(([decision, count]) => `${count} ${decision}`).join(", ") || "none";
-    const effects = (effect) => this.#invocations.filter((item) => item.executionEffect === effect).length;
-    const failures = this.#invocations.filter((item) => item.failure).map((item) => item.failure);
-    const models = [
-      ...new Set(this.#invocations.map((item) => item.model).filter(Boolean))
-    ].join(", ") || "unknown";
+  }
+  #countTrigger(trigger) {
+    return this.#usage.invocations.filter((item) => item.trigger === trigger).length;
+  }
+  #triggersLine() {
+    return [
+      "manual",
+      "executor-requested",
+      "repeated-tool-call",
+      "completion-review",
+      "custom-rule"
+    ].filter((trigger) => this.#countTrigger(trigger) > 0).join(", ") || "none";
+  }
+  summary(limit) {
+    const { invocations, totals } = this.#usage;
+    if (invocations.length === 0 && this.#repetition.interventions === 0) {
+      return;
+    }
+    const markdown = invocations.filter((item) => item.kind === "markdown");
+    const gates = invocations.filter((item) => item.kind === "gate");
+    const effects = (effect) => invocations.filter((item) => item.executionEffect === effect).length;
+    const failures = invocations.filter((item) => item.failure).map((item) => item.failure);
+    const models = [...new Set(invocations.map((item) => item.model).filter(Boolean))].join(", ") || "unknown";
     const budget = limit === undefined ? `${this.#consumedCalls} used; unlimited remaining` : `${this.#consumedCalls} / ${limit} used; ${Math.max(0, limit - this.#consumedCalls)} remaining`;
     return [
       "[Session Advisor Summary]",
-      `Consultations: ${markdown.length} Markdown (${countTrigger("manual")} manual, ${countTrigger("executor-requested")} executor-requested), automatic gates: ${gates.length}`,
-      `Triggers: ${["manual", "executor-requested", "repeated-tool-call", "completion-review", "custom-rule"].filter((trigger) => countTrigger(trigger) > 0).join(", ") || "none"}`,
+      `Consultations: ${markdown.length} Markdown (${this.#countTrigger("manual")} manual, ${this.#countTrigger("executor-requested")} executor-requested), automatic gates: ${gates.length}`,
+      `Triggers: ${this.#triggersLine()}`,
       `Models: ${models}`,
       `Budget: ${budget}`,
-      `Usage: ${formatAdvisorUsageTotals(this.#usage)}`,
-      `Markdown advice: ${markdown.length} responses (${this.#draftConsultations} with drafts)`,
-      `Outcome reports: ${this.#outcomes}`,
-      `Gate decisions: ${decisions}`,
-      `Loop matching: normalized tool signatures; ${this.#loopInterventions} gate intervention${this.#loopInterventions === 1 ? "" : "s"}`,
+      `Usage: ${formatAdvisorUsageTotals(totals)}`,
+      `Markdown advice: ${markdown.length} responses (${this.#ledger.draftConsultations} with drafts)`,
+      `Outcome reports: ${this.#ledger.outcomes}`,
+      `Gate decisions: ${this.#decisionsLine()}`,
+      `Loop matching: normalized tool signatures; ${this.#repetition.interventions} gate intervention${this.#repetition.interventions === 1 ? "" : "s"}`,
       `Execution effects: ${effects("tool-blocked")} tool blocked, ${effects("session-blocked")} sessions blocked, ${effects("continued")} continued`,
       `Failures: ${failures.length ? failures.join(", ") : "none"}`
     ].join(`
@@ -5373,6 +5418,44 @@ var sendAutomaticGateResult = (pi, result) => {
     display: true
   }, { deliverAs: "steer" });
 };
+var applyGateDecision = (pi, ctx, session, result, reason, failureMode) => {
+  if (!result.ok) {
+    session.recordInvocation({
+      executionEffect: gateFailureEffectForMode(failureMode),
+      failure: result.category,
+      kind: "gate",
+      model: advisorRef,
+      trigger: "repeated-tool-call",
+      usage: result.usage
+    });
+    updateAdvisorUsageStatus(ctx, session);
+    const failure = failureEffect(result.category, result.message, ctx, session, failureMode);
+    sendAutomaticGateFailure(pi, `**Advisor gate failure (${result.category}):** ${result.message}`, result.usage);
+    return failure.block ? { block: true, reason: `${reason}
+${failure.reason}` } : undefined;
+  }
+  session.recordInvocation({
+    cost: advisorUsageCost(result.usage),
+    decision: result.decision,
+    executionEffect: gateDecisionEffect(result.decision, failureMode),
+    kind: "gate",
+    model: result.model,
+    trigger: result.trigger,
+    usage: result.usage
+  });
+  updateAdvisorUsageStatus(ctx, session);
+  sendAutomaticGateResult(pi, result);
+  if (result.decision === "proceed") {
+    session.resetRepetition();
+    return;
+  }
+  const gateReason = `Advisor loop review: ${result.markdown}`;
+  if (result.decision === "blocked") {
+    const effect = blockedDecisionEffect(gateReason, ctx, session, failureMode);
+    return effect.block ? { block: true, reason: effect.reason } : undefined;
+  }
+  return { block: true, reason: gateReason };
+};
 var handleAutomaticGate = async (pi, event, ctx, session, runGate, scoutStatus) => {
   if (isSimpleMode() || event.toolName === "ask_advisor" || !advisorAutoLoopGateRef || !session.recordToolCall(event.toolName, event.input, advisorLoopThresholdRef)) {
     return;
@@ -5407,42 +5490,7 @@ var handleAutomaticGate = async (pi, event, ctx, session, runGate, scoutStatus) 
       }
     }, event.toolCallId);
     ensureGateCall();
-    if (!result.ok) {
-      session.recordInvocation({
-        executionEffect: gateFailureEffectForMode(failureMode),
-        failure: result.category,
-        kind: "gate",
-        model: advisorRef,
-        trigger: "repeated-tool-call",
-        usage: result.usage
-      });
-      updateAdvisorUsageStatus(ctx, session);
-      const failure = failureEffect(result.category, result.message, ctx, session, failureMode);
-      sendAutomaticGateFailure(pi, `**Advisor gate failure (${result.category}):** ${result.message}`, result.usage);
-      return failure.block ? { block: true, reason: `${reason}
-${failure.reason}` } : undefined;
-    }
-    session.recordInvocation({
-      cost: advisorUsageCost(result.usage),
-      decision: result.decision,
-      executionEffect: gateDecisionEffect(result.decision, failureMode),
-      kind: "gate",
-      model: result.model,
-      trigger: result.trigger,
-      usage: result.usage
-    });
-    updateAdvisorUsageStatus(ctx, session);
-    sendAutomaticGateResult(pi, result);
-    if (result.decision === "proceed") {
-      session.resetRepetition();
-      return;
-    }
-    const gateReason = `Advisor loop review: ${result.markdown}`;
-    if (result.decision === "blocked") {
-      const effect = blockedDecisionEffect(gateReason, ctx, session, failureMode);
-      return effect.block ? { block: true, reason: effect.reason } : undefined;
-    }
-    return { block: true, reason: gateReason };
+    return applyGateDecision(pi, ctx, session, result, reason, failureMode);
   } finally {
     scoutStatus.release(ctx, scoutStatusToken);
     herdrAdvisorActivity.finish();

@@ -1,10 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import {
-  capToolResult,
-  recentConversation,
-  redactSecrets,
-  textFrom,
-} from "../src/conversation.ts";
+import { recentConversation, textFrom } from "../src/conversation.ts";
+import { redactSecrets } from "../src/redaction.ts";
+import { capToolResult } from "../src/tool-result-cap.ts";
 
 describe("Conversation Module", () => {
   test("textFrom should parse simple strings", () => {

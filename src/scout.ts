@@ -219,15 +219,36 @@ export const runAdvisorScout = async (
   onEvent?: (event: ScoutLifecycleEvent) => void,
   timeoutMs = SCOUT_TIMEOUT_MS,
   dependencies: ScoutDependencies = defaultDependencies
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: cancellation, timeout, provider, and schema outcomes remain explicitly distinct.
 ): Promise<ScoutOutcome> => {
   const startedAt = Date.now();
   const publish = (event: ScoutLifecycleEvent) => {
     onEvent?.(event);
   };
-  if (parentSignal?.aborted) {
+  const cancelled = (): ScoutOutcome => {
     publish({ type: "cancelled" });
     return { cancelled: true, ok: false };
+  };
+  const fallback = (
+    category: ScoutFallbackCategory,
+    message: string,
+    usage?: unknown
+  ): ScoutOutcome => {
+    const outcome = {
+      category,
+      message,
+      metrics:
+        usage === undefined
+          ? baseMetrics(manifest, startedAt)
+          : { ...baseMetrics(manifest, startedAt), usage },
+      model: executorRef,
+      ok: false as const,
+    };
+    publish({ outcome, type: "fallback" });
+    return outcome;
+  };
+
+  if (parentSignal?.aborted) {
+    return cancelled();
   }
 
   let resolved: ResolvedConfiguredModel;
@@ -235,24 +256,14 @@ export const runAdvisorScout = async (
     resolved = await dependencies.resolve(ctx, executorRef, "Scout");
   } catch (error) {
     if (parentSignal?.aborted) {
-      publish({ type: "cancelled" });
-      return { cancelled: true, ok: false };
+      return cancelled();
     }
     const message = error instanceof Error ? error.message : String(error);
-    const outcome = {
-      category: classifyResolutionError(message),
-      message,
-      metrics: baseMetrics(manifest, startedAt),
-      model: executorRef,
-      ok: false as const,
-    };
-    publish({ outcome, type: "fallback" });
-    return outcome;
+    return fallback(classifyResolutionError(message), message);
   }
 
   if (parentSignal?.aborted) {
-    publish({ type: "cancelled" });
-    return { cancelled: true, ok: false };
+    return cancelled();
   }
   publish({ model: executorRef, type: "call" });
   const controller = new AbortController();
@@ -274,6 +285,12 @@ export const runAdvisorScout = async (
       once: true,
     });
   });
+  const teardown = () => {
+    clearTimeout(timer);
+    parentSignal?.removeEventListener("abort", abortFromParent);
+    controller.signal.removeEventListener("abort", onControllerAbort);
+  };
+
   let streamed: CollectedTextStream;
   try {
     const collection = dependencies.collect(resolved, {
@@ -289,30 +306,18 @@ export const runAdvisorScout = async (
     });
     streamed = await Promise.race([collection, abortPromise]);
   } catch (error) {
-    clearTimeout(timer);
-    parentSignal?.removeEventListener("abort", abortFromParent);
-    controller.signal.removeEventListener("abort", onControllerAbort);
+    teardown();
     if (parentSignal?.aborted) {
-      publish({ type: "cancelled" });
-      return { cancelled: true, ok: false };
+      return cancelled();
     }
     const message = error instanceof Error ? error.message : String(error);
-    const outcome = {
-      category: timedOut ? ("timeout" as const) : ("provider-error" as const),
-      message: timedOut ? `Scout timed out after ${timeoutMs} ms.` : message,
-      metrics: baseMetrics(manifest, startedAt),
-      model: executorRef,
-      ok: false as const,
-    };
-    publish({ outcome, type: "fallback" });
-    return outcome;
+    return timedOut
+      ? fallback("timeout", `Scout timed out after ${timeoutMs} ms.`)
+      : fallback("provider-error", message);
   }
-  clearTimeout(timer);
-  parentSignal?.removeEventListener("abort", abortFromParent);
-  controller.signal.removeEventListener("abort", onControllerAbort);
+  teardown();
   if (parentSignal?.aborted) {
-    publish({ type: "cancelled" });
-    return { cancelled: true, ok: false };
+    return cancelled();
   }
 
   let selection: ScoutSelection;
@@ -320,20 +325,11 @@ export const runAdvisorScout = async (
     selection = parseScoutSelection(streamed.text, manifest);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    const outcome = {
-      category: streamed.text.trim()
-        ? ("invalid-selection" as const)
-        : ("empty-response" as const),
+    return fallback(
+      streamed.text.trim() ? "invalid-selection" : "empty-response",
       message,
-      metrics: {
-        ...baseMetrics(manifest, startedAt),
-        usage: snapshotAdvisorUsage(streamed.usage),
-      },
-      model: executorRef,
-      ok: false as const,
-    };
-    publish({ outcome, type: "fallback" });
-    return outcome;
+      snapshotAdvisorUsage(streamed.usage)
+    );
   }
 
   const outcome = {

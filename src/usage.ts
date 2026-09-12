@@ -31,8 +31,7 @@ const finite = (value: unknown) =>
 const add = (left: number | undefined, right: number | undefined) =>
   left === undefined || right === undefined ? (left ?? right) : left + right;
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  Boolean(value) && typeof value === "object" && !Array.isArray(value);
+import { isRecord } from "./content-utils.ts";
 
 const costFields = ["input", "output", "cacheRead", "cacheWrite", "total"];
 

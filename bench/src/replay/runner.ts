@@ -10,7 +10,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { capToolResult } from "../../../src/conversation.ts";
+import { capToolResult } from "../../../src/tool-result-cap.ts";
 import { runAdvisorGate } from "../../../src/tools.ts";
 import {
   BudgetGuard,

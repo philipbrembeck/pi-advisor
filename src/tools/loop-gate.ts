@@ -13,6 +13,7 @@ import {
   getAdvisorMaxCallsPerSession,
   isSimpleMode,
 } from "../config/state.ts";
+import type { GateFailureMode } from "../config/types.ts";
 import { herdrAdvisorActivity } from "../herdr.ts";
 import type { AdvisorSessionState } from "../session-state.ts";
 import { advisorUsageCost, snapshotAdvisorUsage } from "../usage.ts";
@@ -87,6 +88,65 @@ const sendAutomaticGateResult = (
   );
 };
 
+/** Records the invocation, reports it, and maps the gate decision to its
+ * tool-call result (block reason or proceed). */
+const applyGateDecision = (
+  pi: ExtensionAPI,
+  ctx: ExtensionContext,
+  session: AdvisorSessionState,
+  result: Awaited<ReturnType<typeof runAdvisorGate>>,
+  reason: string,
+  failureMode: GateFailureMode
+): ToolCallEventResult | undefined => {
+  if (!result.ok) {
+    session.recordInvocation({
+      executionEffect: gateFailureEffectForMode(failureMode),
+      failure: result.category,
+      kind: "gate",
+      model: advisorRef,
+      trigger: "repeated-tool-call",
+      usage: result.usage,
+    });
+    updateAdvisorUsageStatus(ctx, session);
+    const failure = failureEffect(
+      result.category,
+      result.message,
+      ctx,
+      session,
+      failureMode
+    );
+    sendAutomaticGateFailure(
+      pi,
+      `**Advisor gate failure (${result.category}):** ${result.message}`,
+      result.usage
+    );
+    return failure.block
+      ? { block: true, reason: `${reason}\n${failure.reason}` }
+      : undefined;
+  }
+  session.recordInvocation({
+    cost: advisorUsageCost(result.usage),
+    decision: result.decision,
+    executionEffect: gateDecisionEffect(result.decision, failureMode),
+    kind: "gate",
+    model: result.model,
+    trigger: result.trigger,
+    usage: result.usage,
+  });
+  updateAdvisorUsageStatus(ctx, session);
+  sendAutomaticGateResult(pi, result);
+  if (result.decision === "proceed") {
+    session.resetRepetition();
+    return;
+  }
+  const gateReason = `Advisor loop review: ${result.markdown}`;
+  if (result.decision === "blocked") {
+    const effect = blockedDecisionEffect(gateReason, ctx, session, failureMode);
+    return effect.block ? { block: true, reason: effect.reason } : undefined;
+  }
+  return { block: true, reason: gateReason };
+};
+
 export const handleAutomaticGate = async (
   pi: ExtensionAPI,
   event: ToolCallEvent,
@@ -151,58 +211,7 @@ export const handleAutomaticGate = async (
       event.toolCallId
     );
     ensureGateCall();
-    if (!result.ok) {
-      session.recordInvocation({
-        executionEffect: gateFailureEffectForMode(failureMode),
-        failure: result.category,
-        kind: "gate",
-        model: advisorRef,
-        trigger: "repeated-tool-call",
-        usage: result.usage,
-      });
-      updateAdvisorUsageStatus(ctx, session);
-      const failure = failureEffect(
-        result.category,
-        result.message,
-        ctx,
-        session,
-        failureMode
-      );
-      sendAutomaticGateFailure(
-        pi,
-        `**Advisor gate failure (${result.category}):** ${result.message}`,
-        result.usage
-      );
-      return failure.block
-        ? { block: true, reason: `${reason}\n${failure.reason}` }
-        : undefined;
-    }
-    session.recordInvocation({
-      cost: advisorUsageCost(result.usage),
-      decision: result.decision,
-      executionEffect: gateDecisionEffect(result.decision, failureMode),
-      kind: "gate",
-      model: result.model,
-      trigger: result.trigger,
-      usage: result.usage,
-    });
-    updateAdvisorUsageStatus(ctx, session);
-    sendAutomaticGateResult(pi, result);
-    if (result.decision === "proceed") {
-      session.resetRepetition();
-      return;
-    }
-    const gateReason = `Advisor loop review: ${result.markdown}`;
-    if (result.decision === "blocked") {
-      const effect = blockedDecisionEffect(
-        gateReason,
-        ctx,
-        session,
-        failureMode
-      );
-      return effect.block ? { block: true, reason: effect.reason } : undefined;
-    }
-    return { block: true, reason: gateReason };
+    return applyGateDecision(pi, ctx, session, result, reason, failureMode);
   } finally {
     scoutStatus.release(ctx, scoutStatusToken);
     herdrAdvisorActivity.finish();

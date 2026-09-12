@@ -3,7 +3,6 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { redactSecrets } from "../src/conversation.ts";
 import {
   capRepositoryContext,
   clampGitContextLevel,
@@ -11,6 +10,7 @@ import {
   escapeRepositoryText,
   type GitContextLevel,
 } from "../src/git.ts";
+import { redactSecrets } from "../src/redaction.ts";
 import {
   advisorGitContextBudget,
   advisorMessageText,

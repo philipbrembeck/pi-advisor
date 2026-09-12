@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { redactSecrets } from "../../../src/conversation.ts";
+import { redactSecrets } from "../../../src/redaction.ts";
 import { replayCaseFor } from "../gates.ts";
 import type { ReplayFixture } from "../types.ts";
 import type { CapturedRequest } from "./mock-provider.ts";
