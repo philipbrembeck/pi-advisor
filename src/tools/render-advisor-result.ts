@@ -4,7 +4,7 @@ import {
   type Theme,
   type ToolRenderResultOptions,
 } from "@earendil-works/pi-coding-agent";
-import { Box, Markdown, Text } from "@earendil-works/pi-tui";
+import { Box, Markdown, Spacer, Text } from "@earendil-works/pi-tui";
 import { getAdvisorSettings } from "../config/state.ts";
 import { textFrom } from "../conversation.ts";
 import { formatAdvisorUsage } from "../usage.ts";
@@ -157,7 +157,7 @@ export const renderAdvisorResult = (
   const box =
     context.lastComponent instanceof Box
       ? context.lastComponent
-      : new Box(0, 0, (text: string) => theme.bg("customMessageBg", text));
+      : new Box(1, 0, (text: string) => theme.bg("customMessageBg", text));
   box.setBgFn((text) => theme.bg("customMessageBg", text));
   box.clear();
   if (isPartial) {
@@ -165,5 +165,7 @@ export const renderAdvisorResult = (
   } else {
     renderFinalAdvisorResult(box, result, expanded, theme, context);
   }
+  // Restores the bottom breathing room the removed vertical padding provided.
+  box.addChild(new Spacer(1));
   return box;
 };

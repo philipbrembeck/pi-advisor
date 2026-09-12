@@ -26,6 +26,7 @@ git -c diff.stat=false diff --no-ext-diff --check --no-stat
 
 ## Rules
 
+- You MAY only comment code if it is 100% needed. You MUST never write more than one line of comment.
 - The four `src/*.ts` facades (`config.ts`, `ui.ts`, `tools.ts`, `commands.ts`) are a frozen deep-import compatibility surface: every re-exported value is pinned by name in `test/facade-exports.test.ts`. Do not add new public symbols to a facade without extending that test; do not remove or move re-exports without a breaking-release decision.
 - MUST read Pi extension docs before changing lifecycle hooks, tool blocking, messages, or renderers.
 - MUST treat tool-action blocking and session blocking as different controls; MUST NOT silently escalate one into the other.

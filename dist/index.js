@@ -5188,7 +5188,7 @@ var reserveAdvisorCall = (event, ctx, session, reservedCalls) => {
 import {
   getMarkdownTheme as getMarkdownTheme4
 } from "@earendil-works/pi-coding-agent";
-import { Box as Box3, Markdown as Markdown4, Text as Text5 } from "@earendil-works/pi-tui";
+import { Box as Box3, Markdown as Markdown4, Spacer, Text as Text5 } from "@earendil-works/pi-tui";
 var advisorResultDetails = (result) => result.details;
 var syncRenderPhase = (context, phase) => {
   if (context.state.phase !== phase && context.state.timerId) {
@@ -5275,7 +5275,7 @@ var renderFinalAdvisorResult = (box, result, expanded, theme, context) => {
   box.addChild(new Markdown4(adviceForDisplay(displayAdvice, expanded), 0, 0, getMarkdownTheme4()));
 };
 var renderAdvisorResult = (result, { isPartial, expanded }, theme, context) => {
-  const box = context.lastComponent instanceof Box3 ? context.lastComponent : new Box3(0, 0, (text) => theme.bg("customMessageBg", text));
+  const box = context.lastComponent instanceof Box3 ? context.lastComponent : new Box3(1, 0, (text) => theme.bg("customMessageBg", text));
   box.setBgFn((text) => theme.bg("customMessageBg", text));
   box.clear();
   if (isPartial) {
@@ -5283,6 +5283,7 @@ var renderAdvisorResult = (result, { isPartial, expanded }, theme, context) => {
   } else {
     renderFinalAdvisorResult(box, result, expanded, theme, context);
   }
+  box.addChild(new Spacer(1));
   return box;
 };
 

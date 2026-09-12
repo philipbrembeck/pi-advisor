@@ -479,18 +479,17 @@ describe("ask_advisor result spacing", () => {
     const { renderAdvisorResult } = await import(
       "../src/tools/render-advisor-result.ts"
     );
-    const { Box } = await import("@earendil-works/pi-tui");
+    const { Container } = await import("@earendil-works/pi-tui");
     const theme = renderTheme();
-    const contentBox = new Box(1, 1, (text: string) =>
-      theme.bg("toolSuccessBg", text)
-    );
-    contentBox.addChild(
+    // Mirrors pi's renderShell "self": unpadded container, prefixed by one blank line.
+    const container = new Container();
+    container.addChild(
       renderAdvisorCallBox(
         "test",
         theme as unknown as Parameters<typeof renderAdvisorCallBox>[1]
       )
     );
-    contentBox.addChild(
+    container.addChild(
       renderAdvisorResult(
         {
           content: [{ text: "Received: test.", type: "text" }],
@@ -517,7 +516,9 @@ describe("ask_advisor result spacing", () => {
     );
     // biome-ignore lint/suspicious/noControlCharactersInRegex: strips terminal SGR codes
     const sgr = /\u001b\[[0-9;]*m/g;
-    const lines = contentBox.render(120).map((line) => line.replace(sgr, ""));
+    const lines = ["", ...container.render(120)].map((line) =>
+      line.replace(sgr, "")
+    );
     const questionAt = lines.findIndex((line) => line.includes("test"));
     const scoutAt = lines.findIndex((line) => line.includes("◆ SCOUT"));
     expect(questionAt).toBeGreaterThanOrEqual(0);
@@ -527,5 +528,12 @@ describe("ask_advisor result spacing", () => {
       .every((line) => line.trim() === "");
     expect(blankBetween).toBe(true);
     expect(scoutAt - questionAt).toBe(2);
+    const adviceAt = lines.findIndex((line) =>
+      line.includes("Received: test.")
+    );
+    expect(adviceAt).toBeGreaterThan(scoutAt);
+    expect(lines[adviceAt].startsWith(" Received:")).toBe(true);
+    expect(lines[adviceAt + 1]?.trim()).toBe("");
+    expect(lines).toHaveLength(adviceAt + 2);
   });
 });
