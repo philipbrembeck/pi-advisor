@@ -7,12 +7,13 @@ import {
   type ResolvedConfiguredModel,
   resolveConfiguredModel,
 } from "./model-stream.ts";
+import { groupWire } from "./scout-groups.ts";
+import { reconstructScoutConversation } from "./scout-reconstruct.ts";
 import {
-  reconstructScoutConversation,
   SCOUT_SELECTION_MAX_IDS,
   SCOUT_SYNTHESIS_MAX_BYTES,
   type ScoutManifest,
-} from "./scout-context.ts";
+} from "./scout-types.ts";
 import { snapshotAdvisorUsage } from "./usage.ts";
 
 const SCOUT_TIMEOUT_MS = 30_000;
@@ -106,14 +107,7 @@ const manifestMessage = (manifest: ScoutManifest): Message => ({
   content: [
     {
       text: JSON.stringify({
-        groups: manifest.groups.map((group) => ({
-          bytes: group.bytes,
-          content: group.content,
-          id: group.id,
-          kind: group.kind,
-          label: group.label,
-          required: group.required,
-        })),
+        groups: manifest.groups.map(groupWire),
         omittedBeforeScout: {
           bytes: manifest.omittedBytes,
           groups: manifest.omittedCount,

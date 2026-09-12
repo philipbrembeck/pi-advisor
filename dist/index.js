@@ -1761,20 +1761,95 @@ var readProjectPreferences = async (ctx, maxBytes = PREFERENCES_MAX_BYTES, redac
   } catch {}
 };
 
-// src/scout-context.ts
+// src/scout-groups.ts
 import { createHash } from "node:crypto";
+
+// src/content-utils.ts
+var isRecord2 = (value) => Boolean(value) && typeof value === "object";
+var byteLength2 = (value) => Buffer.byteLength(value, "utf8");
+var contentParts2 = (content) => Array.isArray(content) ? content : [];
+
+// src/scout-protocol.ts
+var invalid = (message) => ({
+  message,
+  ok: false,
+  reason: "invalid-protocol"
+});
+var toolCalls = (message) => contentParts2(message.content).filter((part) => isRecord2(part) && part.type === "toolCall");
+var toolCallId = (part) => typeof part.id === "string" ? part.id : undefined;
+var indexToolCalls = (entries) => {
+  const callOwners = new Map;
+  const resultsByCall = new Map;
+  const state = { latestUserIndex: -1 };
+  for (let index = 0;index < entries.length; index += 1) {
+    const failure = indexEntry(entries[index], index, callOwners, resultsByCall, state);
+    if (failure) {
+      return failure;
+    }
+  }
+  for (const [id, results] of resultsByCall) {
+    if (results.length > 1) {
+      return invalid(`Tool call ${id} has duplicate result messages.`);
+    }
+  }
+  return {
+    index: {
+      callOwners,
+      latestUserIndex: state.latestUserIndex,
+      resultsByCall
+    },
+    ok: true
+  };
+};
+var indexEntry = (entry, index, callOwners, resultsByCall, state) => {
+  if (entry.type !== "message" || !isRecord2(entry.message)) {
+    return;
+  }
+  if (entry.message.role === "user" && textFrom(entry.message.content)) {
+    state.latestUserIndex = index;
+  }
+  if (entry.message.role === "assistant") {
+    return indexAssistantCalls(entry.message, index, callOwners);
+  }
+  if (entry.message.role === "toolResult") {
+    return indexToolResult(entry, entry.message, index, resultsByCall);
+  }
+  return;
+};
+var indexToolResult = (entry, message, index, resultsByCall) => {
+  const id = message.toolCallId;
+  if (typeof id !== "string") {
+    return invalid(`Tool result at context entry ${index} has no tool-call ID.`);
+  }
+  const results = resultsByCall.get(id) ?? [];
+  results.push({ entry, index });
+  resultsByCall.set(id, results);
+  return;
+};
+var indexAssistantCalls = (message, index, callOwners) => {
+  for (const call of toolCalls(message)) {
+    const id = toolCallId(call);
+    if (!id || callOwners.has(id)) {
+      return invalid(`Assistant tool calls at context entry ${index} have missing or duplicate IDs.`);
+    }
+    callOwners.set(id, {
+      index,
+      name: typeof call.name === "string" ? call.name : "unknown"
+    });
+  }
+  return;
+};
+
+// src/scout-types.ts
 var SCOUT_MANIFEST_MAX_BYTES = 64 * 1024;
 var SCOUT_MANIFEST_MAX_GROUPS = 64;
 var SCOUT_GROUP_MAX_BYTES = 24 * 1024;
 var SCOUT_LABEL_MAX_CHARS = 160;
 var SCOUT_SELECTION_MAX_IDS = 32;
 var SCOUT_SYNTHESIS_MAX_BYTES = 4 * 1024;
-var isRecord2 = (value) => Boolean(value) && typeof value === "object";
-var byteLength2 = (value) => Buffer.byteLength(value, "utf8");
+
+// src/scout-groups.ts
 var SPEAKER_PREFIX = /^(User|Executor):\s*/;
-var contentParts2 = (content) => Array.isArray(content) ? content : [];
-var toolCalls = (message) => contentParts2(message.content).filter((part) => isRecord2(part) && part.type === "toolCall");
-var toolCallId = (part) => typeof part.id === "string" ? part.id : undefined;
 var boundedLabel = (value) => [...value.replace(/\s+/g, " ").trim()].slice(0, SCOUT_LABEL_MAX_CHARS).join("");
 var labelFor = (kind, content) => {
   const preview = boundedLabel(content.replace(SPEAKER_PREFIX, ""));
@@ -1788,14 +1863,15 @@ var labelFor = (kind, content) => {
   return boundedLabel(`${prefix[kind]}: ${preview || "(no text)"}`);
 };
 var stableId = (index, entryIds, kind, content) => `g_${createHash("sha256").update(JSON.stringify([index, entryIds, kind, content])).digest("hex").slice(0, 16)}`;
-var groupWireBytes = (group) => byteLength2(JSON.stringify({
+var groupWire = (group) => ({
   bytes: group.bytes,
   content: group.content,
   id: group.id,
   kind: group.kind,
   label: group.label,
   required: group.required
-}));
+});
+var groupWireBytes = (group) => byteLength2(JSON.stringify(groupWire(group)));
 var createGroup = (originalIndex, entryIds, kind, content, required) => ({
   bytes: byteLength2(content),
   content,
@@ -1829,230 +1905,155 @@ var pendingInvocationDisclosure = (entry, invocationId, toolResultMaxLines, tool
   });
   return conversationEntry({ ...entry, message: { ...entry.message, content } }, toolResultMaxLines, toolResultMaxBytes, policies, redact);
 };
-var buildScoutManifest = (ctx, options = {}) => {
-  const entries = ctx.sessionManager.buildContextEntries();
-  const policies = options.policies ?? advisorToolPoliciesRef;
-  const redact = options.redact ?? advisorRedactSecretsRef;
-  const toolResultMaxLines = options.toolResultMaxLines ?? advisorToolResultMaxLinesRef;
-  const toolResultMaxBytes = options.toolResultMaxBytes ?? advisorToolResultMaxBytesRef;
-  const {
-    maxBytes,
-    maxConversationChars,
-    maxGroupBytes = SCOUT_GROUP_MAX_BYTES,
-    maxGroups = SCOUT_MANIFEST_MAX_GROUPS,
-    maxManifestBytes = maxBytes ?? SCOUT_MANIFEST_MAX_BYTES
-  } = options;
-  let latestUserIndex = -1;
-  const callOwners = new Map;
-  const resultsByCall = new Map;
-  for (let index = 0;index < entries.length; index += 1) {
-    const entry = entries[index];
-    if (entry.type !== "message" || !isRecord2(entry.message)) {
+var toolExchangeGroup = (entry, index, entryId, disclosed, immediate, indexed, consumedResultIndexes, caps) => {
+  const calls = toolCalls(entry.message);
+  const callIds = calls.map(toolCallId);
+  const adjacentFailure = adjacentResultMismatch(immediate, index, callIds, indexed.callOwners);
+  if (adjacentFailure) {
+    return { kind: "invalid", message: adjacentFailure };
+  }
+  const missing = new Set;
+  const resultParts = [];
+  const resultEntryIds = [];
+  const matchFailure = collectResults(calls, callIds, index, indexed.resultsByCall, consumedResultIndexes, caps, missing, resultParts, resultEntryIds);
+  if (matchFailure) {
+    return { kind: "invalid", message: matchFailure };
+  }
+  if (missing.size > 0) {
+    return missingOutcome(entry, index, entryId, disclosed, callIds, missing, resultParts, resultEntryIds, caps);
+  }
+  return {
+    group: createGroup(index, [entryId, ...resultEntryIds], "tool-exchange", [disclosed, ...resultParts].join(`
+
+`), false),
+    kind: "group"
+  };
+};
+var adjacentResultMismatch = (immediate, index, callIds, callOwners) => {
+  const next = immediate;
+  if (next?.type === "message" && isRecord2(next.message) && next.message.role === "toolResult" && typeof next.message.toolCallId === "string" && !callIds.includes(next.message.toolCallId) && !callOwners.has(next.message.toolCallId)) {
+    return `Tool result at context entry ${index + 1} does not match its adjacent assistant group.`;
+  }
+  return;
+};
+var collectResults = (calls, callIds, index, resultsByCall, consumedResultIndexes, caps, missing, resultParts, resultEntryIds) => {
+  for (const [callIndex, callId] of callIds.entries()) {
+    const resultMatch = resultsByCall.get(callId)?.[0];
+    if (!resultMatch) {
+      missing.add(callId);
       continue;
     }
-    if (entry.message.role === "user" && textFrom(entry.message.content)) {
-      latestUserIndex = index;
+    if (resultMatch.index <= index) {
+      return `Tool result at context entry ${resultMatch.index} precedes its assistant call.`;
     }
-    if (entry.message.role === "assistant") {
-      for (const call of toolCalls(entry.message)) {
-        const id = toolCallId(call);
-        if (!id || callOwners.has(id)) {
-          return {
-            message: `Assistant tool calls at context entry ${index} have missing or duplicate IDs.`,
-            ok: false,
-            reason: "invalid-protocol"
-          };
-        }
-        callOwners.set(id, {
-          index,
-          name: typeof call.name === "string" ? call.name : "unknown"
-        });
-      }
-    } else if (entry.message.role === "toolResult") {
-      const id = entry.message.toolCallId;
-      if (typeof id !== "string") {
-        return {
-          message: `Tool result at context entry ${index} has no tool-call ID.`,
-          ok: false,
-          reason: "invalid-protocol"
-        };
-      }
-      const results = resultsByCall.get(id) ?? [];
-      results.push({ entry, index });
-      resultsByCall.set(id, results);
+    const resultMessage = resultMatch.entry.message;
+    const expectedName = typeof calls[callIndex].name === "string" ? calls[callIndex].name : "unknown";
+    if (!isRecord2(resultMessage) || resultMessage.toolName !== expectedName) {
+      return `Tool result at context entry ${resultMatch.index} conflicts with call ${callId}.`;
     }
+    consumedResultIndexes.add(resultMatch.index);
+    const resultText = conversationEntry(resultMatch.entry, caps.toolResultMaxLines, caps.toolResultMaxBytes, caps.policies, caps.redact);
+    if (resultText) {
+      resultParts.push(resultText);
+    }
+    resultEntryIds.push(typeof resultMatch.entry.id === "string" ? resultMatch.entry.id : String(resultMatch.index));
   }
-  for (const [id, results] of resultsByCall) {
-    if (results.length > 1) {
-      return {
-        message: `Tool call ${id} has duplicate result messages.`,
-        ok: false,
-        reason: "invalid-protocol"
-      };
-    }
+  return;
+};
+var missingOutcome = (entry, index, entryId, disclosed, callIds, missing, resultParts, resultEntryIds, caps) => {
+  const { currentInvocationId } = caps;
+  const pendingCurrentInvocation = currentInvocationId !== undefined && missing.size === 1 && missing.has(currentInvocationId) && callIds.includes(currentInvocationId);
+  if (!pendingCurrentInvocation) {
+    return {
+      bytes: byteLength2([disclosed, ...resultParts].join(`
+
+`)),
+      kind: "omitted"
+    };
   }
+  const pendingDisclosed = pendingInvocationDisclosure(entry, currentInvocationId, caps.toolResultMaxLines, caps.toolResultMaxBytes, caps.policies, caps.redact, disclosed);
+  return {
+    group: createGroup(index, [entryId, ...resultEntryIds], "pending-invocation", [pendingDisclosed ?? disclosed, ...resultParts].join(`
+
+`), true),
+    kind: "group"
+  };
+};
+var buildGroups = (entries, indexed, caps) => {
   const groups = [];
   const consumedResultIndexes = new Set;
   let protocolOmittedBytes = 0;
   let protocolOmittedCount = 0;
   for (let index = 0;index < entries.length; index += 1) {
     const entry = entries[index];
-    const disclosed = conversationEntry(entry, toolResultMaxLines, toolResultMaxBytes, policies, redact);
+    const disclosed = conversationEntry(entry, caps.toolResultMaxLines, caps.toolResultMaxBytes, caps.policies, caps.redact);
     if (!disclosed) {
       continue;
     }
-    const entryId = typeof entry.id === "string" ? entry.id : String(index);
-    if (entry.type !== "message" || !isRecord2(entry.message)) {
-      groups.push(createGroup(index, [entryId], "compaction", disclosed, false));
-      continue;
+    const outcome = groupForEntry(entry, index, disclosed, entries[index + 1], indexed, consumedResultIndexes, caps);
+    if (outcome.kind === "invalid") {
+      return invalid(outcome.message);
     }
-    const { message } = entry;
-    if (message.role === "user") {
-      groups.push(createGroup(index, [entryId], "user", disclosed, index === latestUserIndex));
-      continue;
-    }
-    if (message.role === "toolResult") {
-      if (consumedResultIndexes.has(index)) {
-        continue;
-      }
-      const resultId = message.toolCallId;
-      const owner = typeof resultId === "string" ? callOwners.get(resultId) : undefined;
-      if (owner) {
-        return {
-          message: `Tool result at context entry ${index} precedes or conflicts with its retained call.`,
-          ok: false,
-          reason: "invalid-protocol"
-        };
-      }
+    if (outcome.kind === "omitted") {
       protocolOmittedCount += 1;
-      protocolOmittedBytes += byteLength2(disclosed);
-      continue;
+      protocolOmittedBytes += outcome.bytes;
+    } else if (outcome.kind === "group") {
+      groups.push(outcome.group);
     }
-    if (message.role !== "assistant") {
-      continue;
-    }
-    const calls = toolCalls(message);
-    if (calls.length === 0) {
-      groups.push(createGroup(index, [entryId], "assistant", disclosed, false));
-      continue;
-    }
-    const callIds = calls.map(toolCallId);
-    const immediate = entries[index + 1];
-    if (immediate?.type === "message" && isRecord2(immediate.message) && immediate.message.role === "toolResult" && typeof immediate.message.toolCallId === "string" && !callIds.includes(immediate.message.toolCallId) && !callOwners.has(immediate.message.toolCallId)) {
-      return {
-        message: `Tool result at context entry ${index + 1} does not match its adjacent assistant group.`,
-        ok: false,
-        reason: "invalid-protocol"
-      };
-    }
-    const missing = new Set;
-    const resultParts = [];
-    const resultEntryIds = [];
-    for (const [callIndex, callId] of callIds.entries()) {
-      const resultMatch = resultsByCall.get(callId)?.[0];
-      if (!resultMatch) {
-        missing.add(callId);
-        continue;
-      }
-      if (resultMatch.index <= index) {
-        return {
-          message: `Tool result at context entry ${resultMatch.index} precedes its assistant call.`,
-          ok: false,
-          reason: "invalid-protocol"
-        };
-      }
-      const resultMessage = resultMatch.entry.message;
-      const expectedName = typeof calls[callIndex].name === "string" ? calls[callIndex].name : "unknown";
-      if (!isRecord2(resultMessage) || resultMessage.toolName !== expectedName) {
-        return {
-          message: `Tool result at context entry ${resultMatch.index} conflicts with call ${callId}.`,
-          ok: false,
-          reason: "invalid-protocol"
-        };
-      }
-      consumedResultIndexes.add(resultMatch.index);
-      const resultText = conversationEntry(resultMatch.entry, toolResultMaxLines, toolResultMaxBytes, policies, redact);
-      if (resultText) {
-        resultParts.push(resultText);
-      }
-      resultEntryIds.push(typeof resultMatch.entry.id === "string" ? resultMatch.entry.id : String(resultMatch.index));
-    }
-    if (missing.size > 0) {
-      const { currentInvocationId } = options;
-      const pendingCurrentInvocation = currentInvocationId !== undefined && missing.size === 1 && missing.has(currentInvocationId) && callIds.includes(currentInvocationId);
-      if (!pendingCurrentInvocation) {
-        protocolOmittedCount += 1;
-        protocolOmittedBytes += byteLength2([disclosed, ...resultParts].join(`
-
-`));
-        continue;
-      }
-      const pendingDisclosed = pendingInvocationDisclosure(entry, currentInvocationId, toolResultMaxLines, toolResultMaxBytes, policies, redact, disclosed);
-      groups.push(createGroup(index, [entryId, ...resultEntryIds], "pending-invocation", [pendingDisclosed ?? disclosed, ...resultParts].join(`
-
-`), true));
-      continue;
-    }
-    groups.push(createGroup(index, [entryId, ...resultEntryIds], "tool-exchange", [disclosed, ...resultParts].join(`
-
-`), false));
   }
-  const availableCount = groups.length + protocolOmittedCount;
-  const availableBytes = groups.reduce((sum, group) => sum + groupWireBytes(group), 0) + protocolOmittedBytes;
-  if (maxManifestBytes <= 0) {
-    return {
-      manifest: {
-        availableBytes: 0,
-        availableCount: 0,
-        groups: [],
-        omittedBytes: 0,
-        omittedCount: 0
-      },
-      ok: true
-    };
-  }
-  const required = groups.filter((group) => group.required);
-  if (required.some((group) => group.bytes > maxGroupBytes) || required.length > maxGroups || required.reduce((sum, group) => sum + groupWireBytes(group), 0) > maxManifestBytes) {
-    return {
-      message: "Required Scout context exceeds the Scout manifest transport limit.",
-      ok: false,
-      reason: "required-group-overflow"
-    };
-  }
-  const contentChars = (items) => items.reduce((sum, group) => sum + group.content.length, 0) + Math.max(0, items.length - 1) * 2;
-  if (maxConversationChars !== undefined && contentChars(required) > maxConversationChars) {
-    return {
-      message: "Required Scout context exceeds the Advisor conversation budget.",
-      ok: false,
-      reason: "required-group-overflow"
-    };
-  }
-  const selected = groups.filter((group) => group.required || group.bytes <= maxGroupBytes);
-  const fits = () => selected.length <= maxGroups && selected.reduce((sum, group) => sum + groupWireBytes(group), 0) <= maxManifestBytes && (maxConversationChars === undefined || contentChars(selected) <= maxConversationChars);
-  while (!fits()) {
-    const optionalIndex = selected.findIndex((group) => !group.required);
-    if (optionalIndex < 0) {
-      return {
-        message: "Required Scout context exceeds fixed manifest limits.",
-        ok: false,
-        reason: "required-group-overflow"
-      };
-    }
-    selected.splice(optionalIndex, 1);
-  }
-  const selectedIds = new Set(selected.map((group) => group.id));
-  const omitted = groups.filter((group) => !selectedIds.has(group.id));
   return {
-    manifest: {
-      availableBytes,
-      availableCount,
-      groups: selected,
-      omittedBytes: protocolOmittedBytes + omitted.reduce((sum, group) => sum + group.bytes, 0),
-      omittedCount: protocolOmittedCount + omitted.length
-    },
-    ok: true
+    groups,
+    ok: true,
+    protocolOmittedBytes,
+    protocolOmittedCount
   };
 };
+var groupForEntry = (entry, index, disclosed, immediate, indexed, consumedResultIndexes, caps) => {
+  const entryId = typeof entry.id === "string" ? entry.id : String(index);
+  if (entry.type !== "message" || !isRecord2(entry.message)) {
+    return {
+      group: createGroup(index, [entryId], "compaction", disclosed, false),
+      kind: "group"
+    };
+  }
+  const { message } = entry;
+  if (message.role === "user") {
+    return {
+      group: createGroup(index, [entryId], "user", disclosed, index === indexed.latestUserIndex),
+      kind: "group"
+    };
+  }
+  if (message.role === "toolResult") {
+    return toolResultOutcome(message, index, disclosed, indexed.callOwners, consumedResultIndexes);
+  }
+  if (message.role !== "assistant") {
+    return { kind: "skipped" };
+  }
+  if (!hasCalls(message)) {
+    return {
+      group: createGroup(index, [entryId], "assistant", disclosed, false),
+      kind: "group"
+    };
+  }
+  return toolExchangeGroup(entry, index, entryId, disclosed, immediate, indexed, consumedResultIndexes, caps);
+};
+var toolResultOutcome = (message, index, disclosed, callOwners, consumedResultIndexes) => {
+  if (consumedResultIndexes.has(index)) {
+    return { kind: "skipped" };
+  }
+  if (ownerOf(message, callOwners)) {
+    return {
+      kind: "invalid",
+      message: `Tool result at context entry ${index} precedes or conflicts with its retained call.`
+    };
+  }
+  return { bytes: byteLength2(disclosed), kind: "omitted" };
+};
+var ownerOf = (message, callOwners) => typeof message.toolCallId === "string" ? callOwners.get(message.toolCallId) : undefined;
+var hasCalls = (message) => contentPartsOf(message).some((part) => isRecord2(part) && part.type === "toolCall");
+var contentPartsOf = (message) => Array.isArray(message.content) ? message.content : [];
+
+// src/scout-reconstruct.ts
 var prefixWithinCharBudget = (value, maxChars) => {
   let result = "";
   for (const character of value) {
@@ -2239,14 +2240,7 @@ var manifestMessage = (manifest) => ({
   content: [
     {
       text: JSON.stringify({
-        groups: manifest.groups.map((group) => ({
-          bytes: group.bytes,
-          content: group.content,
-          id: group.id,
-          kind: group.kind,
-          label: group.label,
-          required: group.required
-        })),
+        groups: manifest.groups.map(groupWire),
         omittedBeforeScout: {
           bytes: manifest.omittedBytes,
           groups: manifest.omittedCount
@@ -2445,6 +2439,97 @@ var runAdvisorScout = async (ctx, manifest, parentSignal, onEvent, timeoutMs = S
   };
   publish({ outcome, type: "success" });
   return outcome;
+};
+
+// src/scout-context.ts
+var resolveCaps = (options) => ({
+  currentInvocationId: options.currentInvocationId,
+  maxConversationChars: options.maxConversationChars,
+  maxGroupBytes: options.maxGroupBytes ?? SCOUT_GROUP_MAX_BYTES,
+  maxGroups: options.maxGroups ?? SCOUT_MANIFEST_MAX_GROUPS,
+  maxManifestBytes: options.maxManifestBytes ?? options.maxBytes ?? SCOUT_MANIFEST_MAX_BYTES,
+  policies: options.policies ?? advisorToolPoliciesRef,
+  redact: options.redact ?? advisorRedactSecretsRef,
+  toolResultMaxBytes: options.toolResultMaxBytes ?? advisorToolResultMaxBytesRef,
+  toolResultMaxLines: options.toolResultMaxLines ?? advisorToolResultMaxLinesRef
+});
+var buildScoutManifest = (ctx, options = {}) => {
+  const entries = ctx.sessionManager.buildContextEntries();
+  const caps = resolveCaps(options);
+  const indexed = indexToolCalls(entries);
+  if (!indexed.ok) {
+    return indexed;
+  }
+  const built = buildGroups(entries, indexed.index, caps);
+  if (!built.ok) {
+    return built;
+  }
+  return fitToBudget(built, caps);
+};
+var fits = (selected, caps) => selected.length <= caps.maxGroups && selected.reduce((sum, group) => sum + groupWireBytes(group), 0) <= caps.maxManifestBytes && (caps.maxConversationChars === undefined || contentChars(selected) <= caps.maxConversationChars);
+var contentChars = (items) => items.reduce((sum, group) => sum + group.content.length, 0) + Math.max(0, items.length - 1) * 2;
+var fitToBudget = (built, caps) => {
+  const { groups, protocolOmittedBytes, protocolOmittedCount } = built;
+  const availableCount = groups.length + protocolOmittedCount;
+  const availableBytes = groups.reduce((sum, group) => sum + groupWireBytes(group), 0) + protocolOmittedBytes;
+  if (caps.maxManifestBytes <= 0) {
+    return {
+      manifest: {
+        availableBytes: 0,
+        availableCount: 0,
+        groups: [],
+        omittedBytes: 0,
+        omittedCount: 0
+      },
+      ok: true
+    };
+  }
+  const required = groups.filter((group) => group.required);
+  const overflow = requiredOverflow(required, caps);
+  if (overflow) {
+    return overflow;
+  }
+  const selected = groups.filter((group) => group.required || group.bytes <= caps.maxGroupBytes);
+  while (!fits(selected, caps)) {
+    const optionalIndex = selected.findIndex((group) => !group.required);
+    if (optionalIndex < 0) {
+      return {
+        message: "Required Scout context exceeds fixed manifest limits.",
+        ok: false,
+        reason: "required-group-overflow"
+      };
+    }
+    selected.splice(optionalIndex, 1);
+  }
+  const selectedIds = new Set(selected.map((group) => group.id));
+  const omitted = groups.filter((group) => !selectedIds.has(group.id));
+  return {
+    manifest: {
+      availableBytes,
+      availableCount,
+      groups: selected,
+      omittedBytes: protocolOmittedBytes + omitted.reduce((sum, group) => sum + group.bytes, 0),
+      omittedCount: protocolOmittedCount + omitted.length
+    },
+    ok: true
+  };
+};
+var requiredOverflow = (required, caps) => {
+  if (required.some((group) => group.bytes > caps.maxGroupBytes) || required.length > caps.maxGroups || required.reduce((sum, group) => sum + groupWireBytes(group), 0) > caps.maxManifestBytes) {
+    return {
+      message: "Required Scout context exceeds the Scout manifest transport limit.",
+      ok: false,
+      reason: "required-group-overflow"
+    };
+  }
+  if (caps.maxConversationChars !== undefined && contentChars(required) > caps.maxConversationChars) {
+    return {
+      message: "Required Scout context exceeds the Advisor conversation budget.",
+      ok: false,
+      reason: "required-group-overflow"
+    };
+  }
+  return;
 };
 
 // src/tools/gate-protocol.ts
