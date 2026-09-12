@@ -45,7 +45,6 @@ describe("Advisor thinking Markdown rendering", () => {
     expect(rendered.length).toBeGreaterThan(0);
     expect(plain).toContain("Reviewing");
     expect(plain).toContain("const next");
-    expect(plain).toContain("💭");
     expect(
       rendered.every((line) => visibleWidth(stripTerminalSequences(line)) <= 24)
     ).toBe(true);
@@ -57,7 +56,6 @@ describe("Advisor thinking Markdown rendering", () => {
 
     // During streaming, raw markers appear transiently (expected behavior).
     // When thinking completes, they will render properly.
-    expect(plain).toContain("💭");
     expect(plain).toContain("Incomplete bold");
   });
 
@@ -65,7 +63,6 @@ describe("Advisor thinking Markdown rendering", () => {
     const complete = renderThinkingMarkdown("**Completed bold**", theme);
     const plain = complete.render(80).map(stripTerminalSequences).join("\n");
 
-    expect(plain).toContain("💭");
     expect(plain).toContain("Completed bold");
     // Once delimiters close, markers don't appear
     expect(plain).not.toContain("**Completed");

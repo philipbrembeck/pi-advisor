@@ -23,7 +23,7 @@ export const SPINNER_FRAMES = [
   "⠏",
 ];
 
-const THINKING_PREFIX = "  💭 ";
+const THINKING_PREFIX = "  ";
 const THINKING_PREFIX_WIDTH = visibleWidth(THINKING_PREFIX);
 export type ThinkingTheme = Pick<Theme, "fg">;
 

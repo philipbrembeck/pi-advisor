@@ -3024,7 +3024,7 @@ var SPINNER_FRAMES = [
   "⠇",
   "⠏"
 ];
-var THINKING_PREFIX = "  \uD83D\uDCAD ";
+var THINKING_PREFIX = "  ";
 var THINKING_PREFIX_WIDTH = visibleWidth(THINKING_PREFIX);
 
 class ThinkingMarkdown {
