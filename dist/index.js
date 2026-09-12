@@ -1444,6 +1444,138 @@ var herdrAdvisorBlock = new HerdrAdvisorBlock(sendToHerdr, () => getAdvisorSetti
 // src/tools/consultation.ts
 import { randomUUID } from "node:crypto";
 
+// src/attachments.ts
+import { execFileSync as execFileSync2 } from "node:child_process";
+import { constants } from "node:fs";
+import { lstat, open, realpath } from "node:fs/promises";
+import { isAbsolute, relative, resolve } from "node:path";
+var ADVISOR_FILE_MAX_BYTES = 8 * 1024;
+var ADVISOR_FILES_TOTAL_MAX_BYTES = 24 * 1024;
+var PATH_SEGMENTS = /[\\/]/;
+var within = (root, candidate) => {
+  const path = relative(root, candidate);
+  return path !== "" && !path.startsWith("..") && !path.includes("../");
+};
+var normalizeRelativePath = (root, path) => relative(root, resolve(root, path));
+var normalizeRequestedPath = (root, value) => {
+  if (typeof value !== "string" || !value || isAbsolute(value) || value.split(PATH_SEGMENTS).includes("..")) {
+    return;
+  }
+  return normalizeRelativePath(root, value);
+};
+var git = (cwd, args) => execFileSync2("git", args, {
+  cwd,
+  encoding: "utf8",
+  maxBuffer: 16 * 1024 * 1024,
+  shell: false,
+  stdio: ["ignore", "pipe", "pipe"],
+  timeout: 5000,
+  windowsHide: true
+});
+var repositoryRoot = (cwd) => {
+  try {
+    return realpath(git(cwd, ["rev-parse", "--show-toplevel"]).trim());
+  } catch {
+    return Promise.resolve(undefined);
+  }
+};
+var untracked = (cwd, path) => {
+  const output = git(cwd, [
+    "ls-files",
+    "--others",
+    "--exclude-standard",
+    "-z",
+    "--",
+    path
+  ]);
+  const expected = normalizeRelativePath(cwd, path);
+  return output.split("\x00").filter(Boolean).some((entry) => normalizeRelativePath(cwd, entry) === expected);
+};
+var tracked = (cwd, path) => {
+  const output = git(cwd, ["ls-files", "--stage", "-z", "--", path]);
+  const expected = normalizeRelativePath(cwd, path);
+  return output.split("\x00").some((entry) => {
+    if (!entry) {
+      return false;
+    }
+    const [metadata, name] = entry.split("\t");
+    return name && normalizeRelativePath(cwd, name) === expected && !metadata.startsWith("160000 ");
+  });
+};
+var isPermitted = (root, path, kind) => kind === "tracked" ? tracked(root, path) : untracked(root, path);
+var readAttachment = async (root, normalizedName, redact, available) => {
+  const absolute = resolve(root, normalizedName);
+  if (!(within(root, absolute) && available > 0)) {
+    return;
+  }
+  const stats = await lstat(absolute);
+  if (stats.isSymbolicLink() || !stats.isFile()) {
+    return;
+  }
+  const resolved = await realpath(absolute);
+  if (!within(root, resolved)) {
+    return;
+  }
+  const flags = constants.O_NOFOLLOW ? constants.O_RDONLY | constants.O_NOFOLLOW : constants.O_RDONLY;
+  const file = await open(resolved, flags);
+  try {
+    const openedStats = await file.stat();
+    if (!openedStats.isFile()) {
+      return;
+    }
+    const buffer = Buffer.alloc(available + 1);
+    const { bytesRead } = await file.read(buffer, 0, buffer.length, 0);
+    const raw = buffer.subarray(0, bytesRead).toString("utf8");
+    if (raw.includes("\x00")) {
+      return;
+    }
+    const text = redactAndCapText(raw, available, redact);
+    return {
+      bytes: Buffer.byteLength(text, "utf8"),
+      path: normalizedName,
+      text
+    };
+  } finally {
+    await file.close();
+  }
+};
+var readFiles = async (cwd, requested, enabled, redact, kind, totalLimit = ADVISOR_FILES_TOTAL_MAX_BYTES) => {
+  if (!(enabled && Array.isArray(requested))) {
+    return [];
+  }
+  const root = await repositoryRoot(cwd);
+  if (!root) {
+    return [];
+  }
+  const unique = new Set;
+  const attachments = [];
+  let total = 0;
+  for (const name of requested) {
+    const normalizedName = normalizeRequestedPath(root, name);
+    if (!normalizedName || unique.has(normalizedName)) {
+      continue;
+    }
+    unique.add(normalizedName);
+    try {
+      if (!isPermitted(root, normalizedName, kind)) {
+        continue;
+      }
+      const available = Math.min(ADVISOR_FILE_MAX_BYTES, totalLimit - total);
+      if (available <= 0) {
+        break;
+      }
+      const attachment = await readAttachment(root, normalizedName, redact, available);
+      if (attachment) {
+        attachments.push(attachment);
+        total += attachment.bytes;
+      }
+    } catch {}
+  }
+  return attachments;
+};
+var readTrackedFiles = (cwd, requested, enabled, redact, totalLimit = ADVISOR_FILES_TOTAL_MAX_BYTES) => readFiles(cwd, requested, enabled, redact, "tracked", totalLimit);
+var readUntrackedFiles = (cwd, requested, enabled, redact, totalLimit = ADVISOR_FILES_TOTAL_MAX_BYTES) => readFiles(cwd, requested, enabled, redact, "untracked", totalLimit);
+
 // src/model-stream.ts
 import {
   stream
@@ -1593,12 +1725,12 @@ var collectTextStream = async (resolved, options, streamModel = stream) => {
 };
 
 // src/preferences.ts
-import { lstat, open, realpath } from "node:fs/promises";
-import { join as join2, relative } from "node:path";
+import { lstat as lstat2, open as open2, realpath as realpath2 } from "node:fs/promises";
+import { join as join2, relative as relative2 } from "node:path";
 var PREFERENCES_MAX_BYTES = 8 * 1024;
 var PREFERENCES_FILENAME = ["advisor-preferences", "md"].join(".");
 var inside = (root, candidate) => {
-  const path = relative(root, candidate);
+  const path = relative2(root, candidate);
   return path === "" || !(path.startsWith("..") || path.includes("../"));
 };
 var readProjectPreferences = async (ctx, maxBytes = PREFERENCES_MAX_BYTES, redact = true) => {
@@ -1606,17 +1738,17 @@ var readProjectPreferences = async (ctx, maxBytes = PREFERENCES_MAX_BYTES, redac
     return;
   }
   try {
-    const root = await realpath(ctx.cwd);
+    const root = await realpath2(ctx.cwd);
     const candidate = join2(ctx.cwd, ".pi", PREFERENCES_FILENAME);
-    const stats = await lstat(candidate);
+    const stats = await lstat2(candidate);
     if (stats.isSymbolicLink() || !stats.isFile()) {
       return;
     }
-    const resolved = await realpath(candidate);
+    const resolved = await realpath2(candidate);
     if (!inside(root, resolved)) {
       return;
     }
-    const file = await open(resolved, "r");
+    const file = await open2(resolved, "r");
     try {
       const buffer = Buffer.alloc(maxBytes + 1);
       const { bytesRead } = await file.read(buffer, 0, buffer.length, 0);
@@ -2314,138 +2446,6 @@ var runAdvisorScout = async (ctx, manifest, parentSignal, onEvent, timeoutMs = S
   publish({ outcome, type: "success" });
   return outcome;
 };
-
-// src/untracked.ts
-import { execFileSync as execFileSync2 } from "node:child_process";
-import { constants } from "node:fs";
-import { lstat as lstat2, open as open2, realpath as realpath2 } from "node:fs/promises";
-import { isAbsolute, relative as relative2, resolve } from "node:path";
-var ADVISOR_FILE_MAX_BYTES = 8 * 1024;
-var ADVISOR_FILES_TOTAL_MAX_BYTES = 24 * 1024;
-var PATH_SEGMENTS = /[\\/]/;
-var within = (root, candidate) => {
-  const path = relative2(root, candidate);
-  return path !== "" && !path.startsWith("..") && !path.includes("../");
-};
-var normalizeRelativePath = (root, path) => relative2(root, resolve(root, path));
-var normalizeRequestedPath = (root, value) => {
-  if (typeof value !== "string" || !value || isAbsolute(value) || value.split(PATH_SEGMENTS).includes("..")) {
-    return;
-  }
-  return normalizeRelativePath(root, value);
-};
-var git = (cwd, args) => execFileSync2("git", args, {
-  cwd,
-  encoding: "utf8",
-  maxBuffer: 16 * 1024 * 1024,
-  shell: false,
-  stdio: ["ignore", "pipe", "pipe"],
-  timeout: 5000,
-  windowsHide: true
-});
-var repositoryRoot = (cwd) => {
-  try {
-    return realpath2(git(cwd, ["rev-parse", "--show-toplevel"]).trim());
-  } catch {
-    return Promise.resolve(undefined);
-  }
-};
-var untracked = (cwd, path) => {
-  const output = git(cwd, [
-    "ls-files",
-    "--others",
-    "--exclude-standard",
-    "-z",
-    "--",
-    path
-  ]);
-  const expected = normalizeRelativePath(cwd, path);
-  return output.split("\x00").filter(Boolean).some((entry) => normalizeRelativePath(cwd, entry) === expected);
-};
-var tracked = (cwd, path) => {
-  const output = git(cwd, ["ls-files", "--stage", "-z", "--", path]);
-  const expected = normalizeRelativePath(cwd, path);
-  return output.split("\x00").some((entry) => {
-    if (!entry) {
-      return false;
-    }
-    const [metadata, name] = entry.split("\t");
-    return name && normalizeRelativePath(cwd, name) === expected && !metadata.startsWith("160000 ");
-  });
-};
-var isPermitted = (root, path, kind) => kind === "tracked" ? tracked(root, path) : untracked(root, path);
-var readAttachment = async (root, normalizedName, redact, available) => {
-  const absolute = resolve(root, normalizedName);
-  if (!(within(root, absolute) && available > 0)) {
-    return;
-  }
-  const stats = await lstat2(absolute);
-  if (stats.isSymbolicLink() || !stats.isFile()) {
-    return;
-  }
-  const resolved = await realpath2(absolute);
-  if (!within(root, resolved)) {
-    return;
-  }
-  const flags = constants.O_NOFOLLOW ? constants.O_RDONLY | constants.O_NOFOLLOW : constants.O_RDONLY;
-  const file = await open2(resolved, flags);
-  try {
-    const openedStats = await file.stat();
-    if (!openedStats.isFile()) {
-      return;
-    }
-    const buffer = Buffer.alloc(available + 1);
-    const { bytesRead } = await file.read(buffer, 0, buffer.length, 0);
-    const raw = buffer.subarray(0, bytesRead).toString("utf8");
-    if (raw.includes("\x00")) {
-      return;
-    }
-    const text = redactAndCapText(raw, available, redact);
-    return {
-      bytes: Buffer.byteLength(text, "utf8"),
-      path: normalizedName,
-      text
-    };
-  } finally {
-    await file.close();
-  }
-};
-var readFiles = async (cwd, requested, enabled, redact, kind, totalLimit = ADVISOR_FILES_TOTAL_MAX_BYTES) => {
-  if (!(enabled && Array.isArray(requested))) {
-    return [];
-  }
-  const root = await repositoryRoot(cwd);
-  if (!root) {
-    return [];
-  }
-  const unique = new Set;
-  const attachments = [];
-  let total = 0;
-  for (const name of requested) {
-    const normalizedName = normalizeRequestedPath(root, name);
-    if (!normalizedName || unique.has(normalizedName)) {
-      continue;
-    }
-    unique.add(normalizedName);
-    try {
-      if (!isPermitted(root, normalizedName, kind)) {
-        continue;
-      }
-      const available = Math.min(ADVISOR_FILE_MAX_BYTES, totalLimit - total);
-      if (available <= 0) {
-        break;
-      }
-      const attachment = await readAttachment(root, normalizedName, redact, available);
-      if (attachment) {
-        attachments.push(attachment);
-        total += attachment.bytes;
-      }
-    } catch {}
-  }
-  return attachments;
-};
-var readTrackedFiles = (cwd, requested, enabled, redact, totalLimit = ADVISOR_FILES_TOTAL_MAX_BYTES) => readFiles(cwd, requested, enabled, redact, "tracked", totalLimit);
-var readUntrackedFiles = (cwd, requested, enabled, redact, totalLimit = ADVISOR_FILES_TOTAL_MAX_BYTES) => readFiles(cwd, requested, enabled, redact, "untracked", totalLimit);
 
 // src/tools/gate-protocol.ts
 var DECISION_LINE = /^Decision\s*:\s*(proceed|revise|blocked)\s*$/i;

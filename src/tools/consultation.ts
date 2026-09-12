@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Message } from "@earendil-works/pi-ai/compat";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { readTrackedFiles, readUntrackedFiles } from "../attachments.ts";
 import {
   advisorEffortRef,
   advisorGitContextMaxCharsRef,
@@ -33,7 +34,6 @@ import {
   SCOUT_MANIFEST_MAX_BYTES,
 } from "../scout-context.ts";
 import type { ConsultationTrigger, GateTrigger } from "../session-state.ts";
-import { readTrackedFiles, readUntrackedFiles } from "../untracked.ts";
 import { parseAutomaticDecision } from "./gate-protocol.ts";
 import {
   ADVISOR_DECISION_SYSTEM,

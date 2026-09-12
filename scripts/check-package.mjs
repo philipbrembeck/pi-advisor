@@ -16,6 +16,7 @@ const expectedFiles = [
   "dist/index.js",
   "extensions/index.ts",
   "package.json",
+  "src/attachments.ts",
   "src/commands.ts",
   "src/commands/activation-preparation.ts",
   "src/commands/activation.ts",
@@ -75,7 +76,6 @@ const expectedFiles = [
   "src/ui/settings-selector.ts",
   "src/ui/text-setting-submenu.ts",
   "src/ui/types.ts",
-  "src/untracked.ts",
   "src/usage.ts",
 ];
 
