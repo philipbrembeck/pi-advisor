@@ -41,10 +41,8 @@ export interface HerdrNotificationRequest {
 type HerdrRequest = HerdrMetadataRequest | HerdrNotificationRequest;
 type Report = (request: HerdrRequest) => void;
 
-// Herdr only accepts semantic state from the pane's lifecycle authority, which
-// for pi is herdr's own herdr-agent-state extension (source "herdr:pi"). Socket
-// reports from any other source are dropped, so the blocked state has to be
-// signalled through the in-process pi event bus that integration listens on.
+// Herdr drops socket reports from other sources, so the blocked state must be
+// signalled through the in-process pi event bus its integration listens on.
 type BlockedEmitter = (active: boolean, label: string) => void;
 let emitBlocked: BlockedEmitter | undefined;
 

@@ -26,16 +26,7 @@ const THINKING_PREFIX = "  💭 ";
 const THINKING_PREFIX_WIDTH = visibleWidth(THINKING_PREFIX);
 export type ThinkingTheme = Pick<Theme, "fg">;
 
-/**
- * Renders visible nested-model thinking with the same Markdown semantics as
- * Pi's assistant thinking blocks while keeping the compact speech-bubble cue.
- * The prefix is added after Markdown parsing so it cannot change block syntax.
- *
- * Note: During streaming, incomplete Markdown (e.g., `**text` without closing **)
- * displays raw markers transiently until delimiters arrive. This mirrors expected
- * behavior when typing Markdown incrementally and is acceptable in the context
- * of brief thinking previews. When thinking is complete, all markers render.
- */
+/** Renders nested-model thinking as Markdown with the compact speech-bubble cue; the prefix is added after parsing so it cannot change block syntax. */
 class ThinkingMarkdown implements Component {
   private readonly markdown: Markdown;
   private readonly prefix: string;

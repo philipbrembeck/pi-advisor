@@ -26,6 +26,7 @@ git -c diff.stat=false diff --no-ext-diff --check --no-stat
 
 ## Rules
 
+- The four `src/*.ts` facades (`config.ts`, `ui.ts`, `tools.ts`, `commands.ts`) are a frozen deep-import compatibility surface: every re-exported value is pinned by name in `test/facade-exports.test.ts`. Do not add new public symbols to a facade without extending that test; do not remove or move re-exports without a breaking-release decision.
 - MUST read Pi extension docs before changing lifecycle hooks, tool blocking, messages, or renderers.
 - MUST treat tool-action blocking and session blocking as different controls; MUST NOT silently escalate one into the other.
 - MUST surface Advisor, auth, or Herdr failures to the user and preserve the intended safety state.

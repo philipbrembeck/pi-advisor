@@ -47,10 +47,7 @@ export const advisorMessageText = (
   );
 };
 
-/**
- * Splits the character budget so repository context can never starve the
- * conversation: it may claim its own cap or half the budget, whichever is less.
- */
+/** Splits the character budget so repository context can never starve the conversation. */
 export const advisorGitContextBudget = (
   contextMaxChars: number,
   gitContextMaxChars: number

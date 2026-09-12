@@ -81,12 +81,7 @@ export interface CoalescedUpdateScheduler {
   ) => ReturnType<typeof setTimeout>;
 }
 
-/**
- * Keep stream updates responsive without forwarding every provider delta to
- * the UI. The first update in a burst is immediate; later updates are kept as
- * the latest value and published at most once per interval. `flush()` closes
- * the publisher and is intended for terminal success/error paths.
- */
+/** Publishes at most one stream update per interval; the first in a burst is immediate and flush() closes for terminal paths. */
 export const createCoalescedUpdate = <T>(
   publish: (value: T) => void,
   intervalMs = ADVISOR_STREAM_UPDATE_INTERVAL_MS,

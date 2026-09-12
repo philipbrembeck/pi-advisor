@@ -16,10 +16,7 @@ const LEVEL_RANK: Record<GitContextLevel, number> = {
   summary: 1,
 };
 
-/**
- * The Executor may request no more repository context than the user configured.
- * A model cannot widen its own disclosure allowance.
- */
+/** The Executor may narrow but never widen the user's disclosure allowance. */
 export const clampGitContextLevel = (
   requested: GitContextLevel,
   allowed: GitContextLevel
@@ -77,11 +74,7 @@ const GIT_MAX_BUFFER = 16 * 1024 * 1024;
 
 export type GitRunner = (args: string[], cwd: string) => string;
 
-/**
- * Collection runs several git commands. A per-command timeout alone would let a
- * pathological repository block for the sum of them, so the budget is shared:
- * each command may use only the time remaining before the overall deadline.
- */
+/** Shares one deadline across commands so a pathological repository cannot block for the sum of per-command timeouts. */
 const deadlineRunner = (): GitRunner => {
   const expiresAt = Date.now() + GIT_TOTAL_TIMEOUT_MS;
   return (args, cwd) => {
@@ -112,14 +105,7 @@ const diffBase = (run: GitRunner, cwd: string): string => {
   }
 };
 
-/**
- * Collects working-tree changes relative to HEAD, covering staged and unstaged
- * work. Untracked files are reported by name only and never by content.
- *
- * `summary` discloses file names, change status, and line counts. It must not
- * include diff hunk headers: git derives those from surrounding file content,
- * so they can reproduce a secret from a line the change never touched.
- */
+/** Collects staged and unstaged changes vs HEAD; summary omits diff hunk headers because git derives them from untouched lines that can reproduce secrets. */
 export const collectGitContext = (
   cwd: string,
   level: GitContextLevel,

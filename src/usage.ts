@@ -10,7 +10,6 @@ export interface AdvisorUsageSnapshot {
   totalTokens?: number;
 }
 
-/** Session-local totals for direct Advisor model requests. */
 export interface AdvisorUsageTotals {
   cacheRead?: number;
   cacheWrite?: number;
@@ -164,13 +163,11 @@ const formatUsageFields = (usage: AdvisorUsageSnapshot): string | undefined => {
   return tokens.join(" · ") || undefined;
 };
 
-/** Formats one response for an Advisor or Scout result renderer. */
 export const formatAdvisorUsage = (usage: unknown): string | undefined => {
   const snapshot = snapshotAdvisorUsage(usage);
   return snapshot ? formatUsageFields(snapshot) : undefined;
 };
 
-/** Formats cumulative direct Advisor usage for a footer or session summary. */
 export const formatAdvisorUsageTotals = (
   totals: AdvisorUsageTotals
 ): string => {
@@ -186,7 +183,6 @@ export const formatAdvisorUsageTotals = (
   );
 };
 
-/** Formats the current direct Advisor usage status for the Pi footer. */
 export const formatAdvisorUsageStatus = (
   totals: AdvisorUsageTotals
 ): string | undefined => {

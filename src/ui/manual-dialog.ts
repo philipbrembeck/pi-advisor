@@ -24,12 +24,7 @@ const TUI_INPUT_TAB: keyof Keybindings = ["tui", "input", "tab"].join(
   "."
 ) as keyof Keybindings;
 
-/**
- * The small, deliberately non-persistent form used by `/advisor-manual`.
- *
- * The dialog owns only local input state. Callers decide when to consume a
- * budget or start a consultation after the submitted request is returned.
- */
+/** The small, non-persistent /advisor-manual form; callers own budget and consultation decisions. */
 export class ManualAdvisorDialog implements Component, Focusable {
   private readonly options: ManualAdvisorDialogOptions;
   private readonly editor: Editor;

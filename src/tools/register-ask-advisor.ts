@@ -29,11 +29,6 @@ import type {
   ToolRegistrationContext,
 } from "./types.ts";
 
-/**
- * Validates a tracked-file follow-up and consumes the one-shot handoff only
- * when the call is worth it: consent must be enabled and the session budget
- * was checked by the caller. A rejected call never burns the claim.
- */
 const claimTrackedHandoff = (
   session: ToolRegistrationContext["session"],
   includeTrackedFiles: string[] | undefined

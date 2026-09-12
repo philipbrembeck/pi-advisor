@@ -76,9 +76,7 @@ const applyChangedConfigValues = (
   }
 };
 
-// Tracks the runtime state represented by the last successful load/save. A
-// save can then merge fresh disk contents without treating untouched in-memory
-// values as an instruction to overwrite an external edit.
+// Tracks the last load/save state so a later save merges fresh disk contents instead of overwriting an external edit.
 let loadedConfigState: ConfigState | undefined;
 let loadedConfigPath: string | undefined;
 
@@ -88,9 +86,8 @@ const readConfig = (path: string): AdvisorConfig => {
   return config;
 };
 
-// loadConfig runs on every tool call and every consultation. Caching the parsed
-// file by path and stat identity removes that read and parse from the hot path
-// while still applying the full reset-then-apply sequence on each call.
+// loadConfig runs per tool call and consultation; caching by path and stat
+// identity keeps the parse off the hot path while still reset-applying each call.
 const configCache = new Map<
   string,
   { config: AdvisorConfig; identity: string }

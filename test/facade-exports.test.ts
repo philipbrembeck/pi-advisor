@@ -223,3 +223,155 @@ describe("config compatibility facade", () => {
     }
   });
 });
+
+// biome-ignore lint/performance/noNamespaceImport: namespace import enumerates the facade's runtime exports for the surface pin below.
+import * as commandsFacadeNamespace from "../src/commands.ts";
+// biome-ignore lint/performance/noNamespaceImport: namespace import enumerates the facade's runtime exports for the surface pin below.
+import * as configFacadeNamespace from "../src/config.ts";
+// biome-ignore lint/performance/noNamespaceImport: namespace import enumerates the facade's runtime exports for the surface pin below.
+import * as toolsFacadeNamespace from "../src/tools.ts";
+// biome-ignore lint/performance/noNamespaceImport: namespace import enumerates the facade's runtime exports for the surface pin below.
+import * as uiFacadeNamespace from "../src/ui.ts";
+
+describe("frozen facade export surfaces", () => {
+  // The four src/*.ts facades are a frozen deep-import compatibility surface:
+  // every value export is pinned by name so additions and removals fail here.
+  // Extending a facade requires updating its list in this test deliberately.
+  test("pins every config facade value export by name", () => {
+    expect(Object.keys(configFacadeNamespace).sort()).toEqual([
+      "ADVISOR_TOOL_POLICIES",
+      "DEFAULT_ADVISOR_GIT_CONTEXT_MAX_CHARS",
+      "DEFAULT_ADVISOR_TOOL_RESULT_MAX_BYTES",
+      "DEFAULT_ADVISOR_TOOL_RESULT_MAX_LINES",
+      "DEFAULT_CONTEXT_MAX_CHARS",
+      "GATE_FAILURE_MODES",
+      "MAX_CONTEXT_MAX_CHARS",
+      "advisorAutoLoopGateRef",
+      "advisorBlockOnBlockedRef",
+      "advisorCollapseResponsesRef",
+      "advisorCompletionGateRef",
+      "advisorCustomInvocationRef",
+      "advisorEffortRef",
+      "advisorFailureGateRef",
+      "advisorFailureModeRef",
+      "advisorGitContextMaxCharsRef",
+      "advisorGitContextRef",
+      "advisorHerdrIntegrationRef",
+      "advisorLoopThresholdRef",
+      "advisorMaxCallsPerSessionRef",
+      "advisorOutcomeLoggingRef",
+      "advisorPlanGateRef",
+      "advisorRedactSecretsRef",
+      "advisorRef",
+      "advisorScoutEnabledRef",
+      "advisorSessionSummaryRef",
+      "advisorToolPoliciesRef",
+      "advisorToolResultMaxBytesRef",
+      "advisorToolResultMaxLinesRef",
+      "advisorTrackedFileContentRef",
+      "advisorUntrackedContentRef",
+      "alwaysOnRef",
+      "configPaths",
+      "contextMaxCharsRef",
+      "executorEffortRef",
+      "executorRef",
+      "getAdvisorMaxCallsPerSession",
+      "getAdvisorSettings",
+      "getPersistedModelRefs",
+      "isSimpleMode",
+      "isValidAdvisorToolPolicies",
+      "isValidContextMaxChars",
+      "isValidGateFailureMode",
+      "isValidLoopThreshold",
+      "isValidMaxCallsPerSession",
+      "isValidToolResultMaxBytes",
+      "isValidToolResultMaxLines",
+      "loadConfig",
+      "parseArgs",
+      "resetConfigCache",
+      "saveConfig",
+      "saveGlobalOutcomeLogging",
+      "setAdvisorAutoLoopGateRef",
+      "setAdvisorBlockOnBlockedRef",
+      "setAdvisorCollapseResponsesRef",
+      "setAdvisorCompletionGateRef",
+      "setAdvisorCustomInvocationRef",
+      "setAdvisorEffortRef",
+      "setAdvisorFailureGateRef",
+      "setAdvisorFailureModeRef",
+      "setAdvisorGitContextMaxCharsRef",
+      "setAdvisorGitContextRef",
+      "setAdvisorHerdrIntegrationRef",
+      "setAdvisorLoopThresholdRef",
+      "setAdvisorMaxCallsPerSessionRef",
+      "setAdvisorOutcomeLoggingRef",
+      "setAdvisorPlanGateRef",
+      "setAdvisorRedactSecretsRef",
+      "setAdvisorRef",
+      "setAdvisorScoutEnabledRef",
+      "setAdvisorSessionSummaryRef",
+      "setAdvisorToolPoliciesRef",
+      "setAdvisorToolResultMaxBytesRef",
+      "setAdvisorToolResultMaxLinesRef",
+      "setAdvisorTrackedFileContentRef",
+      "setAdvisorUntrackedContentRef",
+      "setAlwaysOnRef",
+      "setContextMaxCharsRef",
+      "setExecutorEffortRef",
+      "setExecutorRef",
+      "setShowUsageDetailsRef",
+      "setShowUsageFooterRef",
+      "setSimpleModeRef",
+      "showUsageDetailsRef",
+      "showUsageFooterRef",
+      "simpleModeRef",
+      "splitRef",
+      "validateConfig",
+    ]);
+  });
+
+  test("pins every ui facade value export by name", () => {
+    expect(Object.keys(uiFacadeNamespace).sort()).toEqual([
+      "AdvisorSettingsSelector",
+      "ManualAdvisorDialog",
+      "SearchableModelSelector",
+    ]);
+  });
+
+  test("pins every tools facade value export by name", () => {
+    expect(Object.keys(toolsFacadeNamespace).sort()).toEqual([
+      "ADVISOR_DECISION_SYSTEM",
+      "ADVISOR_SYSTEM",
+      "SPINNER_FRAMES",
+      "ScoutStatusManager",
+      "adviceForDisplay",
+      "advisorGitContextBudget",
+      "advisorInvocationGuidelines",
+      "advisorMessageText",
+      "advisorRepositoryContext",
+      "advisorRequestConversation",
+      "advisorSessionState",
+      "appendScoutLifecycleEntry",
+      "consultAdvisor",
+      "curateAdvisorConversation",
+      "gateFailureEffectForMode",
+      "gitContextNote",
+      "hasSoundVerdict",
+      "parseAutomaticDecision",
+      "registerAdvisorTool",
+      "renderAdvisorCallBox",
+      "renderAdvisorResponseHeader",
+      "renderScoutDetails",
+      "renderThinkingMarkdown",
+      "resolveAdvisorRequest",
+      "runAdvisorGate",
+      "scoutDetailsFromEvent",
+    ]);
+  });
+
+  test("pins every commands facade value export by name", () => {
+    expect(Object.keys(commandsFacadeNamespace).sort()).toEqual([
+      "registerCommands",
+    ]);
+  });
+});
