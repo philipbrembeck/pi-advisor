@@ -9,7 +9,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ### Fixed
 
 - Advisor and Scout thinking previews now respect Pi's `hide_thinking` setting, collapsing to a one-line `Thinking…` cue the way Pi renders the Executor's own hidden thinking.
-- The `ask_advisor` result no longer renders a doubled blank gap between the request and the first Scout line; Pi already frames the result inside its padded tool box.
+- The `ask_advisor` result no longer renders a doubled blank gap between the request and the first Scout line; the result box's own top padding was stacking on the call box's padding.
 - Session summaries keep the cumulative gate-intervention count when the loop gate resets repetition after a proceed decision.
 
 ### Changed
