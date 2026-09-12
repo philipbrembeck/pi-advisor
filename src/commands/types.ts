@@ -1,7 +1,6 @@
 import type {
   ExtensionAPI,
   ExtensionContext,
-  Theme,
 } from "@earendil-works/pi-coding-agent";
 import type { GitContextLevel } from "../git.ts";
 import type { ScoutLifecycleEvent } from "../scout.ts";
@@ -68,11 +67,4 @@ export interface CommandRuntime {
   ) => ReturnType<ExtensionAPI["setModel"]>;
   suppressModelSelectionSync: boolean;
   updateAdvisorUsageStatus: (ctx: ExtensionContext) => void;
-}
-
-export interface ManualAdvisorProgressView {
-  expanded: boolean;
-  question: string | undefined;
-  state: ManualAdvisorProgressState;
-  theme: Theme;
 }

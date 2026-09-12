@@ -1,7 +1,7 @@
 import { visibleWidth } from "@earendil-works/pi-tui";
+import { DEFAULT_EFFORT_LEVEL } from "../commands/model-options.ts";
 import type { ContextPreset } from "./types.ts";
 
-export const DEFAULT_EFFORT_LEVEL = "Default (Model Default)";
 export const TOGGLE_VALUES = ["On", "Off"];
 export const SIMPLE_MODE_GRADIENT_INTERVAL_MS = 100;
 // Purple steps with a moving light highlight, retained from the original UI.

@@ -4,9 +4,9 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  ADVISOR_FILE_MAX_BYTES,
   readTrackedFiles,
   readUntrackedFiles,
-  UNTRACKED_FILE_MAX_BYTES,
 } from "../src/untracked.ts";
 
 const git = (cwd: string, args: string[]) =>
@@ -114,7 +114,7 @@ describe("Advisor file attachments", () => {
     writeFileSync(
       join(cwd, "secret.pem"),
       `-----BEGIN PRIVATE KEY-----\n${"A".repeat(
-        UNTRACKED_FILE_MAX_BYTES + 1000
+        ADVISOR_FILE_MAX_BYTES + 1000
       )}\n-----END PRIVATE KEY-----`
     );
     try {
@@ -126,7 +126,7 @@ describe("Advisor file attachments", () => {
       );
       expect(attachment?.text).toContain("[REDACTED SECRET]");
       expect(attachment?.text).not.toContain("AAAA");
-      expect(attachment?.bytes).toBeLessThanOrEqual(UNTRACKED_FILE_MAX_BYTES);
+      expect(attachment?.bytes).toBeLessThanOrEqual(ADVISOR_FILE_MAX_BYTES);
     } finally {
       rmSync(cwd, { force: true, recursive: true });
     }

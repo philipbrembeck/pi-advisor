@@ -26,7 +26,7 @@ export const clampGitContextLevel = (
 ): GitContextLevel =>
   LEVEL_RANK[requested] <= LEVEL_RANK[allowed] ? requested : allowed;
 
-export type GitContextStatus =
+type GitContextStatus =
   | "disabled"
   | "no-changes"
   | "collected"

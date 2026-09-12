@@ -654,13 +654,9 @@ var applyChangedConfigValues = (data, current, changedKeys, persistAdvisor, pers
 var loadedConfigState;
 var loadedConfigPath;
 var readConfig = (path) => {
-  try {
-    const config = JSON.parse(readFileSync(path, "utf8"));
-    validateConfig(config, path);
-    return config;
-  } catch (error) {
-    throw error instanceof Error ? error : new Error(String(error));
-  }
+  const config = JSON.parse(readFileSync(path, "utf8"));
+  validateConfig(config, path);
+  return config;
 };
 var configCache = new Map;
 var warnedUnknownConfigIdentities = new Set;
@@ -1270,7 +1266,7 @@ var recentConversation = (ctx, maxChars = 15000, toolResultMaxLines = advisorToo
 };
 
 // src/herdr.ts
-var HERDR_NOTIFICATION_METHOD = `${"notification"}.${"show"}`;
+var HERDR_NOTIFICATION_METHOD = "notification.show";
 var SOURCE = "pi-advisor:advisor-activity";
 var BLOCK_SOURCE = "pi-advisor:advisor-block";
 var NOTIFICATION_SOURCE = "pi-advisor:advisor-notification";
@@ -4099,7 +4095,6 @@ import {
 
 // src/ui/settings-formatting.ts
 import { visibleWidth as visibleWidth3 } from "@earendil-works/pi-tui";
-var DEFAULT_EFFORT_LEVEL2 = "Default (Model Default)";
 var TOGGLE_VALUES = ["On", "Off"];
 var SIMPLE_MODE_GRADIENT_INTERVAL_MS = 100;
 var SIMPLE_MODE_GRADIENT_COLORS = [
@@ -4156,7 +4151,7 @@ var contextDescription = (presets, contextMaxChars) => {
 ${meterPrefix}${meter}  full
 ${markerLabel}`;
 };
-var currentEffort = (effort) => effort || DEFAULT_EFFORT_LEVEL2;
+var currentEffort = (effort) => effort || DEFAULT_EFFORT_LEVEL;
 var rainbowGradient = (text, startedAt) => {
   const frame = Math.floor((Date.now() - startedAt) / SIMPLE_MODE_GRADIENT_INTERVAL_MS);
   const shinePosition = frame % (text.length * 2);

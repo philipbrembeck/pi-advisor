@@ -173,13 +173,9 @@ let loadedConfigState: ConfigState | undefined;
 let loadedConfigPath: string | undefined;
 
 const readConfig = (path: string): AdvisorConfig => {
-  try {
-    const config = JSON.parse(readFileSync(path, "utf8"));
-    validateConfig(config, path);
-    return config;
-  } catch (error) {
-    throw error instanceof Error ? error : new Error(String(error));
-  }
+  const config = JSON.parse(readFileSync(path, "utf8"));
+  validateConfig(config, path);
+  return config;
 };
 
 // loadConfig runs on every tool call and every consultation. Caching the parsed

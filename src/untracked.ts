@@ -5,15 +5,12 @@ import { isAbsolute, relative, resolve } from "node:path";
 import { redactAndCapText } from "./conversation.ts";
 
 export const ADVISOR_FILE_MAX_BYTES = 8 * 1024;
-export const ADVISOR_FILES_TOTAL_MAX_BYTES = 24 * 1024;
-export const UNTRACKED_FILE_MAX_BYTES = ADVISOR_FILE_MAX_BYTES;
-export const UNTRACKED_TOTAL_MAX_BYTES = ADVISOR_FILES_TOTAL_MAX_BYTES;
+const ADVISOR_FILES_TOTAL_MAX_BYTES = 24 * 1024;
 export interface UntrackedAttachment {
   bytes: number;
   path: string;
   text: string;
 }
-export type TrackedAttachment = UntrackedAttachment;
 
 const PATH_SEGMENTS = /[\\/]/;
 

@@ -1,6 +1,6 @@
 import type { AdvisorSettings, ContextPreset, SettingValue } from "./types.ts";
 
-export const BOOLEAN_SETTING_IDS = new Set([
+const BOOLEAN_SETTING_IDS = new Set([
   "scoutEnabled",
   "showUsageDetails",
   "showUsageFooter",

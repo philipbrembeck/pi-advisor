@@ -89,7 +89,7 @@ export interface AdvisorToolDetails {
   usage?: unknown;
 }
 
-export interface AdvisorRenderState {
+interface AdvisorRenderState {
   phase?: string;
   scout?: ScoutToolDetails;
   timerId?: ReturnType<typeof setInterval>;

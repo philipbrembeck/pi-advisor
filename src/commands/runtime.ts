@@ -25,7 +25,7 @@ export const notify = (
   }
 };
 
-export class CommandRuntime implements CommandRuntimeContract {
+class CommandRuntime implements CommandRuntimeContract {
   readonly advisorSessionState: AdvisorSessionState;
   readonly manualConsultations = new Map<AbortController, symbol>();
   readonly manualProgress = new Map<string, ManualAdvisorProgressState>();

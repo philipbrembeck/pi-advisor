@@ -34,7 +34,7 @@ import { saveConfig, saveGlobalOutcomeLogging } from "../config/storage.ts";
 import type { AdvisorSettings } from "../ui/types.ts";
 
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: one settings form maps every persisted control.
-export const applyAdvisorSettings = (settings: AdvisorSettings) => {
+const applyAdvisorSettings = (settings: AdvisorSettings) => {
   setAdvisorEffortRef(
     settings.effort === "Default (Model Default)" ? undefined : settings.effort
   );

@@ -61,7 +61,7 @@ export interface CollectedTextStream {
 
 export const ADVISOR_STREAM_UPDATE_INTERVAL_MS = 90;
 
-export interface CoalescedUpdateResult {
+interface CoalescedUpdateResult {
   error?: unknown;
   failed: boolean;
 }

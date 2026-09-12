@@ -15,10 +15,7 @@ import { getAgentDir } from "@earendil-works/pi-coding-agent";
 
 export type OutcomeAdoption = "followed" | "not-followed" | "unknown";
 export type OutcomeValidation = "passed" | "failed" | "not-run" | "unknown";
-export type OutcomeTrigger =
-  | "manual"
-  | "executor-requested"
-  | "repeated-tool-call";
+type OutcomeTrigger = "manual" | "executor-requested" | "repeated-tool-call";
 export const ADOPTIONS: OutcomeAdoption[] = [
   "followed",
   "not-followed",
@@ -115,7 +112,7 @@ const withOutcomeLock = async <T>(run: () => Promise<T>): Promise<T> => {
   throw new Error("Timed out waiting to append an Advisor outcome.");
 };
 
-export const adviceDigest = (advice: string, key: Buffer) =>
+const adviceDigest = (advice: string, key: Buffer) =>
   createHmac("sha256", key).update(advice).digest("hex").slice(0, 16);
 
 /** Best-effort, global-only, minimal persistent telemetry. */

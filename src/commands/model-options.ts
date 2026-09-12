@@ -3,7 +3,7 @@ import { type getPersistedModelRefs, splitRef } from "../config/state.ts";
 import type { ContextPreset } from "../ui/types.ts";
 
 export const DEFAULT_EFFORT_LEVEL = "Default (Model Default)";
-export const SELECTED_PREFIX = "✓ ";
+const SELECTED_PREFIX = "✓ ";
 export const EFFORT_LEVELS = [
   DEFAULT_EFFORT_LEVEL,
   "off",
@@ -105,7 +105,7 @@ export const getAvailableModelRefs = (
     .map((model) => `${model.provider}/${model.id}`);
 };
 
-export const isSelectableModel = (
+const isSelectableModel = (
   ctx: ExtensionContext,
   ref: string | undefined,
   availableRefs: Set<string> | undefined

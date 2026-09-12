@@ -12,8 +12,8 @@ export type GateTrigger =
   | "repeated-tool-call"
   | "completion-review"
   | "custom-rule";
-export type AdvisorTrigger = ConsultationTrigger | GateTrigger;
-export type ExecutionEffect = "continued" | "tool-blocked" | "session-blocked";
+type AdvisorTrigger = ConsultationTrigger | GateTrigger;
+type ExecutionEffect = "continued" | "tool-blocked" | "session-blocked";
 
 export interface AdvisorInvocationRecord {
   cost?: number;

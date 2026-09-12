@@ -10,9 +10,9 @@ import type { AdvisorToolPolicies } from "./config/types.ts";
 import { conversationEntry, textFrom } from "./conversation.ts";
 
 export const SCOUT_MANIFEST_MAX_BYTES = 64 * 1024;
-export const SCOUT_MANIFEST_MAX_GROUPS = 64;
-export const SCOUT_GROUP_MAX_BYTES = 24 * 1024;
-export const SCOUT_LABEL_MAX_CHARS = 160;
+const SCOUT_MANIFEST_MAX_GROUPS = 64;
+const SCOUT_GROUP_MAX_BYTES = 24 * 1024;
+const SCOUT_LABEL_MAX_CHARS = 160;
 export const SCOUT_SELECTION_MAX_IDS = 32;
 export const SCOUT_SYNTHESIS_MAX_BYTES = 4 * 1024;
 

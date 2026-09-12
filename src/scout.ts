@@ -15,7 +15,7 @@ import {
 } from "./scout-context.ts";
 import { snapshotAdvisorUsage } from "./usage.ts";
 
-export const SCOUT_TIMEOUT_MS = 30_000;
+const SCOUT_TIMEOUT_MS = 30_000;
 
 export const SCOUT_SYSTEM = [
   "You are Scout, a context curator serving a separate engineering Advisor.",
@@ -30,7 +30,7 @@ export const SCOUT_SYSTEM = [
   "Do not use Markdown fences or add any other keys or prose.",
 ].join(" ");
 
-export type ScoutFallbackCategory =
+type ScoutFallbackCategory =
   | "required-group-overflow"
   | "invalid-protocol"
   | "missing-model"
@@ -41,7 +41,7 @@ export type ScoutFallbackCategory =
   | "invalid-selection"
   | "timeout";
 
-export interface ScoutMetrics {
+interface ScoutMetrics {
   availableCount: number;
   inputBytes: number;
   latencyMs: number;

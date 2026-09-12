@@ -3,7 +3,7 @@ import { getAdvisorSettings } from "./config/state.ts";
 import { redactSecrets } from "./conversation.ts";
 
 // Keep the JSON-RPC method components separate from Socket's URL-string heuristic.
-const HERDR_NOTIFICATION_METHOD = `${"notification"}.${"show"}`;
+const HERDR_NOTIFICATION_METHOD = "notification.show";
 
 const SOURCE = "pi-advisor:advisor-activity";
 const BLOCK_SOURCE = "pi-advisor:advisor-block";
@@ -38,7 +38,7 @@ export interface HerdrNotificationRequest {
     sound: "request";
   };
 }
-export type HerdrRequest = HerdrMetadataRequest | HerdrNotificationRequest;
+type HerdrRequest = HerdrMetadataRequest | HerdrNotificationRequest;
 type Report = (request: HerdrRequest) => void;
 
 // Herdr only accepts semantic state from the pane's lifecycle authority, which
