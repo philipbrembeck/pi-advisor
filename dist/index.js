@@ -2972,6 +2972,46 @@ import {
   truncateToWidth as truncateToWidth2,
   visibleWidth
 } from "@earendil-works/pi-tui";
+
+// src/pi-settings.ts
+import { existsSync as existsSync2, readFileSync as readFileSync2, statSync as statSync2 } from "node:fs";
+import { join as join3 } from "node:path";
+import { getAgentDir as getAgentDir2 } from "@earendil-works/pi-coding-agent";
+var SETTING_RECHECK_INTERVAL_MS = 2000;
+var cache = new Map;
+var settingsIdentity = (path) => {
+  try {
+    const stats = statSync2(path, { bigint: true });
+    return `${stats.mtimeNs}:${stats.ctimeNs}:${stats.size}:${stats.ino}`;
+  } catch {
+    return `unstattable:${process.hrtime.bigint()}`;
+  }
+};
+var readHideThinking = (path) => {
+  try {
+    const parsed = JSON.parse(readFileSync2(path, "utf8"));
+    return typeof parsed === "object" && parsed !== null && parsed.hideThinkingBlock === true;
+  } catch {
+    return false;
+  }
+};
+var piHideThinkingEnabled = () => {
+  const path = join3(getAgentDir2(), "settings.json");
+  if (!existsSync2(path)) {
+    return false;
+  }
+  const now = Date.now();
+  const cached = cache.get(path);
+  if (cached && now - cached.readAt < SETTING_RECHECK_INTERVAL_MS) {
+    return cached.hidden;
+  }
+  const identity = settingsIdentity(path);
+  const hidden = cached && cached.identity === identity ? cached.hidden : readHideThinking(path);
+  cache.set(path, { hidden, identity, readAt: now });
+  return hidden;
+};
+
+// src/tools/render-common.ts
 var SPINNER_FRAMES = [
   "⠋",
   "⠙",
@@ -3007,7 +3047,18 @@ class ThinkingMarkdown {
     this.markdown.invalidate();
   }
 }
-var renderThinkingMarkdown = (thinking, theme) => new ThinkingMarkdown(thinking, theme);
+
+class HiddenThinkingLabel {
+  label;
+  constructor(theme) {
+    this.label = theme.fg("thinkingText", `${THINKING_PREFIX}Thinking…`);
+  }
+  render() {
+    return [this.label];
+  }
+  invalidate() {}
+}
+var renderThinkingMarkdown = (thinking, theme) => piHideThinkingEnabled() ? new HiddenThinkingLabel(theme) : new ThinkingMarkdown(thinking, theme);
 var resolveAdvisorRequest = (question) => question?.trim() || undefined;
 var renderAdvisorCallBox = (question, theme) => {
   const box = new Box(1, 1, (text) => theme.bg("customMessageBg", text));
@@ -4934,8 +4985,8 @@ import {
   unlink,
   writeFile
 } from "node:fs/promises";
-import { join as join3 } from "node:path";
-import { getAgentDir as getAgentDir2 } from "@earendil-works/pi-coding-agent";
+import { join as join4 } from "node:path";
+import { getAgentDir as getAgentDir3 } from "@earendil-works/pi-coding-agent";
 var ADOPTIONS = [
   "followed",
   "not-followed",
@@ -4948,11 +4999,11 @@ var VALIDATIONS = [
   "unknown"
 ];
 var MAX_LOG_BYTES = 1024 * 1024;
-var statePath = () => join3(getAgentDir2(), "advisor-outcomes-salt");
-var outcomeLogPath = () => join3(getAgentDir2(), "advisor-outcomes.jsonl");
+var statePath = () => join4(getAgentDir3(), "advisor-outcomes-salt");
+var outcomeLogPath = () => join4(getAgentDir3(), "advisor-outcomes.jsonl");
 var salt = async () => {
   const path = statePath();
-  await mkdir(getAgentDir2(), { mode: 448, recursive: true });
+  await mkdir(getAgentDir3(), { mode: 448, recursive: true });
   for (let attempt = 0;attempt < 20; attempt += 1) {
     try {
       const existing = await readFile(path);
@@ -5029,7 +5080,7 @@ var withOutcomeLock = async (run) => {
 var adviceDigest = (advice, key) => createHmac("sha256", key).update(advice).digest("hex").slice(0, 16);
 var appendOutcome = async (record) => {
   const path = outcomeLogPath();
-  await mkdir(getAgentDir2(), { mode: 448, recursive: true });
+  await mkdir(getAgentDir3(), { mode: 448, recursive: true });
   return withOutcomeLock(async () => {
     const next = {
       adoption: record.adoption,
@@ -5224,7 +5275,7 @@ var renderFinalAdvisorResult = (box, result, expanded, theme, context) => {
   box.addChild(new Markdown4(adviceForDisplay(displayAdvice, expanded), 0, 0, getMarkdownTheme4()));
 };
 var renderAdvisorResult = (result, { isPartial, expanded }, theme, context) => {
-  const box = context.lastComponent instanceof Box3 ? context.lastComponent : new Box3(1, 1, (text) => theme.bg("customMessageBg", text));
+  const box = context.lastComponent instanceof Box3 ? context.lastComponent : new Box3(0, 0, (text) => theme.bg("customMessageBg", text));
   box.setBgFn((text) => theme.bg("customMessageBg", text));
   box.clear();
   if (isPartial) {

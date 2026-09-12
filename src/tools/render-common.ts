@@ -8,6 +8,7 @@ import {
   visibleWidth,
 } from "@earendil-works/pi-tui";
 import { advisorCollapseResponsesRef } from "../config/state.ts";
+import { piHideThinkingEnabled } from "../pi-settings.ts";
 
 export const SPINNER_FRAMES = [
   "⠋",
@@ -57,10 +58,30 @@ class ThinkingMarkdown implements Component {
   }
 }
 
+/** Collapsed placeholder shown when Pi's hide_thinking setting is on. */
+class HiddenThinkingLabel implements Component {
+  private readonly label: string;
+
+  constructor(theme: ThinkingTheme) {
+    this.label = theme.fg("thinkingText", `${THINKING_PREFIX}Thinking…`);
+  }
+
+  render(): string[] {
+    return [this.label];
+  }
+
+  invalidate(): void {
+    // The collapsed label is static.
+  }
+}
+
 export const renderThinkingMarkdown = (
   thinking: string,
   theme: ThinkingTheme
-): Component => new ThinkingMarkdown(thinking, theme);
+): Component =>
+  piHideThinkingEnabled()
+    ? new HiddenThinkingLabel(theme)
+    : new ThinkingMarkdown(thinking, theme);
 
 export const resolveAdvisorRequest = (question?: string) =>
   question?.trim() || undefined;

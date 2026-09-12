@@ -1,4 +1,7 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { initTheme } from "@earendil-works/pi-coding-agent";
 import registerExtension from "../extensions/index.ts";
 import { setShowUsageDetailsRef } from "../src/config.ts";
@@ -35,6 +38,25 @@ const usageResult = () => ({
 });
 
 describe("Advisor tool rendering", () => {
+  // Isolate the agent dir so the developer's real hide_thinking setting cannot collapse thinking previews.
+  const previousAgentDir = process.env.PI_CODING_AGENT_DIR;
+  beforeEach(() => {
+    process.env.PI_CODING_AGENT_DIR = mkdtempSync(
+      join(tmpdir(), "pi-advisor-render-")
+    );
+  });
+  afterEach(() => {
+    rmSync(process.env.PI_CODING_AGENT_DIR as string, {
+      force: true,
+      recursive: true,
+    });
+    if (previousAgentDir === undefined) {
+      delete process.env.PI_CODING_AGENT_DIR;
+    } else {
+      process.env.PI_CODING_AGENT_DIR = previousAgentDir;
+    }
+  });
+
   test("renders the Executor request and the Advisor response distinctly", () => {
     setShowUsageDetailsRef(true);
     const advisorTool = registerForRendering();
@@ -408,5 +430,102 @@ describe("Advisor tool rendering", () => {
       context
     );
     expect(context.state.timerId).toBeUndefined();
+  });
+});
+
+describe("Pi hide_thinking integration", () => {
+  const settingsTheme = {
+    bg: (_c: string, t: string) => t,
+    bold: (t: string) => t,
+    fg: (_c: string, t: string) => t,
+  };
+
+  test("collapses the thinking preview to its label when hide_thinking is on", async () => {
+    const { piHideThinkingEnabled } = await import("../src/pi-settings.ts");
+    const { renderThinkingMarkdown } = await import(
+      "../src/tools/render-common.ts"
+    );
+    const agentDir = mkdtempSync(join(tmpdir(), "pi-advisor-hidden-"));
+    const previous = process.env.PI_CODING_AGENT_DIR;
+    process.env.PI_CODING_AGENT_DIR = agentDir;
+    try {
+      writeFileSync(
+        join(agentDir, "settings.json"),
+        JSON.stringify({ hideThinkingBlock: true })
+      );
+      expect(piHideThinkingEnabled()).toBe(true);
+      const collapsed = renderThinkingMarkdown(
+        "**Secret internal reasoning**",
+        settingsTheme
+      );
+      const lines = collapsed.render(80);
+      expect(lines).toHaveLength(1);
+      expect(lines[0]).toContain("Thinking…");
+      expect(lines[0]).not.toContain("Secret internal reasoning");
+    } finally {
+      if (previous === undefined) {
+        delete process.env.PI_CODING_AGENT_DIR;
+      } else {
+        process.env.PI_CODING_AGENT_DIR = previous;
+      }
+      rmSync(agentDir, { force: true, recursive: true });
+    }
+  });
+});
+
+describe("ask_advisor result spacing", () => {
+  test("renders one blank line between the request and the first Scout line", async () => {
+    const { renderAdvisorCallBox } = await import("../src/tools.ts");
+    const { renderAdvisorResult } = await import(
+      "../src/tools/render-advisor-result.ts"
+    );
+    const { Box } = await import("@earendil-works/pi-tui");
+    const theme = renderTheme();
+    const contentBox = new Box(1, 1, (text: string) =>
+      theme.bg("toolSuccessBg", text)
+    );
+    contentBox.addChild(
+      renderAdvisorCallBox(
+        "test",
+        theme as unknown as Parameters<typeof renderAdvisorCallBox>[1]
+      )
+    );
+    contentBox.addChild(
+      renderAdvisorResult(
+        {
+          content: [{ text: "Received: test.", type: "text" }],
+          details: {
+            advisor: "provider/advisor",
+            scout: {
+              availableCount: 2,
+              latencyMs: 7500,
+              model: "provider/executor",
+              selectedCount: 2,
+              status: "curated",
+            },
+            text: "Received: test.",
+          },
+        },
+        { expanded: false, isPartial: false },
+        theme as unknown as Parameters<typeof renderAdvisorResult>[2],
+        {
+          invalidate: () => undefined,
+          lastComponent: undefined,
+          state: {} as any,
+        } as any
+      )
+    );
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: strips terminal SGR codes
+    const sgr = /\u001b\[[0-9;]*m/g;
+    const lines = contentBox.render(120).map((line) => line.replace(sgr, ""));
+    const questionAt = lines.findIndex((line) => line.includes("test"));
+    const scoutAt = lines.findIndex((line) => line.includes("◆ SCOUT"));
+    expect(questionAt).toBeGreaterThanOrEqual(0);
+    expect(scoutAt).toBeGreaterThan(questionAt);
+    const blankBetween = lines
+      .slice(questionAt + 1, scoutAt)
+      .every((line) => line.trim() === "");
+    expect(blankBetween).toBe(true);
+    expect(scoutAt - questionAt).toBe(2);
   });
 });

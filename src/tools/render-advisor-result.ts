@@ -153,10 +153,11 @@ export const renderAdvisorResult = (
   theme: Theme,
   context: AdvisorToolContext
 ) => {
+  // Pi frames this inside its own padded tool box; padding here doubles the gap below the request.
   const box =
     context.lastComponent instanceof Box
       ? context.lastComponent
-      : new Box(1, 1, (text: string) => theme.bg("customMessageBg", text));
+      : new Box(0, 0, (text: string) => theme.bg("customMessageBg", text));
   box.setBgFn((text) => theme.bg("customMessageBg", text));
   box.clear();
   if (isPartial) {

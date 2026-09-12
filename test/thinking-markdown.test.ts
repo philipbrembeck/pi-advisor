@@ -1,4 +1,7 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { initTheme } from "@earendil-works/pi-coding-agent";
 import { stripTerminalSequences, visibleWidth } from "@earendil-works/pi-tui";
 import { renderThinkingMarkdown } from "../src/tools.ts";
@@ -12,6 +15,25 @@ const theme = {
 };
 
 describe("Advisor thinking Markdown rendering", () => {
+  // Isolate the agent dir so the developer's real hide_thinking setting cannot collapse thinking previews.
+  const previousAgentDir = process.env.PI_CODING_AGENT_DIR;
+  beforeEach(() => {
+    process.env.PI_CODING_AGENT_DIR = mkdtempSync(
+      join(tmpdir(), "pi-advisor-thinking-")
+    );
+  });
+  afterEach(() => {
+    rmSync(process.env.PI_CODING_AGENT_DIR as string, {
+      force: true,
+      recursive: true,
+    });
+    if (previousAgentDir === undefined) {
+      delete process.env.PI_CODING_AGENT_DIR;
+    } else {
+      process.env.PI_CODING_AGENT_DIR = previousAgentDir;
+    }
+  });
+
   test("renders incomplete thinking Markdown within narrow widths", () => {
     const component = renderThinkingMarkdown(
       "**Reviewing\n\n```ts\nconst next = 1",
