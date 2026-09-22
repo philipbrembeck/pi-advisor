@@ -4,6 +4,7 @@ import type {
   ToolCallEvent,
   ToolCallEventResult,
 } from "@earendil-works/pi-coding-agent";
+
 import {
   advisorAutoLoopGateRef,
   advisorFailureModeRef,
@@ -27,10 +28,8 @@ import {
 } from "./gate-policy.ts";
 import { adviceForGateText } from "./gate-protocol.ts";
 import { advisorModelIsAllowed } from "./model-access.ts";
-import {
-  appendScoutLifecycleEntry,
-  type ScoutStatusManager,
-} from "./scout-status.ts";
+import { appendScoutLifecycleEntry } from "./scout-status.ts";
+import type { ScoutStatusManager } from "./scout-status.ts";
 import type { AdvisorGateResult, ScoutToolDetails } from "./types.ts";
 
 const sendAutomaticGateCall = (pi: ExtensionAPI, event: ToolCallEvent) => {

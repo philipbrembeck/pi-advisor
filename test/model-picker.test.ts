@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { getConfiguredModelRefs } from "../src/commands/model-options.ts";
+
 import { registerCommands } from "../src/commands.ts";
+import { getConfiguredModelRefs } from "../src/commands/model-options.ts";
 import {
   SearchableModelMultiSelector,
   SearchableModelSelector,
@@ -39,11 +40,11 @@ describe("Searchable model selector", () => {
       allOptions: ["provider/other", "provider/current", "provider/last"],
       currentOption: "provider/current",
       keybindings,
-      onCancel: () => undefined,
-      onSelect: () => undefined,
+      onCancel: () => {},
+      onSelect: () => {},
       theme,
       title: "Select Model",
-      tui: { requestRender: () => undefined },
+      tui: { requestRender: () => {} },
     });
 
     const screen = selector.render(100).join("\n");
@@ -58,13 +59,13 @@ describe("Searchable model selector", () => {
       allOptions: ["provider/available"],
       currentOption: "provider/unavailable",
       keybindings,
-      onCancel: () => undefined,
+      onCancel: () => {},
       onSelect: (value) => {
         selected = value;
       },
       theme,
       title: "Select Model",
-      tui: { requestRender: () => undefined },
+      tui: { requestRender: () => {} },
     });
 
     const screen = selector.render(100).join("\n");
@@ -85,17 +86,17 @@ describe("Searchable model selector", () => {
       currentOptions: ["provider/alpha", "provider/stale"],
       keybindings,
       multiSelect: true,
-      onCancel: () => undefined,
+      onCancel: () => {},
       onSelect: (values) => {
         selected = values;
       },
       theme,
       title: "Advisor model whitelist",
-      tui: { requestRender: () => undefined },
+      tui: { requestRender: () => {} },
     });
 
     const screen = selector.render(100).join("\n");
-    expect(screen.match(/provider\/alpha/g)).toHaveLength(1);
+    expect(screen.match(/provider\/alpha/gu)).toHaveLength(1);
     expect(screen).toContain("✓ provider/alpha");
     expect(screen).toContain("✓ provider/stale");
     selector.handleInput("\r");
@@ -113,13 +114,13 @@ describe("Searchable model selector", () => {
       currentOptions: [],
       keybindings,
       multiSelect: true,
-      onCancel: () => undefined,
+      onCancel: () => {},
       onSelect: (values) => {
         selected = values;
       },
       theme,
       title: "Advisor model whitelist",
-      tui: { requestRender: () => undefined },
+      tui: { requestRender: () => {} },
     });
 
     selector.handleInput("s");
@@ -143,13 +144,13 @@ describe("Searchable model selector", () => {
       currentOptions: [],
       keybindings,
       multiSelect: true,
-      onCancel: () => undefined,
+      onCancel: () => {},
       onSelect: (values) => {
         selected = values;
       },
       theme,
       title: "Advisor model whitelist",
-      tui: { requestRender: () => undefined },
+      tui: { requestRender: () => {} },
     });
 
     selector.handleInput(" ");
@@ -170,13 +171,13 @@ describe("Searchable model selector", () => {
       allOptions: ["provider/other", "provider/current"],
       currentOption: "provider/current",
       keybindings,
-      onCancel: () => undefined,
+      onCancel: () => {},
       onSelect: (value) => {
         selected = value;
       },
       theme,
       title: "Select Model",
-      tui: { requestRender: () => undefined },
+      tui: { requestRender: () => {} },
     });
 
     selector.render(100);
@@ -208,7 +209,7 @@ describe("Advisor model command thinking levels", () => {
         custom: (factory: any) =>
           new Promise((resolve) => {
             const selector = factory(
-              { requestRender: () => undefined },
+              { requestRender: () => {} },
               theme,
               { matches: () => false },
               resolve
@@ -216,7 +217,7 @@ describe("Advisor model command thinking levels", () => {
             selector.render(100);
             selector.handleInput("\r");
           }),
-        notify: () => undefined,
+        notify: () => {},
         select: (_title: string, choices: string[]) => {
           effortChoicesSeen.push(choices);
           return Promise.resolve(choices[0]);
@@ -225,7 +226,7 @@ describe("Advisor model command thinking levels", () => {
     } as any);
     return {
       effortChoicesSeen,
-      saved: JSON.parse(readFileSync(join(agentDir, "advisor.json"), "utf8")),
+      saved: JSON.parse(readFileSync(join(agentDir, "advisor.json"), "utf-8")),
     };
   };
 

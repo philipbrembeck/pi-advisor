@@ -1,10 +1,7 @@
 import { getSettingsListTheme } from "@earendil-works/pi-coding-agent";
-import {
-  type Component,
-  type Focusable,
-  SettingsList,
-  truncateToWidth,
-} from "@earendil-works/pi-tui";
+import { SettingsList, truncateToWidth } from "@earendil-works/pi-tui";
+import type { Component, Focusable } from "@earendil-works/pi-tui";
+
 import {
   rainbowGradient,
   SIMPLE_MODE_GRADIENT_INTERVAL_MS,
@@ -54,7 +51,7 @@ export class AdvisorSettingsSelector implements Component, Focusable {
             label: String(configuredContext),
             value: configuredContext,
           },
-        ].sort((a, b) => a.value - b.value);
+        ].toSorted((a, b) => a.value - b.value);
     if (this.settings.simpleMode) {
       this.startSimpleModeGradient();
     }
@@ -158,7 +155,7 @@ export class AdvisorSettingsSelector implements Component, Focusable {
     (this.options.onChange ?? this.options.onSave)?.({
       ...this.settings,
       showUsageDetails: this.settings.showUsageDetails ?? true,
-      toolPolicies: { ...(this.settings.toolPolicies ?? {}) },
+      toolPolicies: { ...this.settings.toolPolicies },
     });
     if (
       id === "context" ||

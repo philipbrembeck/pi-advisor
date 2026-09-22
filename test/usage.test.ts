@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+
 import {
   addAdvisorUsage,
   advisorUsageForPi,
@@ -15,7 +16,7 @@ describe("Advisor usage", () => {
       snapshotAdvisorUsage({
         cacheRead: 20,
         cacheWrite: 3,
-        cost: { total: 0.012_34 },
+        cost: { total: 0.01234 },
         input: 1200,
         output: 456,
         totalTokens: 1656,
@@ -23,7 +24,7 @@ describe("Advisor usage", () => {
     ).toEqual({
       cacheRead: 20,
       cacheWrite: 3,
-      cost: 0.012_34,
+      cost: 0.01234,
       input: 1200,
       output: 456,
       totalTokens: 1656,
@@ -51,7 +52,7 @@ describe("Advisor usage", () => {
   test("formats individual usage without treating missing fields as zero", () => {
     expect(
       formatAdvisorUsage({
-        cost: { total: 0.012_34 },
+        cost: { total: 0.01234 },
         input: 1200,
         output: 456,
       })
@@ -87,7 +88,7 @@ describe("Advisor usage", () => {
   test("converts partial and zero-cost usage to Pi's complete shape", () => {
     expect(
       advisorUsageForPi({
-        cost: { cacheRead: 0.001, input: 0.01, total: 0.012_34 },
+        cost: { cacheRead: 0.001, input: 0.01, total: 0.01234 },
         input: 1200,
         output: 456,
       })
@@ -99,7 +100,7 @@ describe("Advisor usage", () => {
         cacheWrite: 0,
         input: 0.01,
         output: 0,
-        total: 0.012_34,
+        total: 0.01234,
       },
       input: 1200,
       output: 456,

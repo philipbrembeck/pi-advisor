@@ -1,13 +1,12 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
-import {
-  type Component,
-  type Focusable,
-  fuzzyFilter,
-  Input,
-  type Keybindings,
-  type KeybindingsManager,
-  truncateToWidth,
+import { fuzzyFilter, Input, truncateToWidth } from "@earendil-works/pi-tui";
+import type {
+  Component,
+  Focusable,
+  Keybindings,
+  KeybindingsManager,
 } from "@earendil-works/pi-tui";
+
 import type { RenderRequester } from "./types.ts";
 
 interface SearchableModelListOptions {
@@ -59,7 +58,7 @@ export class SearchableModelList implements Component, Focusable {
         : undefined;
     let allOptions: string[];
     if (this.multiSelect) {
-      allOptions = [...new Set(options.allOptions)].sort((left, right) =>
+      allOptions = [...new Set(options.allOptions)].toSorted((left, right) =>
         left.localeCompare(right)
       );
     } else if (this.currentOption) {
@@ -95,9 +94,9 @@ export class SearchableModelList implements Component, Focusable {
     lines.push(`  ${this.theme.fg("accent", this.theme.bold(this.title))}`);
     const inputLines = this.searchInput.render(Math.max(1, width - 10));
     lines.push(
-      `  ${this.theme.fg("accent", "Search: ")}${inputLines[0] || ""}`
+      `  ${this.theme.fg("accent", "Search: ")}${inputLines[0] || ""}`,
+      ""
     );
-    lines.push("");
 
     const query = this.searchInput.getValue().trim();
     this.filteredOptions = query
@@ -126,23 +125,24 @@ export class SearchableModelList implements Component, Focusable {
       }
       if (total > maxVisible) {
         lines.push(
-          "  " +
-            this.theme.fg("muted", `  (${this.selectedIndex + 1}/${total})`)
+          `  ${this.theme.fg(
+            "muted",
+            `  (${this.selectedIndex + 1}/${total})`
+          )}`
         );
       }
     }
-    lines.push("");
-    lines.push(`  ${this.theme.fg("dim", this.interactionHint())}`);
+    lines.push("", `  ${this.theme.fg("dim", this.interactionHint())}`);
     lines.push(this.theme.fg("border", "─".repeat(width)));
     return lines.map((line) => truncateToWidth(line, width));
   }
 
   handleInput(keyData: string): void {
-    if (this.matchesAction(keyData, "tui.select.up", "\u001b[A")) {
+    if (this.matchesAction(keyData, "tui.select.up", "\u001B[A")) {
       this.moveSelection(-1);
       return;
     }
-    if (this.matchesAction(keyData, "tui.select.down", "\u001b[B")) {
+    if (this.matchesAction(keyData, "tui.select.down", "\u001B[B")) {
       this.moveSelection(1);
       return;
     }
@@ -174,7 +174,7 @@ export class SearchableModelList implements Component, Focusable {
       }
       return;
     }
-    if (this.matchesAction(keyData, "tui.select.cancel", "\u001b")) {
+    if (this.matchesAction(keyData, "tui.select.cancel", "\u001B")) {
       this.onCancel();
       return;
     }

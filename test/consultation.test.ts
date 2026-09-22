@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { tmpdir } from "node:os";
+
 import {
   fauxAssistantMessage,
   registerFauxProvider,
 } from "@earendil-works/pi-ai/compat";
+
 import registerExtension, {
   consultAdvisor,
   runAdvisorGate,
@@ -164,7 +166,7 @@ describe("Advisor consultation request construction", () => {
                   beforeAgentStart = handler;
                 }
               },
-              registerTool: () => undefined,
+              registerTool: () => {},
             }
           )
         );

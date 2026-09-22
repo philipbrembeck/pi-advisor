@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+
 import {
   setAdvisorJevTurnGateEveryTurnsRef,
   setAdvisorJevTurnGateNoulThresholdRef,
@@ -27,7 +29,7 @@ const aborted = () => ({ aborted: false, reason: undefined }) as never;
 interface Harness {
   consultCount: () => number;
   registration: JevTurnGateRegistration;
-  sent: Array<{ content: string; customType: string; details: unknown }>;
+  sent: { content: string; customType: string; details: unknown }[];
   session: AdvisorSessionState;
 }
 
@@ -78,7 +80,7 @@ const ctxWith = (notifications: string[] = []) =>
     signal: aborted(),
     ui: {
       notify: (message: string) => notifications.push(message),
-      setStatus: () => undefined,
+      setStatus: () => {},
     },
   }) as unknown as ExtensionContext;
 

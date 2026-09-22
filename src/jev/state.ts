@@ -1,5 +1,6 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { JsonValue } from "@typesafe-ai/sdk";
+
 import {
   advisorJevDigestMaxCharsRef,
   advisorRedactSecretsRef,

@@ -46,12 +46,11 @@ import {
 } from "./state.ts";
 import {
   ADVISOR_TOOL_POLICIES,
-  type AdvisorConfig,
   GATE_FAILURE_MODES,
   JEV_TRANSPORTS,
-  type JevTransport,
   MAX_CONTEXT_MAX_CHARS,
 } from "./types.ts";
+import type { AdvisorConfig, JevTransport } from "./types.ts";
 
 /** An empty ref means no model has been selected yet. */
 const configuredModelRef = (value: string | undefined): string | undefined =>

@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+
 import {
   createHerdrNotificationRequest,
   HerdrAdvisorActivity,
@@ -19,7 +20,7 @@ describe("Herdr Advisor activity", () => {
       sound: "request",
       title: "bad title",
     });
-    expect(Object.keys(request).sort()).toEqual(["id", "method", "params"]);
+    expect(Object.keys(request).toSorted()).toEqual(["id", "method", "params"]);
     expect(request.params.title.length).toBeLessThanOrEqual(80);
     expect(request.params.body.length).toBeLessThanOrEqual(240);
   });
@@ -38,7 +39,7 @@ describe("Herdr Advisor activity", () => {
       applies_to_source: "herdr:pi",
       state_labels: { working: "seeking advice" },
     });
-    expect(Object.keys(reports[0].params).sort()).toEqual([
+    expect(Object.keys(reports[0].params).toSorted()).toEqual([
       "agent",
       "applies_to_source",
       "pane_id",
@@ -117,7 +118,7 @@ describe("Herdr Advisor activity", () => {
     setHerdrBlockedEmitter((active) => events.push(active));
     try {
       const block = new HerdrAdvisorBlock(
-        () => undefined,
+        () => {},
         () => true
       );
       block.set("first");

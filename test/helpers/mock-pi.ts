@@ -6,7 +6,7 @@ export interface MockPiCapture {
   /** Registered command configs by name. */
   commands?: Map<string, any>;
   /** Captured transcript entries, in append order. */
-  entries?: Array<{ data: unknown; type: string }>;
+  entries?: { data: unknown; type: string }[];
   /** Registered entry renderers by entry type. */
   entryRenderers?: Map<string, any>;
   /** Registered event handlers by event name. */
@@ -14,7 +14,7 @@ export interface MockPiCapture {
   /** Registered message renderers by custom message type. */
   messageRenderers?: Map<string, any>;
   /** Captured executor-bound messages with their send options. */
-  sent?: Array<{ message: any; options: any }>;
+  sent?: { message: any; options: any }[];
   /** Registered tools by tool name. */
   tools?: Map<string, any>;
 }

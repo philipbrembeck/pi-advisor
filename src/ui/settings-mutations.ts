@@ -19,15 +19,14 @@ const BOOLEAN_SETTING_IDS = new Set([
   "outcomeLogging",
 ]);
 
-const parseModelWhitelist = (value: string) =>
-  Array.from(
-    new Set(
-      value
-        .split(",")
-        .map((model) => model.trim())
-        .filter(Boolean)
-    )
-  );
+const parseModelWhitelist = (value: string) => [
+  ...new Set(
+    value
+      .split(",")
+      .map((model) => model.trim())
+      .filter(Boolean)
+  ),
+];
 
 export const mutateAdvisorSettings = (
   settings: AdvisorSettings,
@@ -36,93 +35,119 @@ export const mutateAdvisorSettings = (
   presets: ContextPreset[]
 ): void => {
   switch (id) {
-    case "context":
+    case "context": {
       settings.contextMaxChars =
         presets.find((preset) => preset.label === value)?.value ??
         settings.contextMaxChars;
       break;
-    case "simpleMode":
+    }
+    case "simpleMode": {
       settings.simpleMode = value === "On";
       break;
-    case "alwaysOn":
+    }
+    case "alwaysOn": {
       settings.alwaysOn = value === "On";
       break;
-    case "effort":
+    }
+    case "effort": {
       settings.effort = value;
       break;
-    case "customRule":
+    }
+    case "customRule": {
       settings.customRule = value.trim() || undefined;
       break;
-    case "toolPolicies":
+    }
+    case "toolPolicies": {
       settings.toolPolicies = JSON.parse(
         value
       ) as AdvisorSettings["toolPolicies"];
       break;
-    case "loopThreshold":
+    }
+    case "loopThreshold": {
       settings.loopThreshold = Number(
         value.replace("After ", "").replace(" repeats", "")
       );
       break;
-    case "maxCallsPerSession":
+    }
+    case "maxCallsPerSession": {
       settings.maxCallsPerSession = value === "∞" ? undefined : Number(value);
       break;
-    case "modelWhitelist":
+    }
+    case "modelWhitelist": {
       settings.modelWhitelist = parseModelWhitelist(value);
       break;
-    case "failureMode":
+    }
+    case "failureMode": {
       settings.failureMode = value as AdvisorSettings["failureMode"];
       break;
-    case "gitContext":
+    }
+    case "gitContext": {
       settings.gitContext = value as AdvisorSettings["gitContext"];
       break;
-    case "toolResultMaxLines":
+    }
+    case "toolResultMaxLines": {
       settings.toolResultMaxLines = Number(value);
       break;
-    case "toolResultMaxBytes":
+    }
+    case "toolResultMaxBytes": {
       settings.toolResultMaxBytes = Number(value);
       break;
-    case "gitContextMaxChars":
+    }
+    case "gitContextMaxChars": {
       settings.gitContextMaxChars = Number(value);
       break;
-    case "jevFilter":
+    }
+    case "jevFilter": {
       settings.jevFilterEnabled = value === "On";
       break;
-    case "jevFilterSkipConfidence":
+    }
+    case "jevFilterSkipConfidence": {
       settings.jevFilterSkipConfidence = Number(value);
       break;
-    case "jevFilterNoulMargin":
+    }
+    case "jevFilterNoulMargin": {
       settings.jevFilterNoulMargin = Number(value);
       break;
-    case "jevFilterOverrideWindow":
+    }
+    case "jevFilterOverrideWindow": {
       settings.jevFilterOverrideWindow = Number(value.replace(" turns", ""));
       break;
-    case "jevTurnGateEveryTurns":
+    }
+    case "jevTurnGateEveryTurns": {
       settings.jevTurnGateEveryTurns =
-        value === "Off" ? 0 : Number(value.replace(/[^0-9]/g, ""));
+        value === "Off" ? 0 : Number(value.replace(/[^0-9]/gu, ""));
       break;
-    case "jevTurnGateNoulThreshold":
+    }
+    case "jevTurnGateNoulThreshold": {
       settings.jevTurnGateNoulThreshold = Number(value);
       break;
-    case "jevModel":
+    }
+    case "jevModel": {
       settings.jevModel = value.trim() || DEFAULT_JEV_MODEL;
       break;
-    case "jevTimeoutMs":
+    }
+    case "jevTimeoutMs": {
       settings.jevTimeoutMs = Number(value);
       break;
-    case "jevDigestMaxChars":
+    }
+    case "jevDigestMaxChars": {
       settings.jevDigestMaxChars = Number(value);
       break;
-    case "jevPricePerMtok":
+    }
+    case "jevPricePerMtok": {
       settings.jevPricePerMtok = Number(value);
       break;
-    case "jevTransport":
+    }
+    case "jevTransport": {
       settings.jevTransport = value as AdvisorSettings["jevTransport"];
       break;
-    default:
+    }
+    default: {
       if (BOOLEAN_SETTING_IDS.has(id)) {
         (settings as unknown as Record<string, SettingValue | boolean>)[id] =
           value === "On";
       }
       break;
+    }
   }
 };

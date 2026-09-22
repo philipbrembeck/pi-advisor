@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+
 import {
   setAdvisorJevFilterEnabledRef,
   setAdvisorJevFilterOverrideWindowRef,

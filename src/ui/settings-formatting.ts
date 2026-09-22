@@ -1,4 +1,5 @@
 import { visibleWidth } from "@earendil-works/pi-tui";
+
 import { DEFAULT_EFFORT_LEVEL } from "../commands/model-options.ts";
 import type { ContextPreset } from "./types.ts";
 
@@ -20,7 +21,7 @@ export const withCurrentValue = (current: string, values: string[]) =>
 
 export const numericValues = (current: number, values: number[]) => {
   const all = values.includes(current) ? values : [...values, current];
-  return all.sort((a, b) => a - b).map(String);
+  return all.toSorted((a, b) => a - b).map(String);
 };
 
 export const maxCallValues = (current: string) => {
@@ -61,7 +62,7 @@ export const contextDescription = (
     (preset) => preset.value === contextMaxChars
   );
   const selectedIndex =
-    exactIndex >= 0
+    exactIndex !== -1
       ? exactIndex
       : presets.reduce(
           (closestIndex, preset, index) =>
@@ -100,7 +101,7 @@ export const contextDescription = (
   );
   const markerLabel = `${" ".repeat(labelStart)}${label}`;
   const description =
-    exactIndex >= 0 ? selectedPreset?.description : "Custom context limit.";
+    exactIndex !== -1 ? selectedPreset?.description : "Custom context limit.";
   return `${description ?? "Custom context limit."}\n${meterPrefix}${meter}  full\n${markerLabel}`;
 };
 
@@ -126,8 +127,8 @@ export const rainbowGradient = (text: string, startedAt: number): string => {
       const red = Math.round(baseRed + (255 - baseRed) * brightness);
       const green = Math.round(baseGreen + (255 - baseGreen) * brightness);
       const blue = Math.round(baseBlue + (255 - baseBlue) * brightness);
-      return `\x1b[38;2;${red};${green};${blue}m${character}`;
+      return `\u001B[38;2;${red};${green};${blue}m${character}`;
     })
     .join("")
-    .concat("\x1b[0m");
+    .concat("\u001B[0m");
 };

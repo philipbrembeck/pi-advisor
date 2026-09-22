@@ -1,24 +1,23 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+
 import {
   advisorRedactSecretsRef,
   advisorToolPoliciesRef,
   advisorToolResultMaxBytesRef,
   advisorToolResultMaxLinesRef,
 } from "./config/state.ts";
-import {
-  buildGroups,
-  type DisclosureCaps,
-  type GroupPass,
-  groupWireBytes,
-} from "./scout-groups.ts";
+import { buildGroups, groupWireBytes } from "./scout-groups.ts";
+import type { DisclosureCaps, GroupPass } from "./scout-groups.ts";
 import { indexToolCalls } from "./scout-protocol.ts";
 import {
-  type BuildScoutManifestOptions,
   SCOUT_GROUP_MAX_BYTES,
   SCOUT_MANIFEST_MAX_BYTES,
   SCOUT_MANIFEST_MAX_GROUPS,
-  type ScoutContextGroup,
-  type ScoutManifestResult,
+} from "./scout-types.ts";
+import type {
+  BuildScoutManifestOptions,
+  ScoutContextGroup,
+  ScoutManifestResult,
 } from "./scout-types.ts";
 
 // biome-ignore lint/performance/noBarrelFile: re-export preserves scout-context's historical public import surface.
@@ -126,7 +125,7 @@ const fitToBudget = (
   );
   while (!fits(selected, caps)) {
     const optionalIndex = selected.findIndex((group) => !group.required);
-    if (optionalIndex < 0) {
+    if (optionalIndex === -1) {
       return {
         message: "Required Scout context exceeds fixed manifest limits.",
         ok: false,

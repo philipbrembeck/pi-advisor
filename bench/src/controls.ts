@@ -1,9 +1,9 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+
 import { nullAdvice } from "./arms/null.ts";
 import { oracleAdvice } from "./arms/oracle.ts";
 import { mechanicalPositiveCatch } from "./score/mechanical.ts";
-
 import type {
   DecisionItem,
   DecisionKey,

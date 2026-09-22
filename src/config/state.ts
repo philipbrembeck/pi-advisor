@@ -1,6 +1,5 @@
 import type { GitContextLevel } from "../git.ts";
 import {
-  type AdvisorToolPolicies,
   DEFAULT_ADVISOR_GIT_CONTEXT_MAX_CHARS,
   DEFAULT_ADVISOR_TOOL_RESULT_MAX_BYTES,
   DEFAULT_ADVISOR_TOOL_RESULT_MAX_LINES,
@@ -15,8 +14,11 @@ import {
   DEFAULT_JEV_TRANSPORT,
   DEFAULT_JEV_TURN_GATE_EVERY_TURNS,
   DEFAULT_JEV_TURN_GATE_NOUL_THRESHOLD,
-  type GateFailureMode,
-  type JevTransport,
+} from "./types.ts";
+import type {
+  AdvisorToolPolicies,
+  GateFailureMode,
+  JevTransport,
 } from "./types.ts";
 
 // An empty ref means no model has been selected yet.
@@ -127,9 +129,9 @@ export const setAdvisorMaxCallsPerSessionRef = (value: number | undefined) => {
   advisorMaxCallsPerSessionRef = value;
 };
 export const setAdvisorModelWhitelistRef = (models: string[]) => {
-  advisorModelWhitelistRef = Array.from(
-    new Set(models.map((model) => model.trim()).filter(Boolean))
-  );
+  advisorModelWhitelistRef = [
+    ...new Set(models.map((model) => model.trim()).filter(Boolean)),
+  ];
 };
 export const setAdvisorSessionSummaryRef = (enabled: boolean) => {
   advisorSessionSummaryRef = enabled;

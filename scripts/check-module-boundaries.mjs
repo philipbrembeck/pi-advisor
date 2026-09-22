@@ -24,8 +24,8 @@ const collectTypeScriptFiles = (directory) => {
 const moduleSpecifiers = (source) => {
   const specifiers = [];
   const staticImportPattern =
-    /\b(?:import|export)\s+(?:type\s+)?(?:[\s\S]*?\s+from\s+)?["']([^"']+)["']/g;
-  const dynamicImportPattern = /\bimport\s*\(\s*["']([^"']+)["']\s*\)/g;
+    /\b(?:import|export)\s+(?:type\s+)?(?:[\s\S]*?\s+from\s+)?["']([^"']+)["']/gu;
+  const dynamicImportPattern = /\bimport\s*\(\s*["']([^"']+)["']\s*\)/gu;
   for (const match of source.matchAll(staticImportPattern)) {
     specifiers.push({ index: match.index ?? 0, specifier: match[1] });
   }
@@ -53,7 +53,7 @@ for (const importer of collectTypeScriptFiles(sourceRoot)) {
   if (facadePaths.has(importer)) {
     continue;
   }
-  const source = readFileSync(importer, "utf8");
+  const source = readFileSync(importer, "utf-8");
   for (const { specifier, index } of moduleSpecifiers(source)) {
     const resolved = resolveRelativeSpecifier(importer, specifier);
     if (!(resolved && facadePaths.has(resolved))) {
@@ -68,7 +68,7 @@ for (const importer of collectTypeScriptFiles(sourceRoot)) {
 
 if (violations.length > 0) {
   throw new Error(
-    `Module boundary violations detected:\n${violations.sort().join("\n")}`
+    `Module boundary violations detected:\n${violations.toSorted().join("\n")}`
   );
 }
 

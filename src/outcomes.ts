@@ -11,6 +11,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { join } from "node:path";
+
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 
 export type OutcomeAdoption = "followed" | "not-followed" | "unknown";
@@ -72,7 +73,7 @@ const salt = async () => {
         throw error;
       }
     } finally {
-      await unlink(temporary).catch(() => undefined);
+      await unlink(temporary).catch(() => {});
     }
   }
   throw new Error("Advisor outcome salt initialization did not complete.");
@@ -93,20 +94,20 @@ const withOutcomeLock = async <T>(run: () => Promise<T>): Promise<T> => {
         return await run();
       } finally {
         await lock.close();
-        const current = await stat(lockPath).catch(() => undefined);
+        const current = await stat(lockPath).catch(() => {});
         if (current && sameFile(identity, current)) {
-          await unlink(lockPath).catch(() => undefined);
+          await unlink(lockPath).catch(() => {});
         }
       }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
         throw error;
       }
-      const observed = await stat(lockPath).catch(() => undefined);
+      const observed = await stat(lockPath).catch(() => {});
       if (observed && Date.now() - observed.mtimeMs > 30_000) {
-        const current = await stat(lockPath).catch(() => undefined);
+        const current = await stat(lockPath).catch(() => {});
         if (current && sameFile(observed, current)) {
-          await unlink(lockPath).catch(() => undefined);
+          await unlink(lockPath).catch(() => {});
         }
         continue;
       }
@@ -146,9 +147,9 @@ export const appendOutcome = async (
         throw error;
       });
     if (currentBytes + Buffer.byteLength(line) > MAX_LOG_BYTES) {
-      await writeFile(path, line, { encoding: "utf8", mode: 0o600 });
+      await writeFile(path, line, { encoding: "utf-8", mode: 0o600 });
     } else {
-      await appendFile(path, line, { encoding: "utf8", mode: 0o600 });
+      await appendFile(path, line, { encoding: "utf-8", mode: 0o600 });
     }
     await chmod(path, 0o600);
     return next;

@@ -2,7 +2,9 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
 import { initTheme } from "@earendil-works/pi-coding-agent";
+
 import registerExtension from "../extensions/index.ts";
 import { setShowUsageDetailsRef } from "../src/config.ts";
 import {
@@ -12,7 +14,7 @@ import {
 } from "../src/tools.ts";
 import { mockPi } from "./helpers/mock-pi.ts";
 
-const SPINNER_PATTERN = /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/;
+const SPINNER_PATTERN = /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/u;
 
 initTheme();
 
@@ -66,7 +68,7 @@ describe("Advisor tool rendering", () => {
 
     const theme = renderTheme();
     const context = {
-      invalidate: () => undefined,
+      invalidate: () => {},
       lastComponent: undefined,
       state: {},
     };
@@ -94,7 +96,7 @@ describe("Advisor tool rendering", () => {
     const advisorTool = registerForRendering();
     const theme = renderTheme();
     const context = {
-      invalidate: () => undefined,
+      invalidate: () => {},
       lastComponent: undefined,
       state: {},
     };
@@ -114,7 +116,7 @@ describe("Advisor tool rendering", () => {
     const advisorTool = registerForRendering();
     const theme = renderTheme();
     const context = {
-      invalidate: () => undefined,
+      invalidate: () => {},
       lastComponent: undefined,
       state: {},
     };
@@ -148,7 +150,7 @@ describe("Advisor tool rendering", () => {
     );
     const theme = renderTheme();
     const context = {
-      invalidate: () => undefined,
+      invalidate: () => {},
       lastComponent: undefined,
       state: {},
     };
@@ -174,9 +176,7 @@ describe("Advisor tool rendering", () => {
   test("renders the shared expanded Scout fallback entry", () => {
     setShowUsageDetailsRef(true);
     const entryRenderers = new Map<string, any>();
-    registerExtension(
-      mockPi({ entryRenderers }, { registerTool: () => undefined })
-    );
+    registerExtension(mockPi({ entryRenderers }, { registerTool: () => {} }));
     const theme = renderTheme();
     const fallback = entryRenderers
       .get("advisor-scout-result")(
@@ -229,7 +229,7 @@ describe("Advisor tool rendering", () => {
     const advisorTool = registerForRendering();
     const theme = renderTheme();
     const context = {
-      invalidate: () => undefined,
+      invalidate: () => {},
       lastComponent: undefined,
       state: {} as { phase?: string; timerId?: ReturnType<typeof setInterval> },
     };
@@ -264,7 +264,7 @@ describe("Advisor tool rendering", () => {
     const advisorTool = registerForRendering();
     const theme = renderTheme();
     const context = {
-      invalidate: () => undefined,
+      invalidate: () => {},
       lastComponent: undefined,
       state: {} as { phase?: string; timerId?: ReturnType<typeof setInterval> },
     };
@@ -320,7 +320,7 @@ describe("Advisor tool rendering", () => {
     const advisorTool = registerForRendering();
     const theme = renderTheme();
     const context = {
-      invalidate: () => undefined,
+      invalidate: () => {},
       lastComponent: undefined,
       state: {} as { phase?: string; timerId?: ReturnType<typeof setInterval> },
     };
@@ -371,7 +371,7 @@ describe("Advisor tool rendering", () => {
     const advisorTool = registerForRendering();
     const theme = renderTheme();
     const context = {
-      invalidate: () => undefined,
+      invalidate: () => {},
       lastComponent: undefined,
       state: {} as any,
     };
@@ -407,7 +407,7 @@ describe("Advisor tool rendering", () => {
     const advisorTool = registerForRendering();
     const theme = renderTheme();
     const context = {
-      invalidate: () => undefined,
+      invalidate: () => {},
       lastComponent: undefined,
       state: {} as { timerId?: ReturnType<typeof setInterval> },
     };
@@ -442,9 +442,8 @@ describe("Pi hide_thinking integration", () => {
 
   test("collapses the thinking preview to its label when hide_thinking is on", async () => {
     const { piHideThinkingEnabled } = await import("../src/pi-settings.ts");
-    const { renderThinkingMarkdown } = await import(
-      "../src/tools/render-common.ts"
-    );
+    const { renderThinkingMarkdown } =
+      await import("../src/tools/render-common.ts");
     const agentDir = mkdtempSync(join(tmpdir(), "pi-advisor-hidden-"));
     const previous = process.env.PI_CODING_AGENT_DIR;
     process.env.PI_CODING_AGENT_DIR = agentDir;
@@ -476,9 +475,8 @@ describe("Pi hide_thinking integration", () => {
 describe("ask_advisor result spacing", () => {
   test("renders one blank line between the request and the first Scout line", async () => {
     const { renderAdvisorCallBox } = await import("../src/tools.ts");
-    const { renderAdvisorResult } = await import(
-      "../src/tools/render-advisor-result.ts"
-    );
+    const { renderAdvisorResult } =
+      await import("../src/tools/render-advisor-result.ts");
     const { Container } = await import("@earendil-works/pi-tui");
     const theme = renderTheme();
     // Mirrors pi's renderShell "self": unpadded container, prefixed by one blank line.
@@ -508,14 +506,14 @@ describe("ask_advisor result spacing", () => {
         { expanded: false, isPartial: false },
         theme as unknown as Parameters<typeof renderAdvisorResult>[2],
         {
-          invalidate: () => undefined,
+          invalidate: () => {},
           lastComponent: undefined,
           state: {} as any,
         } as any
       )
     );
     // biome-ignore lint/suspicious/noControlCharactersInRegex: strips terminal SGR codes
-    const sgr = /\u001b\[[0-9;]*m/g;
+    const sgr = /\u001B\[[0-9;]*m/gu;
     const lines = ["", ...container.render(120)].map((line) =>
       line.replace(sgr, "")
     );

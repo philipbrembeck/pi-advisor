@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
+
 import { loadDecisionItem } from "../src/fixture.ts";
 import {
   compareDiscrimination,

@@ -2,7 +2,7 @@
 // silently retarget an existing test's keystrokes.
 
 // biome-ignore lint/suspicious/noControlCharactersInRegex: strips terminal SGR codes
-const SGR_CODE = /\u001b\[[0-9;]*m/g;
+const SGR_CODE = /\u001B\[[0-9;]*m/gu;
 
 export const plainScreen = (selector: any) =>
   selector.render(100).join("\n").replace(SGR_CODE, "");
@@ -13,7 +13,7 @@ export const focusSettingsRow = (selector: any, label: string): number => {
     if (screen.includes(`→ ${label}`)) {
       return presses;
     }
-    selector.handleInput("\u001b[B");
+    selector.handleInput("\u001B[B");
   }
   throw new Error(`Settings row not reachable: ${label}`);
 };

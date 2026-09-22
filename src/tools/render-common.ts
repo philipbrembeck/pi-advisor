@@ -1,12 +1,14 @@
-import { getMarkdownTheme, type Theme } from "@earendil-works/pi-coding-agent";
+import { getMarkdownTheme } from "@earendil-works/pi-coding-agent";
+import type { Theme } from "@earendil-works/pi-coding-agent";
 import {
   Box,
-  type Component,
   Markdown,
   Text,
   truncateToWidth,
   visibleWidth,
 } from "@earendil-works/pi-tui";
+import type { Component } from "@earendil-works/pi-tui";
+
 import { advisorCollapseResponsesRef } from "../config/state.ts";
 import { piHideThinkingEnabled } from "../pi-settings.ts";
 
@@ -107,7 +109,7 @@ export const renderAdvisorCallBox = (
 
 const COLLAPSED_ADVICE_LINES = 12;
 // The system prompt requires this exact first line, so the match is exact too.
-const SOUND_VERDICT = /^Verdict:\s*sound$/;
+const SOUND_VERDICT = /^Verdict:\s*sound$/u;
 
 export const hasSoundVerdict = (advice: string) =>
   SOUND_VERDICT.test(

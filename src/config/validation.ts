@@ -1,5 +1,9 @@
-import type { ConfigKeySchema } from "./schema.ts";
-import { CONFIG_SCHEMA, type ConfigKey, SCHEMA_BY_KEY } from "./schema.ts";
+import {
+  type ConfigKeySchema,
+  CONFIG_SCHEMA,
+  type ConfigKey,
+  SCHEMA_BY_KEY,
+} from "./schema.ts";
 import type { AdvisorConfig } from "./types.ts";
 
 // biome-ignore lint/performance/noBarrelFile: re-exports keep the isValid* validators on their historical module for the config facade.

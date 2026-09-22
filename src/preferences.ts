@@ -1,6 +1,8 @@
 import { lstat, open, realpath } from "node:fs/promises";
 import { join, relative } from "node:path";
+
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+
 import { redactAndCapText } from "./redaction.ts";
 
 const PREFERENCES_MAX_BYTES = 8 * 1024;
@@ -40,9 +42,9 @@ export const readProjectPreferences = async (
     try {
       const buffer = Buffer.alloc(maxBytes + 1);
       const { bytesRead } = await file.read(buffer, 0, buffer.length, 0);
-      const source = buffer.subarray(0, bytesRead).toString("utf8");
+      const source = buffer.subarray(0, bytesRead).toString("utf-8");
       const capped = redactAndCapText(source, maxBytes, redact);
-      return { bytes: Buffer.byteLength(capped, "utf8"), text: capped };
+      return { bytes: Buffer.byteLength(capped, "utf-8"), text: capped };
     } finally {
       await file.close();
     }

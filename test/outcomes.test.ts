@@ -10,6 +10,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
 import { appendOutcome, outcomeLogPath } from "../src/outcomes.ts";
 
 describe("outcome log", () => {
@@ -26,9 +27,9 @@ describe("outcome log", () => {
         trigger: "executor-requested",
         validationStatus: "passed",
       });
-      const raw = readFileSync(outcomeLogPath(), "utf8");
+      const raw = readFileSync(outcomeLogPath(), "utf-8");
       const parsed = JSON.parse(raw);
-      expect(Object.keys(parsed).sort()).toEqual([
+      expect(Object.keys(parsed).toSorted()).toEqual([
         "adoption",
         "adviceHash",
         "timestamp",
@@ -83,7 +84,7 @@ describe("outcome log", () => {
           })
         )
       );
-      const records = readFileSync(outcomeLogPath(), "utf8")
+      const records = readFileSync(outcomeLogPath(), "utf-8")
         .trim()
         .split("\n")
         .map((line) => JSON.parse(line));

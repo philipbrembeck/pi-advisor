@@ -1,5 +1,6 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { Fetch } from "@typesafe-ai/sdk";
+
 import {
   advisorJevTurnGateEveryTurnsRef,
   advisorJevTurnGateNoulThresholdRef,
@@ -10,7 +11,8 @@ import { herdrAdvisorActivity } from "../herdr.ts";
 import { JevFailure, jevClientFromCredentials } from "../jev/client.ts";
 import { composeTurnGateVerdict } from "../jev/questions.ts";
 import { buildJevState } from "../jev/state.ts";
-import { type JevCredentials, resolveJevTransport } from "../jev/transport.ts";
+import { resolveJevTransport } from "../jev/transport.ts";
+import type { JevCredentials } from "../jev/transport.ts";
 import type { AdvisorSessionState } from "../session-state.ts";
 import { advisorUsageCost } from "../usage.ts";
 import type { consultAdvisor } from "./consultation.ts";

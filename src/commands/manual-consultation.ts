@@ -1,4 +1,5 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+
 import { advisorRef } from "../config/state.ts";
 import type { GitContextLevel } from "../git.ts";
 import { herdrAdvisorActivity, notifyHerdrAdvisorFailure } from "../herdr.ts";

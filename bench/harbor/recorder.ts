@@ -1,5 +1,6 @@
 /* biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: the recorder keeps provider, Scout, attestation, and shutdown evidence together. */
 import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
+
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 const RECORDS_PATH = "/logs/agent/bench-records.jsonl";

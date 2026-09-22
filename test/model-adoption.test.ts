@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+
 import { registerCommands } from "../src/commands.ts";
 import { savedConfig, withAgentDir } from "./helpers/config-fixture.ts";
 import { activationContext, activationHarness } from "./helpers/harness.ts";

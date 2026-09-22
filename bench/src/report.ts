@@ -1,5 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
+
 import { capturePins } from "./pins.ts";
 import type {
   BenchmarkConfig,

@@ -1,9 +1,7 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import {
-  readTrackedFiles,
-  readUntrackedFiles,
-  type UntrackedAttachment,
-} from "../attachments.ts";
+
+import { readTrackedFiles, readUntrackedFiles } from "../attachments.ts";
+import type { UntrackedAttachment } from "../attachments.ts";
 import {
   advisorGitContextMaxCharsRef,
   advisorGitContextRef,
@@ -13,19 +11,13 @@ import {
   advisorUntrackedContentRef,
   contextMaxCharsRef,
 } from "../config/state.ts";
-import {
-  clampGitContextLevel,
-  collectGitContext,
-  type GitContextLevel,
-} from "../git.ts";
+import { clampGitContextLevel, collectGitContext } from "../git.ts";
+import type { GitContextLevel } from "../git.ts";
 import { readProjectPreferences } from "../preferences.ts";
 import { redactAndCapText, redactSecrets } from "../redaction.ts";
-import {
-  runAdvisorScout,
-  type ScoutLifecycleEvent,
-  type ScoutOutcome,
-} from "../scout.ts";
 import { curateAdvisorConversation } from "../scout-curation.ts";
+import { runAdvisorScout } from "../scout.ts";
+import type { ScoutLifecycleEvent, ScoutOutcome } from "../scout.ts";
 import {
   advisorGitContextBudget,
   advisorRepositoryContext,

@@ -1,4 +1,5 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+
 import { advisorModelWhitelistRef } from "../config/state.ts";
 
 type AdvisorModelAccess =

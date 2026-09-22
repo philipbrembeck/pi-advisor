@@ -1,11 +1,8 @@
 # pi-advisor benchmark
 
-`bench/` is a repository-only benchmark for the Executor/Advisor flow. It is
-not included in the published npm package.
+`bench/` is a repository-only benchmark for the Executor/Advisor flow. It is not included in the published npm package.
 
-> [!CAUTION]
-> This is a fully **vibe coded** benchmark harness. It is not a general-purpose benchmark framework and does not attempt to measure provider performance.
-> Its sole purpose is to back the pi-advisor-flow with *somewhat* realistic numbers and to check whether they change significantly during release cycles or with new experimental features.
+> [!CAUTION] This is a fully **vibe coded** benchmark harness. It is not a general-purpose benchmark framework and does not attempt to measure provider performance. Its sole purpose is to back the pi-advisor-flow with _somewhat_ realistic numbers and to check whether they change significantly during release cycles or with new experimental features.
 
 The benchmark has three isolated tiers:
 
@@ -15,8 +12,7 @@ The benchmark has three isolated tiers:
 | 2 — decisions | `bun run bench:decisions` | Advisor decision-point scoring |
 | 3 — ReactBench | `bun run bench:screen` / `bun run bench:evaluate` | End-to-end uplift and cost/value evidence |
 
-Tier 3 is the only tier that can support a product value claim. The other tiers
-are regression signals and must not be presented as absolute ReactBench scores.
+Tier 3 is the only tier that can support a product value claim. The other tiers are regression signals and must not be presented as absolute ReactBench scores.
 
 ## Quick start
 
@@ -30,17 +26,11 @@ bun run bench:replay
 bun run bench:decisions --no-report
 ```
 
-The checked-in decision corpus contains 12 positive items and 12 negative
-controls. Each item is under `bench/tasks/<item-id>/`; its `repo/` directory is
-an intentionally empty placeholder. Offline commands do not read a local
-project checkout or any path outside this repository.
+The checked-in decision corpus contains 12 positive items and 12 negative controls. Each item is under `bench/tasks/<item-id>/`; its `repo/` directory is an intentionally empty placeholder. Offline commands do not read a local project checkout or any path outside this repository.
 
 ## Live Tier 2
 
-Live work is opt-in. It requires an OpenAI-compatible endpoint, credentials,
-non-zero pricing for every live model pin, and a budget that covers the printed
-estimate. Copy the example configuration and replace its zero pricing values;
-do not commit credentials or private endpoints.
+Live work is opt-in. It requires an OpenAI-compatible endpoint, credentials, non-zero pricing for every live model pin, and a budget that covers the printed estimate. Copy the example configuration and replace its zero pricing values; do not commit credentials or private endpoints.
 
 ```bash
 cp bench/benchmark.example.json /tmp/pi-advisor-benchmark.json
@@ -52,30 +42,16 @@ BENCH_LIVE=1 bun run bench:decisions \
   --config /tmp/pi-advisor-benchmark.json
 ```
 
-Set `BENCH_SCOUT=1` to run the Scout on/off experiment. `BENCH_PROVIDER` and
-`BENCH_API` control provider serialization; defaults are `openai-codex` and
-`openai-completions`. Every live request records and verifies its pinned model
-and effort. Missing usage is reported as unavailable, never as zero.
+Set `BENCH_SCOUT=1` to run the Scout on/off experiment. `BENCH_PROVIDER` and `BENCH_API` control provider serialization; defaults are `openai-codex` and `openai-completions`. Every live request records and verifies its pinned model and effort. Missing usage is reported as unavailable, never as zero.
 
 ### Live pin sets
 
-Live runs pin a whole model set, not just per-model ids. `config.livePinSet`
-(`"openai-codex"` by default) must name a registered set in
-`bench/src/config.ts`, and the config's `modelPins` must match it exactly —
-unknown set names, extra pins, and drifted model/effort/role values all fail
-closed before any provider call.
+Live runs pin a whole model set, not just per-model ids. `config.livePinSet` (`"openai-codex"` by default) must name a registered set in `bench/src/config.ts`, and the config's `modelPins` must match it exactly — unknown set names, extra pins, and drifted model/effort/role values all fail closed before any provider call.
 
 Two sets are registered:
 
-- `openai-codex` — `gpt-5.6-luna@max` executor, `gpt-5.6-sol@medium` advisor
-  and judge. The preregistered Tier 3 pair.
-- `zai-glm-5.3` — `glm-5.3-flash@max` executor, `glm-5.3@high` advisor and
-  judge. Exploratory Tier 2 only; Tier 3 rejects it because its
-  preregistration is Codex-specific. Efforts use `high`/`max` because the
-  catalog maps `medium` to no thinking level for these models. Effort is
-  verified from the outbound payload, not from server-side behavior, and the
-  judge shares the headline advisor's model family — both limits are stamped
-  into the report warnings.
+- `openai-codex` — `gpt-5.6-luna@max` executor, `gpt-5.6-sol@medium` advisor and judge. The preregistered Tier 3 pair.
+- `zai-glm-5.3` — `glm-5.3-flash@max` executor, `glm-5.3@high` advisor and judge. Exploratory Tier 2 only; Tier 3 rejects it because its preregistration is Codex-specific. Efforts use `high`/`max` because the catalog maps `medium` to no thinking level for these models. Effort is verified from the outbound payload, not from server-side behavior, and the judge shares the headline advisor's model family — both limits are stamped into the report warnings.
 
 A checked-in Z.ai config exists at `bench/benchmark.zai.json`:
 
@@ -86,43 +62,24 @@ BENCH_LIVE=1 BENCH_PROVIDER=zai bun run bench:decisions \
   --config bench/benchmark.zai.json
 ```
 
-Reports from different pin sets are not comparable; compare numbers only
-within one pin set.
+Reports from different pin sets are not comparable; compare numbers only within one pin set.
 
 ### Unusable responses and coverage
 
-Advisor responses with no usable text (for example a tool-call response from
-a tool-tuned endpoint) are retried once. If the retry is also empty, the
-observation is recorded as `excluded: "unusable-advice"` with the stop reason
-and content-part types of the first attempt, and it is removed from the
-catch-rate, false-alarm-rate, and J denominators — an abstention is not a
-neutral answer. Each arm reports usable coverage
-(`coverage_usable`/`coverage_total`), and a live arm below 80% usable is
-reported `INVALID`. Judge responses that do not parse as the required JSON are
-retried once, then scored judge-unavailable with the raw text retained as
-evidence; a live arm below 80% parseable judge responses is also `INVALID`.
-Empty judge responses still fail the run closed.
-Costs, latencies, and budget always include every attempt.
+Advisor responses with no usable text (for example a tool-call response from a tool-tuned endpoint) are retried once. If the retry is also empty, the observation is recorded as `excluded: "unusable-advice"` with the stop reason and content-part types of the first attempt, and it is removed from the catch-rate, false-alarm-rate, and J denominators — an abstention is not a neutral answer. Each arm reports usable coverage (`coverage_usable`/`coverage_total`), and a live arm below 80% usable is reported `INVALID`. Judge responses that do not parse as the required JSON are retried once, then scored judge-unavailable with the raw text retained as evidence; a live arm below 80% parseable judge responses is also `INVALID`. Empty judge responses still fail the run closed. Costs, latencies, and budget always include every attempt.
 
 ## Live Tier 3
 
 Tier 3 requires all of the following:
 
 1. A successful Harbor/ReactBench feasibility spike.
-2. A clean ReactBench checkout at the configured commit (the wrapper fetches
-   the pinned public checkout into a temporary cache when no path is set).
-3. The local Pi installation's `openai-codex` OAuth session in
-   `~/.pi/agent/auth.json` (override with `BENCH_PI_ADVISOR_AUTH_FILE`).
+2. A clean ReactBench checkout at the configured commit (the wrapper fetches the pinned public checkout into a temporary cache when no path is set).
+3. The local Pi installation's `openai-codex` OAuth session in `~/.pi/agent/auth.json` (override with `BENCH_PI_ADVISOR_AUTH_FILE`).
 4. `BENCH_LIVE=1` and non-zero pinned catalog pricing.
 
-The Harbor adapter uses the already-authenticated Pi/Codex subscription. It
-starts a trial-local host broker that refreshes OAuth through Pi's Codex
-credential, keeps the real token outside Harbor, and exposes only a
-per-trial, budget-checked endpoint to the task container. No `BENCH_API_KEY`,
-`OPENAI_API_KEY`, or `BENCH_BASE_URL` is needed for Tier 3.
+The Harbor adapter uses the already-authenticated Pi/Codex subscription. It starts a trial-local host broker that refreshes OAuth through Pi's Codex credential, keeps the real token outside Harbor, and exposes only a per-trial, budget-checked endpoint to the task container. No `BENCH_API_KEY`, `OPENAI_API_KEY`, or `BENCH_BASE_URL` is needed for Tier 3.
 
-Before running Harbor, verify that the Docker CLI exposes all three commands
-used by its local backend:
+Before running Harbor, verify that the Docker CLI exposes all three commands used by its local backend:
 
 ```bash
 docker info
@@ -130,11 +87,9 @@ docker compose version
 docker buildx version
 ```
 
-A standalone `docker-compose` executable is not enough; Harbor invokes the
-Compose and Buildx CLI plugins as `docker compose` and `docker buildx`.
+A standalone `docker-compose` executable is not enough; Harbor invokes the Compose and Buildx CLI plugins as `docker compose` and `docker buildx`.
 
-The zero-configuration command uses the pinned checkout, adapter, extension,
-Pi version, and auth file defaults:
+The zero-configuration command uses the pinned checkout, adapter, extension, Pi version, and auth file defaults:
 
 ```bash
 BENCH_LIVE=1 bun run bench:screen
@@ -155,73 +110,16 @@ export BENCH_HARBOR_ENV=apple-container
 BENCH_LIVE=1 bun run bench:screen --config /tmp/pi-advisor-benchmark.json
 ```
 
-The adapter receives one isolated trial at a time with the task path, seed,
-arm, pinned model/effort values, and artifact directory. It must load the
-pinned `pi-advisor` extension, refuse plain Pi, and print both records:
+The adapter receives one isolated trial at a time with the task path, seed, arm, pinned model/effort values, and artifact directory. It must load the pinned `pi-advisor` extension, refuse plain Pi, and print both records:
 
 ```text
 BENCH_ADVISOR_ATTESTATION={"adapter":"pi-advisor-harbor","extension":"pi-advisor-flow","extensionVersion":"0.5.1","loaded":true,"mode":"advisor","advisorCalls":1,"shutdown":true,"smokeProtocol":false}
 BENCH_RESULT={"passed":true,"cost":0.12,"consultations":1,"taskId":"...","requests":[...]}
 ```
 
-The attestation records whether the run used the smoke-only protocol. The
-`E+A` result may contain zero or one Advisor consultation, bounded by the
-configured one-call session budget; its observed frequency and cost are part
-of the evaluation. The `E`, `F`, and optional `F′` results must attest the
-extension in executor mode and zero Advisor consultations. The checked-in
-`bench/harbor/run-trial` executable starts Harbor with the ReactBench
-checkout's pinned `uv.lock`, mounts only the extension/source and recorder
-needed by the agent, forwards the seed/model/effort/pricing request, gives the
-normal Pi client a remaining-USD lease enforced by the host-side Codex broker
-before provider requests, and archives the Harbor result plus Pi trajectory.
-It refuses to overwrite an existing trial directory. The wrapper allowlists
-the provider and standard Pi installation hosts. Set
-`BENCH_HARBOR_ALLOW_HOSTS` to a comma-separated list for any additional
-installation host. It rejects missing trajectory, grader, request, usage,
-attestation, or clean-shutdown artifacts, wrong model/effort pins, extra
-Advisor calls, or a result that does not record the selected Harbor agent
-timeout. The default is 3600 seconds. `BENCH_HARBOR_AGENT_TIMEOUT_SEC` may
-select a bounded timeout from 1 through 7200 seconds for an explicitly
-documented run; the selected value is recorded in each Harbor result. This
-overrides ReactBench's 1800-second task default. For pinned task Dockerfiles
-that clone GitHub repositories, the wrapper builds from a disposable copy with
-Git protocol v1 and HTTP/1.1 forced; the pinned checkout remains unchanged and
-no host credentials enter Harbor. For recognized Docker build, image-pull, or
-Git/network transport failures that occur before agent startup, the wrapper
-may make at most two sequential retries with 5- and 15-second backoffs. Each
-attempt uses a distinct Harbor artifact directory and writes
-`infrastructure-retry.json`; failures after `agent/pi.txt`, provider usage, or
-verifier execution are never retried. The Harbor command timeout is derived
-from the configured agent timeout: each attempt adds 30 minutes for setup and
-verification, while the outer command also budgets cleanup, all three bounded
-attempts, backoff, and termination margin. At the default 3600-second agent
-setting, the outer boundary is 18,080 seconds. The process-group cleanup also
-terminates the host broker and Harbor descendants. The smoke-only `BENCH_SMOKE=1` protocol forces one consultation
-to verify the broker path; ordinary screening and evaluation do not inject a
-consultation. The request/attestation files are runtime instrumentation
-written inside the agent container, not cryptographic proof against a
-malicious agent: the wrapper detects missing and inconsistent artifacts, but a
-hostile process with shell access could forge them. The host broker is a
-conservative process-level OAuth and budget boundary, not cryptographic
-isolation against a hostile same-container agent. Harbor's verifier reward
-remains the independent grading artifact.
+The attestation records whether the run used the smoke-only protocol. The `E+A` result may contain zero or one Advisor consultation, bounded by the configured one-call session budget; its observed frequency and cost are part of the evaluation. The `E`, `F`, and optional `F′` results must attest the extension in executor mode and zero Advisor consultations. The checked-in `bench/harbor/run-trial` executable starts Harbor with the ReactBench checkout's pinned `uv.lock`, mounts only the extension/source and recorder needed by the agent, forwards the seed/model/effort/pricing request, gives the normal Pi client a remaining-USD lease enforced by the host-side Codex broker before provider requests, and archives the Harbor result plus Pi trajectory. It refuses to overwrite an existing trial directory. The wrapper allowlists the provider and standard Pi installation hosts. Set `BENCH_HARBOR_ALLOW_HOSTS` to a comma-separated list for any additional installation host. It rejects missing trajectory, grader, request, usage, attestation, or clean-shutdown artifacts, wrong model/effort pins, extra Advisor calls, or a result that does not record the selected Harbor agent timeout. The default is 3600 seconds. `BENCH_HARBOR_AGENT_TIMEOUT_SEC` may select a bounded timeout from 1 through 7200 seconds for an explicitly documented run; the selected value is recorded in each Harbor result. This overrides ReactBench's 1800-second task default. For pinned task Dockerfiles that clone GitHub repositories, the wrapper builds from a disposable copy with Git protocol v1 and HTTP/1.1 forced; the pinned checkout remains unchanged and no host credentials enter Harbor. For recognized Docker build, image-pull, or Git/network transport failures that occur before agent startup, the wrapper may make at most two sequential retries with 5- and 15-second backoffs. Each attempt uses a distinct Harbor artifact directory and writes `infrastructure-retry.json`; failures after `agent/pi.txt`, provider usage, or verifier execution are never retried. The Harbor command timeout is derived from the configured agent timeout: each attempt adds 30 minutes for setup and verification, while the outer command also budgets cleanup, all three bounded attempts, backoff, and termination margin. At the default 3600-second agent setting, the outer boundary is 18,080 seconds. The process-group cleanup also terminates the host broker and Harbor descendants. The smoke-only `BENCH_SMOKE=1` protocol forces one consultation to verify the broker path; ordinary screening and evaluation do not inject a consultation. The request/attestation files are runtime instrumentation written inside the agent container, not cryptographic proof against a malicious agent: the wrapper detects missing and inconsistent artifacts, but a hostile process with shell access could forge them. The host broker is a conservative process-level OAuth and budget boundary, not cryptographic isolation against a hostile same-container agent. Harbor's verifier reward remains the independent grading artifact.
 
-Run Stage 2 only after Stage 1 has produced a screening report and the
-corresponding preregistration section was committed. If `BENCH_SCREEN_REPORT`
-is omitted, the newest `*-screen.json` report under `bench/reports/` is used.
-The same host-side Pi/Codex OAuth broker is used for every fresh evaluation
-trial. On Apple silicon, `BENCH_HARBOR_ENV=apple-container` is an experimental
-opt-in: install the Apple Container CLI and system kernel, configure
-`host.container.internal` for the broker as described in Apple's host-integration
-docs, and first verify that the selected ReactBench task supports Harbor's
-Apple backend. The pinned ReactBench screening tasks currently request enforced
-`no-network` phases, which Harbor's Apple backend rejects; use Docker/Colima
-unless that capability is added. The default remains Docker.
-Harbor's default delete behavior removes each completed local environment image,
-while the archived trajectory remains under `bench/reports/`. For long local
-Docker runs, `BENCH_HARBOR_PRUNE=1` also prunes BuildKit's unused cache after
-each trial; use it only on the dedicated benchmark Docker context because the
-prune is context-wide, and do not combine it with concurrent Harbor trials.
+Run Stage 2 only after Stage 1 has produced a screening report and the corresponding preregistration section was committed. If `BENCH_SCREEN_REPORT` is omitted, the newest `*-screen.json` report under `bench/reports/` is used. The same host-side Pi/Codex OAuth broker is used for every fresh evaluation trial. On Apple silicon, `BENCH_HARBOR_ENV=apple-container` is an experimental opt-in: install the Apple Container CLI and system kernel, configure `host.container.internal` for the broker as described in Apple's host-integration docs, and first verify that the selected ReactBench task supports Harbor's Apple backend. The pinned ReactBench screening tasks currently request enforced `no-network` phases, which Harbor's Apple backend rejects; use Docker/Colima unless that capability is added. The default remains Docker. Harbor's default delete behavior removes each completed local environment image, while the archived trajectory remains under `bench/reports/`. For long local Docker runs, `BENCH_HARBOR_PRUNE=1` also prunes BuildKit's unused cache after each trial; use it only on the dedicated benchmark Docker context because the prune is context-wide, and do not combine it with concurrent Harbor trials.
 
 ```bash
 export BENCH_SCREEN_REPORT=/path/to/screen-report.json
@@ -229,8 +127,7 @@ BENCH_LIVE=1 bun run bench:evaluate \
   --config /tmp/pi-advisor-benchmark.json
 ```
 
-Generated reports are written to `bench/reports/`. They are ignored by Git
-except for the directory placeholder.
+Generated reports are written to `bench/reports/`. They are ignored by Git except for the directory placeholder.
 
 ## Reading reports
 
@@ -240,61 +137,28 @@ Check the report status before reading metrics:
 - `INVALID` — null/oracle controls failed; quality metrics are void.
 - `UNAVAILABLE` — the tier could not make its claim; no value was imputed.
 
-Reports include versioned pins, model ids and effort levels per arm, gate
-settings, fixture hashes, budget accounting, controls, and warnings. Tier 2
-keeps the positive mechanical score separate from the LLM judge and retains
-judge justifications. Tier 3 aggregates five seeds to task-level outcomes for
-Q2 and reports the candidate-band-reweighted cost/pass-rate comparison for Q3.
-If out-of-reach tasks have nonzero prevalence, E+A is not run there, so its
-Advisor-inclusive reweighted cost is marked unavailable rather than equated
-with Executor cost; the Q3 verdict fails closed.
+Reports include versioned pins, model ids and effort levels per arm, gate settings, fixture hashes, budget accounting, controls, and warnings. Tier 2 keeps the positive mechanical score separate from the LLM judge and retains judge justifications. Tier 3 aggregates five seeds to task-level outcomes for Q2 and reports the candidate-band-reweighted cost/pass-rate comparison for Q3. If out-of-reach tasks have nonzero prevalence, E+A is not run there, so its Advisor-inclusive reweighted cost is marked unavailable rather than equated with Executor cost; the Q3 verdict fails closed.
 
-The benchmark never reports an absolute ReactBench score. Its results are
-paired comparisons between fixed arms on the same tasks and seeds.
+The benchmark never reports an absolute ReactBench score. Its results are paired comparisons between fixed arms on the same tasks and seeds.
 
 ## Re-seeding Tier 2
 
-`bench/src/harvest.ts` converts archived Tier 3 trajectories into positive and
-negative decision items while keeping scorer keys out of Advisor context. Keep
-hand-authored and harvested corpora side by side until the harvested set is at
-least as discriminating, then schedule a fresh harvest before public answer
-keys contaminate the models.
+`bench/src/harvest.ts` converts archived Tier 3 trajectories into positive and negative decision items while keeping scorer keys out of Advisor context. Keep hand-authored and harvested corpora side by side until the harvested set is at least as discriminating, then schedule a fresh harvest before public answer keys contaminate the models.
 
 ## Harbor provider access
 
-ReactBench is pinned to commit
-`11ff042e60ec83a613053fbd721a54ed4dbfdf6f`, and Harbor exposes the task runner
-and shipped adapters. The default Colima profile was rebuilt after its cached
-VM image and disk link were missing.
+ReactBench is pinned to commit `11ff042e60ec83a613053fbd721a54ed4dbfdf6f`, and Harbor exposes the task runner and shipped adapters. The default Colima profile was rebuilt after its cached VM image and disk link were missing.
 
-The Gate A canary passed: Harbor ran the `hello-react` oracle task with one
-trial, no exception, and reward/tests/React Doctor metrics all equal to `1.0`.
-The host-side OAuth broker and pinned native Codex transport are covered by
-offline proxy tests. On 2026-09-01, bounded authenticated smoke trials also
-passed the artifact boundary: one `E` `fix-react` trial (seed `101`, normalized
-cost `$0.0471`) and one smoke-only `E+A` `write-react` trial (seed `103`,
-normalized cost `$0.0397`). They resolved Executor `luna@max`; the smoke trial
-resolved Advisor `sol@medium` with exactly one consultation. A matching
-ordinary E+A trial (normalized cost `$0.0317`) recorded zero consultations
-without the smoke protocol, showing that screening does not inject a call. All
-task rewards were `0`, so these are transport/integration evidence only, not
-model-quality or economic results. See `bench/STATUS.md` for phase state.
+The Gate A canary passed: Harbor ran the `hello-react` oracle task with one trial, no exception, and reward/tests/React Doctor metrics all equal to `1.0`. The host-side OAuth broker and pinned native Codex transport are covered by offline proxy tests. On 2026-09-01, bounded authenticated smoke trials also passed the artifact boundary: one `E` `fix-react` trial (seed `101`, normalized cost `$0.0471`) and one smoke-only `E+A` `write-react` trial (seed `103`, normalized cost `$0.0397`). They resolved Executor `luna@max`; the smoke trial resolved Advisor `sol@medium` with exactly one consultation. A matching ordinary E+A trial (normalized cost `$0.0317`) recorded zero consultations without the smoke protocol, showing that screening does not inject a call. All task rewards were `0`, so these are transport/integration evidence only, not model-quality or economic results. See `bench/STATUS.md` for phase state.
 
 ## Provenance and licensing
 
-The pinned ReactBench checkout has no `LICENSE` file or license section. This
-repository does not vendor ReactBench task content. Checked-in decision
-fixtures are original derived/control artifacts; any future ReactBench-derived
-item must record its immutable source SHA and licensing decision in its
-`item.toml`. The ReactBench canary is preserved in `fixtures/CANARY`.
+The pinned ReactBench checkout has no `LICENSE` file or license section. This repository does not vendor ReactBench task content. Checked-in decision fixtures are original derived/control artifacts; any future ReactBench-derived item must record its immutable source SHA and licensing decision in its `item.toml`. The ReactBench canary is preserved in `fixtures/CANARY`.
 
 ## Safety rules
 
 - Live commands refuse to run without `BENCH_LIVE=1`.
-- Every live command prints an estimate and enforces the configured normalized
-  USD-equivalent cap; the ChatGPT subscription is not an API invoice.
+- Every live command prints an estimate and enforces the configured normalized USD-equivalent cap; the ChatGPT subscription is not an API invoice.
 - Missing provider usage is reported as `unavailable`, never as zero.
-- Tier 1 fails closed on privacy leaks, malformed fixtures, budget overruns,
-  and nondeterminism.
-- Reports are descriptive unless the preregistration section governing the run
-  existed before that run.
+- Tier 1 fails closed on privacy leaks, malformed fixtures, budget overruns, and nondeterminism.
+- Reports are descriptive unless the preregistration section governing the run existed before that run.

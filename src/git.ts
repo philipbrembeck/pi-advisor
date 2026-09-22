@@ -47,7 +47,10 @@ export interface GitContextResult {
  * would end the region early and promote the remainder to trusted instructions.
  */
 export const escapeRepositoryText = (value: string) =>
-  value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
 
 const TRUNCATION_NOTICE =
   "\n[Repository context truncated: it exceeded the configured limit.]";
@@ -84,7 +87,7 @@ const deadlineRunner = (): GitRunner => {
     }
     return execFileSync("git", args, {
       cwd,
-      encoding: "utf8",
+      encoding: "utf-8",
       maxBuffer: GIT_MAX_BUFFER,
       // Never use a shell: arguments are fixed and must not be re-parsed.
       shell: false,

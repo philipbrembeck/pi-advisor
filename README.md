@@ -84,13 +84,13 @@ Successful calls return an opaque `adviceId`. If global outcome logging is enabl
 
 ## Commands
 
-| Command                   | What it does                                        |
-| ------------------------- | --------------------------------------------------- |
-| `/advisor`                | Enable the flow; choose available models when needed. |
-| `/advisor-manual [focus]` | Ask for an immediate second opinion.                |
-| `/advisor-models`         | Choose the Executor and Advisor models.             |
-| `/advisor-settings`       | Configure behavior, context, privacy, and limits.   |
-| `/advisor-off`            | Disable the flow and persistent activation.         |
+| Command | What it does |
+| --- | --- |
+| `/advisor` | Enable the flow; choose available models when needed. |
+| `/advisor-manual [focus]` | Ask for an immediate second opinion. |
+| `/advisor-models` | Choose the Executor and Advisor models. |
+| `/advisor-settings` | Configure behavior, context, privacy, and limits. |
+| `/advisor-off` | Disable the flow and persistent activation. |
 
 In the interactive TUI, `/advisor-manual [focus]` opens a centered overlay with the focus text prefilled, a choice of permitted Git-context level, and live progress in the transcript. Canceling has no side effects.
 

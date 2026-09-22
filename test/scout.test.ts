@@ -1,13 +1,14 @@
 /* biome-ignore-all lint/performance/noAwaitInLoops: table-driven async failure cases intentionally run serially. */
 /* biome-ignore-all lint/suspicious/useAwait: async dependency stubs mirror the production contract. */
 import { describe, expect, test } from "bun:test";
+
 import { setExecutorEffortRef, setExecutorRef } from "../src/config.ts";
+import type { ScoutManifest } from "../src/scout-context.ts";
 import {
   parseScoutSelection,
   runAdvisorScout,
   SCOUT_SYSTEM,
 } from "../src/scout.ts";
-import type { ScoutManifest } from "../src/scout-context.ts";
 import { ScoutStatusManager } from "../src/tools.ts";
 
 const manifest = (): ScoutManifest => ({
@@ -231,7 +232,7 @@ describe("Advisor Scout", () => {
     };
     const selection = parseScoutSelection(
       JSON.stringify({
-        selectedIds: groups.map((group) => group.id).reverse(),
+        selectedIds: groups.map((group) => group.id).toReversed(),
         synthesis: "Keep the most relevant evidence.",
       }),
       boundedManifest
@@ -369,7 +370,7 @@ describe("Advisor Scout", () => {
 });
 
 describe("Scout status ownership", () => {
-  const context = (statuses: Array<string | undefined>) =>
+  const context = (statuses: (string | undefined)[]) =>
     ({
       hasUI: true,
       ui: {
@@ -379,7 +380,7 @@ describe("Scout status ownership", () => {
     }) as any;
 
   test("keeps a newer active status when an older invocation releases", () => {
-    const statuses: Array<string | undefined> = [];
+    const statuses: (string | undefined)[] = [];
     const manager = new ScoutStatusManager();
     const ctx = context(statuses);
     const older = Symbol("older");
@@ -393,7 +394,7 @@ describe("Scout status ownership", () => {
   });
 
   test("shutdown clear prevents late callbacks from reacquiring status", () => {
-    const statuses: Array<string | undefined> = [];
+    const statuses: (string | undefined)[] = [];
     const manager = new ScoutStatusManager();
     const ctx = context(statuses);
     const token = Symbol("old-session");
@@ -445,7 +446,7 @@ describe("Scout status ownership", () => {
       },
       { type: "cancelled" },
     ] as const) {
-      const statuses: Array<string | undefined> = [];
+      const statuses: (string | undefined)[] = [];
       const manager = new ScoutStatusManager();
       const ctx = context(statuses);
       const token = Symbol("invocation");

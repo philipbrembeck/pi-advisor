@@ -1,4 +1,5 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+
 import { appendOutcome } from "../outcomes.ts";
 import type { AdvisorSessionState } from "../session-state.ts";
 import { consultAdvisor, runAdvisorGate } from "./consultation.ts";

@@ -1,21 +1,18 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
-import {
-  type Component,
-  type Focusable,
-  Key,
-  matchesKey,
-  truncateToWidth,
-} from "@earendil-works/pi-tui";
+import { Key, matchesKey, truncateToWidth } from "@earendil-works/pi-tui";
+import type { Component, Focusable } from "@earendil-works/pi-tui";
 import { noul } from "@typesafe-ai/sdk";
+
 import { jevClientFromCredentials } from "../jev/client.ts";
 import {
   clearKeyTypeSafeKey,
   consumePlaintextKeyWarning,
-  type JevKeyStoreResult,
   removeTypeSafeKeyFromAdvisorJson,
   writeKeyTypeSafeKey,
 } from "../jev/key-store.ts";
-import { type JevCredentials, resolveJevTransport } from "../jev/transport.ts";
+import type { JevKeyStoreResult } from "../jev/key-store.ts";
+import { resolveJevTransport } from "../jev/transport.ts";
+import type { JevCredentials } from "../jev/transport.ts";
 import { MaskedInput } from "./masked-input.ts";
 import type { RenderRequester } from "./types.ts";
 
@@ -53,14 +50,18 @@ const transportLabel = (credentials: JevCredentials): string => {
     return "OpenRouter (reusing pi login)";
   }
   switch (credentials.source) {
-    case "advisor-json":
+    case "advisor-json": {
       return "TypeSafe (key: advisor.json — plaintext, not recommended)";
-    case "bun-secrets":
+    }
+    case "bun-secrets": {
       return "TypeSafe (key: Bun.secrets)";
-    case "file":
+    }
+    case "file": {
       return "TypeSafe (key: stored file, mode 0600)";
-    default:
+    }
+    default: {
       return "TypeSafe (key: TYPESAFE_API_KEY)";
+    }
   }
 };
 
@@ -107,7 +108,7 @@ export class JevSetupSubmenu implements Component, Focusable {
       onSubmit: (value) => this.submitEnteredKey(value),
       placeholder: "Paste a TypeSafe API key",
     });
-    this.refresh().catch(() => undefined);
+    this.refresh().catch(() => {});
   }
 
   get focused(): boolean {
@@ -135,14 +136,14 @@ export class JevSetupSubmenu implements Component, Focusable {
     const actions = this.actions();
     if (
       matchesKey(keyData, Key.down) ||
-      keyData === "\u001b[B" ||
-      keyData === "\u001bOB"
+      keyData === "\u001B[B" ||
+      keyData === "\u001BOB"
     ) {
       this.selectedIndex = (this.selectedIndex + 1) % actions.length;
     } else if (
       matchesKey(keyData, Key.up) ||
-      keyData === "\u001b[A" ||
-      keyData === "\u001bOA"
+      keyData === "\u001B[A" ||
+      keyData === "\u001BOA"
     ) {
       this.selectedIndex =
         (this.selectedIndex - 1 + actions.length) % actions.length;
@@ -162,28 +163,29 @@ export class JevSetupSubmenu implements Component, Focusable {
       "",
     ];
     if (this.credentials) {
-      lines.push(`  Transport: ${transportLabel(this.credentials)}`);
-      lines.push(`  Filter: ${enabled ? "On" : "Off"}`);
+      lines.push(
+        `  Transport: ${transportLabel(this.credentials)}`,
+        `  Filter: ${enabled ? "On" : "Off"}`
+      );
     } else if (this.mode === "verifying") {
       lines.push("  Checking available Jev credentials…");
     } else {
       lines.push(
-        "  No Jev credentials found. Enter a TypeSafe API key below, or add"
+        "  No Jev credentials found. Enter a TypeSafe API key below, or add",
+        "  an OpenRouter login in pi; it is reused automatically."
       );
-      lines.push("  an OpenRouter login in pi; it is reused automatically.");
     }
     if (this.notice) {
-      lines.push("");
-      lines.push(theme.fg("warning", `  ${this.notice}`));
+      lines.push("", theme.fg("warning", `  ${this.notice}`));
     }
     lines.push("");
     if (this.mode === "verifying") {
       lines.push("  Verifying with a live Jev call…");
     } else if (this.mode === "key-entry") {
       lines.push(
-        `  ${this.maskedInput.render(Math.max(10, width - 4))[0] ?? ""}`
+        `  ${this.maskedInput.render(Math.max(10, width - 4))[0] ?? ""}`,
+        theme.fg("dim", "  Enter: verify · Esc: cancel")
       );
-      lines.push(theme.fg("dim", "  Enter: verify · Esc: cancel"));
     } else {
       for (const [index, label] of this.labels().entries()) {
         const prefix = index === this.selectedIndex ? "→ " : "  ";
@@ -243,25 +245,31 @@ export class JevSetupSubmenu implements Component, Focusable {
 
   private activate(action: SetupAction): void {
     switch (action) {
-      case "done":
+      case "done": {
         this.options.done();
         return;
-      case "enter-key":
+      }
+      case "enter-key": {
         this.mode = "key-entry";
         return;
-      case "disable":
+      }
+      case "disable": {
         this.notice = undefined;
         this.options.done("Off");
         return;
-      case "disable-clear":
+      }
+      case "disable-clear": {
         this.disableAndClear().catch(() => undefined);
         return;
+      }
       case "verify-again":
-      case "verify-enable":
+      case "verify-enable": {
         this.verifyAndEnable().catch(() => undefined);
         return;
-      default:
+      }
+      default: {
         return;
+      }
     }
   }
 

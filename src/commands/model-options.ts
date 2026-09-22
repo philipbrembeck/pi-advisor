@@ -1,5 +1,7 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { type getPersistedModelRefs, splitRef } from "../config/state.ts";
+
+import { splitRef } from "../config/state.ts";
+import type { getPersistedModelRefs } from "../config/state.ts";
 import type { ContextPreset } from "../ui/types.ts";
 
 export const DEFAULT_EFFORT_LEVEL = "Default (Model Default)";
@@ -33,7 +35,7 @@ export const selectedEffort = (choice: string): string | undefined => {
 export const ADVISOR_ACTIVATION_EXPLANATION =
   "The Advisor is a second-opinion model that reviews the Executor's context and returns risks, alternatives, and verification steps without changing files or running tools.";
 
-const ARGUMENT_WHITESPACE = /\s+/;
+const ARGUMENT_WHITESPACE = /\s+/u;
 const hasModelOverride = (args: string, key: "advisor" | "executor") =>
   args
     .trim()
@@ -109,9 +111,9 @@ export const getConfiguredModelRefs = (ctx: ExtensionContext): string[] => {
   const registry = ctx.modelRegistry;
   const models =
     typeof registry?.getAvailable === "function" ? registry.getAvailable() : [];
-  return Array.from(
-    new Set(models.map((model) => `${model.provider}/${model.id}`))
-  ).sort((left, right) => left.localeCompare(right));
+  return [
+    ...new Set(models.map((model) => `${model.provider}/${model.id}`)),
+  ].toSorted((left, right) => left.localeCompare(right));
 };
 
 const isSelectableModel = (

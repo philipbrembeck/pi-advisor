@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+
 import {
   buildScoutManifest,
   reconstructScoutConversation,
@@ -283,7 +284,7 @@ describe("Scout context", () => {
           required: group.required,
         }))
       ),
-      "utf8"
+      "utf-8"
     );
     expect(manifestBytes).toBeGreaterThan(1000);
 

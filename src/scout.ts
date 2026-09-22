@@ -1,19 +1,19 @@
 import type { Message } from "@earendil-works/pi-ai/compat";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+
 import { executorEffortRef, executorRef } from "./config/state.ts";
-import {
-  type CollectedTextStream,
-  collectTextStream,
-  type ResolvedConfiguredModel,
-  resolveConfiguredModel,
+import { collectTextStream, resolveConfiguredModel } from "./model-stream.ts";
+import type {
+  CollectedTextStream,
+  ResolvedConfiguredModel,
 } from "./model-stream.ts";
 import { groupWire } from "./scout-groups.ts";
 import { reconstructScoutConversation } from "./scout-reconstruct.ts";
 import {
   SCOUT_SELECTION_MAX_IDS,
   SCOUT_SYNTHESIS_MAX_BYTES,
-  type ScoutManifest,
 } from "./scout-types.ts";
+import type { ScoutManifest } from "./scout-types.ts";
 import { snapshotAdvisorUsage } from "./usage.ts";
 
 const SCOUT_TIMEOUT_MS = 30_000;
@@ -100,8 +100,8 @@ const defaultDependencies: ScoutDependencies = {
   collect: collectTextStream,
   resolve: resolveConfiguredModel,
 };
-const byteLength = (value: string) => Buffer.byteLength(value, "utf8");
-const AUTH_ERROR_PATTERN = /api key|auth|login|credential/i;
+const byteLength = (value: string) => Buffer.byteLength(value, "utf-8");
+const AUTH_ERROR_PATTERN = /api key|auth|login|credential/iu;
 
 const manifestMessage = (manifest: ScoutManifest): Message => ({
   content: [
@@ -137,7 +137,7 @@ export const parseScoutSelection = (
     throw new Error("Scout response must be a JSON object.");
   }
   const record = value as Record<string, unknown>;
-  const keys = Object.keys(record).sort();
+  const keys = Object.keys(record).toSorted();
   if (
     keys.length !== 2 ||
     keys[0] !== "selectedIds" ||
@@ -178,7 +178,7 @@ export const parseScoutSelection = (
     .filter((group) => retained.has(group.id))
     .map((group) => group.id);
   if (typeof record.synthesis !== "string") {
-    throw new Error("Scout synthesis must be a string.");
+    throw new TypeError("Scout synthesis must be a string.");
   }
   if (byteLength(record.synthesis) > SCOUT_SYNTHESIS_MAX_BYTES) {
     throw new Error(

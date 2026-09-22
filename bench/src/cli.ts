@@ -1,4 +1,5 @@
 import { resolve } from "node:path";
+
 import { DEFAULT_CONFIG, loadBenchmarkConfig } from "./config.ts";
 import { defaultControlAdvice, runControls } from "./controls.ts";
 import { runDecisions as runDecisionBenchmark } from "./decisions.ts";

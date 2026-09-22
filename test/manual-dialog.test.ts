@@ -1,12 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
+
 import {
   getAdvisorSettings,
   loadConfig,
   resetConfigCache,
 } from "../src/config.ts";
-import { clampGitContextLevel, type GitContextLevel } from "../src/git.ts";
+import { clampGitContextLevel } from "../src/git.ts";
+import type { GitContextLevel } from "../src/git.ts";
 import { AdvisorSessionState } from "../src/session-state.ts";
 import { withAgentDir } from "./helpers/config-fixture.ts";
 import { modalHarness, modalTheme } from "./helpers/harness.ts";
@@ -17,10 +19,10 @@ describe("Manual Advisor TUI modal", () => {
       { advisorGitContext: "full", advisorHerdrIntegration: false },
       async (agentDir) => {
         const state = new AdvisorSessionState();
-        const calls: Array<{
+        const calls: {
           gitContext: GitContextLevel | undefined;
           question: string | undefined;
-        }> = [];
+        }[] = [];
         const harness = modalHarness(
           agentDir,
           state,
@@ -243,7 +245,7 @@ describe("Manual Advisor TUI modal", () => {
               throw new Error("Missing manual consultation signal.");
             }
             signals.push(signal);
-            return new Promise(() => undefined);
+            return new Promise(() => {});
           }
         );
 
@@ -328,7 +330,7 @@ describe("Manual Advisor TUI modal", () => {
               throw new Error("Missing manual consultation signal.");
             }
             signals.push(signal);
-            return new Promise(() => undefined);
+            return new Promise(() => {});
           }
         );
 

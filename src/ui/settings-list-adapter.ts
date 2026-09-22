@@ -1,11 +1,10 @@
-import {
-  type Component,
-  type Focusable,
-  type Input,
-  Key,
-  matchesKey,
-  type SettingItem,
-  type SettingsList,
+import { Key, matchesKey } from "@earendil-works/pi-tui";
+import type {
+  Component,
+  Focusable,
+  Input,
+  SettingItem,
+  SettingsList,
 } from "@earendil-works/pi-tui";
 
 interface SettingsListPrivateFields {
@@ -53,7 +52,7 @@ export class SettingsListAdapter {
 
   setSelectedId(items: SettingItem[], selectedId: string): void {
     const selectedIndex = items.findIndex((item) => item.id === selectedId);
-    if (selectedIndex >= 0) {
+    if (selectedIndex !== -1) {
       this.privateFields().selectedIndex = selectedIndex;
     }
   }
@@ -63,9 +62,9 @@ export class SettingsListAdapter {
     onChange: (id: string, value: string) => void
   ): boolean {
     let direction = 0;
-    if (matchesKey(keyData, Key.left) || keyData === "\u001b[D") {
+    if (matchesKey(keyData, Key.left) || keyData === "\u001B[D") {
       direction = -1;
-    } else if (matchesKey(keyData, Key.right) || keyData === "\u001b[C") {
+    } else if (matchesKey(keyData, Key.right) || keyData === "\u001B[C") {
       direction = 1;
     }
     if (direction === 0) {

@@ -10,19 +10,20 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+
 import {
   DefaultResourceLoader,
   initTheme,
 } from "../node_modules/@earendil-works/pi-coding-agent/dist/index.js";
 
-const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const packageRoot = resolve(import.meta.dirname, "..");
 const packageManifest = JSON.parse(
-  readFileSync(join(packageRoot, "package.json"), "utf8")
+  readFileSync(join(packageRoot, "package.json"), "utf-8")
 );
 const bundledEntry = resolve(packageRoot, packageManifest.main);
-const CONTEXT_WINDOW_PATTERN = /Context window[\s\S]*100k/;
-const ADVISOR_EFFORT_PATTERN = /Advisor reasoning[\s\S]*off/;
-const MODEL_WHITELIST_PATTERN = /Advisor model whitelist/;
+const CONTEXT_WINDOW_PATTERN = /Context window[\s\S]*100k/u;
+const ADVISOR_EFFORT_PATTERN = /Advisor reasoning[\s\S]*off/u;
+const MODEL_WHITELIST_PATTERN = /Advisor model whitelist/u;
 
 const extensionContext = (cwd) => ({
   cwd,
@@ -45,9 +46,9 @@ const runSettingsCommand = async (handler, context, change) => {
   const ui = {
     custom: async (factory) =>
       new Promise((resolveDialog) => {
-        const done = () => resolveDialog(undefined);
+        const done = () => resolveDialog();
         const selector = factory(
-          { requestRender: () => undefined },
+          { requestRender: () => {} },
           fakeTheme,
           {},
           done
@@ -55,16 +56,16 @@ const runSettingsCommand = async (handler, context, change) => {
         if (change) {
           // Context starts at 25k: one right-arrow selects 100k. Three down
           // arrows select Advisor reasoning, then right-arrow selects "off".
-          selector.handleInput("\u001b[C");
-          selector.handleInput("\u001b[B");
-          selector.handleInput("\u001b[B");
-          selector.handleInput("\u001b[B");
-          selector.handleInput("\u001b[C");
+          selector.handleInput("\u001B[C");
+          selector.handleInput("\u001B[B");
+          selector.handleInput("\u001B[B");
+          selector.handleInput("\u001B[B");
+          selector.handleInput("\u001B[C");
         }
         rendered = selector.render(120).join("\n");
-        selector.handleInput("\u001b");
+        selector.handleInput("\u001B");
       }),
-    notify: () => undefined,
+    notify: () => {},
   };
   await handler("", { ...context, ui });
   return rendered;
@@ -119,7 +120,7 @@ test("bundled package keeps settings state shared under Node DefaultResourceLoad
     assert.match(firstRendered, MODEL_WHITELIST_PATTERN);
 
     const saved = JSON.parse(
-      readFileSync(join(agentDir, "advisor.json"), "utf8")
+      readFileSync(join(agentDir, "advisor.json"), "utf-8")
     );
     assert.equal(saved.contextMaxChars, 100_000);
     assert.equal(saved.advisorEffort, "off");
@@ -151,7 +152,7 @@ test("bundled package keeps settings state shared under Node DefaultResourceLoad
     assert.ok(freshCommand, "advisor-settings command failed on fresh load");
     await runSettingsCommand(freshCommand.handler, context, false);
     const reloaded = JSON.parse(
-      readFileSync(join(agentDir, "advisor.json"), "utf8")
+      readFileSync(join(agentDir, "advisor.json"), "utf-8")
     );
     assert.equal(reloaded.contextMaxChars, 100_000);
     assert.equal(reloaded.advisorEffort, "off");

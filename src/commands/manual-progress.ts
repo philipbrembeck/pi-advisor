@@ -1,5 +1,8 @@
-import { getMarkdownTheme, type Theme } from "@earendil-works/pi-coding-agent";
-import { type Component, Markdown, Text } from "@earendil-works/pi-tui";
+import { getMarkdownTheme } from "@earendil-works/pi-coding-agent";
+import type { Theme } from "@earendil-works/pi-coding-agent";
+import { Markdown, Text } from "@earendil-works/pi-tui";
+import type { Component } from "@earendil-works/pi-tui";
+
 import {
   adviceForDisplay,
   renderAdvisorCallBox,

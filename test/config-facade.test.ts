@@ -8,16 +8,17 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
 import { CONFIG_DIR_NAME } from "@earendil-works/pi-coding-agent";
 
 const AGENT_DIR_ENV = "PI_CODING_AGENT_DIR";
 const INVALID_FAILURE_MODE_PATTERN =
-  /block-session.*block-tool.*warn-and-continue/;
-const INVALID_TOOL_POLICIES_PATTERN = /advisorToolPolicies/;
-const INVALID_SCOUT_ENABLED_PATTERN = /advisorScoutEnabled/;
-const INVALID_SHOW_USAGE_DETAILS_PATTERN = /showUsageDetails/;
-const INVALID_SHOW_USAGE_FOOTER_PATTERN = /showUsageFooter/;
-const INVALID_MODEL_WHITELIST_PATTERN = /advisorModelWhitelist/;
+  /block-session.*block-tool.*warn-and-continue/u;
+const INVALID_TOOL_POLICIES_PATTERN = /advisorToolPolicies/u;
+const INVALID_SCOUT_ENABLED_PATTERN = /advisorScoutEnabled/u;
+const INVALID_SHOW_USAGE_DETAILS_PATTERN = /showUsageDetails/u;
+const INVALID_SHOW_USAGE_FOOTER_PATTERN = /showUsageFooter/u;
+const INVALID_MODEL_WHITELIST_PATTERN = /advisorModelWhitelist/u;
 
 import {
   advisorFailureModeRef,
@@ -210,7 +211,7 @@ describe("Config Module", () => {
     try {
       setAdvisorMaxCallsPerSessionRef(undefined);
       const path = saveConfig({ cwd, isProjectTrusted: () => false } as any);
-      expect(JSON.parse(readFileSync(path, "utf8"))).not.toHaveProperty(
+      expect(JSON.parse(readFileSync(path, "utf-8"))).not.toHaveProperty(
         "advisorMaxCallsPerSession"
       );
     } finally {
@@ -330,7 +331,7 @@ describe("Config Module", () => {
       setAdvisorToolPoliciesRef({ bash: "summary", deploy: "exclude" });
       setAdvisorTrackedFileContentRef(true);
       const path = saveConfig({ cwd, isProjectTrusted: () => false } as any);
-      expect(JSON.parse(readFileSync(path, "utf8"))).toMatchObject({
+      expect(JSON.parse(readFileSync(path, "utf-8"))).toMatchObject({
         advisorAutoLoopGate: false,
         advisorBlockOnBlocked: false,
         advisorCollapseResponses: true,

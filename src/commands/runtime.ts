@@ -2,6 +2,7 @@ import type {
   ExtensionAPI,
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
+
 import { getAdvisorSettings } from "../config/state.ts";
 import { notifyHerdrAdvisorFailure } from "../herdr.ts";
 import type { AdvisorSessionState } from "../session-state.ts";
@@ -59,8 +60,7 @@ class CommandRuntime implements CommandRuntimeContract {
           undefined,
           undefined,
           undefined,
-          onScout,
-          undefined
+          onScout
         ));
   }
 

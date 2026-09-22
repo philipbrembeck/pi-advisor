@@ -1,4 +1,5 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+
 import { registerCommands } from "../src/commands/registration.ts";
 import { setHerdrBlockedEmitter } from "../src/herdr.ts";
 import { AdvisorSessionState } from "../src/session-state.ts";

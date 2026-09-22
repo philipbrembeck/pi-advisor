@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { tmpdir } from "node:os";
+
 import registerExtension, {
   consultAdvisor,
   runAdvisorGate,
@@ -98,7 +99,7 @@ describe("Extension Registration", () => {
 
   test("fans a manual Advisor response out to the Executor without waiting for the command", async () => {
     const commands = new Map<string, any>();
-    const sent: Array<{ message: any; options: any }> = [];
+    const sent: { message: any; options: any }[] = [];
     let receivedQuestion: string | undefined;
 
     registerCommands(mockPi({ commands, sent }), {
@@ -136,7 +137,7 @@ describe("Extension Registration", () => {
 
   test("shows manual Advisor progress and forwards response chunks", async () => {
     const commands = new Map<string, any>();
-    const statuses: Array<string | undefined> = [];
+    const statuses: (string | undefined)[] = [];
     const chunks: string[] = [];
     registerCommands(mockPi({ commands }), {
       consult: (_ctx, _question, _signal, onChunk, onScout) => {
@@ -187,9 +188,9 @@ describe("Extension Registration", () => {
 
   test("adds an immediate Advisor call entry to the transcript", async () => {
     const commands = new Map<string, any>();
-    const entries: Array<{ type: string; data: unknown }> = [];
+    const entries: { type: string; data: unknown }[] = [];
     registerCommands(mockPi({ commands, entries }), {
-      consult: () => new Promise(() => undefined),
+      consult: () => new Promise(() => {}),
     });
 
     await commands.get("advisor-manual").handler("Check the migration", {
@@ -208,7 +209,7 @@ describe("Extension Registration", () => {
 
   test("renders one terminal manual Scout entry before the Advisor response", async () => {
     const commands = new Map<string, any>();
-    const entries: Array<{ type: string; data: any }> = [];
+    const entries: { type: string; data: any }[] = [];
     const timeline: string[] = [];
     registerCommands(
       mockPi(
@@ -274,7 +275,7 @@ describe("Extension Registration", () => {
       string,
       (event?: unknown, ctx?: { hasUI?: boolean }) => void
     >();
-    const sent: Array<{ message: any; options: any }> = [];
+    const sent: { message: any; options: any }[] = [];
     let resolveConsult!: (value: {
       markdown: string;
       thinkingText: string;
@@ -324,7 +325,7 @@ describe("Extension Registration", () => {
       {
         consult: (_ctx, _question, _signal, _onChunk, onScout) => {
           lateScout = onScout;
-          return new Promise(() => undefined);
+          return new Promise(() => {});
         },
       }
     );
@@ -342,11 +343,11 @@ describe("Extension Registration", () => {
   test("keeps manual Scout progress out of the footer", async () => {
     const commands = new Map<string, any>();
     const events = new Map<string, any>();
-    const statuses: Array<string | undefined> = [];
+    const statuses: (string | undefined)[] = [];
     registerCommands(mockPi({ commands, events }), {
       consult: (_ctx, _question, _signal, _onChunk, onScout) => {
         onScout?.({ model: "executor", type: "call" });
-        return new Promise(() => undefined);
+        return new Promise(() => {});
       },
     });
     const ctx = {
@@ -374,7 +375,7 @@ describe("Extension Registration", () => {
         }
         signals.push(signal);
         return new Promise<{ markdown: string; thinkingText: string }>(
-          () => undefined
+          () => {}
         );
       },
     });

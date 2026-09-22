@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
+
 import { noul } from "@typesafe-ai/sdk";
+
 import { JevClient, JevFailure } from "../src/jev/client.ts";
 
 const API_KEY = "tsk-test-key-material-9f8e7d6c";
@@ -32,7 +34,7 @@ const abortableFetch =
     });
 
 const hangingFetch = () =>
-  abortableFetch(() => new Promise<Response>(() => undefined));
+  abortableFetch(() => new Promise<Response>(() => {}));
 
 const client = (fetch: unknown, timeoutMs = 5000) =>
   new JevClient({
@@ -52,7 +54,7 @@ describe("JevClient.ask", () => {
     expect(result.answers.proceed).toEqual({ noul: 0.9, type: "noul" });
     expect(result.model).toBe("jev-test");
     expect(result.usage).toEqual({
-      cost: 0.000_21,
+      cost: 0.00021,
       inputTokens: 5000,
       outputTokens: 0,
     });

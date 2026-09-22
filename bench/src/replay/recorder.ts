@@ -1,5 +1,6 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+
 import { redactSecrets } from "../../../src/redaction.ts";
 import { replayCaseFor } from "../gates.ts";
 import type { ReplayFixture } from "../types.ts";

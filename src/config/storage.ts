@@ -1,17 +1,16 @@
 import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import {
-  CONFIG_DIR_NAME,
-  type ExtensionContext,
-  getAgentDir,
-} from "@earendil-works/pi-coding-agent";
+
+import { CONFIG_DIR_NAME, getAgentDir } from "@earendil-works/pi-coding-agent";
+import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+
 import { applyConfig, resetDefaults } from "./defaults.ts";
 import {
   CONFIG_SCHEMA,
   configuredModelRef,
-  type PersistedConfigKey,
   SAVED_CONFIG_KEYS,
 } from "./schema.ts";
+import type { PersistedConfigKey } from "./schema.ts";
 import { setAdvisorOutcomeLoggingRef, setPersistedModelRefs } from "./state.ts";
 import type { AdvisorConfig } from "./types.ts";
 import { unknownConfigKeys, validateConfig } from "./validation.ts";
@@ -43,7 +42,7 @@ const RESERVED_ADVISOR_JSON_KEYS = new Set(["typesafe_api_key"]);
 
 export const readExistingConfig = (path: string): Record<string, unknown> => {
   try {
-    const parsed = JSON.parse(readFileSync(path, "utf8"));
+    const parsed = JSON.parse(readFileSync(path, "utf-8"));
     return parsed && typeof parsed === "object" && !Array.isArray(parsed)
       ? (parsed as Record<string, unknown>)
       : {};
@@ -86,7 +85,7 @@ let loadedConfigState: ConfigState | undefined;
 let loadedConfigPath: string | undefined;
 
 const readConfig = (path: string): AdvisorConfig => {
-  const config = JSON.parse(readFileSync(path, "utf8"));
+  const config = JSON.parse(readFileSync(path, "utf-8"));
   validateConfig(config, path);
   return config;
 };

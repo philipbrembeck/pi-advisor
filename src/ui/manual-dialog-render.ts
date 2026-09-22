@@ -3,6 +3,7 @@ import {
   visibleWidth,
   wrapTextWithAnsi,
 } from "@earendil-works/pi-tui";
+
 import type { GitContextLevel } from "../git.ts";
 import type { ManualAdvisorDialogView } from "./types.ts";
 

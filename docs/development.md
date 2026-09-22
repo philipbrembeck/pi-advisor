@@ -9,10 +9,7 @@ bun install
 bun run build
 ```
 
-Pi loads `dist/index.js`, which bundles internal modules so settings controls and
-persistence share the same runtime state. Run `bun run build` once after
-checkout, then reload Pi. The pre-commit hook rebuilds and stages the bundle
-after linting source changes; `prepack` also rebuilds it for npm packaging.
+Pi loads `dist/index.js`, which bundles internal modules so settings controls and persistence share the same runtime state. Run `bun run build` once after checkout, then reload Pi. The pre-commit hook rebuilds and stages the bundle after linting source changes; `prepack` also rebuilds it for npm packaging.
 
 ## Checks
 

@@ -151,8 +151,8 @@ export class AdvisorJevLedgerState {
           `${filter.overrides} override${filter.overrides === 1 ? "" : "s"}`
         );
       }
-      lines.push(`Consultation dedup: ${parts.join(", ")}`);
       lines.push(
+        `Consultation dedup: ${parts.join(", ")}`,
         this.#savingsLine(this.#markdownCosts(invocations), filter.skipped)
       );
     } else if (this.#filterActive()) {

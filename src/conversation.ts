@@ -1,4 +1,5 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+
 import {
   advisorRedactSecretsRef,
   advisorToolPoliciesRef,
@@ -6,7 +7,8 @@ import {
   advisorToolResultMaxLinesRef,
 } from "./config/state.ts";
 import type { AdvisorToolPolicies } from "./config/types.ts";
-import { contentParts, isRecord, type RecordValue } from "./content-utils.ts";
+import { contentParts, isRecord } from "./content-utils.ts";
+import type { RecordValue } from "./content-utils.ts";
 import { redactSecrets } from "./redaction.ts";
 import { capToolResult } from "./tool-result-cap.ts";
 

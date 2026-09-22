@@ -1,9 +1,9 @@
 import type { GateDecision } from "../session-state.ts";
 import type { AdvisorGateFailure, AdvisorGateResult } from "./types.ts";
 
-const DECISION_LINE = /^Decision\s*:\s*(proceed|revise|blocked)\s*$/i;
-const CODE_FENCE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
-const LINE_BREAK = /\r?\n/;
+const DECISION_LINE = /^Decision\s*:\s*(proceed|revise|blocked)\s*$/iu;
+const CODE_FENCE = /^ {0,3}(`{3,}|~{3,})(.*)$/u;
+const LINE_BREAK = /\r?\n/u;
 
 interface FenceState {
   character: string;

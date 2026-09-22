@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
 import { registerCommands } from "../src/commands.ts";
 import { resetConfigCache } from "../src/config.ts";
 import { AdvisorSessionState } from "../src/session-state.ts";
@@ -26,9 +27,9 @@ describe("Advisor loop-gate budget behavior", () => {
               appendEntry(type: string) {
                 timeline.push(`entry:${type}`);
               },
-              registerEntryRenderer: () => undefined,
-              registerMessageRenderer: () => undefined,
-              registerTool: () => undefined,
+              registerEntryRenderer: () => {},
+              registerMessageRenderer: () => {},
+              registerTool: () => {},
               sendMessage(message: any) {
                 sentMessages.push(message);
                 timeline.push(`message:${message.customType}`);
@@ -144,10 +145,10 @@ describe("Advisor loop-gate budget behavior", () => {
           mockPi(
             { activeTools: ["ask_advisor"], events },
             {
-              registerEntryRenderer: () => undefined,
-              registerMessageRenderer: () => undefined,
-              registerTool: () => undefined,
-              sendMessage: () => undefined,
+              registerEntryRenderer: () => {},
+              registerMessageRenderer: () => {},
+              registerTool: () => {},
+              sendMessage: () => {},
             }
           ),
           state,
@@ -172,8 +173,8 @@ describe("Advisor loop-gate budget behavior", () => {
           isProjectTrusted: () => false,
           signal: new AbortController().signal,
           ui: {
-            notify: () => undefined,
-            setStatus: () => undefined,
+            notify: () => {},
+            setStatus: () => {},
           },
         } as any;
         // The modes share the process-global configuration refs, so each case
@@ -224,9 +225,9 @@ describe("Advisor loop-gate budget behavior", () => {
         mockPi(
           { activeTools: ["ask_advisor"], events },
           {
-            registerEntryRenderer: () => undefined,
-            registerMessageRenderer: () => undefined,
-            registerTool: () => undefined,
+            registerEntryRenderer: () => {},
+            registerMessageRenderer: () => {},
+            registerTool: () => {},
           }
         ),
         state
@@ -259,7 +260,7 @@ describe("Advisor loop-gate budget behavior", () => {
       const state = new AdvisorSessionState();
       state.consumeCall();
 
-      registerCommands(mockPi({ commands }, { sendMessage: () => undefined }), {
+      registerCommands(mockPi({ commands }, { sendMessage: () => {} }), {
         consult: () => {
           consultations += 1;
           return Promise.resolve({ markdown: "ok", thinkingText: "" });
@@ -325,10 +326,10 @@ describe("Advisor loop-gate budget behavior", () => {
       mockPi(
         { activeTools: ["ask_advisor"], events },
         {
-          events: { emit: () => undefined },
-          registerCommand: () => undefined,
-          registerMessageRenderer: () => undefined,
-          registerTool: () => undefined,
+          events: { emit: () => {} },
+          registerCommand: () => {},
+          registerMessageRenderer: () => {},
+          registerTool: () => {},
         }
       )
     );

@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { constants } from "node:fs";
 import { lstat, open, realpath } from "node:fs/promises";
 import { isAbsolute, relative, resolve } from "node:path";
+
 import { redactAndCapText } from "./redaction.ts";
 
 export const ADVISOR_FILE_MAX_BYTES = 8 * 1024;
@@ -12,7 +13,7 @@ export interface UntrackedAttachment {
   text: string;
 }
 
-const PATH_SEGMENTS = /[\\/]/;
+const PATH_SEGMENTS = /[\\/]/u;
 
 const within = (root: string, candidate: string) => {
   const path = relative(root, candidate);
@@ -36,7 +37,7 @@ const normalizeRequestedPath = (root: string, value: unknown) => {
 const git = (cwd: string, args: string[]) =>
   execFileSync("git", args, {
     cwd,
-    encoding: "utf8",
+    encoding: "utf-8",
     maxBuffer: 16 * 1024 * 1024,
     shell: false,
     stdio: ["ignore", "pipe", "pipe"],
@@ -48,7 +49,7 @@ const repositoryRoot = (cwd: string) => {
   try {
     return realpath(git(cwd, ["rev-parse", "--show-toplevel"]).trim());
   } catch {
-    return Promise.resolve(undefined);
+    return Promise.resolve();
   }
 };
 
@@ -120,13 +121,13 @@ const readAttachment = async (
     }
     const buffer = Buffer.alloc(available + 1);
     const { bytesRead } = await file.read(buffer, 0, buffer.length, 0);
-    const raw = buffer.subarray(0, bytesRead).toString("utf8");
+    const raw = buffer.subarray(0, bytesRead).toString("utf-8");
     if (raw.includes("\0")) {
       return;
     }
     const text = redactAndCapText(raw, available, redact);
     return {
-      bytes: Buffer.byteLength(text, "utf8"),
+      bytes: Buffer.byteLength(text, "utf-8"),
       path: normalizedName,
       text,
     };

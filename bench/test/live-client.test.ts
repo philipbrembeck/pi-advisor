@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+
 import { LiveModelClient } from "../src/live-client.ts";
 import { MockProviderServer } from "../src/replay/mock-provider.ts";
 import type { ModelPin } from "../src/types.ts";

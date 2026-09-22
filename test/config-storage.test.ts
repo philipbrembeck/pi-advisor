@@ -8,7 +8,9 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+
 import { registerCommands } from "../src/commands.ts";
 import { CONFIG_SCHEMA, SAVED_CONFIG_KEYS } from "../src/config/schema.ts";
 import {
@@ -32,7 +34,7 @@ let agentDir = "";
 
 const configPath = () => join(agentDir, "advisor.json");
 const readSavedConfig = () =>
-  JSON.parse(readFileSync(configPath(), "utf8")) as Record<string, unknown>;
+  JSON.parse(readFileSync(configPath(), "utf-8")) as Record<string, unknown>;
 
 describe("Advisor config persistence", () => {
   beforeEach(() => {
@@ -202,12 +204,12 @@ describe("Advisor argument persistence", () => {
           mockPi(
             { activeTools: ["ask_advisor"], commands },
             {
-              on: () => undefined,
-              registerEntryRenderer: () => undefined,
-              registerMessageRenderer: () => undefined,
-              setActiveTools: () => undefined,
+              on: () => {},
+              registerEntryRenderer: () => {},
+              registerMessageRenderer: () => {},
+              setActiveTools: () => {},
               setModel: () => Promise.resolve(true),
-              setThinkingLevel: () => undefined,
+              setThinkingLevel: () => {},
             }
           )
         );
@@ -230,7 +232,7 @@ describe("Advisor argument persistence", () => {
           cwd: dir,
           hasUI: true,
           isProjectTrusted: () => false,
-          ui: { notify: () => undefined },
+          ui: { notify: () => {} },
         } as any);
         expect(savedConfig(dir).executor).toBe("good/executor");
       }
@@ -242,7 +244,7 @@ describe("Config schema consistency", () => {
   test("every AdvisorConfig key has exactly one schema entry", () => {
     // Compile-time coverage (satisfies Record<keyof AdvisorConfig, ...>)
     // guarantees no missing or extra keys; this pins the exact 43-key set.
-    const schemaKeys = Object.keys(CONFIG_SCHEMA).sort();
+    const schemaKeys = Object.keys(CONFIG_SCHEMA).toSorted();
     expect(schemaKeys).toEqual([
       "advisor",
       "advisorAutoLoopGate",
@@ -292,7 +294,7 @@ describe("Config schema consistency", () => {
   });
 
   test("persisted schema keys match the historical SAVED_CONFIG_KEYS list", () => {
-    expect([...SAVED_CONFIG_KEYS].sort()).toEqual([
+    expect([...SAVED_CONFIG_KEYS].toSorted()).toEqual([
       "advisor",
       "advisorAutoLoopGate",
       "advisorBlockOnBlocked",

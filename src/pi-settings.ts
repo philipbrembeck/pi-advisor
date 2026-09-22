@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
+
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 
 interface PiGlobalSettings {
@@ -27,7 +28,7 @@ const settingsIdentity = (path: string): string => {
 
 const readHideThinking = (path: string): boolean => {
   try {
-    const parsed: unknown = JSON.parse(readFileSync(path, "utf8"));
+    const parsed: unknown = JSON.parse(readFileSync(path, "utf-8"));
     return (
       typeof parsed === "object" &&
       parsed !== null &&

@@ -2,6 +2,7 @@ import type {
   ExtensionAPI,
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
+
 import type { GitContextLevel } from "../git.ts";
 import type { ScoutLifecycleEvent } from "../scout.ts";
 import type { AdvisorSessionState } from "../session-state.ts";

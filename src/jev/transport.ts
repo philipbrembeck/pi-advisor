@@ -1,6 +1,8 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+
 import { advisorJevTransportRef } from "../config/state.ts";
-import { type JevKeySource, resolveTypeSafeKey } from "./key-store.ts";
+import { resolveTypeSafeKey } from "./key-store.ts";
+import type { JevKeySource } from "./key-store.ts";
 
 export type JevTransportKind = "typesafe" | "openrouter";
 

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
+
 import {
   setAdvisorJevFilterEnabledRef,
   setAdvisorJevTransportRef,
@@ -25,7 +26,7 @@ const credentials = (
 const openSetup = (
   options: { currentValue?: string; deps?: Record<string, unknown> } = {}
 ) => {
-  const results: Array<string | undefined> = [];
+  const results: (string | undefined)[] = [];
   const renders: string[] = [];
   const setup = new JevSetupSubmenu(
     {
@@ -35,9 +36,9 @@ const openSetup = (
       tui: { requestRender: () => renders.push("render") },
     },
     {
-      resolveTransport: () => Promise.resolve(undefined),
+      resolveTransport: () => Promise.resolve(),
       verify: () => Promise.resolve({ ok: true }),
-      ...(options.deps ?? {}),
+      ...options.deps,
     } as never
   );
   return { renders, results, setup };
@@ -217,7 +218,7 @@ describe("JevSetupSubmenu", () => {
     await settle();
     expect(screen(setup)).toContain("Disable and clear stored key");
     // Index 1 is plain Disable: it keeps the stored key.
-    setup.handleInput("\u001b[B");
+    setup.handleInput("\u001B[B");
     setup.handleInput("\r");
     await settle();
     expect(results).toEqual(["Off"]);
@@ -235,8 +236,8 @@ describe("JevSetupSubmenu", () => {
       },
     });
     await settle();
-    second.setup.handleInput("\u001b[B");
-    second.setup.handleInput("\u001b[B");
+    second.setup.handleInput("\u001B[B");
+    second.setup.handleInput("\u001B[B");
     second.setup.handleInput("\r");
     await settle();
     expect(second.results).toEqual(["Off"]);

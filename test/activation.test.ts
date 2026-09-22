@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
+
 import { initTheme } from "@earendil-works/pi-coding-agent";
+
 import { registerCommands } from "../src/commands.ts";
 import {
   contextMaxCharsRef,
@@ -20,7 +22,7 @@ import { mockPi } from "./helpers/mock-pi.ts";
 
 initTheme();
 
-const modelsRegistry = (models: Array<{ id: string; provider: string }>) => ({
+const modelsRegistry = (models: { id: string; provider: string }[]) => ({
   find: (provider: string, id: string) =>
     models.find((model) => model.provider === provider && model.id === id),
   getApiKeyAndHeaders: () => Promise.resolve({ apiKey: "key", ok: true }),
@@ -42,7 +44,7 @@ const typingSelectorUi = (
     custom: (factory: any) =>
       new Promise((resolve) => {
         const selector = factory(
-          { requestRender: () => undefined },
+          { requestRender: () => {} },
           theme,
           { matches: () => false },
           (value: string | undefined) => {
@@ -61,7 +63,7 @@ const typingSelectorUi = (
         customCall += 1;
         selector.handleInput("\r");
       }),
-    notify: () => undefined,
+    notify: () => {},
     select: () => Promise.resolve("✓ Default (Model Default)"),
   };
 };
@@ -100,7 +102,7 @@ describe("Advisor activation flow", () => {
               selectedModel = model;
               return Promise.resolve(true);
             },
-            setThinkingLevel: () => undefined,
+            setThinkingLevel: () => {},
           }
         )
       );
@@ -168,7 +170,7 @@ describe("Advisor activation flow", () => {
       expect(explanation).toContain("Advisor flow ready");
       expect(notices).toHaveLength(1);
       expect(
-        explanation?.split("\n\n")[0].match(/[.!?](?=\s|$)/g)
+        explanation?.split("\n\n")[0].match(/[.!?](?=\s|$)/gu)
       ).toHaveLength(1);
     });
   });
@@ -195,9 +197,9 @@ describe("Advisor activation flow", () => {
           ui: {
             custom: () => {
               customCalls += 1;
-              return Promise.resolve(undefined);
+              return Promise.resolve();
             },
-            notify: () => undefined,
+            notify: () => {},
           },
         } as any;
 
@@ -260,7 +262,7 @@ describe("Advisor activation flow", () => {
         hasUI: true,
         isProjectTrusted: () => false,
         modelRegistry: {
-          find: () => undefined,
+          find: () => {},
           getApiKeyAndHeaders: () =>
             Promise.resolve({ apiKey: "key", ok: true }),
           getAvailable: () => [
@@ -269,8 +271,8 @@ describe("Advisor activation flow", () => {
           ],
         },
         ui: {
-          custom: () => Promise.resolve(undefined),
-          notify: () => undefined,
+          custom: () => Promise.resolve(),
+          notify: () => {},
         },
       } as any;
 

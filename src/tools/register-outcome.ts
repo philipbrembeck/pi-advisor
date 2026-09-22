@@ -1,5 +1,6 @@
 import { Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
+
 import { advisorOutcomeLoggingRef } from "../config/state.ts";
 import { loadConfig } from "../config/storage.ts";
 import { textFrom } from "../conversation.ts";

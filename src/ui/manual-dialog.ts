@@ -1,18 +1,14 @@
-import {
-  type Component,
-  Editor,
-  type EditorTheme,
-  type Focusable,
-  Key,
-  type Keybindings,
-  type KeyId,
-  matchesKey,
+import { Editor, Key, matchesKey } from "@earendil-works/pi-tui";
+import type {
+  Component,
+  EditorTheme,
+  Focusable,
+  Keybindings,
+  KeyId,
 } from "@earendil-works/pi-tui";
-import {
-  clampGitContextLevel,
-  GIT_CONTEXT_LEVELS,
-  type GitContextLevel,
-} from "../git.ts";
+
+import { clampGitContextLevel, GIT_CONTEXT_LEVELS } from "../git.ts";
+import type { GitContextLevel } from "../git.ts";
 import { renderManualAdvisorDialog } from "./manual-dialog-render.ts";
 import type {
   ManualAdvisorDialogOptions,
@@ -54,7 +50,7 @@ export class ManualAdvisorDialog implements Component, Focusable {
     // while the configured level remains the hard ceiling.
     this.gitLevels = GIT_CONTEXT_LEVELS.filter(
       (level) => clampGitContextLevel(level, options.gitContext) === level
-    ).reverse();
+    ).toReversed();
     this.gitIndex = Math.max(0, this.gitLevels.indexOf(options.gitContext));
 
     const editorTheme: EditorTheme = {
@@ -100,21 +96,25 @@ export class ManualAdvisorDialog implements Component, Focusable {
     }
 
     switch (this.focusTarget) {
-      case "editor":
+      case "editor": {
         // Editor owns Enter/Shift+Enter and all cursor/editing semantics. Its
         // onSubmit callback above is the sole editor submission path. At the
         // edge of the message, a directional key also moves to the adjacent
         // form control so the Git selector is reachable without Tab.
         this.handleEditorInput(keyData);
         return;
-      case "git":
+      }
+      case "git": {
         this.handleGitInput(keyData);
         return;
-      case "actions":
+      }
+      case "actions": {
         this.handleActionInput(keyData);
         return;
-      default:
+      }
+      default: {
         return;
+      }
     }
   }
 

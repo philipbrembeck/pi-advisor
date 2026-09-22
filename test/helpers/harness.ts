@@ -1,5 +1,7 @@
-import { type ExtensionAPI, initTheme } from "@earendil-works/pi-coding-agent";
+import { initTheme } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { getKeybindings } from "@earendil-works/pi-tui";
+
 import { registerCommands } from "../../src/commands.ts";
 import type { AdvisorSessionState } from "../../src/session-state.ts";
 import { mockPi } from "./mock-pi.ts";
@@ -29,12 +31,12 @@ export const modalHarness = (
 ) => {
   const commands = new Map<string, any>();
   const events = new Map<string, any>();
-  const entries: Array<{ data: unknown; type: string }> = [];
+  const entries: { data: unknown; type: string }[] = [];
   const entryRenderers = new Map<string, any>();
   const modalOptions: any[] = [];
   const notices: string[] = [];
-  const sent: Array<{ message: any; options: any }> = [];
-  const statuses: Array<string | undefined> = [];
+  const sent: { message: any; options: any }[] = [];
+  const statuses: (string | undefined)[] = [];
   const mockPiApi = mockPi({ commands, entries, entryRenderers, events, sent });
   const ctx = {
     cwd: agentDir,
@@ -46,7 +48,7 @@ export const modalHarness = (
         new Promise((resolve) => {
           modalOptions.push(options);
           const dialog = factory(
-            { requestRender: () => undefined, terminal: { rows: 24 } },
+            { requestRender: () => {}, terminal: { rows: 24 } },
             modalTheme,
             getKeybindings(),
             resolve
@@ -90,17 +92,17 @@ export const activationHarness = () => {
     { commands, events, messageRenderers: renderers },
     {
       getActiveTools: () => activeTools,
-      registerEntryRenderer: () => undefined,
+      registerEntryRenderer: () => {},
       registerMessageRenderer(type: string, renderer: any) {
         renderers.set(type, renderer);
       },
-      registerTool: () => undefined,
-      sendMessage: () => undefined,
+      registerTool: () => {},
+      sendMessage: () => {},
       setActiveTools(tools: string[]) {
         activeTools.splice(0, activeTools.length, ...tools);
       },
       setModel: () => Promise.resolve(true),
-      setThinkingLevel: () => undefined,
+      setThinkingLevel: () => {},
     }
   ) as unknown as ExtensionAPI;
   return {
@@ -121,7 +123,7 @@ export const activationHarness = () => {
 export const activationContext = (
   agentDir: string,
   notes: string[] = [],
-  models?: Array<{ id: string; provider: string }>
+  models?: { id: string; provider: string }[]
 ) =>
   ({
     cwd: agentDir,

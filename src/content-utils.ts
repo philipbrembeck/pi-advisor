@@ -5,7 +5,7 @@ export type RecordValue = Record<string, unknown>;
 export const isRecord = (value: unknown): value is RecordValue =>
   Boolean(value) && typeof value === "object" && !Array.isArray(value);
 
-export const byteLength = (value: string) => Buffer.byteLength(value, "utf8");
+export const byteLength = (value: string) => Buffer.byteLength(value, "utf-8");
 
 export const contentParts = (content: unknown): unknown[] => {
   if (typeof content === "string") {

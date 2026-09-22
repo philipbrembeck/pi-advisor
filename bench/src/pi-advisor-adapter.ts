@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
+
 import { normalizeUsage } from "./cost.ts";
 import {
   DEFAULT_HARBOR_AGENT_TIMEOUT_SEC,
@@ -77,13 +78,13 @@ const isUsableCodexAuthFile = (path: string) => {
     const credential = value["openai-codex"];
     return Boolean(
       isRecord(credential) &&
-        credential.type === "oauth" &&
-        typeof credential.access === "string" &&
-        credential.access.trim() &&
-        typeof credential.refresh === "string" &&
-        credential.refresh.trim() &&
-        typeof credential.expires === "number" &&
-        Number.isFinite(credential.expires)
+      credential.type === "oauth" &&
+      typeof credential.access === "string" &&
+      credential.access.trim() &&
+      typeof credential.refresh === "string" &&
+      credential.refresh.trim() &&
+      typeof credential.expires === "number" &&
+      Number.isFinite(credential.expires)
     );
   } catch {
     return false;
@@ -301,8 +302,10 @@ export const parseAdvisorAttestation = (
   return parseAttestationValue(parsed, expectedVersion, arm, smokeProtocol);
 };
 
-export interface PiAdvisorHarborAdapterOptions
-  extends Omit<CommandReactBenchRunnerOptions, "command"> {
+export interface PiAdvisorHarborAdapterOptions extends Omit<
+  CommandReactBenchRunnerOptions,
+  "command"
+> {
   command: string;
   prerequisites: PiAdvisorAdapterPrerequisites;
 }

@@ -10,8 +10,8 @@ import {
   setExecutorRef,
 } from "../config/state.ts";
 import { saveConfig } from "../config/storage.ts";
-import { activateAdvisor } from "./activation.ts";
 import { loadCommandConfig } from "./activation-preparation.ts";
+import { activateAdvisor } from "./activation.ts";
 import { selectAdvisorModels } from "./model-picker.ts";
 import type { CommandRuntime } from "./types.ts";
 

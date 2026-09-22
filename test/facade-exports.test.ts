@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { registerCommands as leafRegisterCommands } from "../src/commands/registration.ts";
+
 import type {
   CommandDependencies,
   ManualAdvisorProgressPhase,
@@ -8,13 +8,7 @@ import type {
   ThinkingLevel,
 } from "../src/commands.ts";
 import { registerCommands as facadeRegisterCommands } from "../src/commands.ts";
-import {
-  contextMaxCharsRef as leafContextMaxCharsRef,
-  setContextMaxCharsRef as leafSetContextMaxCharsRef,
-} from "../src/config/state.ts";
-import { loadConfig as leafLoadConfig } from "../src/config/storage.ts";
-import { DEFAULT_CONTEXT_MAX_CHARS as leafDefaultContextMaxChars } from "../src/config/types.ts";
-import { validateConfig as leafValidateConfig } from "../src/config/validation.ts";
+import { registerCommands as leafRegisterCommands } from "../src/commands/registration.ts";
 import type {
   AdvisorConfig,
   AdvisorToolPolicies,
@@ -30,39 +24,12 @@ import {
   validateConfig as facadeValidateConfig,
 } from "../src/config.ts";
 import {
-  consultAdvisor as leafConsultAdvisor,
-  curateAdvisorConversation as leafCurateAdvisorConversation,
-  runAdvisorGate as leafRunAdvisorGate,
-} from "../src/tools/consultation.ts";
-import { gateFailureEffectForMode as leafGateFailureEffectForMode } from "../src/tools/gate-policy.ts";
-import { parseAutomaticDecision as leafParseAutomaticDecision } from "../src/tools/gate-protocol.ts";
-import {
-  ADVISOR_DECISION_SYSTEM as leafAdvisorDecisionSystem,
-  advisorGitContextBudget as leafAdvisorGitContextBudget,
-  advisorInvocationGuidelines as leafAdvisorInvocationGuidelines,
-  advisorMessageText as leafAdvisorMessageText,
-  advisorRepositoryContext as leafAdvisorRepositoryContext,
-  advisorRequestConversation as leafAdvisorRequestConversation,
-  ADVISOR_SYSTEM as leafAdvisorSystem,
-  gitContextNote as leafGitContextNote,
-} from "../src/tools/prompts.ts";
-import { registerAdvisorTool as leafRegisterAdvisorTool } from "../src/tools/registration.ts";
-import {
-  adviceForDisplay as leafAdviceForDisplay,
-  hasSoundVerdict as leafHasSoundVerdict,
-  renderAdvisorCallBox as leafRenderAdvisorCallBox,
-  renderAdvisorResponseHeader as leafRenderAdvisorResponseHeader,
-  renderThinkingMarkdown as leafRenderThinkingMarkdown,
-  resolveAdvisorRequest as leafResolveAdvisorRequest,
-  SPINNER_FRAMES as leafSpinnerFrames,
-} from "../src/tools/render-common.ts";
-import {
-  appendScoutLifecycleEntry as leafAppendScoutLifecycleEntry,
-  renderScoutDetails as leafRenderScoutDetails,
-  scoutDetailsFromEvent as leafScoutDetailsFromEvent,
-  ScoutStatusManager as leafScoutStatusManager,
-} from "../src/tools/scout-status.ts";
-import { advisorSessionState as leafAdvisorSessionState } from "../src/tools/session.ts";
+  contextMaxCharsRef as leafContextMaxCharsRef,
+  setContextMaxCharsRef as leafSetContextMaxCharsRef,
+} from "../src/config/state.ts";
+import { loadConfig as leafLoadConfig } from "../src/config/storage.ts";
+import { DEFAULT_CONTEXT_MAX_CHARS as leafDefaultContextMaxChars } from "../src/config/types.ts";
+import { validateConfig as leafValidateConfig } from "../src/config/validation.ts";
 import type {
   AdvisorConsultationResult,
   AdvisorGateFailure,
@@ -103,9 +70,40 @@ import {
   ScoutStatusManager as facadeScoutStatusManager,
   SPINNER_FRAMES as facadeSpinnerFrames,
 } from "../src/tools.ts";
-import { ManualAdvisorDialog as leafManualAdvisorDialog } from "../src/ui/manual-dialog.ts";
-import { SearchableModelSelector as leafSearchableModelSelector } from "../src/ui/model-selector.ts";
-import { AdvisorSettingsSelector as leafAdvisorSettingsSelector } from "../src/ui/settings-selector.ts";
+import {
+  consultAdvisor as leafConsultAdvisor,
+  curateAdvisorConversation as leafCurateAdvisorConversation,
+  runAdvisorGate as leafRunAdvisorGate,
+} from "../src/tools/consultation.ts";
+import { gateFailureEffectForMode as leafGateFailureEffectForMode } from "../src/tools/gate-policy.ts";
+import { parseAutomaticDecision as leafParseAutomaticDecision } from "../src/tools/gate-protocol.ts";
+import {
+  ADVISOR_DECISION_SYSTEM as leafAdvisorDecisionSystem,
+  advisorGitContextBudget as leafAdvisorGitContextBudget,
+  advisorInvocationGuidelines as leafAdvisorInvocationGuidelines,
+  advisorMessageText as leafAdvisorMessageText,
+  advisorRepositoryContext as leafAdvisorRepositoryContext,
+  advisorRequestConversation as leafAdvisorRequestConversation,
+  ADVISOR_SYSTEM as leafAdvisorSystem,
+  gitContextNote as leafGitContextNote,
+} from "../src/tools/prompts.ts";
+import { registerAdvisorTool as leafRegisterAdvisorTool } from "../src/tools/registration.ts";
+import {
+  adviceForDisplay as leafAdviceForDisplay,
+  hasSoundVerdict as leafHasSoundVerdict,
+  renderAdvisorCallBox as leafRenderAdvisorCallBox,
+  renderAdvisorResponseHeader as leafRenderAdvisorResponseHeader,
+  renderThinkingMarkdown as leafRenderThinkingMarkdown,
+  resolveAdvisorRequest as leafResolveAdvisorRequest,
+  SPINNER_FRAMES as leafSpinnerFrames,
+} from "../src/tools/render-common.ts";
+import {
+  appendScoutLifecycleEntry as leafAppendScoutLifecycleEntry,
+  renderScoutDetails as leafRenderScoutDetails,
+  scoutDetailsFromEvent as leafScoutDetailsFromEvent,
+  ScoutStatusManager as leafScoutStatusManager,
+} from "../src/tools/scout-status.ts";
+import { advisorSessionState as leafAdvisorSessionState } from "../src/tools/session.ts";
 import type {
   AdvisorSettings,
   ContextPreset,
@@ -116,6 +114,9 @@ import {
   ManualAdvisorDialog as facadeManualAdvisorDialog,
   SearchableModelSelector as facadeSearchableModelSelector,
 } from "../src/ui.ts";
+import { ManualAdvisorDialog as leafManualAdvisorDialog } from "../src/ui/manual-dialog.ts";
+import { SearchableModelSelector as leafSearchableModelSelector } from "../src/ui/model-selector.ts";
+import { AdvisorSettingsSelector as leafAdvisorSettingsSelector } from "../src/ui/settings-selector.ts";
 
 export interface CommandsFacadeTypeInventory {
   consult: ManualConsult;
@@ -238,7 +239,7 @@ describe("frozen facade export surfaces", () => {
   // every value export is pinned by name so additions and removals fail here.
   // Extending a facade requires updating its list in this test deliberately.
   test("pins every config facade value export by name", () => {
-    expect(Object.keys(configFacadeNamespace).sort()).toEqual([
+    expect(Object.keys(configFacadeNamespace).toSorted()).toEqual([
       "ADVISOR_TOOL_POLICIES",
       "DEFAULT_ADVISOR_GIT_CONTEXT_MAX_CHARS",
       "DEFAULT_ADVISOR_TOOL_RESULT_MAX_BYTES",
@@ -334,7 +335,7 @@ describe("frozen facade export surfaces", () => {
   });
 
   test("pins every ui facade value export by name", () => {
-    expect(Object.keys(uiFacadeNamespace).sort()).toEqual([
+    expect(Object.keys(uiFacadeNamespace).toSorted()).toEqual([
       "AdvisorSettingsSelector",
       "ManualAdvisorDialog",
       "SearchableModelSelector",
@@ -342,7 +343,7 @@ describe("frozen facade export surfaces", () => {
   });
 
   test("pins every tools facade value export by name", () => {
-    expect(Object.keys(toolsFacadeNamespace).sort()).toEqual([
+    expect(Object.keys(toolsFacadeNamespace).toSorted()).toEqual([
       "ADVISOR_DECISION_SYSTEM",
       "ADVISOR_SYSTEM",
       "SPINNER_FRAMES",
@@ -373,7 +374,7 @@ describe("frozen facade export surfaces", () => {
   });
 
   test("pins every commands facade value export by name", () => {
-    expect(Object.keys(commandsFacadeNamespace).sort()).toEqual([
+    expect(Object.keys(commandsFacadeNamespace).toSorted()).toEqual([
       "registerCommands",
     ]);
   });

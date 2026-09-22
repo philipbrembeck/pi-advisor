@@ -2,14 +2,15 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
 import {
   clearKeyTypeSafeKey,
   consumePlaintextKeyWarning,
-  type JevSecretsLike,
   resetPlaintextKeyWarning,
   resolveTypeSafeKey,
   writeKeyTypeSafeKey,
 } from "../src/jev/key-store.ts";
+import type { JevSecretsLike } from "../src/jev/key-store.ts";
 
 const fileStoreSpy = () => {
   const written: string[] = [];
@@ -58,7 +59,7 @@ describe("resolveTypeSafeKey", () => {
     const resolution = await resolveTypeSafeKey({
       env: { TYPESAFE_API_KEY: "env-key" },
       readAdvisorJson: () => ({ typesafe_api_key: "config-key" }),
-      readFileStore: () => undefined,
+      readFileStore: () => {},
       secrets: memorySecrets(
         new Map([["pi-advisor/typesafe-api-key", "stored-key"]])
       ),
@@ -70,7 +71,7 @@ describe("resolveTypeSafeKey", () => {
     const resolution = await resolveTypeSafeKey({
       env: { TYPESAFE_API_KEY: "  env-key \n" },
       readAdvisorJson: () => ({ typesafe_api_key: "config-key" }),
-      readFileStore: () => undefined,
+      readFileStore: () => {},
       secrets: memorySecrets(),
     });
     expect(resolution).toEqual({ key: "env-key", source: "env" });
@@ -80,7 +81,7 @@ describe("resolveTypeSafeKey", () => {
     const resolution = await resolveTypeSafeKey({
       env: {},
       readAdvisorJson: () => ({ typesafe_api_key: " config-key\n" }),
-      readFileStore: () => undefined,
+      readFileStore: () => {},
       secrets: null,
     });
     expect(resolution).toEqual({ key: "config-key", source: "advisor-json" });
@@ -90,7 +91,7 @@ describe("resolveTypeSafeKey", () => {
     const resolution = await resolveTypeSafeKey({
       env: {},
       readAdvisorJson: () => ({}),
-      readFileStore: () => undefined,
+      readFileStore: () => {},
       secrets: null,
     });
     expect(resolution).toEqual({});
@@ -126,7 +127,7 @@ describe("resolveTypeSafeKey", () => {
     const resolution = await resolveTypeSafeKey({
       env: {},
       readAdvisorJson: () => ({ typesafe_api_key: 42 }),
-      readFileStore: () => undefined,
+      readFileStore: () => {},
       secrets: null,
     });
     expect(resolution).toEqual({});
@@ -172,7 +173,7 @@ describe("writeKeyTypeSafeKey", () => {
     const result = await writeKeyTypeSafeKey("key", {
       env: {},
       readAdvisorJson: () => ({}),
-      readFileStore: () => undefined,
+      readFileStore: () => {},
       secrets: null,
       writeFileStore: () => {
         throw new Error("disk full");

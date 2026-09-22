@@ -2,7 +2,9 @@ import { describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
 import { initTheme } from "@earendil-works/pi-coding-agent";
+
 import { resetConfigCache } from "../src/config.ts";
 import { AdvisorSessionState } from "../src/session-state.ts";
 import {
@@ -18,8 +20,8 @@ import { changeSetting, plainScreen } from "./helpers/settings-navigation.ts";
 
 initTheme();
 
-const SIMPLE_MODE_ON = /→ Simple mode\s+On/;
-const SIMPLE_MODE_OFF = /→ Simple mode\s+Off/;
+const SIMPLE_MODE_ON = /→ Simple mode\s+On/u;
+const SIMPLE_MODE_OFF = /→ Simple mode\s+Off/u;
 
 const selectorTheme = {
   bold: (text: string) => text,
@@ -39,7 +41,7 @@ const openSelector = (initial: any) => {
       planGate: true,
       ...initial,
     },
-    onCancel: () => undefined,
+    onCancel: () => {},
     onChange: (value: any) => saved.push(value),
     presets: [
       { description: "none", label: "0", value: 0 },
@@ -47,7 +49,7 @@ const openSelector = (initial: any) => {
       { description: "15k", label: "15k", value: 15_000 },
     ],
     theme: selectorTheme,
-    tui: { requestRender: () => undefined },
+    tui: { requestRender: () => {} },
   } as any);
   return { saved, selector };
 };
@@ -103,7 +105,7 @@ describe("Advisor settings navigation and gate parsing regressions", () => {
     const before = plainScreen(selector);
     expect(before).toContain("→ Context window");
     expect(before).toContain("10k");
-    expect(before.match(/Context window/g)).toHaveLength(1);
+    expect(before.match(/Context window/gu)).toHaveLength(1);
     changeSetting(selector, "Context window");
     expect(plainScreen(selector)).toContain("15k");
   });
@@ -155,11 +157,9 @@ describe("Advisor settings navigation and gate parsing regressions", () => {
   });
 
   test("never sends an empty Advisor request body", () => {
-    expect(advisorMessageText("", undefined).trim().length).toBeGreaterThan(0);
+    expect(advisorMessageText("").trim().length).toBeGreaterThan(0);
     expect(advisorMessageText("", "Focus")).toContain("Focus");
-    expect(advisorMessageText("history", undefined)).toContain(
-      "<conversation>"
-    );
+    expect(advisorMessageText("history")).toContain("<conversation>");
   });
 
   test("allows an outcome persistence failure to be retried", async () => {
@@ -209,9 +209,9 @@ describe("Advisor settings navigation and gate parsing regressions", () => {
   test("keeps concurrent registrations' safety state isolated", () => {
     const firstState = new AdvisorSessionState();
     const secondState = new AdvisorSessionState();
-    const firstStarts: Array<() => void> = [];
-    const secondStarts: Array<() => void> = [];
-    const makePi = (starts: Array<() => void>) =>
+    const firstStarts: (() => void)[] = [];
+    const secondStarts: (() => void)[] = [];
+    const makePi = (starts: (() => void)[]) =>
       mockPi(
         {},
         {
@@ -221,8 +221,8 @@ describe("Advisor settings navigation and gate parsing regressions", () => {
               starts.push(handler);
             }
           },
-          registerMessageRenderer: () => undefined,
-          registerTool: () => undefined,
+          registerMessageRenderer: () => {},
+          registerTool: () => {},
         }
       );
 
@@ -243,9 +243,7 @@ describe("Advisor settings navigation and gate parsing regressions", () => {
   test("keeps a recorded session block active after ask_advisor is disabled", () => {
     let toolCall: any;
     const events = new Map<string, any>();
-    registerAdvisorTool(
-      mockPi({ events }, { events: { emit: () => undefined } })
-    );
+    registerAdvisorTool(mockPi({ events }, { events: { emit: () => {} } }));
     toolCall = events.get("tool_call");
     advisorSessionState.resetTask();
     advisorSessionState.block("still blocked");
@@ -273,9 +271,9 @@ describe("Advisor settings navigation and gate parsing regressions", () => {
               toolCall = handler;
             }
           },
-          registerCommand: () => undefined,
-          registerMessageRenderer: () => undefined,
-          registerTool: () => undefined,
+          registerCommand: () => {},
+          registerMessageRenderer: () => {},
+          registerTool: () => {},
         }
       )
     );

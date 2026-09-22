@@ -122,19 +122,19 @@ Decision: revise
 Decision: blocked
 ```
 
-| Decision | Effect |
-| --- | --- |
+| Decision  | Effect                                              |
+| --------- | --------------------------------------------------- |
 | `proceed` | Reset the repeat counter and allow the tool action. |
-| `revise` | Block the repeated tool action. |
-| `blocked` | Apply the configured gate-failure policy. |
+| `revise`  | Block the repeated tool action.                     |
+| `blocked` | Apply the configured gate-failure policy.           |
 
 Malformed, missing, duplicate, or contradictory decisions are gate failures. The same policy applies when the Advisor is unavailable or the shared call budget is exhausted.
 
-| Failure mode | Effect |
-| --- | --- |
-| `block-session` (default) | Block the session. |
-| `block-tool` | Block only the current tool action. |
-| `warn-and-continue` | Show a warning and continue. |
+| Failure mode              | Effect                              |
+| ------------------------- | ----------------------------------- |
+| `block-session` (default) | Block the session.                  |
+| `block-tool`              | Block only the current tool action. |
+| `warn-and-continue`       | Show a warning and continue.        |
 
 | Condition | `block-session` | `block-tool` | `warn-and-continue` |
 | --- | --- | --- | --- |

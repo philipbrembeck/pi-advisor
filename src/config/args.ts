@@ -9,7 +9,7 @@ import {
 import { MAX_CONTEXT_MAX_CHARS } from "./types.ts";
 import { isValidContextMaxChars } from "./validation.ts";
 
-const ARGUMENT_WHITESPACE = /\s+/;
+const ARGUMENT_WHITESPACE = /\s+/u;
 
 export const parseArgs = (args: string): string | undefined => {
   let nextExecutor = executorRef;

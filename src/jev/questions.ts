@@ -37,7 +37,7 @@ export interface ScreeningCriteria {
 
 export type ScreeningVerdict = { skip: false } | { skip: true };
 
-const NUMERIC_KEY_PATTERN = /^\d+$/;
+const NUMERIC_KEY_PATTERN = /^\d+$/u;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === "object" && !Array.isArray(value);

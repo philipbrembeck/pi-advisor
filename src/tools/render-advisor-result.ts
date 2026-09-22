@@ -1,10 +1,11 @@
-import type { AgentToolResult } from "@earendil-works/pi-coding-agent";
 import {
+  type AgentToolResult,
   getMarkdownTheme,
   type Theme,
   type ToolRenderResultOptions,
 } from "@earendil-works/pi-coding-agent";
 import { Box, Markdown, Spacer, Text } from "@earendil-works/pi-tui";
+
 import { getAdvisorSettings } from "../config/state.ts";
 import { textFrom } from "../conversation.ts";
 import { formatAdvisorUsage } from "../usage.ts";

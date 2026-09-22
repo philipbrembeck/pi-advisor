@@ -1,19 +1,21 @@
 import { describe, expect, test } from "bun:test";
+
 import {
   getKeybindings,
   Key,
   matchesKey,
   stripTerminalSequences,
-  type TUI,
   visibleWidth,
 } from "@earendil-works/pi-tui";
-import { TextSettingSubmenu } from "../src/ui/text-setting-submenu.ts";
+import type { TUI } from "@earendil-works/pi-tui";
+
 import {
   AdvisorSettingsSelector,
   ManualAdvisorDialog,
-  type ManualAdvisorRequest,
   SearchableModelSelector,
 } from "../src/ui.ts";
+import type { ManualAdvisorRequest } from "../src/ui.ts";
+import { TextSettingSubmenu } from "../src/ui/text-setting-submenu.ts";
 
 const theme = {
   bold: (value: string) => value,
@@ -65,8 +67,8 @@ describe("ManualAdvisorDialog", () => {
       initialMessage: "Check the migration",
     });
     const screen = stripTerminalSequences(dialog.render(90).join("\n"))
-      .replace(/[│]/g, " ")
-      .replace(/\s+/g, " ");
+      .replaceAll(/[│]/gu, " ")
+      .replaceAll(/\s+/gu, " ");
 
     expect(screen).toContain("Ask Advisor");
     expect(screen).toContain("▸ Message for Advisor (optional)");
@@ -123,7 +125,7 @@ describe("ManualAdvisorDialog", () => {
 
     dialog.handleInput("\r");
     dialog.handleInput("\r");
-    dialog.handleInput("\u001b");
+    dialog.handleInput("\u001B");
 
     expect(submitted).toEqual([{ gitContext: "summary" }]);
     expect(cancelled()).toBe(0);
@@ -133,9 +135,9 @@ describe("ManualAdvisorDialog", () => {
     const { dialog, submitted, cancelled } = makeDialog({ gitContext: "full" });
 
     dialog.handleInput("\t");
-    dialog.handleInput("\u001b[B");
+    dialog.handleInput("\u001B[B");
     dialog.handleInput("\t");
-    dialog.handleInput("\u001b[C");
+    dialog.handleInput("\u001B[C");
     dialog.handleInput("\r");
 
     expect(submitted).toEqual([]);
@@ -150,11 +152,11 @@ describe("ManualAdvisorDialog", () => {
 
   test("uses arrows and Space within Git choices, then leaves at the edges", () => {
     const summary = makeDialog({ gitContext: "summary" });
-    summary.dialog.handleInput("\u001b[B");
+    summary.dialog.handleInput("\u001B[B");
     expect(
       stripTerminalSequences(summary.dialog.render(90).join("\n"))
     ).toContain("▸ ● Summary — changed paths and status");
-    summary.dialog.handleInput("\u001b[B");
+    summary.dialog.handleInput("\u001B[B");
     expect(
       stripTerminalSequences(summary.dialog.render(90).join("\n"))
     ).toContain("▸ ● None — no Git data");
@@ -164,30 +166,30 @@ describe("ManualAdvisorDialog", () => {
     ).toContain("● Summary");
 
     const git = makeDialog({ gitContext: "full" });
-    git.dialog.handleInput("\u001b[B");
-    git.dialog.handleInput("\u001b[B");
+    git.dialog.handleInput("\u001B[B");
+    git.dialog.handleInput("\u001B[B");
     expect(stripTerminalSequences(git.dialog.render(90).join("\n"))).toContain(
       "● Summary — changed paths and status"
     );
-    git.dialog.handleInput("\u001b[A");
+    git.dialog.handleInput("\u001B[A");
     expect(stripTerminalSequences(git.dialog.render(90).join("\n"))).toContain(
       "● Full — summary plus patch"
     );
 
     const editor = makeDialog({ gitContext: "off" });
-    editor.dialog.handleInput("\u001b[B");
-    editor.dialog.handleInput("\u001b[A");
+    editor.dialog.handleInput("\u001B[B");
+    editor.dialog.handleInput("\u001B[A");
     editor.dialog.handleInput("x");
     expect(
       stripTerminalSequences(editor.dialog.render(90).join("\n"))
     ).toContain("│ x");
 
     const actions = makeDialog({ gitContext: "full" });
-    actions.dialog.handleInput("\u001b[B");
-    actions.dialog.handleInput("\u001b[B");
-    actions.dialog.handleInput("\u001b[B");
-    actions.dialog.handleInput("\u001b[A");
-    actions.dialog.handleInput("\u001b[A");
+    actions.dialog.handleInput("\u001B[B");
+    actions.dialog.handleInput("\u001B[B");
+    actions.dialog.handleInput("\u001B[B");
+    actions.dialog.handleInput("\u001B[A");
+    actions.dialog.handleInput("\u001B[A");
     expect(actions.dialog.render(90).join("\n")).toContain("▸");
     actions.dialog.handleInput("\r");
     actions.dialog.handleInput("\r");
@@ -198,7 +200,7 @@ describe("ManualAdvisorDialog", () => {
     const { dialog, renders } = makeDialog();
 
     dialog.handleInput("\t");
-    dialog.handleInput("\u001b[Z");
+    dialog.handleInput("\u001B[Z");
     expect(renders()).toBeGreaterThan(0);
 
     const before = dialog.render(80).join("\n");
@@ -210,7 +212,7 @@ describe("ManualAdvisorDialog", () => {
   test("cancels exactly once and suppresses input after completion", () => {
     const { dialog, submitted, cancelled } = makeDialog();
 
-    dialog.handleInput("\u001b");
+    dialog.handleInput("\u001B");
     dialog.handleInput("\r");
     dialog.handleInput("a");
     dialog.handleInput("\t");
@@ -268,13 +270,13 @@ describe("SearchableModelSelector", () => {
       allOptions,
       currentOption,
       keybindings: { matches: () => false } as any,
-      onCancel: () => undefined,
+      onCancel: () => {},
       onSelect: (value) => {
         selected = value;
       },
       theme: testTheme,
       title: "Select Model",
-      tui: { requestRender: () => undefined },
+      tui: { requestRender: () => {} },
     });
     return { selected: () => selected, selector };
   };
@@ -306,9 +308,9 @@ describe("SearchableModelSelector", () => {
       text: 39,
     };
     const recordingTheme = {
-      bold: (value: string) => `\u001b[1m${value}\u001b[22m`,
+      bold: (value: string) => `\u001B[1m${value}\u001B[22m`,
       fg: (color: string, value: string) =>
-        `\u001b[${codes[color] ?? 39}m${value}\u001b[39m`,
+        `\u001B[${codes[color] ?? 39}m${value}\u001B[39m`,
     } as any;
     const { selector } = makeSelector(
       ["provider/one"],
@@ -319,7 +321,7 @@ describe("SearchableModelSelector", () => {
     const lines = selector.render(60);
     expect(stripTerminalSequences(lines[0])).toBe("─".repeat(60));
     expect(stripTerminalSequences(lines.at(-1) ?? "")).toBe("─".repeat(60));
-    expect(lines.join("\n")).toContain("\u001b[2mType to search");
+    expect(lines.join("\n")).toContain("\u001B[2mType to search");
     expect(lines.join("\n")).not.toContain("═");
   });
 
@@ -341,7 +343,7 @@ describe("TextSettingSubmenu", () => {
     const submenu = new TextSettingSubmenu({
       description: "Enter a value.",
       initial: "",
-      onCancel: () => undefined,
+      onCancel: () => {},
       onSubmit: (value) => {
         if (value.includes("@")) {
           submitted.push(value);
@@ -351,7 +353,7 @@ describe("TextSettingSubmenu", () => {
       },
       theme,
       title: "Target",
-      tui: { requestRender: () => undefined },
+      tui: { requestRender: () => {} },
     });
 
     submenu.handleInput("x");
@@ -387,8 +389,8 @@ describe("AdvisorSettingsSelector simple mode label", () => {
         planGate: true,
         simpleMode,
       },
-      onCancel: () => undefined,
-      onChange: () => undefined,
+      onCancel: () => {},
+      onChange: () => {},
       presets,
       theme: {
         bold: (value: string) => value,

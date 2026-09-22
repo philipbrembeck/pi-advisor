@@ -1,11 +1,12 @@
-import { AdvisorJevLedgerState, type AdvisorJevUsage } from "./jev/ledger.ts";
+import { AdvisorJevLedgerState } from "./jev/ledger.ts";
+import type { AdvisorJevUsage } from "./jev/ledger.ts";
 import {
-  type AdvisorUsageTotals,
   addAdvisorUsage,
   emptyAdvisorUsageTotals,
   formatAdvisorUsageStatus,
   formatAdvisorUsageTotals,
 } from "./usage.ts";
+import type { AdvisorUsageTotals } from "./usage.ts";
 
 export type GateDecision = "proceed" | "revise" | "blocked";
 export type ConsultationTrigger = "manual" | "executor-requested" | "turn-gate";
@@ -27,7 +28,7 @@ export interface AdvisorInvocationRecord {
   usage?: unknown;
 }
 
-const WHITESPACE = /\s/;
+const WHITESPACE = /\s/u;
 const TIMESTAMP_KEYS = new Set([
   "createdat",
   "date",
@@ -37,7 +38,8 @@ const TIMESTAMP_KEYS = new Set([
   "updatedat",
 ]);
 const REQUEST_ID_KEYS = new Set(["correlationid", "requestid", "traceid"]);
-const normalizedKey = (key: string) => key.replace(/[-_]/g, "").toLowerCase();
+const normalizedKey = (key: string) =>
+  key.replaceAll(/[-_]/gu, "").toLowerCase();
 const isVolatileKey = (key: string, keys: Set<string>) =>
   keys.has(normalizedKey(key));
 
@@ -75,8 +77,8 @@ const normalizeShellWhitespace = (command: string) => {
 
 const normalizeString = (value: string) =>
   value
-    .replace(/\/(?:private\/)?tmp\/[^\s/]+/g, "/tmp/<temporary>")
-    .replace(/\/var\/folders\/[^\s/]+/g, "/var/folders/<temporary>");
+    .replaceAll(/\/(?:private\/)?tmp\/[^\s/]+/gu, "/tmp/<temporary>")
+    .replaceAll(/\/var\/folders\/[^\s/]+/gu, "/var/folders/<temporary>");
 
 export const normalizeToolInput = (
   toolName: string,
@@ -102,7 +104,7 @@ export const normalizeToolInput = (
       const record = value as Record<string, unknown>;
       return Object.fromEntries(
         Object.keys(record)
-          .sort()
+          .toSorted()
           .map((childKey) => [childKey, visit(record[childKey], childKey)])
       );
     }
@@ -300,11 +302,10 @@ export class AdvisorSessionState {
       return false;
     }
     const mentioned = paths.every((path) => {
-      const escaped = path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const boundary =
-        "(^|[\\s\\\"'`()\\[])" +
-        escaped +
-        "(?=$|[\\s\\\"'`),;:!?\\]]|\\.(?=\\s|$))";
+      const escaped = path.replaceAll(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+      const boundary = `(^|[\\s\\"'\`()\\[])${
+        escaped
+      }(?=$|[\\s\\"'\`),;:!?\\]]|\\.(?=\\s|$))`;
       return new RegExp(boundary).test(advice);
     });
     if (!mentioned) {

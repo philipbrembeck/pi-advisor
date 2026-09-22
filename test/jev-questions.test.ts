@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+
 import {
   composeScreeningVerdict,
   composeTurnGateVerdict,
@@ -11,7 +12,7 @@ const [L0, L1, L2] = STAKES_RUBRIC;
 const scoreAnswer = (
   probabilities: Record<string, number>,
   legend?: Record<string, string>,
-  score = 1.0
+  score = 1
 ) => ({
   confidence: 0.9,
   ...(legend ? { legend } : {}),
@@ -57,12 +58,12 @@ describe("lowestStakesProbability", () => {
   });
 
   test("falls back to the smallest numeric index when the legend is absent", () => {
-    expect(
-      lowestStakesProbability(scoreAnswer({ "0": 0.4, "1": 0.6 }, undefined))
-    ).toBe(0.4);
-    expect(
-      lowestStakesProbability(scoreAnswer({ "1": 0.4, "2": 0.6 }, undefined))
-    ).toBe(0.4);
+    expect(lowestStakesProbability(scoreAnswer({ "0": 0.4, "1": 0.6 }))).toBe(
+      0.4
+    );
+    expect(lowestStakesProbability(scoreAnswer({ "1": 0.4, "2": 0.6 }))).toBe(
+      0.4
+    );
   });
 
   test("returns undefined for unresolvable shapes", () => {
@@ -71,7 +72,7 @@ describe("lowestStakesProbability", () => {
         scoreAnswer({ high: 0.1, low: 0.9 }, { other: L0 })
       )
     ).toBeUndefined();
-    expect(lowestStakesProbability(scoreAnswer({}, undefined))).toBeUndefined();
+    expect(lowestStakesProbability(scoreAnswer({}))).toBeUndefined();
     expect(lowestStakesProbability("garbage")).toBeUndefined();
   });
 });

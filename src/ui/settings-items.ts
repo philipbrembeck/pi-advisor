@@ -1,9 +1,7 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
-import {
-  getKeybindings,
-  type KeybindingsManager,
-  type SettingItem,
-} from "@earendil-works/pi-tui";
+import { getKeybindings } from "@earendil-works/pi-tui";
+import type { KeybindingsManager, SettingItem } from "@earendil-works/pi-tui";
+
 import {
   DEFAULT_JEV_DIGEST_MAX_CHARS,
   DEFAULT_JEV_FILTER_NOUL_MARGIN,

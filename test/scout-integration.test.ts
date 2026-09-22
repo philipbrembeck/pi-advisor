@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+
 import { curateAdvisorConversation } from "../src/tools.ts";
 
 describe("Scout Advisor-context integration", () => {

@@ -1,18 +1,15 @@
 import { createHash } from "node:crypto";
+
 import type { AdvisorToolPolicies } from "./config/types.ts";
-import {
-  byteLength,
-  contentParts,
-  isRecord,
-  type RecordValue,
-} from "./content-utils.ts";
+import { byteLength, contentParts, isRecord } from "./content-utils.ts";
+import type { RecordValue } from "./content-utils.ts";
 import { conversationEntry } from "./conversation.ts";
 import { invalid, toolCallId, toolCalls } from "./scout-protocol.ts";
-import {
-  type InvalidProtocolResult,
-  SCOUT_LABEL_MAX_CHARS,
-  type ScoutContextGroup,
-  type ScoutGroupKind,
+import { SCOUT_LABEL_MAX_CHARS } from "./scout-types.ts";
+import type {
+  InvalidProtocolResult,
+  ScoutContextGroup,
+  ScoutGroupKind,
 } from "./scout-types.ts";
 
 export interface GroupPass {
@@ -22,10 +19,10 @@ export interface GroupPass {
   protocolOmittedCount: number;
 }
 
-const SPEAKER_PREFIX = /^(User|Executor):\s*/;
+const SPEAKER_PREFIX = /^(User|Executor):\s*/u;
 
 const boundedLabel = (value: string) =>
-  [...value.replace(/\s+/g, " ").trim()]
+  [...value.replaceAll(/\s+/gu, " ").trim()]
     .slice(0, SCOUT_LABEL_MAX_CHARS)
     .join("");
 
@@ -149,7 +146,7 @@ const toolExchangeGroup = (
   immediate: unknown,
   indexed: {
     callOwners: Map<string, { index: number; name: string }>;
-    resultsByCall: Map<string, Array<{ entry: RecordValue; index: number }>>;
+    resultsByCall: Map<string, { entry: RecordValue; index: number }[]>;
   },
   consumedResultIndexes: Set<number>,
   caps: DisclosureCaps
@@ -231,7 +228,7 @@ const collectResults = (
   calls: RecordValue[],
   callIds: string[],
   index: number,
-  resultsByCall: Map<string, Array<{ entry: RecordValue; index: number }>>,
+  resultsByCall: Map<string, { entry: RecordValue; index: number }[]>,
   consumedResultIndexes: Set<number>,
   caps: DisclosureCaps,
   missing: Set<string>,
@@ -326,7 +323,7 @@ export const buildGroups = (
   indexed: {
     callOwners: Map<string, { index: number; name: string }>;
     latestUserIndex: number;
-    resultsByCall: Map<string, Array<{ entry: RecordValue; index: number }>>;
+    resultsByCall: Map<string, { entry: RecordValue; index: number }[]>;
   },
   caps: DisclosureCaps & {
     maxGroupBytes: number;
@@ -389,7 +386,7 @@ const groupForEntry = (
   indexed: {
     callOwners: Map<string, { index: number; name: string }>;
     latestUserIndex: number;
-    resultsByCall: Map<string, Array<{ entry: RecordValue; index: number }>>;
+    resultsByCall: Map<string, { entry: RecordValue; index: number }[]>;
   },
   consumedResultIndexes: Set<number>,
   caps: DisclosureCaps

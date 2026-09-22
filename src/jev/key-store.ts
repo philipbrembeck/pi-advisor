@@ -6,7 +6,9 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
+
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
+
 import { readExistingConfig, resetConfigCache } from "../config/storage.ts";
 import { redactSecrets } from "../redaction.ts";
 
@@ -69,7 +71,7 @@ const readAdvisorJsonConfig = (): Record<string, unknown> =>
 
 const defaultReadFileStore = (): string | undefined => {
   try {
-    return normalizeKey(readFileSync(keyFilePath(), "utf8"));
+    return normalizeKey(readFileSync(keyFilePath(), "utf-8"));
   } catch {
     return undefined;
   }

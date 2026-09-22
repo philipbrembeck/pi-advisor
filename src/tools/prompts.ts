@@ -1,4 +1,5 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+
 import {
   advisorCompletionGateRef,
   advisorCustomInvocationRef,
@@ -8,12 +9,8 @@ import {
   isSimpleMode,
 } from "../config/state.ts";
 import { recentConversation } from "../conversation.ts";
-import {
-  capRepositoryContext,
-  escapeRepositoryText,
-  type GitContextLevel,
-  type GitContextResult,
-} from "../git.ts";
+import { capRepositoryContext, escapeRepositoryText } from "../git.ts";
+import type { GitContextLevel, GitContextResult } from "../git.ts";
 
 export const advisorMessageText = (
   conversation: string,
@@ -63,16 +60,21 @@ export const gitContextNote = (
     return `Repository context was limited to "${allowed}" by user configuration; a fuller view was requested but withheld.`;
   }
   switch (result.status) {
-    case "disabled":
+    case "disabled": {
       return "Repository context was disabled or had no disclosure budget; it was withheld. Do not assume the working tree is clean.";
-    case "no-changes":
+    }
+    case "no-changes": {
       return "The working tree has no uncommitted changes.";
-    case "not-a-repository":
+    }
+    case "not-a-repository": {
       return "No Git repository is available for this session.";
-    case "failed":
+    }
+    case "failed": {
       return "Repository context could not be collected. Do not assume the working tree is clean.";
-    default:
+    }
+    default: {
       return;
+    }
   }
 };
 

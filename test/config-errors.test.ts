@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
 import type { runAdvisorGate } from "../extensions/index.ts";
 import { registerCommands } from "../src/commands.ts";
 import { resetConfigCache } from "../src/config.ts";
@@ -16,7 +17,7 @@ describe("Command configuration errors", () => {
       writeFileSync(join(agentDir, "advisor.json"), "{ not valid json");
       resetConfigCache();
       const commands = new Map<string, any>();
-      const notifications: Array<{ message: string; level: string }> = [];
+      const notifications: { message: string; level: string }[] = [];
       const context = {
         cwd: tmpdir(),
         hasUI: true,
@@ -50,18 +51,18 @@ describe("Tool lifecycle configuration errors", () => {
   test("fails open on invalid advisor.json and resumes gating once fixed", async () => {
     await withAgentDir({}, async (agentDir) => {
       const configPath = join(agentDir, "advisor.json");
-      const notifications: Array<{ level: string; message: string }> = [];
+      const notifications: { level: string; message: string }[] = [];
       let gateRuns = 0;
       const events = new Map<string, any>();
       registerAdvisorTool(
         mockPi(
           { activeTools: ["ask_advisor"], events },
           {
-            registerCommand: () => undefined,
-            registerEntryRenderer: () => undefined,
-            registerMessageRenderer: () => undefined,
-            registerTool: () => undefined,
-            sendMessage: () => undefined,
+            registerCommand: () => {},
+            registerEntryRenderer: () => {},
+            registerMessageRenderer: () => {},
+            registerTool: () => {},
+            sendMessage: () => {},
           }
         ),
         new AdvisorSessionState(),
@@ -88,7 +89,7 @@ describe("Tool lifecycle configuration errors", () => {
         ui: {
           notify: (message: string, level: string) =>
             notifications.push({ level, message }),
-          setStatus: () => undefined,
+          setStatus: () => {},
         },
       } as any;
       const readEvent = {

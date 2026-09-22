@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
 import { piHideThinkingEnabled } from "../src/pi-settings.ts";
 
 const AGENT_DIR_ENV = "PI_CODING_AGENT_DIR";

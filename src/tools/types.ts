@@ -1,4 +1,5 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+
 import type { appendOutcome } from "../outcomes.ts";
 import type { ScoutOutcome } from "../scout.ts";
 import type {

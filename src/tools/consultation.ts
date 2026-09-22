@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
+
 import type { Message } from "@earendil-works/pi-ai/compat";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+
 import {
   advisorEffortRef,
   advisorRedactSecretsRef,
@@ -102,7 +104,7 @@ const collectAdvisorResponse = async (
   }
   return {
     draftBytes: context.draftText
-      ? Buffer.byteLength(context.draftText, "utf8")
+      ? Buffer.byteLength(context.draftText, "utf-8")
       : undefined,
     markdown,
     model: advisorRef,

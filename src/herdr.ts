@@ -1,4 +1,5 @@
 import net from "node:net";
+
 import { getAdvisorSettings } from "./config/state.ts";
 import { redactSecrets } from "./redaction.ts";
 
@@ -59,13 +60,13 @@ const safeEmitBlocked = (active: boolean, label = "Advisor blocked") => {
 };
 
 const isControlCharacter = (character: string) =>
-  character <= "\u001f" || character === "\u007f";
+  character <= "\u001F" || character === "\u007F";
 
 const cleanNotification = (value: string, max: number) =>
   [...redactSecrets(value)]
     .map((character) => (isControlCharacter(character) ? " " : character))
     .join("")
-    .replace(/\s+/g, " ")
+    .replaceAll(/\s+/gu, " ")
     .trim()
     .slice(0, max);
 

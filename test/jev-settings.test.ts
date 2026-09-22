@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
+
 import { initTheme } from "@earendil-works/pi-coding-agent";
+
+import { loadConfig } from "../src/config.ts";
 import {
   advisorJevDigestMaxCharsRef,
   advisorJevFilterNoulMarginRef,
@@ -17,7 +20,6 @@ import {
 } from "../src/config/state.ts";
 import { saveConfig } from "../src/config/storage.ts";
 import { validateConfig } from "../src/config/validation.ts";
-import { loadConfig } from "../src/config.ts";
 import { AdvisorSettingsSelector } from "../src/ui.ts";
 import { savedConfig, withAgentDir } from "./helpers/config-fixture.ts";
 import { changeSetting, plainScreen } from "./helpers/settings-navigation.ts";
@@ -42,31 +44,34 @@ const openSelector = (initial: any = {}) => {
       planGate: true,
       ...initial,
     },
-    onCancel: () => undefined,
+    onCancel: () => {},
     onChange: (value: any) => saved.push(value),
     presets: [
       { description: "none", label: "0", value: 0 },
       { description: "15k", label: "15k", value: 15_000 },
     ],
     theme: selectorTheme,
-    tui: { requestRender: () => undefined },
+    tui: { requestRender: () => {} },
   } as any);
   return { saved, selector };
 };
 
 const INVALID_SETTINGS: [Record<string, unknown>, RegExp][] = [
-  [{ advisorJevTimeoutMs: 0 }, /advisorJevTimeoutMs/],
-  [{ advisorJevTimeoutMs: 1.5 }, /advisorJevTimeoutMs/],
-  [{ advisorJevDigestMaxChars: -1 }, /advisorJevDigestMaxChars/],
-  [{ advisorJevPricePerMtok: 0 }, /advisorJevPricePerMtok/],
-  [{ advisorJevTransport: "vercel" }, /advisorJevTransport/],
-  [{ advisorJevFilterSkipConfidence: 0.4 }, /advisorJevFilterSkipConfidence/],
-  [{ advisorJevFilterSkipConfidence: 1.1 }, /advisorJevFilterSkipConfidence/],
-  [{ advisorJevFilterNoulMargin: -0.1 }, /advisorJevFilterNoulMargin/],
-  [{ advisorJevFilterNoulMargin: 0.6 }, /advisorJevFilterNoulMargin/],
-  [{ advisorJevFilterOverrideWindow: -1 }, /advisorJevFilterOverrideWindow/],
-  [{ advisorJevTurnGateEveryTurns: -1 }, /advisorJevTurnGateEveryTurns/],
-  [{ advisorJevTurnGateNoulThreshold: 1.1 }, /advisorJevTurnGateNoulThreshold/],
+  [{ advisorJevTimeoutMs: 0 }, /advisorJevTimeoutMs/u],
+  [{ advisorJevTimeoutMs: 1.5 }, /advisorJevTimeoutMs/u],
+  [{ advisorJevDigestMaxChars: -1 }, /advisorJevDigestMaxChars/u],
+  [{ advisorJevPricePerMtok: 0 }, /advisorJevPricePerMtok/u],
+  [{ advisorJevTransport: "vercel" }, /advisorJevTransport/u],
+  [{ advisorJevFilterSkipConfidence: 0.4 }, /advisorJevFilterSkipConfidence/u],
+  [{ advisorJevFilterSkipConfidence: 1.1 }, /advisorJevFilterSkipConfidence/u],
+  [{ advisorJevFilterNoulMargin: -0.1 }, /advisorJevFilterNoulMargin/u],
+  [{ advisorJevFilterNoulMargin: 0.6 }, /advisorJevFilterNoulMargin/u],
+  [{ advisorJevFilterOverrideWindow: -1 }, /advisorJevFilterOverrideWindow/u],
+  [{ advisorJevTurnGateEveryTurns: -1 }, /advisorJevTurnGateEveryTurns/u],
+  [
+    { advisorJevTurnGateNoulThreshold: 1.1 },
+    /advisorJevTurnGateNoulThreshold/u,
+  ],
 ];
 
 const focusJevFilterRow = (selector: any) => {
@@ -75,7 +80,7 @@ const focusJevFilterRow = (selector: any) => {
       selector.handleInput("\r");
       return;
     }
-    selector.handleInput("\u001b[B");
+    selector.handleInput("\u001B[B");
   }
   throw new Error("Jev consultation filter row not reachable");
 };
@@ -225,7 +230,7 @@ describe("Jev shared settings", () => {
         if (plainScreen(selector).includes("→ Jev model")) {
           return i;
         }
-        selector.handleInput("\u001b[B");
+        selector.handleInput("\u001B[B");
       }
       throw new Error("Jev model row not reachable");
     })();

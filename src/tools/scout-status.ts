@@ -3,7 +3,9 @@ import type {
   ExtensionContext,
   Theme,
 } from "@earendil-works/pi-coding-agent";
-import { type Box, Text } from "@earendil-works/pi-tui";
+import { Text } from "@earendil-works/pi-tui";
+import type { Box } from "@earendil-works/pi-tui";
+
 import { executorRef, getAdvisorSettings } from "../config/state.ts";
 import type { ScoutLifecycleEvent } from "../scout.ts";
 import { formatAdvisorUsage, snapshotAdvisorUsage } from "../usage.ts";

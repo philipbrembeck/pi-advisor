@@ -3,6 +3,7 @@ import type {
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+
 import {
   advisorRef,
   getAdvisorMaxCallsPerSession,

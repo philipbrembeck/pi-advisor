@@ -27,11 +27,11 @@ Herdr's raw API uses newline-delimited JSON over a local Unix domain socket or a
 
 Herdr injects these values into managed pane processes:
 
-| Variable | pi-advisor use |
-| --- | --- |
-| `HERDR_ENV=1` | Confirms that Pi is running inside Herdr. |
-| `HERDR_SOCKET_PATH` | Selects the local socket or pipe. |
-| `HERDR_PANE_ID` | Identifies the pane receiving metadata. |
+| Variable            | pi-advisor use                            |
+| ------------------- | ----------------------------------------- |
+| `HERDR_ENV=1`       | Confirms that Pi is running inside Herdr. |
+| `HERDR_SOCKET_PATH` | Selects the local socket or pipe.         |
+| `HERDR_PANE_ID`     | Identifies the pane receiving metadata.   |
 
 pi-advisor sends nothing unless all three values are available. On Windows, `src/herdr.ts` converts the injected socket value to a `\\.\pipe\...` endpoint.
 

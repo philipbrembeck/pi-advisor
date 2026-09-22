@@ -1,11 +1,12 @@
-import {
-  type Api,
-  type AssistantMessage,
-  type Message,
-  type Model,
-  stream,
+import { stream } from "@earendil-works/pi-ai/compat";
+import type {
+  Api,
+  AssistantMessage,
+  Message,
+  Model,
 } from "@earendil-works/pi-ai/compat";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+
 import { splitRef } from "./config/state.ts";
 
 export interface ResolvedConfiguredModel {

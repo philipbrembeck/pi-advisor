@@ -1,5 +1,6 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { Fetch } from "@typesafe-ai/sdk";
+
 import {
   advisorJevFilterEnabledRef,
   advisorJevFilterNoulMarginRef,
@@ -14,7 +15,8 @@ import {
   screeningQuestions,
 } from "../jev/questions.ts";
 import { buildJevState } from "../jev/state.ts";
-import { type JevCredentials, resolveJevTransport } from "../jev/transport.ts";
+import { resolveJevTransport } from "../jev/transport.ts";
+import type { JevCredentials } from "../jev/transport.ts";
 import type { AdvisorSessionState } from "../session-state.ts";
 import { createOutageNotifier } from "./outage-notifier.ts";
 
@@ -42,7 +44,7 @@ export interface ScreeningDeps {
 }
 
 export const normalizeScreeningQuestion = (question: string | undefined) =>
-  question?.trim().toLowerCase().replace(/\s+/g, " ") || undefined;
+  question?.trim().toLowerCase().replaceAll(/\s+/gu, " ") || undefined;
 
 const REATTACHED_ADVICE_CAP_BYTES = 4 * 1024;
 

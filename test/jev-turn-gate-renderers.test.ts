@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
+
 import { initTheme } from "@earendil-works/pi-coding-agent";
+
 import { setShowUsageDetailsRef } from "../src/config/state.ts";
 import { registerToolRenderers } from "../src/tools/register-renderers.ts";
 import { mockPi } from "./helpers/mock-pi.ts";
@@ -7,7 +9,7 @@ import { mockPi } from "./helpers/mock-pi.ts";
 initTheme();
 
 // biome-ignore lint/suspicious/noControlCharactersInRegex: strips terminal SGR codes
-const SGR_CODE = /\u001b\[[0-9;]*m/g;
+const SGR_CODE = /\u001B\[[0-9;]*m/gu;
 
 describe("Jev turn-gate steer renderers", () => {
   test("are registered and mirror the loop-gate shapes", () => {

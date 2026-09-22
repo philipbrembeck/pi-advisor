@@ -1,5 +1,6 @@
 import { getMarkdownTheme } from "@earendil-works/pi-coding-agent";
 import { Box, Markdown, Text } from "@earendil-works/pi-tui";
+
 import { getAdvisorSettings } from "../config/state.ts";
 import {
   adviceForDisplay,

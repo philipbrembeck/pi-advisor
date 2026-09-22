@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+
 import {
   collectTextStream,
   createCoalescedUpdate,
@@ -172,7 +173,7 @@ describe("model stream", () => {
   test("reports missing models and auth without substitution", async () => {
     await expect(
       resolveConfiguredModel(
-        { modelRegistry: { find: () => undefined } } as any,
+        { modelRegistry: { find: () => {} } } as any,
         "provider/missing",
         "Scout"
       )

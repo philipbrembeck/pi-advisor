@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+
 import { DEFAULT_LIVE_PIN_SET, LIVE_PIN_SETS } from "./config.ts";
 import type {
   BenchmarkConfig,

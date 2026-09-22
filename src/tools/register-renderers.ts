@@ -1,8 +1,7 @@
-import {
-  type ExtensionAPI,
-  getMarkdownTheme,
-} from "@earendil-works/pi-coding-agent";
+import { getMarkdownTheme } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Box, Markdown, Text } from "@earendil-works/pi-tui";
+
 import { getAdvisorSettings } from "../config/state.ts";
 import { formatAdvisorUsage } from "../usage.ts";
 import { adviceForDisplay, renderAdvisorCallBox } from "./render-common.ts";

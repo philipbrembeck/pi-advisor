@@ -1,9 +1,6 @@
-import {
-  type Component,
-  type Focusable,
-  Input,
-  truncateToWidth,
-} from "@earendil-works/pi-tui";
+import { Input, truncateToWidth } from "@earendil-works/pi-tui";
+import type { Component, Focusable } from "@earendil-works/pi-tui";
+
 import type { TextSettingSubmenuOptions } from "./types.ts";
 
 /** Small inline editor used by SettingsList for the two free-form settings. */

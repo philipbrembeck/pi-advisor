@@ -3,10 +3,12 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
 import {
   fauxAssistantMessage,
   registerFauxProvider,
 } from "@earendil-works/pi-ai/compat";
+
 import { loadConfig, resetConfigCache } from "../src/config.ts";
 import { AdvisorSessionState } from "../src/session-state.ts";
 import { registerAdvisorTool } from "../src/tools.ts";
@@ -16,7 +18,7 @@ import { mockPi } from "./helpers/mock-pi.ts";
 describe("Tracked file handoff", () => {
   const registerHandoffTool = (
     state: AdvisorSessionState,
-    consulted: Array<string[] | undefined>
+    consulted: (string[] | undefined)[]
   ) => {
     const tools = new Map<string, any>();
     registerAdvisorTool(mockPi({ tools }), state, {
@@ -55,7 +57,7 @@ describe("Tracked file handoff", () => {
       { advisorTrackedFileContent: false },
       async (agentDir) => {
         const configPath = join(agentDir, "advisor.json");
-        const consulted: Array<string[] | undefined> = [];
+        const consulted: (string[] | undefined)[] = [];
         const state = new AdvisorSessionState();
         const getTool = registerHandoffTool(state, consulted);
         const ctx = handoffContext(agentDir);
@@ -117,7 +119,7 @@ describe("Tracked file handoff", () => {
       },
       async (agentDir) => {
         const configPath = join(agentDir, "advisor.json");
-        const consulted: Array<string[] | undefined> = [];
+        const consulted: (string[] | undefined)[] = [];
         const state = new AdvisorSessionState();
         const getTool = registerHandoffTool(state, consulted);
         const ctx = handoffContext(agentDir);

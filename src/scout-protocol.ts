@@ -1,4 +1,5 @@
-import { contentParts, isRecord, type RecordValue } from "./content-utils.ts";
+import { contentParts, isRecord } from "./content-utils.ts";
+import type { RecordValue } from "./content-utils.ts";
 import { textFrom } from "./conversation.ts";
 import type { InvalidProtocolResult } from "./scout-types.ts";
 
@@ -12,7 +13,7 @@ export const invalid = (message: string): InvalidProtocolResult => ({
 export interface ToolCallIndex {
   callOwners: Map<string, { index: number; name: string }>;
   latestUserIndex: number;
-  resultsByCall: Map<string, Array<{ entry: RecordValue; index: number }>>;
+  resultsByCall: Map<string, { entry: RecordValue; index: number }[]>;
 }
 
 export const toolCalls = (message: RecordValue) =>
@@ -31,7 +32,7 @@ export const indexToolCalls = (
   const callOwners = new Map<string, { index: number; name: string }>();
   const resultsByCall = new Map<
     string,
-    Array<{ entry: RecordValue; index: number }>
+    { entry: RecordValue; index: number }[]
   >();
   const state = { latestUserIndex: -1 };
   for (let index = 0; index < entries.length; index += 1) {
@@ -65,7 +66,7 @@ const indexEntry = (
   entry: RecordValue,
   index: number,
   callOwners: Map<string, { index: number; name: string }>,
-  resultsByCall: Map<string, Array<{ entry: RecordValue; index: number }>>,
+  resultsByCall: Map<string, { entry: RecordValue; index: number }[]>,
   state: { latestUserIndex: number }
 ): InvalidProtocolResult | undefined => {
   if (entry.type !== "message" || !isRecord(entry.message)) {
@@ -87,7 +88,7 @@ const indexToolResult = (
   entry: RecordValue,
   message: RecordValue,
   index: number,
-  resultsByCall: Map<string, Array<{ entry: RecordValue; index: number }>>
+  resultsByCall: Map<string, { entry: RecordValue; index: number }[]>
 ): InvalidProtocolResult | undefined => {
   const id = message.toolCallId;
   if (typeof id !== "string") {

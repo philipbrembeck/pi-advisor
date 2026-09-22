@@ -1,17 +1,19 @@
 import { afterEach, describe, expect, test } from "bun:test";
+
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+
 import {
   setAdvisorJevTurnGateEveryTurnsRef,
   setAdvisorModelWhitelistRef,
 } from "../src/config/state.ts";
 import { AdvisorSessionState } from "../src/session-state.ts";
+import { registerAdvisorTool } from "../src/tools.ts";
 import { consultAdvisor } from "../src/tools/consultation.ts";
 import { handleJevTurnEnd } from "../src/tools/jev-turn-gate.ts";
 import {
   advisorModelAccess,
   advisorModelAccessReason,
 } from "../src/tools/model-access.ts";
-import { registerAdvisorTool } from "../src/tools.ts";
 import { withAgentDir } from "./helpers/config-fixture.ts";
 import { mockPi } from "./helpers/mock-pi.ts";
 
@@ -148,7 +150,7 @@ describe("Advisor model whitelist", () => {
           return { apiKey: "test", transport: "typesafe" as const };
         },
       },
-      send: () => undefined,
+      send: () => {},
       session,
     } as any;
     const ctx = contextFor({ id: "other", provider: "provider" });
@@ -173,7 +175,7 @@ describe("Advisor model whitelist", () => {
         registerAdvisorTool(
           mockPi(
             { activeTools: ["ask_advisor"], events },
-            { registerTool: () => undefined }
+            { registerTool: () => {} }
           ),
           session,
           {

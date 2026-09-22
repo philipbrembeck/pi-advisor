@@ -1,4 +1,5 @@
 import type { Component, Focusable } from "@earendil-works/pi-tui";
+
 import { SearchableModelList } from "./searchable-model-list.ts";
 import type {
   SearchableModelMultiSelectorOptions,

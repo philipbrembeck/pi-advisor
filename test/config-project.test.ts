@@ -9,7 +9,9 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
 import { CONFIG_DIR_NAME } from "@earendil-works/pi-coding-agent";
+
 import {
   advisorCollapseResponsesRef,
   advisorEffortRef,
@@ -32,7 +34,7 @@ import {
 } from "../src/config.ts";
 
 const AGENT_DIR_ENV = "PI_CODING_AGENT_DIR";
-const INVALID_GIT_CONTEXT_PATTERN = /off.*summary.*full/;
+const INVALID_GIT_CONTEXT_PATTERN = /off.*summary.*full/u;
 
 describe("Project and repository config rules", () => {
   test("loadConfig ignores invalid repository-controlled project config", () => {

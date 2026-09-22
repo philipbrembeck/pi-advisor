@@ -1,15 +1,13 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+
 import { advisorScoutEnabledRef, executorRef } from "./config/state.ts";
-import {
-  runAdvisorScout,
-  type ScoutLifecycleEvent,
-  type ScoutOutcome,
-} from "./scout.ts";
 import {
   buildScoutManifest,
   reconstructScoutConversation,
   SCOUT_MANIFEST_MAX_BYTES,
 } from "./scout-context.ts";
+import { runAdvisorScout } from "./scout.ts";
+import type { ScoutLifecycleEvent, ScoutOutcome } from "./scout.ts";
 
 /** Runs Scout over the manifested branch and reconstructs the curated
  * conversation, falling back to the exact legacy conversation on any
@@ -55,14 +53,7 @@ export const curateAdvisorConversation = async (
     onScout?.({ outcome: scout, type: "fallback" });
     return { conversation: legacyConversation, scout };
   }
-  const outcome = await runScout(
-    ctx,
-    built.manifest,
-    signal,
-    onScout,
-    undefined,
-    undefined
-  );
+  const outcome = await runScout(ctx, built.manifest, signal, onScout);
   if (!outcome.ok && outcome.cancelled) {
     throw signal?.reason instanceof Error
       ? signal.reason

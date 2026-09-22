@@ -2,6 +2,7 @@ import type {
   ExtensionAPI,
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
+
 import { activateAdvisor } from "./activation.ts";
 import { registerCommandLifecycle } from "./lifecycle.ts";
 import { registerManualCommand } from "./manual-command.ts";

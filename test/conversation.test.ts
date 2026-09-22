@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+
 import { recentConversation, textFrom } from "../src/conversation.ts";
 import { redactSecrets } from "../src/redaction.ts";
 import { capToolResult } from "../src/tool-result-cap.ts";
@@ -90,11 +91,11 @@ describe("Conversation Module", () => {
 
   test("enforces byte and line caps without splitting Unicode", () => {
     const single = capToolResult("😀😀😀😀", 2, 4);
-    expect(Buffer.byteLength(single.content, "utf8")).toBeLessThanOrEqual(4);
+    expect(Buffer.byteLength(single.content, "utf-8")).toBeLessThanOrEqual(4);
     expect(single.content.split("\n")).toHaveLength(1);
     expect(single.content).toBe("[...");
     const oversized = capToolResult("x".repeat(10_000), 10, 10);
-    expect(Buffer.byteLength(oversized.content, "utf8")).toBeLessThanOrEqual(
+    expect(Buffer.byteLength(oversized.content, "utf-8")).toBeLessThanOrEqual(
       10
     );
     expect(oversized.content.split("\n")).toHaveLength(1);

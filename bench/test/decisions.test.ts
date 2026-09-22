@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+
 import { DEFAULT_CONFIG } from "../src/config.ts";
 import { controlJudge, defaultControlAdvice } from "../src/controls.ts";
 import {

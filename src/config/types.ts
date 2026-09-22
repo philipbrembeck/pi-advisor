@@ -2,6 +2,7 @@ import {
   DEFAULT_MAX_BYTES,
   DEFAULT_MAX_LINES,
 } from "@earendil-works/pi-coding-agent";
+
 import type { GitContextLevel } from "../git.ts";
 
 export const DEFAULT_CONTEXT_MAX_CHARS = 15_000;

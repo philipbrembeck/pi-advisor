@@ -14,7 +14,7 @@ export interface SystemOneMock {
 /** Injectable fetch returning one canned systemone response per call, with
  * full request capture for privacy canaries. */
 export const systemOneMock = (
-  responses: Array<unknown | { body: unknown; status: number }>,
+  responses: (unknown | { body: unknown; status: number })[],
   options: { latencyMs?: number } = {}
 ): SystemOneMock => {
   const captured: CapturedJevRequest[] = [];

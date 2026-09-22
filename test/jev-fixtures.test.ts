@@ -1,14 +1,16 @@
 import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+
 import { setAdvisorRedactSecretsRef } from "../src/config/state.ts";
 import { JevClient } from "../src/jev/client.ts";
 import { composeScreeningVerdict } from "../src/jev/questions.ts";
 import { buildJevState } from "../src/jev/state.ts";
 import { branchFromLines, systemOneMock } from "./helpers/jev-mock.ts";
 
-const ONLY_Q = /^q+$/;
+const ONLY_Q = /^q+$/u;
 const FIXTURE_DIR = resolve("test/fixtures/jev");
 const PRIVACY_CANARY = "super-secret-replay-token";
 
@@ -24,10 +26,10 @@ interface ScreeningFixture {
 const fixtureFiles = () =>
   readdirSync(FIXTURE_DIR)
     .filter((name) => name.endsWith(".json"))
-    .sort()
+    .toSorted()
     .map((name) => ({
       fixture: JSON.parse(
-        readFileSync(join(FIXTURE_DIR, name), "utf8")
+        readFileSync(join(FIXTURE_DIR, name), "utf-8")
       ) as ScreeningFixture,
       name,
     }));

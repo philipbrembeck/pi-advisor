@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
+
 import { initTheme } from "@earendil-works/pi-coding-agent";
 import { stripTerminalSequences } from "@earendil-works/pi-tui";
+
 import { registerCommands } from "../src/commands.ts";
 import {
   advisorScoutEnabledRef,
@@ -17,8 +19,8 @@ import {
 
 initTheme();
 
-const SCOUT_ON_PATTERN = /Experimental Advisor Scout\s+On/;
-const MAX_CALLS_ROW_PATTERN = /Max Advisor calls\/session\s+10/;
+const SCOUT_ON_PATTERN = /Experimental Advisor Scout\s+On/u;
+const MAX_CALLS_ROW_PATTERN = /Max Advisor calls\/session\s+10/u;
 
 const selectorTheme = {
   bold: (text: string) => text,
@@ -30,7 +32,7 @@ const openSelector = (overrides: {
   onSave?: (settings: any) => void;
   initial?: Record<string, unknown>;
   modelRefs?: string[];
-  presets?: Array<{ description: string; label: string; value: number }>;
+  presets?: { description: string; label: string; value: number }[];
 }) => {
   const saved: any[] = [];
   const selector = new AdvisorSettingsSelector({
@@ -45,7 +47,7 @@ const openSelector = (overrides: {
     },
     keybindings: { matches: () => false } as any,
     modelRefs: overrides.modelRefs ?? ["provider/one", "provider/two"],
-    onCancel: () => undefined,
+    onCancel: () => {},
     onChange:
       overrides.onChange ??
       (overrides.onSave ? undefined : (settings) => saved.push(settings)),
@@ -55,7 +57,7 @@ const openSelector = (overrides: {
       { description: "Recent history", label: "10k", value: 10_000 },
     ],
     theme: selectorTheme,
-    tui: { requestRender: () => undefined },
+    tui: { requestRender: () => {} },
   });
   return { saved, selector };
 };
@@ -90,9 +92,9 @@ describe("Advisor settings selector", () => {
         saved = settings;
       },
     });
-    selector.handleInput("\u001b[C");
+    selector.handleInput("\u001B[C");
     expect(saved.contextMaxChars).toBe(10_000);
-    selector.handleInput("\u001b[D");
+    selector.handleInput("\u001B[D");
     expect(saved.contextMaxChars).toBe(0);
   });
 
@@ -140,7 +142,7 @@ describe("Advisor settings selector", () => {
       initial: { simpleMode: true },
       presets: [{ description: "No history", label: "0", value: 0 }],
     });
-    expect(selector.render(100).join("\n")).toContain("\u001b[38;2;");
+    expect(selector.render(100).join("\n")).toContain("\u001B[38;2;");
     selector.dispose();
   });
 
@@ -185,7 +187,7 @@ describe("Advisor settings selector", () => {
 
   test("keeps invalid tool disclosure policies open with an actionable error", () => {
     const { selector } = openSelector({
-      onSave: () => undefined,
+      onSave: () => {},
       presets: [{ description: "No history", label: "0", value: 0 }],
     });
     focusSettingsRow(selector, "Tool disclosure policies");
@@ -212,7 +214,7 @@ describe("Advisor settings selector", () => {
     focusSettingsRow(selector, "Advisor model whitelist");
     selector.handleInput("\r");
     selector.handleInput(" ");
-    selector.handleInput("\u001b[B");
+    selector.handleInput("\u001B[B");
     selector.handleInput(" ");
     selector.handleInput("\r");
     expect(saved.modelWhitelist).toEqual(["provider/one", "provider/two"]);
@@ -241,7 +243,7 @@ describe("Advisor settings selector", () => {
       const custom = async (factory: any) =>
         new Promise<any>((resolve) => {
           const selector = factory(
-            { requestRender: () => undefined },
+            { requestRender: () => {} },
             selectorTheme,
             {},
             resolve
@@ -249,12 +251,12 @@ describe("Advisor settings selector", () => {
           focusSettingsRow(selector, "Experimental Advisor Scout");
           changeSetting(selector, "Experimental Advisor Scout");
           changeSetting(selector, "Max Advisor calls/session");
-          selector.handleInput("\u001b");
+          selector.handleInput("\u001B");
         });
       const reopened = async (factory: any) =>
         new Promise<any>((resolve) => {
           const selector = factory(
-            { requestRender: () => undefined },
+            { requestRender: () => {} },
             selectorTheme,
             {},
             resolve
@@ -270,14 +272,14 @@ describe("Advisor settings selector", () => {
             selector.render(100).join("\n")
           );
           expect(screen).toMatch(MAX_CALLS_ROW_PATTERN);
-          selector.handleInput("\u001b");
+          selector.handleInput("\u001B");
         });
       registerCommands(mockPi({ commands }));
       const context = {
         cwd: "/",
         hasUI: true,
         isProjectTrusted: () => false,
-        ui: { custom, notify: () => undefined, setStatus: () => undefined },
+        ui: { custom, notify: () => {}, setStatus: () => {} },
       } as any;
 
       await commands.get("advisor-settings").handler("", context);
