@@ -63,10 +63,12 @@ export const noUndeclaredDependenciesRule = defineRule({
       ExportNamedDeclaration: (node) => check(node, node.source?.value),
       ImportDeclaration: (node) => check(node, node.source?.value),
       ImportExpression: (node) => {
-        const {source} = node;
-        if (source?.type === "Literal") {
-          check(node, source.value);
+        const { source } = node;
+        if (source?.type !== "Literal") {
+          return;
         }
+        const { value } = source;
+        check(node, value);
       },
     };
   },
