@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+// The namespace imports enumerate each facade's runtime exports for the surface pins below.
+import * as commandsFacadeNamespace from "../src/commands.ts";
 import type {
   CommandDependencies,
   ManualAdvisorProgressPhase,
@@ -9,6 +11,7 @@ import type {
 } from "../src/commands.ts";
 import { registerCommands as facadeRegisterCommands } from "../src/commands.ts";
 import { registerCommands as leafRegisterCommands } from "../src/commands/registration.ts";
+import * as configFacadeNamespace from "../src/config.ts";
 import type {
   AdvisorConfig,
   AdvisorToolPolicies,
@@ -30,6 +33,7 @@ import {
 import { loadConfig as leafLoadConfig } from "../src/config/storage.ts";
 import { DEFAULT_CONTEXT_MAX_CHARS as leafDefaultContextMaxChars } from "../src/config/types.ts";
 import { validateConfig as leafValidateConfig } from "../src/config/validation.ts";
+import * as toolsFacadeNamespace from "../src/tools.ts";
 import type {
   AdvisorConsultationResult,
   AdvisorGateFailure,
@@ -104,6 +108,7 @@ import {
   ScoutStatusManager as leafScoutStatusManager,
 } from "../src/tools/scout-status.ts";
 import { advisorSessionState as leafAdvisorSessionState } from "../src/tools/session.ts";
+import * as uiFacadeNamespace from "../src/ui.ts";
 import type {
   AdvisorSettings,
   ContextPreset,
@@ -224,15 +229,6 @@ describe("config compatibility facade", () => {
     }
   });
 });
-
-// biome-ignore lint/performance/noNamespaceImport: namespace import enumerates the facade's runtime exports for the surface pin below.
-import * as commandsFacadeNamespace from "../src/commands.ts";
-// biome-ignore lint/performance/noNamespaceImport: namespace import enumerates the facade's runtime exports for the surface pin below.
-import * as configFacadeNamespace from "../src/config.ts";
-// biome-ignore lint/performance/noNamespaceImport: namespace import enumerates the facade's runtime exports for the surface pin below.
-import * as toolsFacadeNamespace from "../src/tools.ts";
-// biome-ignore lint/performance/noNamespaceImport: namespace import enumerates the facade's runtime exports for the surface pin below.
-import * as uiFacadeNamespace from "../src/ui.ts";
 
 describe("frozen facade export surfaces", () => {
   // The four src/*.ts facades are a frozen deep-import compatibility surface:

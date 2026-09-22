@@ -24,13 +24,20 @@ const collectTypeScriptFiles = (directory) => {
 const moduleSpecifiers = (source) => {
   const specifiers = [];
   const staticImportPattern =
-    /\b(?:import|export)\s+(?:type\s+)?(?:[\s\S]*?\s+from\s+)?["']([^"']+)["']/gu;
-  const dynamicImportPattern = /\bimport\s*\(\s*["']([^"']+)["']\s*\)/gu;
+    /\b(?:import|export)\s+(?:type\s+)?(?:[\s\S]*?\s+from\s+)?["'](?<specifier>[^"']+)["']/gu;
+  const dynamicImportPattern =
+    /\bimport\s*\(\s*["'](?<specifier>[^"']+)["']\s*\)/gu;
   for (const match of source.matchAll(staticImportPattern)) {
-    specifiers.push({ index: match.index ?? 0, specifier: match[1] });
+    specifiers.push({
+      index: match.index ?? 0,
+      specifier: match.groups.specifier,
+    });
   }
   for (const match of source.matchAll(dynamicImportPattern)) {
-    specifiers.push({ index: match.index ?? 0, specifier: match[1] });
+    specifiers.push({
+      index: match.index ?? 0,
+      specifier: match.groups.specifier,
+    });
   }
   return specifiers;
 };

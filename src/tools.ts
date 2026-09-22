@@ -1,4 +1,3 @@
-// biome-ignore lint/performance/noBarrelFile: this facade intentionally preserves the public tools module contract.
 export {
   consultAdvisor,
   curateAdvisorConversation,

@@ -9,8 +9,6 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-
 import { registerCommands } from "../src/commands.ts";
 import { CONFIG_SCHEMA, SAVED_CONFIG_KEYS } from "../src/config/schema.ts";
 import {
@@ -28,13 +26,23 @@ import {
 import { savedConfig, withAgentDir } from "./helpers/config-fixture.ts";
 import { mockPi } from "./helpers/mock-pi.ts";
 
-const context = { hasUI: false } as unknown as ExtensionContext;
+type JsonValue =
+  | boolean
+  | null
+  | number
+  | string
+  | JsonValue[]
+  | { [key: string]: JsonValue };
+
+// SAFETY: mock context exercises only hasUI-aware paths in this suite.
+const context = { hasUI: false } as any;
 const originalAgentDir = process.env.PI_CODING_AGENT_DIR;
 let agentDir = "";
 
 const configPath = () => join(agentDir, "advisor.json");
 const readSavedConfig = () =>
-  JSON.parse(readFileSync(configPath(), "utf-8")) as Record<string, unknown>;
+  // SAFETY: advisor.json is flat JSON written by saveConfig in these fixtures.
+  JSON.parse(readFileSync(configPath(), "utf-8")) as Record<string, JsonValue>;
 
 describe("Advisor config persistence", () => {
   beforeEach(() => {
@@ -214,6 +222,7 @@ describe("Advisor argument persistence", () => {
           )
         );
 
+        // SAFETY: mock implements the consumed command context: cwd, hasUI, isProjectTrusted, modelRegistry, ui.
         await commands.get("advisor").handler("executor=missing/model", {
           cwd: dir,
           hasUI: true,
@@ -225,14 +234,19 @@ describe("Advisor argument persistence", () => {
               Promise.resolve({ apiKey: "key", ok: true }),
           },
           ui: { notify: (message: string) => notes.push(message) },
+
+          // SAFETY: mock implements the consumed command context: cwd, hasUI, isProjectTrusted, modelRegistry, ui.
         } as any);
 
         expect(notes.join("\n")).toContain("Executor model not found");
+        // SAFETY: mock implements the consumed command context: cwd, hasUI, isProjectTrusted, modelRegistry, ui.
         await commands.get("advisor-off").handler("", {
           cwd: dir,
           hasUI: true,
           isProjectTrusted: () => false,
           ui: { notify: () => {} },
+
+          // SAFETY: mock implements the consumed command context: cwd, hasUI, isProjectTrusted, modelRegistry, ui.
         } as any);
         expect(savedConfig(dir).executor).toBe("good/executor");
       }

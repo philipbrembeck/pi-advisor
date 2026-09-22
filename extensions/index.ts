@@ -31,7 +31,7 @@ export const runAdvisorGate = (
   ...args: Parameters<typeof runAdvisorGateImplementation>
 ) => runAdvisorGateImplementation(...args);
 
-export default function (pi: ExtensionAPI) {
+export default function registerPiAdvisor(pi: ExtensionAPI) {
   const sessionState = new AdvisorSessionState();
   const scoutStatus = new ScoutStatusManager();
   setHerdrBlockedEmitter((active, label) =>
