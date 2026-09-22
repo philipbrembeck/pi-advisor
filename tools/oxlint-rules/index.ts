@@ -26,20 +26,51 @@ const packageNameOf = (specifier: string): string | null => {
 };
 
 const declaredPackages = (): Set<string> => {
-  const manifest = JSON.parse(readFileSync("package.json", "utf8"));
+  const {
+    dependencies,
+    devDependencies,
+    optionalDependencies,
+    peerDependencies,
+  } = JSON.parse(readFileSync("package.json", "utf-8"));
   const fields = [
-    manifest.dependencies,
-    manifest.devDependencies,
-    manifest.peerDependencies,
-    manifest.optionalDependencies,
+    dependencies,
+    devDependencies,
+    peerDependencies,
+    optionalDependencies,
   ];
   return new Set(fields.flatMap((field) => Object.keys(field ?? {})));
 };
 
 /** Report bare imports of packages missing from package.json (phantom dependencies). */
 export const noUndeclaredDependenciesRule = defineRule({
+  createOnce(context) {
+    let declared: Set<string> | undefined;
+    const check = (node: ESTree.Node, specifier: string | undefined) => {
+      if (specifier === undefined) {
+        return;
+      }
+      const name = packageNameOf(specifier);
+      if (name === null || RUNTIME_BUILTINS.has(name)) {
+        return;
+      }
+      declared ??= declaredPackages();
+      if (!declared.has(name)) {
+        context.report({ data: { name }, messageId: "undeclared", node });
+      }
+    };
+    return {
+      ExportAllDeclaration: (node) => check(node, node.source?.value),
+      ExportNamedDeclaration: (node) => check(node, node.source?.value),
+      ImportDeclaration: (node) => check(node, node.source?.value),
+      ImportExpression: (node) => {
+        const {source} = node;
+        if (source?.type === "Literal") {
+          check(node, source.value);
+        }
+      },
+    };
+  },
   meta: {
-    type: "problem",
     docs: {
       description:
         "Disallow importing packages that are not declared in package.json.",
@@ -48,33 +79,7 @@ export const noUndeclaredDependenciesRule = defineRule({
       undeclared:
         'Package "{{name}}" is imported but not declared in package.json.',
     },
-  },
-  createOnce(context) {
-    let declared: Set<string> | undefined;
-    const check = (node: ESTree.Node, rawSpecifier: unknown) => {
-      if (typeof rawSpecifier !== "string") {
-        return;
-      }
-      const name = packageNameOf(rawSpecifier);
-      if (name === null || RUNTIME_BUILTINS.has(name)) {
-        return;
-      }
-      declared ??= declaredPackages();
-      if (!declared.has(name)) {
-        context.report({ node, messageId: "undeclared", data: { name } });
-      }
-    };
-    return {
-      ImportDeclaration: (node) => check(node, node.source?.value),
-      ExportNamedDeclaration: (node) => check(node, node.source?.value),
-      ExportAllDeclaration: (node) => check(node, node.source?.value),
-      ImportExpression: (node) => {
-        const source = node.source;
-        if (source?.type === "Literal") {
-          check(node, source.value);
-        }
-      },
-    };
+    type: "problem",
   },
 });
 
