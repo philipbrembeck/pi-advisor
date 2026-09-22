@@ -29,6 +29,7 @@ const openSelector = (overrides: {
   onChange?: (settings: any) => void;
   onSave?: (settings: any) => void;
   initial?: Record<string, unknown>;
+  modelRefs?: string[];
   presets?: Array<{ description: string; label: string; value: number }>;
 }) => {
   const saved: any[] = [];
@@ -42,6 +43,8 @@ const openSelector = (overrides: {
       planGate: true,
       ...overrides.initial,
     },
+    keybindings: { matches: () => false } as any,
+    modelRefs: overrides.modelRefs ?? ["provider/one", "provider/two"],
     onCancel: () => undefined,
     onChange:
       overrides.onChange ??
@@ -196,6 +199,23 @@ describe("Advisor settings selector", () => {
     expect(selector.render(120).join("\n")).toContain(
       "Enter a valid JSON object."
     );
+  });
+
+  test("selects multiple models from the Advisor model whitelist menu", () => {
+    let saved: any;
+    const { selector } = openSelector({
+      onSave: (settings) => {
+        saved = settings;
+      },
+      presets: [{ description: "No history", label: "0", value: 0 }],
+    });
+    focusSettingsRow(selector, "Advisor model whitelist");
+    selector.handleInput("\r");
+    selector.handleInput(" ");
+    selector.handleInput("\u001b[B");
+    selector.handleInput(" ");
+    selector.handleInput("\r");
+    expect(saved.modelWhitelist).toEqual(["provider/one", "provider/two"]);
   });
 
   test("edits the custom invocation rule inline", () => {

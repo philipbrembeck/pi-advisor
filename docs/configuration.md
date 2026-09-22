@@ -15,6 +15,10 @@ All fields are optional. The model refs below are explicit examples of models av
   "executorEffort": "medium",
   "advisorEffort": "xhigh",
   "contextMaxChars": 25000,
+  "advisorModelWhitelist": [
+    "provider/fast-executor",
+    "provider/frontier-executor"
+  ],
 
   "advisorPlanGate": true,
   "advisorFailureGate": true,
@@ -50,6 +54,12 @@ All fields are optional. The model refs below are explicit examples of models av
   }
 }
 ```
+
+## Advisor model whitelist
+
+`advisorModelWhitelist` is an optional global array of exact `provider/model` references. When it contains one or more entries, the Advisor tool and every automatic Advisor path are available only while the current Executor model matches one of those entries. A missing current model is denied when the list is non-empty. An empty list (the default) allows every model for backward compatibility. The same restriction applies even when `ask_advisor` is present in the active tool list.
+
+The `/advisor-settings` row opens a searchable multi-select menu containing the models configured in Pi. Type to fuzzy-filter the list, use Space to toggle models, and press Enter to apply. The setting is checked before budgets, repeated-call tracking, Jev screening, or any Advisor provider request, so a denied model neither spends Advisor budget nor triggers a gate. Matching is exact and case-sensitive.
 
 ## Simple mode and persistent activation
 

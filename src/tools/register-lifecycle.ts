@@ -7,8 +7,23 @@ import { loadConfig } from "../config/storage.ts";
 import { herdrAdvisorBlock } from "../herdr.ts";
 import { reserveAdvisorCall } from "./gate-policy.ts";
 import { handleAutomaticGate } from "./loop-gate.ts";
+import { advisorModelAccess } from "./model-access.ts";
 import { advisorInvocationGuidelines } from "./prompts.ts";
 import type { ToolRegistrationContext } from "./types.ts";
+
+const modelAccessBlock = (
+  toolName: string,
+  ctx: Parameters<typeof loadConfig>[0]
+): { block: true; reason: string } | undefined => {
+  const access = advisorModelAccess(ctx);
+  if (access.allowed || toolName !== "ask_advisor") {
+    return undefined;
+  }
+  return {
+    block: true,
+    reason: access.reason,
+  };
+};
 
 export const registerToolLifecycle = ({
   pi,
@@ -57,6 +72,9 @@ export const registerToolLifecycle = ({
       return;
     }
     loadConfig(ctx);
+    if (!advisorModelAccess(ctx).allowed) {
+      return;
+    }
     const guidelines = advisorInvocationGuidelines();
     const budget = isSimpleMode()
       ? undefined
@@ -87,6 +105,10 @@ export const registerToolLifecycle = ({
       // The ask_advisor execute path surfaces its own configuration errors as
       // tool errors; every other tool must proceed without Advisor gating.
       return;
+    }
+    const accessBlock = modelAccessBlock(event.toolName, ctx);
+    if (accessBlock) {
+      return accessBlock;
     }
     const reservation = reserveAdvisorCall(event, ctx, session, reservedCalls);
     if (event.toolName === "ask_advisor") {

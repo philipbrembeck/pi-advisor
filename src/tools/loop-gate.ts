@@ -26,6 +26,7 @@ import {
   updateAdvisorUsageStatus,
 } from "./gate-policy.ts";
 import { adviceForGateText } from "./gate-protocol.ts";
+import { advisorModelIsAllowed } from "./model-access.ts";
 import {
   appendScoutLifecycleEntry,
   type ScoutStatusManager,
@@ -158,6 +159,7 @@ export const handleAutomaticGate = async (
   if (
     isSimpleMode() ||
     event.toolName === "ask_advisor" ||
+    !advisorModelIsAllowed(ctx) ||
     !advisorAutoLoopGateRef ||
     !session.recordToolCall(
       event.toolName,

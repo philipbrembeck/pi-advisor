@@ -4,11 +4,13 @@ import {
   isSimpleMode,
 } from "../config/state.ts";
 import type { GitContextLevel } from "../git.ts";
+import { advisorModelAccessReason } from "../tools/model-access.ts";
 import { resolveAdvisorRequest } from "../tools/render-common.ts";
 import { ManualAdvisorDialog } from "../ui/manual-dialog.ts";
 import type { ManualAdvisorRequest } from "../ui/types.ts";
 import { loadCommandConfig } from "./activation-preparation.ts";
 import { startManualConsultation } from "./manual-consultation.ts";
+import { notify } from "./runtime.ts";
 import type { CommandRuntime, ManualAdvisorProgressState } from "./types.ts";
 
 export const registerManualCommand = (runtime: CommandRuntime) => {
@@ -17,6 +19,11 @@ export const registerManualCommand = (runtime: CommandRuntime) => {
       "Consult the Advisor in parallel; accepts an optional focused question and fans its response out to the Executor",
     handler: async (args, ctx) => {
       if (!loadCommandConfig(ctx)) {
+        return;
+      }
+      const accessReason = advisorModelAccessReason(ctx);
+      if (accessReason) {
+        notify(ctx, accessReason, "warning");
         return;
       }
       if (

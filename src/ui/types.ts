@@ -11,11 +11,22 @@ export interface SearchableModelSelectorOptions {
   allOptions: string[];
   currentOption?: string;
   keybindings: KeybindingsManager;
+  multiSelect?: false;
   onCancel: () => void;
   onSelect: (value: string) => void;
   theme: Theme;
   title: string;
   tui: RenderRequester;
+}
+
+export interface SearchableModelMultiSelectorOptions
+  extends Omit<
+    SearchableModelSelectorOptions,
+    "currentOption" | "multiSelect" | "onSelect"
+  > {
+  currentOptions: string[];
+  multiSelect: true;
+  onSelect: (values: string[]) => void;
 }
 
 export interface ManualAdvisorRequest {
@@ -82,6 +93,7 @@ export interface AdvisorSettings {
   jevTurnGateNoulThreshold?: number;
   loopThreshold?: number;
   maxCallsPerSession?: number;
+  modelWhitelist?: string[];
   outcomeLogging?: boolean;
   planGate: boolean;
   redactSecrets?: boolean;
@@ -100,6 +112,8 @@ export interface AdvisorSettings {
 export interface AdvisorSettingsSelectorOptions {
   effortLevels: string[];
   initial: AdvisorSettings;
+  keybindings?: KeybindingsManager;
+  modelRefs?: string[];
   onCancel: () => void;
   onChange?: (settings: AdvisorSettings) => void;
   /** @deprecated Use onChange; retained for extensions embedding this component. */

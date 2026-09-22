@@ -15,6 +15,7 @@ import type { AdvisorSessionState } from "../session-state.ts";
 import { advisorUsageCost } from "../usage.ts";
 import type { consultAdvisor } from "./consultation.ts";
 import { updateAdvisorUsageStatus } from "./gate-policy.ts";
+import { advisorModelIsAllowed } from "./model-access.ts";
 import { createOutageNotifier } from "./outage-notifier.ts";
 
 export const turnGateQuestion = {
@@ -81,6 +82,7 @@ export const handleJevTurnEnd = async (
     isSimpleMode() ||
     session.blocked ||
     !registration.activeTools().includes("ask_advisor") ||
+    !advisorModelIsAllowed(ctx) ||
     !session.canConsult(getAdvisorMaxCallsPerSession())
   ) {
     return;

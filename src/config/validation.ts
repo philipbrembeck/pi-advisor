@@ -4,6 +4,7 @@ import type { AdvisorConfig } from "./types.ts";
 
 // biome-ignore lint/performance/noBarrelFile: re-exports keep the isValid* validators on their historical module for the config facade.
 export {
+  isValidAdvisorModelWhitelist,
   isValidAdvisorToolPolicies,
   isValidContextMaxChars,
   isValidGateFailureMode,
@@ -69,6 +70,19 @@ const validateNumericValues = (config: ConfigRecord, path: string) => {
   }
 };
 
+const validateArrayValues = (config: ConfigRecord, path: string) => {
+  for (const key of keysOfType("array")) {
+    const isValid = SCHEMA_BY_KEY[key].validate;
+    if (
+      config[key] !== undefined &&
+      isValid !== undefined &&
+      !isValid(config[key])
+    ) {
+      invalidConfigValue(path, key, SCHEMA_BY_KEY[key].accepted);
+    }
+  }
+};
+
 const validateEnumValues = (config: ConfigRecord, path: string) => {
   for (const key of keysOfType("enum")) {
     const isValid = SCHEMA_BY_KEY[key].validate;
@@ -109,6 +123,7 @@ export const validateConfig = (
   validateBooleanValues(config, path);
   validateNumericValues(config, path);
   validateObjectValues(config, path);
+  validateArrayValues(config, path);
   validateEnumValues(config, path);
   return true;
 };

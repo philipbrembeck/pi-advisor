@@ -14,6 +14,7 @@ export {
   advisorHerdrIntegrationRef,
   advisorLoopThresholdRef,
   advisorMaxCallsPerSessionRef,
+  advisorModelWhitelistRef,
   advisorOutcomeLoggingRef,
   advisorPlanGateRef,
   advisorRedactSecretsRef,
@@ -46,6 +47,7 @@ export {
   setAdvisorHerdrIntegrationRef,
   setAdvisorLoopThresholdRef,
   setAdvisorMaxCallsPerSessionRef,
+  setAdvisorModelWhitelistRef,
   setAdvisorOutcomeLoggingRef,
   setAdvisorPlanGateRef,
   setAdvisorRedactSecretsRef,
@@ -93,6 +95,7 @@ export {
   MAX_CONTEXT_MAX_CHARS,
 } from "./config/types.ts";
 export {
+  isValidAdvisorModelWhitelist,
   isValidAdvisorToolPolicies,
   isValidContextMaxChars,
   isValidGateFailureMode,

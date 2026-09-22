@@ -24,6 +24,7 @@ import {
   advisorJevTurnGateNoulThresholdRef,
   advisorLoopThresholdRef,
   advisorMaxCallsPerSessionRef,
+  advisorModelWhitelistRef,
   advisorOutcomeLoggingRef,
   advisorPlanGateRef,
   advisorRedactSecretsRef,
@@ -55,6 +56,12 @@ import {
 /** An empty ref means no model has been selected yet. */
 const configuredModelRef = (value: string | undefined): string | undefined =>
   value?.trim() || undefined;
+
+export const isValidAdvisorModelWhitelist = (
+  value: unknown
+): value is string[] =>
+  Array.isArray(value) &&
+  value.every((model) => typeof model === "string" && model.trim().length > 0);
 
 export const isValidAdvisorToolPolicies = (
   value: unknown
@@ -134,7 +141,7 @@ export interface ConfigKeySchema {
   /** Included in the state captured and diffed by saveConfig. */
   persisted: boolean;
   /** JSON value type used for the base type check. */
-  type: "string" | "boolean" | "number" | "enum" | "object";
+  type: "string" | "boolean" | "number" | "enum" | "object" | "array";
   /** Type beyond the JSON type, for enum and object keys. */
   validate?: (value: unknown) => boolean;
 }
@@ -296,6 +303,13 @@ export const CONFIG_SCHEMA = {
     persisted: true,
     type: "number",
     validate: isValidMaxCallsPerSession,
+  },
+  advisorModelWhitelist: {
+    accepted: "an array of non-empty provider/model strings",
+    current: () => [...advisorModelWhitelistRef],
+    persisted: true,
+    type: "array",
+    validate: isValidAdvisorModelWhitelist,
   },
   advisorOutcomeLogging: {
     accepted: "true or false",

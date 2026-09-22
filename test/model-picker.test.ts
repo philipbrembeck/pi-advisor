@@ -1,12 +1,33 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { getConfiguredModelRefs } from "../src/commands/model-options.ts";
 import { registerCommands } from "../src/commands.ts";
-import { SearchableModelSelector } from "../src/ui.ts";
+import {
+  SearchableModelMultiSelector,
+  SearchableModelSelector,
+} from "../src/ui/model-selector.ts";
 import { withAgentDir } from "./helpers/config-fixture.ts";
 import { mockPi } from "./helpers/mock-pi.ts";
 
 describe("Searchable model selector", () => {
+  test("lists only models available from Pi's model registry", () => {
+    const refs = getConfiguredModelRefs({
+      modelRegistry: {
+        getAll: () => [
+          { id: "unavailable", provider: "provider" },
+          { id: "first", provider: "provider" },
+        ],
+        getAvailable: () => [
+          { id: "second", provider: "provider" },
+          { id: "first", provider: "provider" },
+          { id: "first", provider: "provider" },
+        ],
+      },
+    } as any);
+    expect(refs).toEqual(["provider/first", "provider/second"]);
+  });
+
   const theme = {
     bold: (value: string) => value,
     fg: (_color: string, value: string) => value,
@@ -50,6 +71,97 @@ describe("Searchable model selector", () => {
     expect(screen).not.toContain("provider/unavailable");
     selector.handleInput("\r");
     expect(selected).toBe("provider/available");
+  });
+
+  test("keeps saved and stale whitelist entries checked without duplicates", () => {
+    let selected: string[] | undefined;
+    const selector = new SearchableModelMultiSelector({
+      allOptions: [
+        "provider/alpha",
+        "provider/beta",
+        "provider/alpha",
+        "provider/stale",
+      ],
+      currentOptions: ["provider/alpha", "provider/stale"],
+      keybindings,
+      multiSelect: true,
+      onCancel: () => undefined,
+      onSelect: (values) => {
+        selected = values;
+      },
+      theme,
+      title: "Advisor model whitelist",
+      tui: { requestRender: () => undefined },
+    });
+
+    const screen = selector.render(100).join("\n");
+    expect(screen.match(/provider\/alpha/g)).toHaveLength(1);
+    expect(screen).toContain("✓ provider/alpha");
+    expect(screen).toContain("✓ provider/stale");
+    selector.handleInput("\r");
+    expect(selected).toEqual(["provider/alpha", "provider/stale"]);
+  });
+
+  test("fuzzy-filters and toggles multiple models", () => {
+    let selected: string[] | undefined;
+    const selector = new SearchableModelMultiSelector({
+      allOptions: [
+        "anthropic/claude-sonnet-5",
+        "openai-codex/gpt-5.6-luna",
+        "openrouter/deepseek-v4",
+      ],
+      currentOptions: [],
+      keybindings,
+      multiSelect: true,
+      onCancel: () => undefined,
+      onSelect: (values) => {
+        selected = values;
+      },
+      theme,
+      title: "Advisor model whitelist",
+      tui: { requestRender: () => undefined },
+    });
+
+    selector.handleInput("s");
+    selector.handleInput("o");
+    selector.handleInput("n");
+    expect(selector.render(100).join("\n")).toContain(
+      "anthropic/claude-sonnet-5"
+    );
+    expect(selector.render(100).join("\n")).not.toContain(
+      "openrouter/deepseek-v4"
+    );
+    selector.handleInput(" ");
+    selector.handleInput("\r");
+    expect(selected).toEqual(["anthropic/claude-sonnet-5"]);
+  });
+
+  test("applies selected models when the current search has no matches", () => {
+    let selected: string[] | undefined;
+    const selector = new SearchableModelMultiSelector({
+      allOptions: ["provider/alpha", "provider/beta"],
+      currentOptions: [],
+      keybindings,
+      multiSelect: true,
+      onCancel: () => undefined,
+      onSelect: (values) => {
+        selected = values;
+      },
+      theme,
+      title: "Advisor model whitelist",
+      tui: { requestRender: () => undefined },
+    });
+
+    selector.handleInput(" ");
+    for (const character of "no-match") {
+      selector.handleInput(character);
+    }
+    expect(selector.render(100).join("\n")).toContain(
+      "No matching models found."
+    );
+    selector.handleInput("\r");
+
+    expect(selected).toEqual(["provider/alpha"]);
   });
 
   test("keeps the current model when Enter is pressed immediately", () => {

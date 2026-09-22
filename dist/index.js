@@ -51,6 +51,7 @@ var advisorBlockOnBlockedRef = true;
 var advisorAutoLoopGateRef = true;
 var advisorLoopThresholdRef = 3;
 var advisorMaxCallsPerSessionRef;
+var advisorModelWhitelistRef = [];
 var advisorSessionSummaryRef = false;
 var simpleModeRef = false;
 var alwaysOnRef = false;
@@ -128,6 +129,9 @@ var setAdvisorLoopThresholdRef = (value) => {
 };
 var setAdvisorMaxCallsPerSessionRef = (value) => {
   advisorMaxCallsPerSessionRef = value;
+};
+var setAdvisorModelWhitelistRef = (models) => {
+  advisorModelWhitelistRef = Array.from(new Set(models.map((model) => model.trim()).filter(Boolean)));
 };
 var setAdvisorSessionSummaryRef = (enabled) => {
   advisorSessionSummaryRef = enabled;
@@ -241,6 +245,7 @@ var getAdvisorSettings = () => ({
   jevTurnGateNoulThreshold: advisorJevTurnGateNoulThresholdRef,
   loopThreshold: advisorLoopThresholdRef,
   maxCallsPerSession: advisorMaxCallsPerSessionRef,
+  modelWhitelist: [...advisorModelWhitelistRef],
   outcomeLogging: advisorOutcomeLoggingRef,
   planGate: advisorPlanGateRef,
   redactSecrets: advisorRedactSecretsRef,
@@ -369,6 +374,7 @@ ${patch}` : "Patch: (no tracked-file content changes)");
 
 // src/config/schema.ts
 var configuredModelRef = (value) => value?.trim() || undefined;
+var isValidAdvisorModelWhitelist = (value) => Array.isArray(value) && value.every((model) => typeof model === "string" && model.trim().length > 0);
 var isValidAdvisorToolPolicies = (value) => {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return false;
@@ -546,6 +552,13 @@ var CONFIG_SCHEMA = {
     type: "number",
     validate: isValidMaxCallsPerSession
   },
+  advisorModelWhitelist: {
+    accepted: "an array of non-empty provider/model strings",
+    current: () => [...advisorModelWhitelistRef],
+    persisted: true,
+    type: "array",
+    validate: isValidAdvisorModelWhitelist
+  },
   advisorOutcomeLogging: {
     accepted: "true or false",
     current: () => advisorOutcomeLoggingRef,
@@ -694,6 +707,14 @@ var validateNumericValues = (config, path) => {
     }
   }
 };
+var validateArrayValues = (config, path) => {
+  for (const key of keysOfType("array")) {
+    const isValid = SCHEMA_BY_KEY[key].validate;
+    if (config[key] !== undefined && isValid !== undefined && !isValid(config[key])) {
+      invalidConfigValue(path, key, SCHEMA_BY_KEY[key].accepted);
+    }
+  }
+};
 var validateEnumValues = (config, path) => {
   for (const key of keysOfType("enum")) {
     const isValid = SCHEMA_BY_KEY[key].validate;
@@ -719,6 +740,7 @@ var validateConfig = (value, path = "advisor.json") => {
   validateBooleanValues(config, path);
   validateNumericValues(config, path);
   validateObjectValues(config, path);
+  validateArrayValues(config, path);
   validateEnumValues(config, path);
   return true;
 };
@@ -775,6 +797,7 @@ var resetDefaults = () => {
   setAdvisorAutoLoopGateRef(true);
   setAdvisorLoopThresholdRef(3);
   setAdvisorMaxCallsPerSessionRef(undefined);
+  setAdvisorModelWhitelistRef([]);
   setAdvisorSessionSummaryRef(false);
   setSimpleModeRef(false);
   setAlwaysOnRef(false);
@@ -830,6 +853,7 @@ var applyConfig = (config) => {
   applyOptionalConfig(config, "advisorAutoLoopGate", setAdvisorAutoLoopGateRef);
   applyOptionalConfig(config, "advisorLoopThreshold", setAdvisorLoopThresholdRef);
   applyOptionalConfig(config, "advisorMaxCallsPerSession", setAdvisorMaxCallsPerSessionRef);
+  applyOptionalConfig(config, "advisorModelWhitelist", setAdvisorModelWhitelistRef);
   applyOptionalConfig(config, "advisorSessionSummary", setAdvisorSessionSummaryRef);
   applyOptionalConfig(config, "advisorScoutEnabled", setAdvisorScoutEnabledRef);
   applyOptionalConfig(config, "showUsageDetails", setShowUsageDetailsRef);
@@ -1050,6 +1074,11 @@ var getAvailableModelRefs = (ctx) => {
   }
   return ctx.modelRegistry.getAvailable().map((model) => `${model.provider}/${model.id}`);
 };
+var getConfiguredModelRefs = (ctx) => {
+  const registry = ctx.modelRegistry;
+  const models = typeof registry?.getAvailable === "function" ? registry.getAvailable() : [];
+  return Array.from(new Set(models.map((model) => `${model.provider}/${model.id}`))).sort((left, right) => left.localeCompare(right));
+};
 var isSelectableModel = (ctx, ref, availableRefs) => {
   if (!ref) {
     return false;
@@ -1084,18 +1113,20 @@ var planActivationModels = (ctx, executor, advisor, pendingExecutorRef, persiste
   };
 };
 
-// src/ui/model-selector.ts
+// src/ui/searchable-model-list.ts
 import {
   fuzzyFilter,
   Input,
   truncateToWidth
 } from "@earendil-works/pi-tui";
 
-class SearchableModelSelector {
+class SearchableModelList {
   tui;
   searchInput;
   allOptions;
   currentOption;
+  multiSelect;
+  selected = new Set;
   filteredOptions;
   selectedIndex = 0;
   title;
@@ -1112,13 +1143,30 @@ class SearchableModelSelector {
     this.searchInput.focused = val;
   }
   constructor(options) {
+    this.multiSelect = options.multiSelect;
     this.tui = options.tui;
     this.title = options.title;
-    this.currentOption = options.currentOption && options.allOptions.includes(options.currentOption) ? options.currentOption : undefined;
-    this.allOptions = this.currentOption ? [
-      this.currentOption,
-      ...options.allOptions.filter((item) => item !== this.currentOption)
-    ] : options.allOptions;
+    const [requestedCurrentOption] = options.currentOptions;
+    this.currentOption = !this.multiSelect && requestedCurrentOption && options.allOptions.includes(requestedCurrentOption) ? requestedCurrentOption : undefined;
+    let allOptions;
+    if (this.multiSelect) {
+      allOptions = [...new Set(options.allOptions)].sort((left, right) => left.localeCompare(right));
+    } else if (this.currentOption) {
+      allOptions = [
+        this.currentOption,
+        ...options.allOptions.filter((item) => item !== this.currentOption)
+      ];
+    } else {
+      allOptions = [...options.allOptions];
+    }
+    this.allOptions = allOptions;
+    if (this.multiSelect) {
+      for (const value of options.currentOptions) {
+        if (this.allOptions.includes(value)) {
+          this.selected.add(value);
+        }
+      }
+    }
     this.theme = options.theme;
     this.keybindings = options.keybindings;
     this.onSelect = options.onSelect;
@@ -1146,20 +1194,14 @@ class SearchableModelSelector {
       const startIndex = Math.max(0, Math.min(this.selectedIndex - Math.floor(maxVisible / 2), total - maxVisible));
       const endIndex = Math.min(startIndex + maxVisible, total);
       for (let i = startIndex;i < endIndex; i += 1) {
-        const item = this.filteredOptions[i];
-        const tick = item === this.currentOption ? "✓ " : "  ";
-        if (i === this.selectedIndex) {
-          lines.push(`  ${this.theme.fg("accent", "→ ")}${this.theme.fg("accent", `${tick}${item}`)}`);
-        } else {
-          lines.push(`    ${this.theme.fg("text", `${tick}${item}`)}`);
-        }
+        lines.push(this.renderOption(this.filteredOptions[i], i));
       }
       if (total > maxVisible) {
         lines.push("  " + this.theme.fg("muted", `  (${this.selectedIndex + 1}/${total})`));
       }
     }
     lines.push("");
-    lines.push(`  ${this.theme.fg("dim", "Type to search · ↑↓: navigate · Enter: select · Esc: cancel")}`);
+    lines.push(`  ${this.theme.fg("dim", this.interactionHint())}`);
     lines.push(this.theme.fg("border", "─".repeat(width)));
     return lines.map((line) => truncateToWidth(line, width));
   }
@@ -1172,10 +1214,27 @@ class SearchableModelSelector {
       this.moveSelection(1);
       return;
     }
+    if (this.multiSelect && keyData === " ") {
+      const item = this.filteredOptions[this.selectedIndex];
+      if (item) {
+        if (this.selected.has(item)) {
+          this.selected.delete(item);
+        } else {
+          this.selected.add(item);
+        }
+      }
+      this.tui.requestRender();
+      return;
+    }
     if (this.matchesAction(keyData, "tui.select.confirm", `
 `) || keyData === "\r") {
-      if (this.filteredOptions.length > 0) {
-        this.onSelect(this.filteredOptions[this.selectedIndex]);
+      if (this.multiSelect) {
+        this.onSelect(this.allOptions.filter((item) => this.selected.has(item)));
+      } else {
+        const selectedOption = this.filteredOptions[this.selectedIndex];
+        if (selectedOption !== undefined) {
+          this.onSelect([selectedOption]);
+        }
       }
       return;
     }
@@ -1186,6 +1245,19 @@ class SearchableModelSelector {
     this.searchInput.handleInput(keyData);
     this.selectedIndex = 0;
     this.tui.requestRender();
+  }
+  interactionHint() {
+    return this.multiSelect ? "Type to search · ↑↓: navigate · Space: toggle · Enter: apply · Esc: cancel" : "Type to search · ↑↓: navigate · Enter: select · Esc: cancel";
+  }
+  renderOption(item, index) {
+    let tick = "  ";
+    if (this.multiSelect ? this.selected.has(item) : item === this.currentOption) {
+      tick = "✓ ";
+    }
+    if (index === this.selectedIndex) {
+      return `  ${this.theme.fg("accent", `→ ${tick}${item}`)}`;
+    }
+    return `    ${this.theme.fg("text", `${tick}${item}`)}`;
   }
   matchesAction(keyData, action, fallback) {
     return this.keybindings.matches(keyData, action) || keyData === fallback;
@@ -1203,6 +1275,50 @@ class SearchableModelSelector {
       }
     }
     this.tui.requestRender();
+  }
+}
+
+// src/ui/model-selector.ts
+class ModelSelectorAdapter {
+  list;
+  constructor(list) {
+    this.list = list;
+  }
+  get focused() {
+    return this.list.focused;
+  }
+  set focused(value) {
+    this.list.focused = value;
+  }
+  invalidate() {
+    this.list.invalidate();
+  }
+  render(width) {
+    return this.list.render(width);
+  }
+  handleInput(keyData) {
+    this.list.handleInput(keyData);
+  }
+}
+
+class SearchableModelSelector extends ModelSelectorAdapter {
+  constructor(options) {
+    super(new SearchableModelList({
+      ...options,
+      currentOptions: options.currentOption ? [options.currentOption] : [],
+      multiSelect: false,
+      onSelect: ([value]) => {
+        if (value !== undefined) {
+          options.onSelect(value);
+        }
+      }
+    }));
+  }
+}
+
+class SearchableModelMultiSelector extends ModelSelectorAdapter {
+  constructor(options) {
+    super(new SearchableModelList(options));
   }
 }
 
@@ -3033,6 +3149,32 @@ var adviceForGateText = (result) => `**Decision: ${result.decision}**
 
 ${result.markdown}`;
 
+// src/tools/model-access.ts
+var currentModelRef = (ctx) => {
+  const { model } = ctx;
+  return model ? `${model.provider}/${model.id}` : undefined;
+};
+var advisorModelAccess = (ctx) => {
+  const modelRef = currentModelRef(ctx);
+  if (advisorModelWhitelistRef.length === 0) {
+    return { allowed: true, ...modelRef ? { modelRef } : {} };
+  }
+  if (modelRef && advisorModelWhitelistRef.includes(modelRef)) {
+    return { allowed: true, modelRef };
+  }
+  const current = modelRef ?? "no current model";
+  return {
+    allowed: false,
+    ...modelRef ? { modelRef } : {},
+    reason: `Advisor calls are restricted to the configured model whitelist (${advisorModelWhitelistRef.join(", ")}). Current model: ${current}.`
+  };
+};
+var advisorModelIsAllowed = (ctx) => advisorModelAccess(ctx).allowed;
+var advisorModelAccessReason = (ctx) => {
+  const access = advisorModelAccess(ctx);
+  return access.allowed ? undefined : access.reason;
+};
+
 // src/tools/consultation.ts
 class AdvisorNoAdviceError extends Error {
   constructor() {
@@ -3046,6 +3188,10 @@ ${item.text}
 var collectAdvisorResponse = async (options) => {
   const { ctx, question, signal, systemPrompt } = options;
   loadConfig(ctx);
+  const accessReason = advisorModelAccessReason(ctx);
+  if (accessReason) {
+    throw new Error(accessReason);
+  }
   const resolved = await resolveConfiguredModel(ctx, advisorRef, "Advisor");
   const context = await assembleConsultationContext(options);
   const outboundQuestion = advisorRedactSecretsRef && question !== undefined ? redactSecrets(question) : question;
@@ -5156,6 +5302,11 @@ var registerManualCommand = (runtime) => {
       if (!loadCommandConfig(ctx)) {
         return;
       }
+      const accessReason = advisorModelAccessReason(ctx);
+      if (accessReason) {
+        notify(ctx, accessReason, "warning");
+        return;
+      }
       if (!(isSimpleMode() || runtime.advisorSessionState.canConsult(getAdvisorMaxCallsPerSession()))) {
         runtime.reportManualBudgetExhausted(ctx);
         return;
@@ -5418,6 +5569,11 @@ var rainbowGradient = (text, startedAt) => {
     return `\x1B[38;2;${red};${green};${blue}m${character}`;
   }).join("").concat("\x1B[0m");
 };
+
+// src/ui/settings-items.ts
+import {
+  getKeybindings
+} from "@earendil-works/pi-tui";
 
 // src/ui/jev-setup-submenu.ts
 import {
@@ -5939,8 +6095,28 @@ var jevItems = (settings, theme, tui) => [
     ])
   }
 ];
+var advisorModelWhitelistItem = (settings, modelRefs, keybindings, theme, tui) => ({
+  currentValue: settings.modelWhitelist?.length ? settings.modelWhitelist.join(", ") : "Any model",
+  description: "Only the exact provider/model references listed here may call the Advisor; an empty list allows every model.",
+  id: "modelWhitelist",
+  label: "Advisor model whitelist",
+  submenu: (_currentValue, done) => new SearchableModelMultiSelector({
+    allOptions: [
+      ...new Set([...modelRefs ?? [], ...settings.modelWhitelist ?? []])
+    ],
+    currentOptions: settings.modelWhitelist ?? [],
+    keybindings: keybindings ?? getKeybindings(),
+    multiSelect: true,
+    onCancel: done,
+    onSelect: (values) => done(values.join(",")),
+    theme,
+    title: "Advisor model whitelist",
+    tui
+  })
+});
 var createSettingsItems = ({
   effortLevels,
+  modelWhitelist,
   presets,
   settings,
   theme,
@@ -5970,6 +6146,7 @@ var createSettingsItems = ({
     }
   ];
   if (settings.simpleMode) {
+    items.push(modelWhitelist);
     return items;
   }
   items.push({
@@ -5978,7 +6155,7 @@ var createSettingsItems = ({
     id: "effort",
     label: "Advisor reasoning",
     values: withCurrentValue(currentEffort(settings.effort), effortLevels)
-  }, toggle("scoutEnabled", "Experimental Advisor Scout", "Enable the experimental Scout before Advisor calls.", settings.scoutEnabled, false), toggle("showUsageDetails", "Show usage and cost details", "Show token usage and cost details in Advisor responses.", settings.showUsageDetails, true), toggle("showUsageFooter", "Show usage in footer", "Show the current Advisor usage summary in the footer.", settings.showUsageFooter, false), toggle("planGate", "Plan gate", "Ask the Advisor to review implementation plans.", settings.planGate, true), toggle("failureGate", "Failure gate", "Ask the Advisor to review repeated failures.", settings.failureGate, true), toggle("completionGate", "Completion gate", "Ask the Advisor to review work before declaring success.", settings.completionGate, true), toggle("collapseResponses", "Collapse long responses", "Collapse long Advisor responses in the transcript.", settings.collapseResponses, false), {
+  }, modelWhitelist, toggle("scoutEnabled", "Experimental Advisor Scout", "Enable the experimental Scout before Advisor calls.", settings.scoutEnabled, false), toggle("showUsageDetails", "Show usage and cost details", "Show token usage and cost details in Advisor responses.", settings.showUsageDetails, true), toggle("showUsageFooter", "Show usage in footer", "Show the current Advisor usage summary in the footer.", settings.showUsageFooter, false), toggle("planGate", "Plan gate", "Ask the Advisor to review implementation plans.", settings.planGate, true), toggle("failureGate", "Failure gate", "Ask the Advisor to review repeated failures.", settings.failureGate, true), toggle("completionGate", "Completion gate", "Ask the Advisor to review work before declaring success.", settings.completionGate, true), toggle("collapseResponses", "Collapse long responses", "Collapse long Advisor responses in the transcript.", settings.collapseResponses, false), {
     currentValue: settings.customRule || "None",
     description: "Add a rule that triggers Advisor involvement.",
     id: "customRule",
@@ -6171,6 +6348,7 @@ var BOOLEAN_SETTING_IDS = new Set([
   "untrackedContent",
   "outcomeLogging"
 ]);
+var parseModelWhitelist = (value) => Array.from(new Set(value.split(",").map((model) => model.trim()).filter(Boolean)));
 var mutateAdvisorSettings = (settings, id, value, presets) => {
   switch (id) {
     case "context":
@@ -6196,6 +6374,9 @@ var mutateAdvisorSettings = (settings, id, value, presets) => {
       break;
     case "maxCallsPerSession":
       settings.maxCallsPerSession = value === "∞" ? undefined : Number(value);
+      break;
+    case "modelWhitelist":
+      settings.modelWhitelist = parseModelWhitelist(value);
       break;
     case "failureMode":
       settings.failureMode = value;
@@ -6311,8 +6492,10 @@ class AdvisorSettingsSelector {
       }
       return defaultLabel(text, selected);
     };
+    const modelWhitelist = advisorModelWhitelistItem(this.settings, this.options.modelRefs, this.options.keybindings, this.options.theme, this.options.tui);
     const items = createSettingsItems({
       effortLevels: this.options.effortLevels,
+      modelWhitelist,
       presets: this.presets,
       settings: this.settings,
       theme: this.options.theme,
@@ -6354,7 +6537,7 @@ class AdvisorSettingsSelector {
       showUsageDetails: this.settings.showUsageDetails ?? true,
       toolPolicies: { ...this.settings.toolPolicies ?? {} }
     });
-    if (id === "context" || id === "simpleMode" || id === "customRule" || id === "toolPolicies") {
+    if (id === "context" || id === "simpleMode" || id === "customRule" || id === "modelWhitelist" || id === "toolPolicies") {
       this.settingsList = this.createSettingsList(id);
     }
   }
@@ -6373,6 +6556,7 @@ var applyAdvisorSettings = (settings) => {
   setAdvisorAutoLoopGateRef(settings.autoLoopGate ?? true);
   setAdvisorLoopThresholdRef(settings.loopThreshold ?? 3);
   setAdvisorMaxCallsPerSessionRef(settings.maxCallsPerSession);
+  setAdvisorModelWhitelistRef(settings.modelWhitelist ?? []);
   setAdvisorSessionSummaryRef(settings.sessionSummary ?? false);
   setAdvisorScoutEnabledRef(settings.scoutEnabled ?? false);
   setShowUsageDetailsRef(settings.showUsageDetails ?? true);
@@ -6421,9 +6605,11 @@ var registerSettingsCommands = (runtime) => {
         return;
       }
       const initial = getAdvisorSettings();
-      await ctx.ui.custom((tui, theme, _keybindings, done) => new AdvisorSettingsSelector({
+      await ctx.ui.custom((tui, theme, keybindings, done) => new AdvisorSettingsSelector({
         effortLevels: EFFORT_LEVELS,
         initial,
+        keybindings,
+        modelRefs: getConfiguredModelRefs(ctx),
         onCancel: () => done(),
         onChange: (settings) => {
           try {
@@ -6698,7 +6884,7 @@ var handleJevTurnEnd = async (registration, ctx) => {
   if (interval <= 0 || session.turnsSinceConsultation <= 0 || session.turnsSinceConsultation % interval !== 0) {
     return;
   }
-  if (isSimpleMode() || session.blocked || !registration.activeTools().includes("ask_advisor") || !session.canConsult(getAdvisorMaxCallsPerSession())) {
+  if (isSimpleMode() || session.blocked || !registration.activeTools().includes("ask_advisor") || !advisorModelIsAllowed(ctx) || !session.canConsult(getAdvisorMaxCallsPerSession())) {
     return;
   }
   const consult = registration.deps?.consult ?? registration.consult;
@@ -6891,6 +7077,12 @@ var renderAdvisorResult = (result, { isPartial, expanded }, theme, context) => {
 };
 
 // src/tools/register-ask-advisor.ts
+var assertAdvisorModelAccess = (ctx) => {
+  const accessReason = advisorModelAccessReason(ctx);
+  if (accessReason) {
+    throw new Error(accessReason);
+  }
+};
 var claimTrackedHandoff = (session, includeTrackedFiles) => {
   if (!includeTrackedFiles?.length) {
     return;
@@ -6913,6 +7105,7 @@ var registerAskAdvisorTool = ({
     description: "Consult the on-demand Advisor model for strategic guidance. Call with an empty object for a contextual review; attach an optional draft for concrete plan or completion review. If the Advisor explicitly names a missing file, you may make a sequential follow-up call with includeTrackedFiles when enabled and relevant.",
     async execute(_id, params, signal, onUpdate, ctx) {
       reservedCalls.delete(_id);
+      assertAdvisorModelAccess(ctx);
       if (!(isSimpleMode() || session.canConsult(getAdvisorMaxCallsPerSession()))) {
         throw new Error("Advisor call budget exhausted for this session.");
       }
@@ -7139,7 +7332,7 @@ ${failure.reason}` } : undefined;
   return { block: true, reason: gateReason };
 };
 var handleAutomaticGate = async (pi, event, ctx, session, runGate, scoutStatus) => {
-  if (isSimpleMode() || event.toolName === "ask_advisor" || !advisorAutoLoopGateRef || !session.recordToolCall(event.toolName, event.input, advisorLoopThresholdRef)) {
+  if (isSimpleMode() || event.toolName === "ask_advisor" || !advisorModelIsAllowed(ctx) || !advisorAutoLoopGateRef || !session.recordToolCall(event.toolName, event.input, advisorLoopThresholdRef)) {
     return;
   }
   const reason = `Advisor loop gate: normalized signature for ${event.toolName} repeated ${advisorLoopThresholdRef} times without a materially different tool action.`;
@@ -7181,6 +7374,16 @@ var handleAutomaticGate = async (pi, event, ctx, session, runGate, scoutStatus) 
 };
 
 // src/tools/register-lifecycle.ts
+var modelAccessBlock = (toolName, ctx) => {
+  const access = advisorModelAccess(ctx);
+  if (access.allowed || toolName !== "ask_advisor") {
+    return;
+  }
+  return {
+    block: true,
+    reason: access.reason
+  };
+};
 var registerToolLifecycle = ({
   pi,
   reservedCalls,
@@ -7218,6 +7421,9 @@ var registerToolLifecycle = ({
       return;
     }
     loadConfig(ctx);
+    if (!advisorModelAccess(ctx).allowed) {
+      return;
+    }
     const guidelines = advisorInvocationGuidelines();
     const budget = isSimpleMode() ? undefined : session.remainingCalls(getAdvisorMaxCallsPerSession());
     if (budget !== undefined) {
@@ -7244,6 +7450,10 @@ ${guidelines.map((rule) => `- ${rule}`).join(`
     }
     if (!loadConfigOrSkipGating(ctx)) {
       return;
+    }
+    const accessBlock = modelAccessBlock(event.toolName, ctx);
+    if (accessBlock) {
+      return accessBlock;
     }
     const reservation = reserveAdvisorCall(event, ctx, session, reservedCalls);
     if (event.toolName === "ask_advisor") {

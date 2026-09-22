@@ -7,7 +7,11 @@ import {
 import { saveConfig } from "../config/storage.ts";
 import { AdvisorSettingsSelector } from "../ui/settings-selector.ts";
 import { loadCommandConfig } from "./activation-preparation.ts";
-import { CONTEXT_PRESETS, EFFORT_LEVELS } from "./model-options.ts";
+import {
+  CONTEXT_PRESETS,
+  EFFORT_LEVELS,
+  getConfiguredModelRefs,
+} from "./model-options.ts";
 import { notify } from "./runtime.ts";
 import { saveAdvisorSettings } from "./settings-persistence.ts";
 import type { CommandRuntime } from "./types.ts";
@@ -22,10 +26,12 @@ export const registerSettingsCommands = (runtime: CommandRuntime) => {
 
       const initial = getAdvisorSettings();
       await ctx.ui.custom<void>(
-        (tui, theme, _keybindings, done) =>
+        (tui, theme, keybindings, done) =>
           new AdvisorSettingsSelector({
             effortLevels: EFFORT_LEVELS,
             initial,
+            keybindings,
+            modelRefs: getConfiguredModelRefs(ctx),
             onCancel: () => done(),
             onChange: (settings) => {
               try {

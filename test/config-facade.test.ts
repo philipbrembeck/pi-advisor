@@ -17,10 +17,12 @@ const INVALID_TOOL_POLICIES_PATTERN = /advisorToolPolicies/;
 const INVALID_SCOUT_ENABLED_PATTERN = /advisorScoutEnabled/;
 const INVALID_SHOW_USAGE_DETAILS_PATTERN = /showUsageDetails/;
 const INVALID_SHOW_USAGE_FOOTER_PATTERN = /showUsageFooter/;
+const INVALID_MODEL_WHITELIST_PATTERN = /advisorModelWhitelist/;
 
 import {
   advisorFailureModeRef,
   advisorHerdrIntegrationRef,
+  advisorModelWhitelistRef,
   advisorOutcomeLoggingRef,
   advisorRedactSecretsRef,
   advisorRef,
@@ -51,6 +53,7 @@ import {
   setAdvisorHerdrIntegrationRef,
   setAdvisorLoopThresholdRef,
   setAdvisorMaxCallsPerSessionRef,
+  setAdvisorModelWhitelistRef,
   setAdvisorPlanGateRef,
   setAdvisorRedactSecretsRef,
   setAdvisorScoutEnabledRef,
@@ -129,10 +132,14 @@ describe("Config Module", () => {
       expect(alwaysOnRef).toBe(false);
       expect(advisorSessionSummaryRef).toBe(false);
       expect(advisorScoutEnabledRef).toBe(false);
+      expect(advisorModelWhitelistRef).toEqual([]);
       expect(showUsageDetailsRef).toBe(true);
       expect(showUsageFooterRef).toBe(false);
       expect(advisorHerdrIntegrationRef).toBe(true);
       expect(validateConfig({ advisorScoutEnabled: true })).toBe(true);
+      expect(
+        validateConfig({ advisorModelWhitelist: ["provider/model"] })
+      ).toBe(true);
       expect(validateConfig({ showUsageDetails: false })).toBe(true);
       expect(validateConfig({ showUsageFooter: true })).toBe(true);
       expect(() => validateConfig({ showUsageDetails: "yes" })).toThrow(
@@ -163,6 +170,11 @@ describe("Config Module", () => {
         expect(() => validateConfig({ advisorToolPolicies: invalid })).toThrow(
           INVALID_TOOL_POLICIES_PATTERN
         );
+      }
+      for (const invalid of ["provider/model", [""], ["provider/model", 1]]) {
+        expect(() =>
+          validateConfig({ advisorModelWhitelist: invalid })
+        ).toThrow(INVALID_MODEL_WHITELIST_PATTERN);
       }
     } finally {
       if (previousAgentDir === undefined) {
@@ -303,6 +315,7 @@ describe("Config Module", () => {
       setAdvisorAutoLoopGateRef(false);
       setAdvisorLoopThresholdRef(5);
       setAdvisorMaxCallsPerSessionRef(2);
+      setAdvisorModelWhitelistRef(["provider/allowed", "provider/allowed"]);
       setAdvisorSessionSummaryRef(false);
       setAdvisorScoutEnabledRef(true);
       setShowUsageDetailsRef(false);
@@ -326,6 +339,7 @@ describe("Config Module", () => {
         advisorHerdrIntegration: false,
         advisorLoopThreshold: 5,
         advisorMaxCallsPerSession: 2,
+        advisorModelWhitelist: ["provider/allowed"],
         advisorPlanGate: false,
         advisorRedactSecrets: true,
         advisorScoutEnabled: true,

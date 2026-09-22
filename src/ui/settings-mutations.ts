@@ -19,6 +19,16 @@ const BOOLEAN_SETTING_IDS = new Set([
   "outcomeLogging",
 ]);
 
+const parseModelWhitelist = (value: string) =>
+  Array.from(
+    new Set(
+      value
+        .split(",")
+        .map((model) => model.trim())
+        .filter(Boolean)
+    )
+  );
+
 export const mutateAdvisorSettings = (
   settings: AdvisorSettings,
   id: string,
@@ -55,6 +65,9 @@ export const mutateAdvisorSettings = (
       break;
     case "maxCallsPerSession":
       settings.maxCallsPerSession = value === "∞" ? undefined : Number(value);
+      break;
+    case "modelWhitelist":
+      settings.modelWhitelist = parseModelWhitelist(value);
       break;
     case "failureMode":
       settings.failureMode = value as AdvisorSettings["failureMode"];

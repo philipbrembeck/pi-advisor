@@ -22,6 +22,7 @@ const packageManifest = JSON.parse(
 const bundledEntry = resolve(packageRoot, packageManifest.main);
 const CONTEXT_WINDOW_PATTERN = /Context window[\s\S]*100k/;
 const ADVISOR_EFFORT_PATTERN = /Advisor reasoning[\s\S]*off/;
+const MODEL_WHITELIST_PATTERN = /Advisor model whitelist/;
 
 const extensionContext = (cwd) => ({
   cwd,
@@ -110,7 +111,12 @@ test("bundled package keeps settings state shared under Node DefaultResourceLoad
     assert.ok(firstCommand, "advisor-settings command was not registered");
 
     const context = extensionContext(cwd);
-    await runSettingsCommand(firstCommand.handler, context, true);
+    const firstRendered = await runSettingsCommand(
+      firstCommand.handler,
+      context,
+      true
+    );
+    assert.match(firstRendered, MODEL_WHITELIST_PATTERN);
 
     const saved = JSON.parse(
       readFileSync(join(agentDir, "advisor.json"), "utf8")

@@ -25,6 +25,7 @@ import {
   setAdvisorJevTurnGateNoulThresholdRef,
   setAdvisorLoopThresholdRef,
   setAdvisorMaxCallsPerSessionRef,
+  setAdvisorModelWhitelistRef,
   setAdvisorOutcomeLoggingRef,
   setAdvisorPlanGateRef,
   setAdvisorRedactSecretsRef,
@@ -71,6 +72,7 @@ const applyAdvisorSettings = (settings: AdvisorSettings) => {
   setAdvisorAutoLoopGateRef(settings.autoLoopGate ?? true);
   setAdvisorLoopThresholdRef(settings.loopThreshold ?? 3);
   setAdvisorMaxCallsPerSessionRef(settings.maxCallsPerSession);
+  setAdvisorModelWhitelistRef(settings.modelWhitelist ?? []);
   setAdvisorSessionSummaryRef(settings.sessionSummary ?? false);
   setAdvisorScoutEnabledRef(settings.scoutEnabled ?? false);
   setShowUsageDetailsRef(settings.showUsageDetails ?? true);

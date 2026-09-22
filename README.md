@@ -20,6 +20,7 @@ Keep implementation on a fast model and borrow frontier reasoning only when deci
 - **Configurable review gates** before plans, after repeated failures, and before declaring completion.
 - **Automatic loop detection** for repeated tool calls, with explicit proceed, revise, or blocked decisions.
 - **Separate model and reasoning controls** for the Executor and Advisor.
+- **Model whitelist** that can restrict Advisor calls to exact `provider/model` Executor references.
 - **Advisor usage accounting** with per-response token and cost details, normalized usage in Pi's `/cost` totals, and an optional cumulative footer.
 - **Privacy controls** for conversation history, repository context, explicit file handoff, tool results, secret redaction, and outcome logging.
 - **Optional persistent activation, Simple mode, session summaries, and Herdr integration.**
@@ -67,7 +68,7 @@ On first use, or whenever a saved model is unavailable, `/advisor` opens the sam
 /advisor executor=openai-codex/gpt-5.6-luna advisor=openai-codex/gpt-5.6-sol
 ```
 
-From the Executor, `ask_advisor({})` requests a general review. A targeted `question` or concise `draft` can focus the review on a particular decision.
+From the Executor, `ask_advisor({})` requests a general review. A targeted `question` or concise `draft` can focus the review on a particular decision. `/advisor-settings` can restrict this tool and every automatic Advisor gate to a whitelist of exact `provider/model` Executor references; an empty whitelist preserves the default of allowing every model.
 
 In the Settings, enable Simple Mode for a quick start.
 

@@ -9,7 +9,10 @@ import {
   rainbowGradient,
   SIMPLE_MODE_GRADIENT_INTERVAL_MS,
 } from "./settings-formatting.ts";
-import { createSettingsItems } from "./settings-items.ts";
+import {
+  advisorModelWhitelistItem,
+  createSettingsItems,
+} from "./settings-items.ts";
 import { SettingsListAdapter } from "./settings-list-adapter.ts";
 import { mutateAdvisorSettings } from "./settings-mutations.ts";
 import type {
@@ -96,8 +99,16 @@ export class AdvisorSettingsSelector implements Component, Focusable {
       }
       return defaultLabel(text, selected);
     };
+    const modelWhitelist = advisorModelWhitelistItem(
+      this.settings,
+      this.options.modelRefs,
+      this.options.keybindings,
+      this.options.theme,
+      this.options.tui
+    );
     const items = createSettingsItems({
       effortLevels: this.options.effortLevels,
+      modelWhitelist,
       presets: this.presets,
       settings: this.settings,
       theme: this.options.theme,
@@ -153,6 +164,7 @@ export class AdvisorSettingsSelector implements Component, Focusable {
       id === "context" ||
       id === "simpleMode" ||
       id === "customRule" ||
+      id === "modelWhitelist" ||
       id === "toolPolicies"
     ) {
       this.settingsList = this.createSettingsList(id);

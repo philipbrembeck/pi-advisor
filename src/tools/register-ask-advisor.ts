@@ -1,4 +1,7 @@
-import type { AgentToolResult } from "@earendil-works/pi-coding-agent";
+import type {
+  AgentToolResult,
+  ExtensionContext,
+} from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import {
   advisorRef,
@@ -18,6 +21,7 @@ import {
 } from "../usage.ts";
 import { notifyLocalFailure, updateAdvisorUsageStatus } from "./gate-policy.ts";
 import { normalizeScreeningQuestion, screeningSkipText } from "./jev-filter.ts";
+import { advisorModelAccessReason } from "./model-access.ts";
 import { renderAdvisorResult } from "./render-advisor-result.ts";
 import {
   renderAdvisorCallBox,
@@ -29,6 +33,13 @@ import type {
   AdvisorToolDetails,
   ToolRegistrationContext,
 } from "./types.ts";
+
+const assertAdvisorModelAccess = (ctx: ExtensionContext) => {
+  const accessReason = advisorModelAccessReason(ctx);
+  if (accessReason) {
+    throw new Error(accessReason);
+  }
+};
 
 const claimTrackedHandoff = (
   session: ToolRegistrationContext["session"],
@@ -61,6 +72,7 @@ export const registerAskAdvisorTool = ({
       "Consult the on-demand Advisor model for strategic guidance. Call with an empty object for a contextual review; attach an optional draft for concrete plan or completion review. If the Advisor explicitly names a missing file, you may make a sequential follow-up call with includeTrackedFiles when enabled and relevant.",
     async execute(_id, params, signal, onUpdate, ctx) {
       reservedCalls.delete(_id);
+      assertAdvisorModelAccess(ctx);
       // The budget check precedes the handoff claim so a rejected call never
       // consumes the one-shot tracked-file handoff.
       if (

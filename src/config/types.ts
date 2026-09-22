@@ -71,6 +71,7 @@ export interface AdvisorConfig {
   advisorJevTurnGateNoulThreshold?: number;
   advisorLoopThreshold?: number;
   advisorMaxCallsPerSession?: number;
+  advisorModelWhitelist?: string[];
   advisorOutcomeLogging?: boolean;
   advisorPlanGate?: boolean;
   advisorRedactSecrets?: boolean;

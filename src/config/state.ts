@@ -36,6 +36,7 @@ export let advisorBlockOnBlockedRef = true;
 export let advisorAutoLoopGateRef = true;
 export let advisorLoopThresholdRef = 3;
 export let advisorMaxCallsPerSessionRef: number | undefined;
+export let advisorModelWhitelistRef: string[] = [];
 export let advisorSessionSummaryRef = false;
 export let simpleModeRef = false;
 export let alwaysOnRef = false;
@@ -124,6 +125,11 @@ export const setAdvisorLoopThresholdRef = (value: number) => {
 };
 export const setAdvisorMaxCallsPerSessionRef = (value: number | undefined) => {
   advisorMaxCallsPerSessionRef = value;
+};
+export const setAdvisorModelWhitelistRef = (models: string[]) => {
+  advisorModelWhitelistRef = Array.from(
+    new Set(models.map((model) => model.trim()).filter(Boolean))
+  );
 };
 export const setAdvisorSessionSummaryRef = (enabled: boolean) => {
   advisorSessionSummaryRef = enabled;
@@ -243,6 +249,7 @@ export const getAdvisorSettings = () => ({
   jevTurnGateNoulThreshold: advisorJevTurnGateNoulThresholdRef,
   loopThreshold: advisorLoopThresholdRef,
   maxCallsPerSession: advisorMaxCallsPerSessionRef,
+  modelWhitelist: [...advisorModelWhitelistRef],
   outcomeLogging: advisorOutcomeLoggingRef,
   planGate: advisorPlanGateRef,
   redactSecrets: advisorRedactSecretsRef,

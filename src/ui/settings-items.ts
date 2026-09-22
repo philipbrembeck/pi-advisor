@@ -1,5 +1,9 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
-import type { SettingItem } from "@earendil-works/pi-tui";
+import {
+  getKeybindings,
+  type KeybindingsManager,
+  type SettingItem,
+} from "@earendil-works/pi-tui";
 import {
   DEFAULT_JEV_DIGEST_MAX_CHARS,
   DEFAULT_JEV_FILTER_NOUL_MARGIN,
@@ -13,6 +17,7 @@ import {
 } from "../config/types.ts";
 import { isValidAdvisorToolPolicies } from "../config/validation.ts";
 import { JevSetupSubmenu } from "./jev-setup-submenu.ts";
+import { SearchableModelMultiSelector } from "./model-selector.ts";
 import {
   contextDescription,
   currentContextLabel,
@@ -32,6 +37,7 @@ import type {
 
 export interface SettingsItemsOptions {
   effortLevels: string[];
+  modelWhitelist: SettingItem;
   presets: ContextPreset[];
   settings: AdvisorSettings;
   theme: Theme;
@@ -200,8 +206,39 @@ const jevItems = (
   },
 ];
 
+export const advisorModelWhitelistItem = (
+  settings: AdvisorSettings,
+  modelRefs: string[] | undefined,
+  keybindings: KeybindingsManager | undefined,
+  theme: Theme,
+  tui: RenderRequester
+): SettingItem => ({
+  currentValue: settings.modelWhitelist?.length
+    ? settings.modelWhitelist.join(", ")
+    : "Any model",
+  description:
+    "Only the exact provider/model references listed here may call the Advisor; an empty list allows every model.",
+  id: "modelWhitelist",
+  label: "Advisor model whitelist",
+  submenu: (_currentValue, done) =>
+    new SearchableModelMultiSelector({
+      allOptions: [
+        ...new Set([...(modelRefs ?? []), ...(settings.modelWhitelist ?? [])]),
+      ],
+      currentOptions: settings.modelWhitelist ?? [],
+      keybindings: keybindings ?? getKeybindings(),
+      multiSelect: true,
+      onCancel: done,
+      onSelect: (values) => done(values.join(",")),
+      theme,
+      title: "Advisor model whitelist",
+      tui,
+    }),
+});
+
 export const createSettingsItems = ({
   effortLevels,
+  modelWhitelist,
   presets,
   settings,
   theme,
@@ -233,6 +270,7 @@ export const createSettingsItems = ({
     },
   ];
   if (settings.simpleMode) {
+    items.push(modelWhitelist);
     return items;
   }
 
@@ -244,6 +282,7 @@ export const createSettingsItems = ({
       label: "Advisor reasoning",
       values: withCurrentValue(currentEffort(settings.effort), effortLevels),
     },
+    modelWhitelist,
     toggle(
       "scoutEnabled",
       "Experimental Advisor Scout",
