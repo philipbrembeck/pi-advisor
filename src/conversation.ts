@@ -7,22 +7,22 @@ import {
   advisorToolResultMaxLinesRef,
 } from "./config/state.ts";
 import type { AdvisorToolPolicies } from "./config/types.ts";
-import { contentParts, isRecord } from "./content-utils.ts";
+import { contentParts, isRecordOf, isString } from "./content-utils.ts";
 import type { RecordValue } from "./content-utils.ts";
 import { redactSecrets } from "./redaction.ts";
 import { capToolResult } from "./tool-result-cap.ts";
 
-const textFromPart = (part: unknown): string => {
-  if (typeof part === "string") {
+const textFromPart = <Part>(part: Part): string => {
+  if (isString(part)) {
     return part;
   }
-  if (!isRecord(part) || part.type !== "text") {
+  if (!isRecordOf(part) || part.type !== "text") {
     return "";
   }
-  return typeof part.text === "string" ? part.text : "";
+  return isString(part.text) ? part.text : "";
 };
 
-export const textFrom = (content: unknown): string =>
+export const textFrom = <Content>(content: Content): string =>
   contentParts(content).map(textFromPart).join("\n").trim();
 
 const assistantEntry = (
@@ -36,10 +36,10 @@ const assistantEntry = (
     parts.push(redact ? redactSecrets(text) : text);
   }
   for (const part of contentParts(message.content)) {
-    if (!isRecord(part) || part.type !== "toolCall") {
+    if (!isRecordOf(part) || part.type !== "toolCall") {
       continue;
     }
-    const toolName = typeof part.name === "string" ? part.name : "unknown";
+    const toolName = isString(part.name) ? part.name : "unknown";
     const policy = policies[toolName] ?? "full";
     if (policy === "exclude") {
       parts.push(`[Tool Call: ${toolName}] (excluded by Advisor tool policy)`);
@@ -67,8 +67,7 @@ const toolResultEntry = (
   redact: boolean
 ): string => {
   const status = message.isError ? "error" : "success";
-  const toolName =
-    typeof message.toolName === "string" ? message.toolName : "unknown";
+  const toolName = isString(message.toolName) ? message.toolName : "unknown";
   const policy = policies[toolName] ?? "full";
   const source = textFrom(message.content);
   if (policy === "exclude") {
@@ -91,20 +90,20 @@ const toolResultEntry = (
   return `[Tool Result for ${toolName}] (${message.isError ? "Error " : ""}output):\n${capped.content}`;
 };
 
-export const conversationEntry = (
-  entry: unknown,
+export const conversationEntry = <Entry>(
+  entry: Entry,
   toolResultMaxLines: number,
   toolResultMaxBytes: number,
   policies: AdvisorToolPolicies,
   redact: boolean
 ): string | undefined => {
-  if (!isRecord(entry)) {
+  if (!isRecordOf(entry)) {
     return;
   }
-  if (entry.type === "compaction" && typeof entry.summary === "string") {
+  if (entry.type === "compaction" && isString(entry.summary)) {
     return `[System Compaction Summary]: ${redact ? redactSecrets(entry.summary) : entry.summary}`;
   }
-  if (entry.type !== "message" || !isRecord(entry.message)) {
+  if (entry.type !== "message" || !isRecordOf(entry.message)) {
     return;
   }
   const { message } = entry;

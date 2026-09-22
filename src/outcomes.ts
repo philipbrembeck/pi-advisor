@@ -11,6 +11,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { join } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 
@@ -45,12 +46,15 @@ const statePath = () => join(getAgentDir(), "advisor-outcomes-salt");
 export const outcomeLogPath = () =>
   join(getAgentDir(), "advisor-outcomes.jsonl");
 
+const isErrnoException = (error: unknown): error is NodeJS.ErrnoException =>
+  error instanceof Error && "code" in error;
+
 const salt = async () => {
   const path = statePath();
   await mkdir(getAgentDir(), { mode: 0o700, recursive: true });
   for (let attempt = 0; attempt < 20; attempt += 1) {
     try {
-      // biome-ignore lint/performance/noAwaitInLoops: contenders retry sequentially until one salt is atomically published.
+      // Contenders retry sequentially until one salt is atomically published.
       const existing = await readFile(path);
       if (existing.length === 32) {
         return existing;
@@ -58,7 +62,7 @@ const salt = async () => {
       // Recover a salt file left incomplete by an interrupted older writer.
       await unlink(path);
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      if (!isErrnoException(error) || error.code !== "ENOENT") {
         throw error;
       }
     }
@@ -69,11 +73,11 @@ const salt = async () => {
       await link(temporary, path);
       return value;
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
+      if (!isErrnoException(error) || error.code !== "EEXIST") {
         throw error;
       }
     } finally {
-      await unlink(temporary).catch(() => {});
+      await unlink(temporary).catch(() => undefined);
     }
   }
   throw new Error("Advisor outcome salt initialization did not complete.");
@@ -87,31 +91,31 @@ const withOutcomeLock = async <T>(run: () => Promise<T>): Promise<T> => {
   const lockPath = `${outcomeLogPath()}.lock`;
   for (let attempt = 0; attempt < 200; attempt += 1) {
     try {
-      // biome-ignore lint/performance/noAwaitInLoops: lock acquisition must retry sequentially across processes.
+      // Lock acquisition must retry sequentially across processes.
       const lock = await open(lockPath, "wx", 0o600);
       const identity = await lock.stat();
       try {
         return await run();
       } finally {
         await lock.close();
-        const current = await stat(lockPath).catch(() => {});
+        const current = await stat(lockPath).catch(() => undefined);
         if (current && sameFile(identity, current)) {
-          await unlink(lockPath).catch(() => {});
+          await unlink(lockPath).catch(() => undefined);
         }
       }
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
+      if (!isErrnoException(error) || error.code !== "EEXIST") {
         throw error;
       }
-      const observed = await stat(lockPath).catch(() => {});
+      const observed = await stat(lockPath).catch(() => undefined);
       if (observed && Date.now() - observed.mtimeMs > 30_000) {
-        const current = await stat(lockPath).catch(() => {});
+        const current = await stat(lockPath).catch(() => undefined);
         if (current && sameFile(observed, current)) {
-          await unlink(lockPath).catch(() => {});
+          await unlink(lockPath).catch(() => undefined);
         }
         continue;
       }
-      await new Promise((resolve) => setTimeout(resolve, 5));
+      await sleep(5);
     }
   }
   throw new Error("Timed out waiting to append an Advisor outcome.");
@@ -146,11 +150,10 @@ export const appendOutcome = async (
         }
         throw error;
       });
-    if (currentBytes + Buffer.byteLength(line) > MAX_LOG_BYTES) {
-      await writeFile(path, line, { encoding: "utf-8", mode: 0o600 });
-    } else {
-      await appendFile(path, line, { encoding: "utf-8", mode: 0o600 });
-    }
+    const overflow = currentBytes + Buffer.byteLength(line) > MAX_LOG_BYTES;
+    await (overflow
+      ? writeFile(path, line, { encoding: "utf-8", mode: 0o600 })
+      : appendFile(path, line, { encoding: "utf-8", mode: 0o600 }));
     await chmod(path, 0o600);
     return next;
   });

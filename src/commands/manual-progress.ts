@@ -5,6 +5,7 @@ import type { Component } from "@earendil-works/pi-tui";
 
 import {
   adviceForDisplay,
+  noop,
   renderAdvisorCallBox,
   renderThinkingMarkdown,
   SPINNER_FRAMES,
@@ -90,7 +91,5 @@ export class ManualAdvisorProgressComponent implements Component {
     return box.render(width);
   }
 
-  invalidate(): void {
-    // The live progress state is read during each render.
-  }
+  readonly invalidate = noop;
 }

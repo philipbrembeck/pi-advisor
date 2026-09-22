@@ -14,6 +14,8 @@ interface SettingsListPrivateFields {
   submenuComponent?: Component | null;
 }
 
+type SettingsListWithPrivateFields = SettingsList & SettingsListPrivateFields;
+
 /**
  * Contains the narrow compatibility access needed for pi-tui's SettingsList.
  * No other UI module should depend on its private fields.
@@ -44,6 +46,7 @@ export class SettingsListAdapter {
 
   setFocused(value: boolean): void {
     const fields = this.privateFields();
+    // SAFETY: a SettingsList submenu component is registered only when focusable.
     const submenu = fields.submenuComponent as Focusable | undefined;
     if (submenu) {
       submenu.focused = value;
@@ -97,6 +100,7 @@ export class SettingsListAdapter {
   }
 
   private privateFields(): SettingsListPrivateFields {
-    return this.list as unknown as SettingsListPrivateFields;
+    // SAFETY: compatibility-only read of SettingsList's private layout fields.
+    return this.list as SettingsListWithPrivateFields;
   }
 }

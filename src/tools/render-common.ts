@@ -29,6 +29,9 @@ const THINKING_PREFIX = "  ";
 const THINKING_PREFIX_WIDTH = visibleWidth(THINKING_PREFIX);
 export type ThinkingTheme = Pick<Theme, "fg">;
 
+/** Shared no-op for interface-required methods that manage no state. */
+export const noop = (): void => undefined;
+
 /** Renders nested-model thinking as Markdown with the compact speech-bubble cue; the prefix is added after parsing so it cannot change block syntax. */
 class ThinkingMarkdown implements Component {
   private readonly markdown: Markdown;
@@ -61,28 +64,20 @@ class ThinkingMarkdown implements Component {
 }
 
 /** Collapsed placeholder shown when Pi's hide_thinking setting is on. */
-class HiddenThinkingLabel implements Component {
-  private readonly label: string;
-
-  constructor(theme: ThinkingTheme) {
-    this.label = theme.fg("thinkingText", `${THINKING_PREFIX}Thinking…`);
-  }
-
-  render(): string[] {
-    return [this.label];
-  }
-
-  invalidate(): void {
-    // The collapsed label is static.
-  }
-}
+const hiddenThinkingLabel = (theme: ThinkingTheme): Component => {
+  const label = theme.fg("thinkingText", `${THINKING_PREFIX}Thinking…`);
+  return {
+    invalidate: noop,
+    render: () => [label],
+  };
+};
 
 export const renderThinkingMarkdown = (
   thinking: string,
   theme: ThinkingTheme
 ): Component =>
   piHideThinkingEnabled()
-    ? new HiddenThinkingLabel(theme)
+    ? hiddenThinkingLabel(theme)
     : new ThinkingMarkdown(thinking, theme);
 
 export const resolveAdvisorRequest = (question?: string) =>

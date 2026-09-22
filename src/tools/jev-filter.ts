@@ -66,45 +66,6 @@ export const resetJevOutageNotification = outageNotifier.reset;
 
 const allow = (): ScreeningOutcome => ({ decision: "allow" });
 
-/**
- * Fail-open screening: decides run/skip for one ask_advisor call. Disabled or
- * simple mode, missing credentials, and every Jev failure allow the
- * consultation; only the hard conjunction (negligible-mass ≥ skip confidence
- * AND confidently self-answerable) or an exact repeat skips.
- */
-export const screenConsultation = (
-  ctx: ExtensionContext,
-  session: AdvisorSessionState,
-  options: ScreenConsultationOptions,
-  deps: ScreeningDeps = {}
-): Promise<ScreeningOutcome> => {
-  if (isSimpleMode()) {
-    return Promise.resolve(allow());
-  }
-  // Repeat reattachment and its force/passthrough escape hatch are code-side
-  // and free: they run regardless of the Jev enable flag, which only gates
-  // the (paid, network) Jev screening call.
-  const normalizedQuestion = normalizeScreeningQuestion(options.question);
-  const bypass = bypassOutcome(session, options, normalizedQuestion);
-  if (bypass) {
-    return Promise.resolve(bypass);
-  }
-  const reattached = session.reattachedAdviceFor(normalizedQuestion);
-  if (reattached) {
-    session.recordJevFilterSkipped(true, normalizedQuestion);
-    return Promise.resolve({
-      decision: "skip",
-      kind: "repeat",
-      reason: "already answered earlier in this session",
-      reattachedAdvice: reattached.slice(0, REATTACHED_ADVICE_CAP_BYTES),
-    });
-  }
-  if (!advisorJevFilterEnabledRef) {
-    return Promise.resolve(allow());
-  }
-  return screenWithJev(ctx, session, options, deps, normalizedQuestion);
-};
-
 const bypassOutcome = (
   session: AdvisorSessionState,
   options: ScreenConsultationOptions,
@@ -193,6 +154,45 @@ const screenWithJev = async (
     }
     return allow();
   }
+};
+
+/**
+ * Fail-open screening: decides run/skip for one ask_advisor call. Disabled or
+ * simple mode, missing credentials, and every Jev failure allow the
+ * consultation; only the hard conjunction (negligible-mass ≥ skip confidence
+ * AND confidently self-answerable) or an exact repeat skips.
+ */
+export const screenConsultation = (
+  ctx: ExtensionContext,
+  session: AdvisorSessionState,
+  options: ScreenConsultationOptions,
+  deps: ScreeningDeps = {}
+): Promise<ScreeningOutcome> => {
+  if (isSimpleMode()) {
+    return Promise.resolve(allow());
+  }
+  // Repeat reattachment and its force/passthrough escape hatch are code-side
+  // and free: they run regardless of the Jev enable flag, which only gates
+  // the (paid, network) Jev screening call.
+  const normalizedQuestion = normalizeScreeningQuestion(options.question);
+  const bypass = bypassOutcome(session, options, normalizedQuestion);
+  if (bypass) {
+    return Promise.resolve(bypass);
+  }
+  const reattached = session.reattachedAdviceFor(normalizedQuestion);
+  if (reattached) {
+    session.recordJevFilterSkipped(true, normalizedQuestion);
+    return Promise.resolve({
+      decision: "skip",
+      kind: "repeat",
+      reason: "already answered earlier in this session",
+      reattachedAdvice: reattached.slice(0, REATTACHED_ADVICE_CAP_BYTES),
+    });
+  }
+  if (!advisorJevFilterEnabledRef) {
+    return Promise.resolve(allow());
+  }
+  return screenWithJev(ctx, session, options, deps, normalizedQuestion);
 };
 
 export const screeningSkipText = (outcome: {

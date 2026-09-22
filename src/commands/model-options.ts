@@ -93,13 +93,14 @@ export const findConfiguredModel = (
     return;
   }
   const [provider, modelId] = splitRef(ref);
+  // oxlint-disable-next-line unicorn/no-array-method-this-argument -- Pi ModelRegistry.find(provider, id), not Array#find.
   return ctx.modelRegistry.find(provider, modelId);
 };
 
 export const getAvailableModelRefs = (
   ctx: ExtensionContext
 ): string[] | undefined => {
-  if (typeof ctx.modelRegistry.getAvailable !== "function") {
+  if (!ctx.modelRegistry.getAvailable) {
     return undefined;
   }
   return ctx.modelRegistry
@@ -109,8 +110,7 @@ export const getAvailableModelRefs = (
 
 export const getConfiguredModelRefs = (ctx: ExtensionContext): string[] => {
   const registry = ctx.modelRegistry;
-  const models =
-    typeof registry?.getAvailable === "function" ? registry.getAvailable() : [];
+  const models = registry?.getAvailable ? registry.getAvailable() : [];
   return [
     ...new Set(models.map((model) => `${model.provider}/${model.id}`)),
   ].toSorted((left, right) => left.localeCompare(right));

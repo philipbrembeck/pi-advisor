@@ -1,3 +1,5 @@
+import { isString } from "../content-utils.ts";
+import type { JsonValue } from "../content-utils.ts";
 import { GIT_CONTEXT_LEVELS, isValidGitContextLevel } from "../git.ts";
 import {
   advisorAutoLoopGateRef,
@@ -44,23 +46,30 @@ import {
   showUsageFooterRef,
   simpleModeRef,
 } from "./state.ts";
+import type {
+  AdvisorConfig,
+  AdvisorConfigValue,
+  JevTransport,
+} from "./types.ts";
 import {
   ADVISOR_TOOL_POLICIES,
   GATE_FAILURE_MODES,
   JEV_TRANSPORTS,
   MAX_CONTEXT_MAX_CHARS,
 } from "./types.ts";
-import type { AdvisorConfig, JevTransport } from "./types.ts";
 
 /** An empty ref means no model has been selected yet. */
 const configuredModelRef = (value: string | undefined): string | undefined =>
   value?.trim() || undefined;
 
+const isNonEmptyModel = (model: unknown): model is string =>
+  typeof model === "string" && model.trim().length > 0;
+
 export const isValidAdvisorModelWhitelist = (
   value: unknown
-): value is string[] =>
-  Array.isArray(value) &&
-  value.every((model) => typeof model === "string" && model.trim().length > 0);
+): value is string[] => Array.isArray(value) && value.every(isNonEmptyModel);
+
+const ADVISOR_TOOL_POLICY_NAMES = new Set<string>(ADVISOR_TOOL_POLICIES);
 
 export const isValidAdvisorToolPolicies = (
   value: unknown
@@ -71,10 +80,8 @@ export const isValidAdvisorToolPolicies = (
   return Object.entries(value).every(
     ([toolName, policy]) =>
       toolName.trim().length > 0 &&
-      typeof policy === "string" &&
-      ADVISOR_TOOL_POLICIES.includes(
-        policy as (typeof ADVISOR_TOOL_POLICIES)[number]
-      )
+      isString(policy) &&
+      ADVISOR_TOOL_POLICY_NAMES.has(policy)
   );
 };
 
@@ -93,11 +100,12 @@ export const isValidLoopThreshold = (value: unknown): value is number =>
 export const isValidMaxCallsPerSession = (value: unknown): value is number =>
   nonNegativeSafeInteger(value);
 
+const GATE_FAILURE_MODE_NAMES = new Set<string>(GATE_FAILURE_MODES);
+
 export const isValidGateFailureMode = (
   value: unknown
 ): value is (typeof GATE_FAILURE_MODES)[number] =>
-  typeof value === "string" &&
-  GATE_FAILURE_MODES.includes(value as (typeof GATE_FAILURE_MODES)[number]);
+  isString(value) && GATE_FAILURE_MODE_NAMES.has(value);
 
 export const isValidToolResultMaxLines = (value: unknown): value is number =>
   nonNegativeSafeInteger(value);
@@ -126,8 +134,10 @@ export const isValidJevNoulMargin = (value: unknown): value is number =>
   value >= 0 &&
   value <= 0.5;
 
+const JEV_TRANSPORT_NAMES = new Set<string>(JEV_TRANSPORTS);
+
 export const isValidJevTransport = (value: unknown): value is JevTransport =>
-  typeof value === "string" && JEV_TRANSPORTS.includes(value as JevTransport);
+  isString(value) && JEV_TRANSPORT_NAMES.has(value);
 
 /** One declarative entry per AdvisorConfig key: JSON type, persistence, and
  * the live runtime value behind it. Validation and storage derive from this
@@ -136,13 +146,13 @@ export interface ConfigKeySchema {
   /** Human-readable accepted-value phrase for error messages. */
   accepted: string;
   /** Live runtime value captured by saveConfig. */
-  current: () => unknown;
+  current: () => AdvisorConfigValue;
   /** Included in the state captured and diffed by saveConfig. */
   persisted: boolean;
   /** JSON value type used for the base type check. */
   type: "string" | "boolean" | "number" | "enum" | "object" | "array";
   /** Type beyond the JSON type, for enum and object keys. */
-  validate?: (value: unknown) => boolean;
+  validate?: (value: unknown) => value is JsonValue;
 }
 
 export const CONFIG_SCHEMA = {
@@ -428,6 +438,9 @@ export const CONFIG_SCHEMA = {
 
 export type ConfigKey = keyof typeof CONFIG_SCHEMA;
 
+// SAFETY: CONFIG_SCHEMA satisfies Record<keyof AdvisorConfig, ConfigKeySchema>, so Object.keys yields exactly ConfigKey.
+export const configKeys = Object.keys(CONFIG_SCHEMA) as ConfigKey[];
+
 /** Keys saveConfig captures, diffs, and writes to advisor.json. */
 export type PersistedConfigKey = {
   [Key in ConfigKey]: (typeof CONFIG_SCHEMA)[Key]["persisted"] extends true
@@ -435,11 +448,10 @@ export type PersistedConfigKey = {
     : never;
 }[ConfigKey];
 
-export const SAVED_CONFIG_KEYS = (
-  Object.keys(CONFIG_SCHEMA) as ConfigKey[]
-).filter(
-  (key) => CONFIG_SCHEMA[key].persisted
-) as readonly PersistedConfigKey[];
+export const SAVED_CONFIG_KEYS: readonly PersistedConfigKey[] =
+  configKeys.filter(
+    (key): key is PersistedConfigKey => CONFIG_SCHEMA[key].persisted
+  );
 
 /** Widened per-key view for consumers that index by dynamic key. */
 const SCHEMA_BY_KEY: Record<ConfigKey, ConfigKeySchema> = CONFIG_SCHEMA;

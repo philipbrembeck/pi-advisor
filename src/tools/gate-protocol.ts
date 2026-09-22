@@ -1,8 +1,13 @@
 import type { GateDecision } from "../session-state.ts";
 import type { AdvisorGateFailure, AdvisorGateResult } from "./types.ts";
 
-const DECISION_LINE = /^Decision\s*:\s*(proceed|revise|blocked)\s*$/iu;
-const CODE_FENCE = /^ {0,3}(`{3,}|~{3,})(.*)$/u;
+/** Named-group accessor; exec matches of these regexes always populate groups. */
+const namedGroups = (match: RegExpExecArray): Record<string, string> =>
+  match.groups ?? {};
+
+const DECISION_LINE =
+  /^Decision\s*:\s*(?<decision>proceed|revise|blocked)\s*$/iu;
+const CODE_FENCE = /^ {0,3}(?<marker>`{3,}|~{3,})(?<suffix>.*)$/u;
 const LINE_BREAK = /\r?\n/u;
 
 interface FenceState {
@@ -10,11 +15,16 @@ interface FenceState {
   length: number;
 }
 
+interface FenceAdvance {
+  closed: boolean;
+  openingFence: FenceState | undefined;
+}
+
 const advanceFence = (
   openingFence: FenceState | undefined,
   marker: string,
   suffix: string
-): { closed: boolean; openingFence: FenceState | undefined } => {
+): FenceAdvance => {
   if (!openingFence) {
     if (marker[0] === "`" && suffix.includes("`")) {
       return { closed: false, openingFence: undefined };
@@ -59,7 +69,8 @@ export const parseAutomaticDecision = (
       ok: false,
     };
   }
-  const decision = match[1].toLowerCase() as GateDecision;
+  // SAFETY: DECISION_LINE's decision group only matches proceed, revise, or blocked.
+  const decision = namedGroups(match).decision.toLowerCase() as GateDecision;
   let openingFence: FenceState | undefined;
   const decisions: string[] = [];
   let pendingFencedDecisions: string[] = [];
@@ -72,10 +83,11 @@ export const parseAutomaticDecision = (
     // open.
     const fence = CODE_FENCE.exec(line);
     if (fence) {
+      const groups = namedGroups(fence);
       const { closed, openingFence: nextOpeningFence } = advanceFence(
         openingFence,
-        fence[1],
-        fence[2]
+        groups.marker,
+        groups.suffix
       );
       openingFence = nextOpeningFence;
       if (closed) {
@@ -87,7 +99,7 @@ export const parseAutomaticDecision = (
     if (!subsequent) {
       continue;
     }
-    const repeated = subsequent[1].trim().toLowerCase();
+    const repeated = namedGroups(subsequent).decision.trim().toLowerCase();
     if (openingFence) {
       pendingFencedDecisions.push(repeated);
     } else {
@@ -97,21 +109,22 @@ export const parseAutomaticDecision = (
   if (openingFence) {
     decisions.push(...pendingFencedDecisions);
   }
-  for (const repeated of decisions) {
-    if (repeated === decision) {
-      return {
-        category: "duplicate-decision",
-        markdown: text,
-        message: "Advisor gate response contains duplicate decision lines.",
-        ok: false,
-      };
-    }
-    return {
-      category: "contradictory-decision",
-      markdown: text,
-      message: "Advisor gate response contains contradictory decision lines.",
-      ok: false,
-    };
+  const [repeated] = decisions;
+  if (repeated !== undefined) {
+    return repeated === decision
+      ? {
+          category: "duplicate-decision",
+          markdown: text,
+          message: "Advisor gate response contains duplicate decision lines.",
+          ok: false,
+        }
+      : {
+          category: "contradictory-decision",
+          markdown: text,
+          message:
+            "Advisor gate response contains contradictory decision lines.",
+          ok: false,
+        };
   }
   return {
     decision,

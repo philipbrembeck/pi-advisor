@@ -26,13 +26,14 @@ export const resolveConfiguredModel = async (
     throw new Error(`${label} model not configured`);
   }
   const [provider, modelId] = splitRef(ref);
-  const model = ctx.modelRegistry.find(provider, modelId);
+  const lookup: [string, string] = [provider, modelId];
+  const model = ctx.modelRegistry.find(...lookup);
   if (!model) {
     throw new Error(`${label} model not found: ${ref}`);
   }
   const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
   if (!auth.ok) {
-    throw new Error((auth as { error: string }).error);
+    throw new Error(auth.error);
   }
   if (!auth.apiKey) {
     throw new Error(`No API key for ${ref}`);
@@ -62,6 +63,12 @@ export interface CollectedTextStream {
 
 export const ADVISOR_STREAM_UPDATE_INTERVAL_MS = 90;
 
+const defaultScheduler: CoalescedUpdateScheduler = {
+  clearTimeout,
+  now: Date.now,
+  setTimeout: (callback, delay) => setTimeout(callback, delay),
+};
+
 interface CoalescedUpdateResult {
   error?: unknown;
   failed: boolean;
@@ -86,19 +93,14 @@ export interface CoalescedUpdateScheduler {
 export const createCoalescedUpdate = <T>(
   publish: (value: T) => void,
   intervalMs = ADVISOR_STREAM_UPDATE_INTERVAL_MS,
-  scheduler: CoalescedUpdateScheduler = {
-    clearTimeout,
-    now: Date.now,
-    setTimeout: (callback, delay) => setTimeout(callback, delay),
-  }
+  scheduler: CoalescedUpdateScheduler | undefined = defaultScheduler
 ): CoalescedUpdate<T> => {
   if (!Number.isFinite(intervalMs) || intervalMs <= 0) {
     throw new Error("Coalesced update interval must be positive and finite.");
   }
 
   let closed = false;
-  let hasPending = false;
-  let pending: T | undefined;
+  let pending: { value: T } | undefined;
   let lastPublishedAt: number | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let publishError: unknown;
@@ -113,12 +115,11 @@ export const createCoalescedUpdate = <T>(
 
   const publishPending = () => {
     timer = undefined;
-    if (!hasPending) {
+    if (!pending) {
       return;
     }
-    const value = pending as T;
+    const { value } = pending;
     pending = undefined;
-    hasPending = false;
     lastPublishedAt = scheduler.now();
     try {
       publish(value);
@@ -151,7 +152,6 @@ export const createCoalescedUpdate = <T>(
       closed = true;
       clearTimer();
       pending = undefined;
-      hasPending = false;
     },
     flush: () => {
       if (!closed) {
@@ -168,8 +168,7 @@ export const createCoalescedUpdate = <T>(
       if (publishFailed) {
         throw publishError;
       }
-      pending = value;
-      hasPending = true;
+      pending = { value };
       if (timer === undefined) {
         schedule();
       }
@@ -187,22 +186,22 @@ export const collectTextStream = async (
 ): Promise<CollectedTextStream> => {
   let thinking = "";
   let text = "";
+  const streamOptions: Parameters<typeof streamModel>[2] = {
+    apiKey: resolved.apiKey,
+    env: resolved.env,
+    headers: resolved.headers,
+    // SAFETY: stream() models the provider-facing reasoning field as never; options.reasoning is the Pi-facing effort string.
+    reasoning: options.reasoning as never,
+    signal: options.signal,
+  };
+  if (options.reasoning !== undefined) {
+    // SAFETY: reasoningEffort takes the same effort string; kept absent when reasoning is unset.
+    streamOptions.reasoningEffort = options.reasoning as never;
+  }
   const eventStream = streamModel(
     resolved.model,
     { messages: options.messages, systemPrompt: options.systemPrompt },
-    {
-      apiKey: resolved.apiKey,
-      env: resolved.env,
-      headers: resolved.headers,
-      // `stream()` uses the provider-facing name while the extension's public
-      // option keeps the Pi-facing `reasoning` name. Preserve both so the
-      // configured effort reaches providers that serialize reasoning_effort.
-      reasoning: options.reasoning as never,
-      ...(options.reasoning === undefined
-        ? {}
-        : { reasoningEffort: options.reasoning as never }),
-      signal: options.signal,
-    }
+    streamOptions
   );
 
   for await (const event of eventStream) {
@@ -243,8 +242,6 @@ export const collectTextStream = async (
   return {
     text: finalText,
     thinking,
-    usage: (
-      lastAssistant as (AssistantMessage & { usage?: unknown }) | undefined
-    )?.usage,
+    usage: lastAssistant?.usage,
   };
 };

@@ -3,6 +3,7 @@ import { constants } from "node:fs";
 import { lstat, open, realpath } from "node:fs/promises";
 import { isAbsolute, relative, resolve } from "node:path";
 
+import { isString } from "./content-utils.ts";
 import { redactAndCapText } from "./redaction.ts";
 
 export const ADVISOR_FILE_MAX_BYTES = 8 * 1024;
@@ -22,9 +23,9 @@ const within = (root: string, candidate: string) => {
 const normalizeRelativePath = (root: string, path: string) =>
   relative(root, resolve(root, path));
 
-const normalizeRequestedPath = (root: string, value: unknown) => {
+const normalizeRequestedPath = (root: string, value: string) => {
   if (
-    typeof value !== "string" ||
+    !isString(value) ||
     !value ||
     isAbsolute(value) ||
     value.split(PATH_SEGMENTS).includes("..")
@@ -109,9 +110,9 @@ const readAttachment = async (
   if (!within(root, resolved)) {
     return;
   }
+  // fs.open needs combined numeric flags for O_NOFOLLOW; O_RDONLY (0) and O_NOFOLLOW occupy disjoint bits, so + is exact.
   const flags = constants.O_NOFOLLOW
-    ? // biome-ignore lint/suspicious/noBitwiseOperators: fs.open requires numeric flags for O_NOFOLLOW.
-      constants.O_RDONLY | constants.O_NOFOLLOW
+    ? constants.O_RDONLY + constants.O_NOFOLLOW
     : constants.O_RDONLY;
   const file = await open(resolved, flags);
   try {
@@ -170,7 +171,6 @@ const readFiles = async (
         break;
       }
       // Sequentially enforce the aggregate disclosure budget.
-      // biome-ignore lint/performance/noAwaitInLoops: each accepted file consumes the remaining budget.
       const attachment = await readAttachment(
         root,
         normalizedName,

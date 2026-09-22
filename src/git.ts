@@ -1,14 +1,18 @@
 import { execFileSync } from "node:child_process";
 
+import { isString } from "./content-utils.ts";
+
 /** How much repository change context may leave the machine. */
 export type GitContextLevel = "off" | "summary" | "full";
 
 export const GIT_CONTEXT_LEVELS: GitContextLevel[] = ["off", "summary", "full"];
 
+const GIT_CONTEXT_LEVEL_SET = new Set<string>(GIT_CONTEXT_LEVELS);
+
 export const isValidGitContextLevel = (
   value: unknown
 ): value is GitContextLevel =>
-  GIT_CONTEXT_LEVELS.includes(value as GitContextLevel);
+  isString(value) && GIT_CONTEXT_LEVEL_SET.has(value);
 
 const LEVEL_RANK: Record<GitContextLevel, number> = {
   full: 2,

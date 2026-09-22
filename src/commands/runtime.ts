@@ -26,6 +26,18 @@ export const notify = (
   }
 };
 
+const reportManualBudgetExhausted = (ctx: ExtensionContext) => {
+  const message = "Advisor call budget exhausted for this session.";
+  notify(ctx, message, "warning");
+  notifyHerdrAdvisorFailure("Advisor budget exhausted", message);
+};
+
+const requestManualRender = (ctx: ExtensionContext) => {
+  if (ctx.hasUI) {
+    ctx.ui.setStatus("advisor-manual", undefined);
+  }
+};
+
 class CommandRuntime implements CommandRuntimeContract {
   readonly advisorSessionState: AdvisorSessionState;
   readonly manualConsultations = new Map<AbortController, symbol>();
@@ -35,7 +47,9 @@ class CommandRuntime implements CommandRuntimeContract {
     ReturnType<typeof setInterval>
   >();
   readonly pi: ExtensionAPI;
+  readonly reportManualBudgetExhausted = reportManualBudgetExhausted;
   readonly requestAdvisor: ManualConsult;
+  readonly requestManualRender = requestManualRender;
   readonly scoutStatus: ScoutStatusManager;
   manualProgressSequence = 0;
   pendingExecutorModelRef: string | undefined;
@@ -92,18 +106,6 @@ class CommandRuntime implements CommandRuntimeContract {
           ? this.advisorSessionState.usageStatus()
           : undefined
       );
-    }
-  }
-
-  reportManualBudgetExhausted(ctx: ExtensionContext) {
-    const message = "Advisor call budget exhausted for this session.";
-    notify(ctx, message, "warning");
-    notifyHerdrAdvisorFailure("Advisor budget exhausted", message);
-  }
-
-  requestManualRender(ctx: ExtensionContext) {
-    if (ctx.hasUI) {
-      ctx.ui.setStatus("advisor-manual", undefined);
     }
   }
 }

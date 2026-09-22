@@ -1,8 +1,8 @@
-import {
-  type AgentToolResult,
-  getMarkdownTheme,
-  type Theme,
-  type ToolRenderResultOptions,
+import { getMarkdownTheme } from "@earendil-works/pi-coding-agent";
+import type {
+  AgentToolResult,
+  Theme,
+  ToolRenderResultOptions,
 } from "@earendil-works/pi-coding-agent";
 import { Box, Markdown, Spacer, Text } from "@earendil-works/pi-tui";
 
@@ -117,6 +117,33 @@ const renderPartialAdvisorResult = (
   }
 };
 
+const thinkingPreview = (details: AdvisorToolDetails | undefined) =>
+  details?.thinking?.trim()
+    ? `${details.thinking.slice(0, 300)}${details.thinking.length > 300 ? "…" : ""}`
+    : "";
+
+const finalResultLines = (
+  details: AdvisorToolDetails | undefined,
+  advice: string,
+  theme: Theme
+): string[] => {
+  const lines = [renderAdvisorResponseHeader(hasSoundVerdict(advice), theme)];
+  if (details?.advisor) {
+    lines.push(theme.fg("dim", `  ${details.advisor}`));
+  }
+  if (getAdvisorSettings().showUsageDetails) {
+    const usage = formatAdvisorUsage(details?.usage);
+    if (usage) {
+      lines.push(theme.fg("dim", `  Usage: ${usage}`));
+    }
+  }
+  const attachments = attachmentLabels(details);
+  if (attachments.length) {
+    lines.push(theme.fg("dim", `  ${attachments.join(" · ")}`));
+  }
+  return lines;
+};
+
 const renderFinalAdvisorResult = (
   box: Box,
   result: AgentToolResult<AdvisorToolDetails>,
@@ -145,23 +172,8 @@ const renderFinalAdvisorResult = (
     return;
   }
   const advice = details?.text || textFrom(result.content);
-  const lines = [renderAdvisorResponseHeader(hasSoundVerdict(advice), theme)];
-  if (details?.advisor) {
-    lines.push(theme.fg("dim", `  ${details.advisor}`));
-  }
-  if (getAdvisorSettings().showUsageDetails) {
-    const usage = formatAdvisorUsage(details?.usage);
-    if (usage) {
-      lines.push(theme.fg("dim", `  Usage: ${usage}`));
-    }
-  }
-  const attachments = attachmentLabels(details);
-  if (attachments.length) {
-    lines.push(theme.fg("dim", `  ${attachments.join(" · ")}`));
-  }
-  const thinking = details?.thinking?.trim()
-    ? `${details.thinking.slice(0, 300)}${details.thinking.length > 300 ? "…" : ""}`
-    : "";
+  const thinking = thinkingPreview(details);
+  const lines = finalResultLines(details, advice, theme);
   const displayAdvice = advice || "(Advisor returned no advice.)";
   box.addChild(new Text(lines.join("\n"), 0, 0));
   if (thinking) {

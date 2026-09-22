@@ -1,4 +1,7 @@
-import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type {
+  ExtensionContext,
+  TurnEndEvent,
+} from "@earendil-works/pi-coding-agent";
 import type { Fetch } from "@typesafe-ai/sdk";
 
 import {
@@ -37,6 +40,17 @@ export interface JevTurnGateDeps {
   resolveTransport?: () => Promise<JevCredentials | undefined>;
 }
 
+export interface TurnGateCallDetails {
+  question: string;
+  turn: number;
+}
+
+export interface TurnGateResultDetails {
+  advisor: string;
+  text: string;
+  usage?: unknown;
+}
+
 export interface JevTurnGateRegistration {
   activeTools: () => string[];
   consult: typeof consultAdvisor;
@@ -44,7 +58,7 @@ export interface JevTurnGateRegistration {
   send: (message: {
     content: string;
     customType: string;
-    details: Record<string, unknown>;
+    details: TurnGateCallDetails | TurnGateResultDetails;
     display: boolean;
   }) => void;
   session: AdvisorSessionState;
@@ -175,13 +189,15 @@ export const handleJevTurnEnd = async (
   }
 };
 
+type TurnEndRegistrar = (
+  event: "turn_end",
+  handler: (event: TurnEndEvent, ctx: ExtensionContext) => void | Promise<void>
+) => void;
+
 /** Wires the turn_end handler on an ExtensionAPI-like surface. */
-export const registerJevTurnGate = <T extends string>(
-  on: (
-    event: T,
-    handler: (event: unknown, ctx: ExtensionContext) => unknown
-  ) => void,
+export const registerJevTurnGate = (
+  on: TurnEndRegistrar,
   registration: JevTurnGateRegistration
 ): void => {
-  on("turn_end" as T, (_event, ctx) => handleJevTurnEnd(registration, ctx));
+  on("turn_end", (_event, ctx) => handleJevTurnEnd(registration, ctx));
 };

@@ -14,6 +14,24 @@ export interface ToolResultTruncation {
 
 const OMITTED_MARKER = "[... omitted tool-result section ...]";
 
+const collect = (
+  candidates: string[],
+  maxEntries: number,
+  maxContentBytes: number
+) => {
+  const selected: string[] = [];
+  let used = 0;
+  for (const line of candidates.slice(0, maxEntries)) {
+    const next = used + byteLength(line) + (selected.length ? 1 : 0);
+    if (next > maxContentBytes) {
+      break;
+    }
+    selected.push(line);
+    used = next;
+  }
+  return selected;
+};
+
 export const capToolResult = (
   value: string,
   maxLines = DEFAULT_ADVISOR_TOOL_RESULT_MAX_LINES,
@@ -53,23 +71,6 @@ export const capToolResult = (
   }
   const headCount = Math.floor((maxLines - 1) / 2);
   const tailCount = maxLines - 1 - headCount;
-  const collect = (
-    candidates: string[],
-    maxEntries: number,
-    maxContentBytes: number
-  ) => {
-    const selected: string[] = [];
-    let used = 0;
-    for (const line of candidates.slice(0, maxEntries)) {
-      const next = used + byteLength(line) + (selected.length ? 1 : 0);
-      if (next > maxContentBytes) {
-        break;
-      }
-      selected.push(line);
-      used = next;
-    }
-    return selected;
-  };
   const availableBytes = maxBytes - markerBytes - 2;
   const head = collect(lines, headCount, Math.floor(availableBytes / 2));
   const tail = collect(

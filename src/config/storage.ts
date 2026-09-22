@@ -4,6 +4,8 @@ import { join } from "node:path";
 import { CONFIG_DIR_NAME, getAgentDir } from "@earendil-works/pi-coding-agent";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
+import { isRecord, isString } from "../content-utils.ts";
+import type { RecordValue } from "../content-utils.ts";
 import { applyConfig, resetDefaults } from "./defaults.ts";
 import {
   CONFIG_SCHEMA,
@@ -28,6 +30,7 @@ type ConfigState = {
 };
 
 const currentConfigState = (): ConfigState =>
+  // SAFETY: SAVED_CONFIG_KEYS enumerates exactly the ConfigState keys, so fromEntries yields ConfigState.
   Object.fromEntries(
     SAVED_CONFIG_KEYS.map((key) => [key, CONFIG_SCHEMA[key].current()])
   ) as ConfigState;
@@ -40,12 +43,10 @@ const sameConfigValue = <Value>(left: Value, right: Value) =>
  * preserved like any unknown key, and never trigger the typo warning. */
 const RESERVED_ADVISOR_JSON_KEYS = new Set(["typesafe_api_key"]);
 
-export const readExistingConfig = (path: string): Record<string, unknown> => {
+export const readExistingConfig = (path: string): RecordValue => {
   try {
-    const parsed = JSON.parse(readFileSync(path, "utf-8"));
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : {};
+    const parsed: unknown = JSON.parse(readFileSync(path, "utf-8"));
+    return isRecord(parsed) ? parsed : {};
   } catch {
     return {};
   }
@@ -60,12 +61,14 @@ const shouldPersistConfigKey = (
   (key !== "executor" || persistExecutor);
 
 const applyChangedConfigValues = (
-  data: Record<string, unknown>,
+  existing: RecordValue,
   current: ConfigState,
   changedKeys: readonly SavedConfigKey[],
   persistAdvisor: boolean,
   persistExecutor: boolean
-) => {
+): RecordValue => {
+  const dropped = new Set<string>();
+  const data: RecordValue = { ...existing };
   for (const key of changedKeys) {
     if (!shouldPersistConfigKey(key, persistAdvisor, persistExecutor)) {
       continue;
@@ -73,11 +76,21 @@ const applyChangedConfigValues = (
     const value = current[key];
     const isEmptyModelRef = (key === "advisor" || key === "executor") && !value;
     if (value === undefined || isEmptyModelRef) {
-      delete data[key];
+      dropped.add(key);
     } else {
       data[key] = value;
     }
   }
+  if (dropped.size === 0) {
+    return data;
+  }
+  const retained: RecordValue = {};
+  for (const key of Object.keys(data)) {
+    if (!dropped.has(key)) {
+      retained[key] = data[key];
+    }
+  }
+  return retained;
 };
 
 // Tracks the last load/save state so a later save merges fresh disk contents instead of overwriting an external edit.
@@ -141,9 +154,9 @@ export const loadConfig = (_ctx: ExtensionContext) => {
   );
   if (globalConfig) {
     applyConfig(globalConfig);
-    const unknownKeys = unknownConfigKeys(
-      globalConfig as Record<string, unknown>
-    ).filter((key) => !RESERVED_ADVISOR_JSON_KEYS.has(key));
+    const unknownKeys = unknownConfigKeys(globalConfig).filter(
+      (key) => !RESERVED_ADVISOR_JSON_KEYS.has(key)
+    );
     const warningIdentity = `${global}:${configIdentity(global)}`;
     if (
       unknownKeys.length > 0 &&
@@ -195,9 +208,8 @@ export const saveConfig = (
   if (changedKeys.length === 0) {
     return path;
   }
-  const data = { ...existing };
-  applyChangedConfigValues(
-    data,
+  const data = applyChangedConfigValues(
+    existing,
     current,
     changedKeys,
     persistAdvisor,
@@ -210,14 +222,14 @@ export const saveConfig = (
     nextLoadedState.advisor = baseline
       ? baseline.advisor
       : configuredModelRef(
-          typeof existing.advisor === "string" ? existing.advisor : undefined
+          isString(existing.advisor) ? existing.advisor : undefined
         );
   }
   if (!persistExecutor) {
     nextLoadedState.executor = baseline
       ? baseline.executor
       : configuredModelRef(
-          typeof existing.executor === "string" ? existing.executor : undefined
+          isString(existing.executor) ? existing.executor : undefined
         );
   }
   loadedConfigState = nextLoadedState;

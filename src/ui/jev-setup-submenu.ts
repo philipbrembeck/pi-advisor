@@ -45,6 +45,23 @@ type SetupAction =
   | "enter-key"
   | "done";
 
+const ACTION_LABELS: Record<SetupAction, string> = {
+  disable: "Disable",
+  "disable-clear": "Disable and clear stored key",
+  done: "Done",
+  "enter-key": "Enter a TypeSafe API key",
+  "verify-again": "Verify again",
+  "verify-enable": "Verify and enable",
+};
+
+const fireAndForget = async (action: Promise<unknown>): Promise<void> => {
+  try {
+    await action;
+  } catch {
+    // Background setup actions surface their own notices.
+  }
+};
+
 const transportLabel = (credentials: JevCredentials): string => {
   if (credentials.transport === "openrouter") {
     return "OpenRouter (reusing pi login)";
@@ -108,7 +125,7 @@ export class JevSetupSubmenu implements Component, Focusable {
       onSubmit: (value) => this.submitEnteredKey(value),
       placeholder: "Paste a TypeSafe API key",
     });
-    this.refresh().catch(() => {});
+    void fireAndForget(this.refresh());
   }
 
   get focused(): boolean {
@@ -212,20 +229,8 @@ export class JevSetupSubmenu implements Component, Focusable {
     return actions;
   }
 
-  private actionLabels(): Record<SetupAction, string> {
-    return {
-      disable: "Disable",
-      "disable-clear": "Disable and clear stored key",
-      done: "Done",
-      "enter-key": "Enter a TypeSafe API key",
-      "verify-again": "Verify again",
-      "verify-enable": "Verify and enable",
-    };
-  }
-
   private labels(): string[] {
-    const labels = this.actionLabels();
-    return this.actions().map((action) => labels[action]);
+    return this.actions().map((action) => ACTION_LABELS[action]);
   }
 
   private async refresh(): Promise<void> {
@@ -244,32 +249,25 @@ export class JevSetupSubmenu implements Component, Focusable {
   }
 
   private activate(action: SetupAction): void {
-    switch (action) {
-      case "done": {
-        this.options.done();
-        return;
-      }
-      case "enter-key": {
-        this.mode = "key-entry";
-        return;
-      }
-      case "disable": {
-        this.notice = undefined;
-        this.options.done("Off");
-        return;
-      }
-      case "disable-clear": {
-        this.disableAndClear().catch(() => undefined);
-        return;
-      }
-      case "verify-again":
-      case "verify-enable": {
-        this.verifyAndEnable().catch(() => undefined);
-        return;
-      }
-      default: {
-        return;
-      }
+    if (action === "done") {
+      this.options.done();
+      return;
+    }
+    if (action === "enter-key") {
+      this.mode = "key-entry";
+      return;
+    }
+    if (action === "disable") {
+      this.notice = undefined;
+      this.options.done("Off");
+      return;
+    }
+    if (action === "disable-clear") {
+      void fireAndForget(this.disableAndClear());
+      return;
+    }
+    if (action === "verify-again" || action === "verify-enable") {
+      void fireAndForget(this.verifyAndEnable());
     }
   }
 

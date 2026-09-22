@@ -58,8 +58,7 @@ import {
 } from "../config/types.ts";
 import type { AdvisorSettings } from "../ui/types.ts";
 
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: one settings form maps every persisted control.
-const applyAdvisorSettings = (settings: AdvisorSettings) => {
+const applySessionSettings = (settings: AdvisorSettings) => {
   setAdvisorEffortRef(
     settings.effort === "Default (Model Default)" ? undefined : settings.effort
   );
@@ -82,6 +81,9 @@ const applyAdvisorSettings = (settings: AdvisorSettings) => {
   setAlwaysOnRef(settings.alwaysOn ?? false);
   setAdvisorFailureModeRef(settings.failureMode ?? "block-session");
   setAdvisorHerdrIntegrationRef(settings.herdrIntegration ?? true);
+};
+
+const applyJevSettings = (settings: AdvisorSettings) => {
   setAdvisorJevFilterEnabledRef(settings.jevFilterEnabled ?? false);
   setAdvisorJevFilterSkipConfidenceRef(
     settings.jevFilterSkipConfidence ?? DEFAULT_JEV_FILTER_SKIP_CONFIDENCE
@@ -107,6 +109,9 @@ const applyAdvisorSettings = (settings: AdvisorSettings) => {
   setAdvisorJevTurnGateNoulThresholdRef(
     settings.jevTurnGateNoulThreshold ?? DEFAULT_JEV_TURN_GATE_NOUL_THRESHOLD
   );
+};
+
+const applyDisclosureSettings = (settings: AdvisorSettings) => {
   setAdvisorToolResultMaxLinesRef(settings.toolResultMaxLines ?? 2000);
   setAdvisorToolResultMaxBytesRef(settings.toolResultMaxBytes ?? 50 * 1024);
   setAdvisorRedactSecretsRef(settings.redactSecrets ?? false);
@@ -116,6 +121,12 @@ const applyAdvisorSettings = (settings: AdvisorSettings) => {
   setAdvisorTrackedFileContentRef(settings.trackedFileContent ?? false);
   setAdvisorUntrackedContentRef(settings.untrackedContent ?? false);
   setAdvisorOutcomeLoggingRef(settings.outcomeLogging ?? false);
+};
+
+const applyAdvisorSettings = (settings: AdvisorSettings) => {
+  applySessionSettings(settings);
+  applyJevSettings(settings);
+  applyDisclosureSettings(settings);
 };
 
 export const saveAdvisorSettings = (

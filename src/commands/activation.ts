@@ -117,6 +117,7 @@ export const activateAdvisor = async (
   // later attempt.
   runtime.pendingExecutorModelRef = undefined;
   if (executorEffortRef) {
+    // SAFETY: executorEffortRef is operator-configured and trusted to name a ThinkingLevel.
     runtime.pi.setThinkingLevel(executorEffortRef as ThinkingLevel);
   }
   if (!runtime.flowEnabled()) {

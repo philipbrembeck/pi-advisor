@@ -1,14 +1,34 @@
 /** Shared untyped-content inspection helpers. */
 
-export type RecordValue = Record<string, unknown>;
+export type JsonValue =
+  | null
+  | boolean
+  | number
+  | string
+  | JsonValue[]
+  | { [key: string]: JsonValue };
+
+export type RecordValue = Record<string, JsonValue>;
 
 export const isRecord = (value: unknown): value is RecordValue =>
   Boolean(value) && typeof value === "object" && !Array.isArray(value);
 
+export const isRecordOf = <Value>(value: Value): value is Value & RecordValue =>
+  Boolean(value) && typeof value === "object" && !Array.isArray(value);
+
+export const isString = <Value>(value: Value): value is Value & string =>
+  typeof value === "string";
+
+export const isNumber = <Value>(value: Value): value is Value & number =>
+  typeof value === "number";
+
+export const isBoolean = <Value>(value: Value): value is Value & boolean =>
+  typeof value === "boolean";
+
 export const byteLength = (value: string) => Buffer.byteLength(value, "utf-8");
 
-export const contentParts = (content: unknown): unknown[] => {
-  if (typeof content === "string") {
+export const contentParts = <Content>(content: Content): unknown[] => {
+  if (isString(content)) {
     return [content];
   }
   return Array.isArray(content) ? content : [];

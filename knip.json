@@ -3,12 +3,7 @@
   "entry": [
     "extensions/index.ts",
     "oxlint.config.ts",
-    "oxfmt.config.ts",
-    "tools/oxlint-rules/index.ts",
-    "scripts/check-module-boundaries.mjs",
-    "scripts/check-package.mjs",
-    "test/**/*.{test.ts,mjs}",
-    "test/default-resource-loader.node.mjs"
+    "test/**/*.{test.ts,mjs}"
   ],
   "project": [
     "src/**/*.ts",

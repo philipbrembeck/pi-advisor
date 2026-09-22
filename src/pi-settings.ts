@@ -3,9 +3,7 @@ import { join } from "node:path";
 
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 
-interface PiGlobalSettings {
-  hideThinkingBlock?: boolean;
-}
+import { isRecord } from "./content-utils.ts";
 
 interface CachedSetting {
   hidden: boolean;
@@ -29,11 +27,7 @@ const settingsIdentity = (path: string): string => {
 const readHideThinking = (path: string): boolean => {
   try {
     const parsed: unknown = JSON.parse(readFileSync(path, "utf-8"));
-    return (
-      typeof parsed === "object" &&
-      parsed !== null &&
-      (parsed as PiGlobalSettings).hideThinkingBlock === true
-    );
+    return isRecord(parsed) && parsed.hideThinkingBlock === true;
   } catch {
     return false;
   }

@@ -1,3 +1,5 @@
+import { isRecordOf, isString } from "./content-utils.ts";
+import type { JsonValue } from "./content-utils.ts";
 import { AdvisorJevLedgerState } from "./jev/ledger.ts";
 import type { AdvisorJevUsage } from "./jev/ledger.ts";
 import {
@@ -80,12 +82,21 @@ const normalizeString = (value: string) =>
     .replaceAll(/\/(?:private\/)?tmp\/[^\s/]+/gu, "/tmp/<temporary>")
     .replaceAll(/\/var\/folders\/[^\s/]+/gu, "/var/folders/<temporary>");
 
-export const normalizeToolInput = (
+export type NormalizedToolInput =
+  | JsonValue
+  | undefined
+  | NormalizedToolInput[]
+  | { [key: string]: NormalizedToolInput };
+
+export const normalizeToolInput = <Input>(
   toolName: string,
-  input: unknown
-): unknown => {
-  const visit = (value: unknown, key?: string): unknown => {
-    if (typeof value === "string") {
+  input: Input
+): NormalizedToolInput => {
+  const visit = (
+    value: NormalizedToolInput,
+    key?: string
+  ): NormalizedToolInput => {
+    if (isString(value)) {
       if (key && isVolatileKey(key, TIMESTAMP_KEYS)) {
         return "<timestamp>";
       }
@@ -100,21 +111,23 @@ export const normalizeToolInput = (
     if (Array.isArray(value)) {
       return value.map((item) => visit(item));
     }
-    if (value && typeof value === "object") {
-      const record = value as Record<string, unknown>;
+    if (isRecordOf(value)) {
       return Object.fromEntries(
-        Object.keys(record)
+        Object.keys(value)
           .toSorted()
-          .map((childKey) => [childKey, visit(record[childKey], childKey)])
+          .map((childKey) => [childKey, visit(value[childKey], childKey)])
       );
     }
     return value;
   };
-  return visit(input);
+  // SAFETY: Pi tool inputs are JSON-decoded tool arguments, so the root value is already NormalizedToolInput-shaped.
+  return visit(input as Input & NormalizedToolInput);
 };
 
-export const normalizedToolSignature = (toolName: string, input: unknown) =>
-  `${toolName}:${JSON.stringify(normalizeToolInput(toolName, input))}`;
+export const normalizedToolSignature = <Input>(
+  toolName: string,
+  input: Input
+) => `${toolName}:${JSON.stringify(normalizeToolInput(toolName, input))}`;
 
 interface RepetitionState {
   count: number;
@@ -122,16 +135,15 @@ interface RepetitionState {
   previousSignature?: string;
 }
 
+interface IssuedAdvice {
+  advice: string;
+  normalizedQuestion?: string;
+  trigger: ConsultationTrigger;
+}
+
 interface AdviceLedger {
   draftConsultations: number;
-  issued: Map<
-    string,
-    {
-      advice: string;
-      normalizedQuestion?: string;
-      trigger: ConsultationTrigger;
-    }
-  >;
+  issued: Map<string, IssuedAdvice>;
   lastAdvice?: string;
   outcomes: number;
   pending: Set<string>;
@@ -198,7 +210,7 @@ export class AdvisorSessionState {
     this.#blockedReason ??= reason;
   }
 
-  recordToolCall(toolName: string, input: unknown, threshold: number) {
+  recordToolCall<Input>(toolName: string, input: Input, threshold: number) {
     if (toolName === "ask_advisor") {
       return false;
     }
@@ -271,11 +283,11 @@ export class AdvisorSessionState {
     draft = false,
     normalizedQuestion?: string
   ) {
-    this.#ledger.issued.set(id, {
-      advice,
-      ...(normalizedQuestion ? { normalizedQuestion } : {}),
-      trigger,
-    });
+    const issued: IssuedAdvice = { advice, trigger };
+    if (normalizedQuestion) {
+      issued.normalizedQuestion = normalizedQuestion;
+    }
+    this.#ledger.issued.set(id, issued);
     this.#ledger.lastAdvice = advice;
     if (draft) {
       this.#ledger.draftConsultations += 1;
@@ -303,10 +315,10 @@ export class AdvisorSessionState {
     }
     const mentioned = paths.every((path) => {
       const escaped = path.replaceAll(/[.*+?^${}()|[\]\\]/gu, "\\$&");
-      const boundary = `(^|[\\s\\"'\`()\\[])${
+      const boundary = `(^|[\\s"'\`()\\[])${
         escaped
-      }(?=$|[\\s\\"'\`),;:!?\\]]|\\.(?=\\s|$))`;
-      return new RegExp(boundary).test(advice);
+      }(?=$|[\\s"'\`),;:!?\\]]|\\.(?=\\s|$))`;
+      return new RegExp(boundary, "u").test(advice);
     });
     if (!mentioned) {
       return false;
@@ -355,7 +367,7 @@ export class AdvisorSessionState {
       (item) => item.kind === "gate"
     );
     return (
-      (["proceed", "revise", "blocked"] as GateDecision[])
+      (["proceed", "revise", "blocked"] as const)
         .map(
           (decision) =>
             [
@@ -376,15 +388,17 @@ export class AdvisorSessionState {
 
   #triggersLine() {
     return (
-      [
-        "manual",
-        "executor-requested",
-        "turn-gate",
-        "repeated-tool-call",
-        "completion-review",
-        "custom-rule",
-      ]
-        .filter((trigger) => this.#countTrigger(trigger as AdvisorTrigger) > 0)
+      (
+        [
+          "manual",
+          "executor-requested",
+          "turn-gate",
+          "repeated-tool-call",
+          "completion-review",
+          "custom-rule",
+        ] as const
+      )
+        .filter((trigger) => this.#countTrigger(trigger) > 0)
         .join(", ") || "none"
     );
   }

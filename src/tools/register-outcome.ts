@@ -30,6 +30,7 @@ export const registerOutcomeTool = ({
         throw new Error("Unknown, already recorded, or pending adviceId.");
       }
       try {
+        // SAFETY: the tool schema's enum restricts adoption and validationStatus to ADOPTIONS/VALIDATIONS members.
         await appendAdvisorOutcome({
           adoption: params.adoption as (typeof ADOPTIONS)[number],
           advice: advice.advice,

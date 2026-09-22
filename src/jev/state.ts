@@ -24,25 +24,27 @@ export type JevState = Record<string, JsonValue>;
 export const buildJevState = (
   ctx: ExtensionContext,
   input: JevStateInput = {}
-): JevState => {
-  const state: JevState = { role: "executor" };
+) => {
+  const fields = new Map<string, string>([["role", "executor"]]);
   if (input.question) {
-    state.executor_question = redactAndCapText(
-      input.question,
-      JEV_TEXT_CAP_BYTES,
-      advisorRedactSecretsRef
+    fields.set(
+      "executor_question",
+      redactAndCapText(
+        input.question,
+        JEV_TEXT_CAP_BYTES,
+        advisorRedactSecretsRef
+      )
     );
   }
   if (input.draft) {
-    state.executor_draft = redactAndCapText(
-      input.draft,
-      JEV_TEXT_CAP_BYTES,
-      advisorRedactSecretsRef
+    fields.set(
+      "executor_draft",
+      redactAndCapText(input.draft, JEV_TEXT_CAP_BYTES, advisorRedactSecretsRef)
     );
   }
   const digest = recentConversation(ctx, advisorJevDigestMaxCharsRef);
   if (digest) {
-    state.recent_conversation = digest;
+    fields.set("recent_conversation", digest);
   }
-  return state;
+  return Object.fromEntries(fields);
 };

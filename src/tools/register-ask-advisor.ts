@@ -179,28 +179,34 @@ export const registerAskAdvisorTool = ({
         const usage = snapshotAdvisorUsage(result.usage);
         const piUsage = advisorUsageForPi(result.usage);
         updateAdvisorUsageStatus(ctx, session);
-        return {
+        const details: AdvisorToolDetails = {
+          adviceId: result.adviceId,
+          advisor: result.model,
+          draftBytes: result.draftBytes,
+          preferenceBytes: result.preferenceBytes,
+          question: resolveAdvisorRequest(params.question),
+          scout: scoutDetails,
+          text: result.markdown,
+          thinking: result.thinkingText,
+          trackedBytes: result.trackedBytes,
+          untrackedBytes: result.untrackedBytes,
+        };
+        if (usage) {
+          details.usage = usage;
+        }
+        const response: AgentToolResult<AdvisorToolDetails> = {
           content: [
             {
               text: `Advisor (${result.model})\n\n${result.markdown}`,
               type: "text",
             },
           ],
-          details: {
-            adviceId: result.adviceId,
-            advisor: result.model,
-            draftBytes: result.draftBytes,
-            preferenceBytes: result.preferenceBytes,
-            question: resolveAdvisorRequest(params.question),
-            scout: scoutDetails,
-            text: result.markdown,
-            thinking: result.thinkingText,
-            trackedBytes: result.trackedBytes,
-            untrackedBytes: result.untrackedBytes,
-            ...(usage ? { usage } : {}),
-          },
-          ...(piUsage ? { usage: piUsage } : {}),
+          details,
         };
+        if (piUsage) {
+          response.usage = piUsage;
+        }
+        return response;
       } catch (error) {
         // Publish the latest partial state before surfacing a provider or
         // execution error. A failure from the UI sink must not replace the
@@ -279,6 +285,7 @@ export const registerAskAdvisorTool = ({
       return renderAdvisorCallBox(args.question?.trim(), theme);
     },
     renderResult(result, options, theme, context) {
+      // SAFETY: this tool's execute() only returns AdvisorToolDetails-shaped details.
       return renderAdvisorResult(
         result as AgentToolResult<AdvisorToolDetails>,
         options,

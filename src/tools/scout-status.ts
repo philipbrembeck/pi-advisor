@@ -144,6 +144,43 @@ const scoutTitle = (scout: ScoutToolDetails, frame: string) => {
   return "◆ SCOUT · FALLBACK";
 };
 
+const scoutSummaryLine = (scout: ScoutToolDetails) =>
+  `  ${scout.model}${
+    scout.selectedCount === undefined
+      ? ""
+      : ` · ${scout.selectedCount} kept / ${Math.max(0, (scout.availableCount ?? 0) - scout.selectedCount)} omitted`
+  }${scout.latencyMs === undefined ? "" : ` · ${(scout.latencyMs / 1000).toFixed(1)}s`}`;
+
+const scoutExpandedLines = (
+  scout: ScoutToolDetails,
+  expanded: boolean,
+  theme: Theme
+): string[] => {
+  const lines: string[] = [];
+  if (expanded && scout.selectedLabels?.length) {
+    lines.push(
+      theme.fg("dim", `  Selected: ${scout.selectedLabels.join("; ")}`)
+    );
+  }
+  if (expanded && scout.synthesis) {
+    lines.push(
+      theme.fg(
+        "dim",
+        `  Scout synthesis (untrusted inference): ${scout.synthesis}`
+      )
+    );
+  }
+  if (expanded && scout.omittedBeforeScout) {
+    lines.push(
+      theme.fg(
+        "dim",
+        `  ${scout.omittedBeforeScout} group(s) omitted before Scout`
+      )
+    );
+  }
+  return lines;
+};
+
 export const renderScoutDetails = (
   box: Box,
   scout: ScoutToolDetails,
@@ -161,10 +198,7 @@ export const renderScoutDetails = (
         : "accent",
       theme.bold(title)
     ),
-    theme.fg(
-      "dim",
-      `  ${scout.model}${scout.selectedCount === undefined ? "" : ` · ${scout.selectedCount} kept / ${Math.max(0, (scout.availableCount ?? 0) - scout.selectedCount)} omitted`}${scout.latencyMs === undefined ? "" : ` · ${(scout.latencyMs / 1000).toFixed(1)}s`}`
-    ),
+    theme.fg("dim", scoutSummaryLine(scout)),
   ];
   if (getAdvisorSettings().showUsageDetails) {
     const usage = formatAdvisorUsage(scout.usage);
@@ -180,28 +214,7 @@ export const renderScoutDetails = (
   if (thinking.trim()) {
     box.addChild(renderThinkingMarkdown(thinking, theme));
   }
-  const expandedLines: string[] = [];
-  if (expanded && scout.selectedLabels?.length) {
-    expandedLines.push(
-      theme.fg("dim", `  Selected: ${scout.selectedLabels.join("; ")}`)
-    );
-  }
-  if (expanded && scout.synthesis) {
-    expandedLines.push(
-      theme.fg(
-        "dim",
-        `  Scout synthesis (untrusted inference): ${scout.synthesis}`
-      )
-    );
-  }
-  if (expanded && scout.omittedBeforeScout) {
-    expandedLines.push(
-      theme.fg(
-        "dim",
-        `  ${scout.omittedBeforeScout} group(s) omitted before Scout`
-      )
-    );
-  }
+  const expandedLines = scoutExpandedLines(scout, expanded, theme);
   if (expandedLines.length > 0) {
     box.addChild(new Text(expandedLines.join("\n"), 0, 0));
   }

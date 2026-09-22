@@ -1,14 +1,23 @@
 import {
-  DEFAULT_MAX_BYTES,
-  DEFAULT_MAX_LINES,
+  DEFAULT_MAX_BYTES as PI_DEFAULT_MAX_BYTES,
+  DEFAULT_MAX_LINES as PI_DEFAULT_MAX_LINES,
 } from "@earendil-works/pi-coding-agent";
 
 import type { GitContextLevel } from "../git.ts";
 
+export {
+  DEFAULT_MAX_BYTES,
+  DEFAULT_MAX_LINES,
+} from "@earendil-works/pi-coding-agent";
+
 export const DEFAULT_CONTEXT_MAX_CHARS = 15_000;
 export const MAX_CONTEXT_MAX_CHARS = Number.MAX_SAFE_INTEGER;
-export const DEFAULT_ADVISOR_TOOL_RESULT_MAX_LINES = DEFAULT_MAX_LINES;
-export const DEFAULT_ADVISOR_TOOL_RESULT_MAX_BYTES = DEFAULT_MAX_BYTES;
+const DEFAULT_ADVISOR_TOOL_RESULT_MAX_LINES = PI_DEFAULT_MAX_LINES;
+const DEFAULT_ADVISOR_TOOL_RESULT_MAX_BYTES = PI_DEFAULT_MAX_BYTES;
+export {
+  DEFAULT_ADVISOR_TOOL_RESULT_MAX_BYTES,
+  DEFAULT_ADVISOR_TOOL_RESULT_MAX_LINES,
+};
 export const DEFAULT_ADVISOR_GIT_CONTEXT_MAX_CHARS = 20_000;
 export const DEFAULT_JEV_MODEL = "jev-latest";
 // Provisional: the latency benchmark was dropped from scope; revisit if live
@@ -92,3 +101,5 @@ export interface AdvisorConfig {
   showUsageFooter?: boolean;
   simpleMode?: boolean;
 }
+
+export type AdvisorConfigValue = AdvisorConfig[keyof AdvisorConfig];

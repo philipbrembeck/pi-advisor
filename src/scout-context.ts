@@ -20,7 +20,7 @@ import type {
   ScoutManifestResult,
 } from "./scout-types.ts";
 
-// biome-ignore lint/performance/noBarrelFile: re-export preserves scout-context's historical public import surface.
+// Re-exports preserve scout-context's historical public import surface.
 export { reconstructScoutConversation } from "./scout-reconstruct.ts";
 export type {
   BuildScoutManifestOptions,
@@ -53,21 +53,44 @@ const resolveCaps = (
 });
 
 /** Builds disclosed, indivisible history groups from Pi's compaction-aware branch. */
-export const buildScoutManifest = (
-  ctx: ExtensionContext,
-  options: BuildScoutManifestOptions = {}
-): ScoutManifestResult => {
-  const entries = ctx.sessionManager.buildContextEntries();
-  const caps = resolveCaps(options);
-  const indexed = indexToolCalls(entries);
-  if (!indexed.ok) {
-    return indexed;
+const contentChars = (items: ScoutContextGroup[]) =>
+  items.reduce((sum, group) => sum + group.content.length, 0) +
+  Math.max(0, items.length - 1) * 2;
+
+const requiredOverflow = (
+  required: ScoutContextGroup[],
+  caps: {
+    maxConversationChars?: number;
+    maxGroupBytes: number;
+    maxGroups: number;
+    maxManifestBytes: number;
   }
-  const built = buildGroups(entries, indexed.index, caps);
-  if (!built.ok) {
-    return built;
+): ScoutManifestResult | undefined => {
+  if (
+    required.some((group) => group.bytes > caps.maxGroupBytes) ||
+    required.length > caps.maxGroups ||
+    required.reduce((sum, group) => sum + groupWireBytes(group), 0) >
+      caps.maxManifestBytes
+  ) {
+    return {
+      message:
+        "Required Scout context exceeds the Scout manifest transport limit.",
+      ok: false,
+      reason: "required-group-overflow",
+    };
   }
-  return fitToBudget(built, caps);
+  if (
+    caps.maxConversationChars !== undefined &&
+    contentChars(required) > caps.maxConversationChars
+  ) {
+    return {
+      message:
+        "Required Scout context exceeds the Advisor conversation budget.",
+      ok: false,
+      reason: "required-group-overflow",
+    };
+  }
+  return undefined;
 };
 
 const fits = (
@@ -84,10 +107,6 @@ const fits = (
     caps.maxManifestBytes &&
   (caps.maxConversationChars === undefined ||
     contentChars(selected) <= caps.maxConversationChars);
-
-const contentChars = (items: ScoutContextGroup[]) =>
-  items.reduce((sum, group) => sum + group.content.length, 0) +
-  Math.max(0, items.length - 1) * 2;
 
 const fitToBudget = (
   built: GroupPass,
@@ -150,38 +169,19 @@ const fitToBudget = (
   };
 };
 
-const requiredOverflow = (
-  required: ScoutContextGroup[],
-  caps: {
-    maxConversationChars?: number;
-    maxGroupBytes: number;
-    maxGroups: number;
-    maxManifestBytes: number;
+export const buildScoutManifest = (
+  ctx: ExtensionContext,
+  options: BuildScoutManifestOptions = {}
+): ScoutManifestResult => {
+  const entries = ctx.sessionManager.buildContextEntries();
+  const caps = resolveCaps(options);
+  const indexed = indexToolCalls(entries);
+  if (!indexed.ok) {
+    return indexed;
   }
-): ScoutManifestResult | undefined => {
-  if (
-    required.some((group) => group.bytes > caps.maxGroupBytes) ||
-    required.length > caps.maxGroups ||
-    required.reduce((sum, group) => sum + groupWireBytes(group), 0) >
-      caps.maxManifestBytes
-  ) {
-    return {
-      message:
-        "Required Scout context exceeds the Scout manifest transport limit.",
-      ok: false,
-      reason: "required-group-overflow",
-    };
+  const built = buildGroups(entries, indexed.index, caps);
+  if (!built.ok) {
+    return built;
   }
-  if (
-    caps.maxConversationChars !== undefined &&
-    contentChars(required) > caps.maxConversationChars
-  ) {
-    return {
-      message:
-        "Required Scout context exceeds the Advisor conversation budget.",
-      ok: false,
-      reason: "required-group-overflow",
-    };
-  }
-  return undefined;
+  return fitToBudget(built, caps);
 };

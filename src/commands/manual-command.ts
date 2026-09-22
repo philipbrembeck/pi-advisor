@@ -103,7 +103,6 @@ export const registerManualCommand = (runtime: CommandRuntime) => {
       // Intentional fire-and-forget: the consultation streams after the command
       // handler returns. void satisfies noFloatingPromises; noVoid is ignored here
       // because this Biome version offers no ignoreVoidAsExpression option.
-      // biome-ignore lint/complexity/noVoid: marks an intentional fire-and-forget promise
       void startManualConsultation(
         runtime,
         ctx,

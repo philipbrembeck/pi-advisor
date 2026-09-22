@@ -1,12 +1,16 @@
 // src/config/types.ts
 import {
+  DEFAULT_MAX_BYTES as PI_DEFAULT_MAX_BYTES,
+  DEFAULT_MAX_LINES as PI_DEFAULT_MAX_LINES
+} from "@earendil-works/pi-coding-agent";
+import {
   DEFAULT_MAX_BYTES,
   DEFAULT_MAX_LINES
 } from "@earendil-works/pi-coding-agent";
 var DEFAULT_CONTEXT_MAX_CHARS = 15000;
 var MAX_CONTEXT_MAX_CHARS = Number.MAX_SAFE_INTEGER;
-var DEFAULT_ADVISOR_TOOL_RESULT_MAX_LINES = DEFAULT_MAX_LINES;
-var DEFAULT_ADVISOR_TOOL_RESULT_MAX_BYTES = DEFAULT_MAX_BYTES;
+var DEFAULT_ADVISOR_TOOL_RESULT_MAX_LINES = PI_DEFAULT_MAX_LINES;
+var DEFAULT_ADVISOR_TOOL_RESULT_MAX_BYTES = PI_DEFAULT_MAX_BYTES;
 var DEFAULT_ADVISOR_GIT_CONTEXT_MAX_CHARS = 20000;
 var DEFAULT_JEV_MODEL = "jev-latest";
 var DEFAULT_JEV_TIMEOUT_MS = 8000;
@@ -268,10 +272,38 @@ var splitRef = (ref) => {
   return i === -1 ? ["openai-codex", ref] : [ref.slice(0, i), ref.slice(i + 1)];
 };
 
+// src/content-utils.ts
+var isRecord = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
+var isRecordOf = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
+var isString = (value) => typeof value === "string";
+var isNumber = (value) => typeof value === "number";
+var isBoolean = (value) => typeof value === "boolean";
+var byteLength = (value) => Buffer.byteLength(value, "utf-8");
+var contentParts = (content) => {
+  if (isString(content)) {
+    return [content];
+  }
+  return Array.isArray(content) ? content : [];
+};
+var capUtf8Bytes = (value, maxBytes) => {
+  let result = "";
+  let used = 0;
+  for (const character of value) {
+    const characterBytes = byteLength(character);
+    if (used + characterBytes > maxBytes) {
+      break;
+    }
+    result += character;
+    used += characterBytes;
+  }
+  return result;
+};
+
 // src/git.ts
 import { execFileSync } from "node:child_process";
 var GIT_CONTEXT_LEVELS = ["off", "summary", "full"];
-var isValidGitContextLevel = (value) => GIT_CONTEXT_LEVELS.includes(value);
+var GIT_CONTEXT_LEVEL_SET = new Set(GIT_CONTEXT_LEVELS);
+var isValidGitContextLevel = (value) => isString(value) && GIT_CONTEXT_LEVEL_SET.has(value);
 var LEVEL_RANK = {
   full: 2,
   off: 0,
@@ -376,18 +408,21 @@ ${patch}` : "Patch: (no tracked-file content changes)");
 
 // src/config/schema.ts
 var configuredModelRef = (value) => value?.trim() || undefined;
-var isValidAdvisorModelWhitelist = (value) => Array.isArray(value) && value.every((model) => typeof model === "string" && model.trim().length > 0);
+var isNonEmptyModel = (model) => typeof model === "string" && model.trim().length > 0;
+var isValidAdvisorModelWhitelist = (value) => Array.isArray(value) && value.every(isNonEmptyModel);
+var ADVISOR_TOOL_POLICY_NAMES = new Set(ADVISOR_TOOL_POLICIES);
 var isValidAdvisorToolPolicies = (value) => {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return false;
   }
-  return Object.entries(value).every(([toolName, policy]) => toolName.trim().length > 0 && typeof policy === "string" && ADVISOR_TOOL_POLICIES.includes(policy));
+  return Object.entries(value).every(([toolName, policy]) => toolName.trim().length > 0 && isString(policy) && ADVISOR_TOOL_POLICY_NAMES.has(policy));
 };
 var nonNegativeSafeInteger = (value) => typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 var isValidContextMaxChars = (value) => typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && value <= MAX_CONTEXT_MAX_CHARS;
 var isValidLoopThreshold = (value) => typeof value === "number" && Number.isSafeInteger(value) && value >= 2;
 var isValidMaxCallsPerSession = (value) => nonNegativeSafeInteger(value);
-var isValidGateFailureMode = (value) => typeof value === "string" && GATE_FAILURE_MODES.includes(value);
+var GATE_FAILURE_MODE_NAMES = new Set(GATE_FAILURE_MODES);
+var isValidGateFailureMode = (value) => isString(value) && GATE_FAILURE_MODE_NAMES.has(value);
 var isValidToolResultMaxLines = (value) => nonNegativeSafeInteger(value);
 var isValidToolResultMaxBytes = (value) => nonNegativeSafeInteger(value);
 var isValidJevTimeoutMs = (value) => typeof value === "number" && Number.isSafeInteger(value) && value >= 1;
@@ -395,7 +430,8 @@ var isValidJevDigestMaxChars = (value) => nonNegativeSafeInteger(value);
 var isValidJevPricePerMtok = (value) => typeof value === "number" && Number.isFinite(value) && value > 0;
 var isValidJevSkipConfidence = (value) => typeof value === "number" && Number.isFinite(value) && value >= 0.5 && value <= 1;
 var isValidJevNoulMargin = (value) => typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 0.5;
-var isValidJevTransport = (value) => typeof value === "string" && JEV_TRANSPORTS.includes(value);
+var JEV_TRANSPORT_NAMES = new Set(JEV_TRANSPORTS);
+var isValidJevTransport = (value) => isString(value) && JEV_TRANSPORT_NAMES.has(value);
 var CONFIG_SCHEMA = {
   advisor: {
     accepted: "a provider/model string",
@@ -675,12 +711,13 @@ var CONFIG_SCHEMA = {
     type: "boolean"
   }
 };
-var SAVED_CONFIG_KEYS = Object.keys(CONFIG_SCHEMA).filter((key) => CONFIG_SCHEMA[key].persisted);
+var configKeys = Object.keys(CONFIG_SCHEMA);
+var SAVED_CONFIG_KEYS = configKeys.filter((key) => CONFIG_SCHEMA[key].persisted);
 var SCHEMA_BY_KEY = CONFIG_SCHEMA;
 
 // src/config/validation.ts
-var CONFIG_KEYS = new Set(Object.keys(CONFIG_SCHEMA));
-var keysOfType = (type) => Object.keys(CONFIG_SCHEMA).filter((key) => SCHEMA_BY_KEY[key].type === type);
+var CONFIG_KEYS = new Set(configKeys);
+var keysOfType = (type) => configKeys.filter((key) => SCHEMA_BY_KEY[key].type === type);
 var BOOLEAN_CONFIG_KEYS = keysOfType("boolean");
 var STRING_CONFIG_KEYS = keysOfType("string");
 var invalidConfigValue = (path, key, accepted) => {
@@ -689,14 +726,14 @@ var invalidConfigValue = (path, key, accepted) => {
 var unknownConfigKeys = (config) => Object.keys(config).filter((key) => !CONFIG_KEYS.has(key));
 var validateStringValues = (config, path) => {
   for (const key of STRING_CONFIG_KEYS) {
-    if (config[key] !== undefined && typeof config[key] !== "string") {
+    if (config[key] !== undefined && !isString(config[key])) {
       invalidConfigValue(path, key, SCHEMA_BY_KEY[key].accepted);
     }
   }
 };
 var validateBooleanValues = (config, path) => {
   for (const key of BOOLEAN_CONFIG_KEYS) {
-    if (config[key] !== undefined && typeof config[key] !== "boolean") {
+    if (config[key] !== undefined && !isBoolean(config[key])) {
       invalidConfigValue(path, key, SCHEMA_BY_KEY[key].accepted);
     }
   }
@@ -734,21 +771,20 @@ var validateObjectValues = (config, path) => {
   }
 };
 var validateConfig = (value, path = "advisor.json") => {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
+  if (!isRecord(value)) {
     throw new TypeError(`Invalid advisor configuration at ${path}: expected a JSON object.`);
   }
-  const config = value;
-  validateStringValues(config, path);
-  validateBooleanValues(config, path);
-  validateNumericValues(config, path);
-  validateObjectValues(config, path);
-  validateArrayValues(config, path);
-  validateEnumValues(config, path);
+  validateStringValues(value, path);
+  validateBooleanValues(value, path);
+  validateNumericValues(value, path);
+  validateObjectValues(value, path);
+  validateArrayValues(value, path);
+  validateEnumValues(value, path);
   return true;
 };
 
 // src/config/args.ts
-var ARGUMENT_WHITESPACE = /\s+/;
+var ARGUMENT_WHITESPACE = /\s+/u;
 var parseArgs = (args) => {
   let nextExecutor = executorRef;
   let nextAdvisor = advisorRef;
@@ -890,13 +926,15 @@ var RESERVED_ADVISOR_JSON_KEYS = new Set(["typesafe_api_key"]);
 var readExistingConfig = (path) => {
   try {
     const parsed = JSON.parse(readFileSync(path, "utf-8"));
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+    return isRecord(parsed) ? parsed : {};
   } catch {
     return {};
   }
 };
 var shouldPersistConfigKey = (key, persistAdvisor, persistExecutor) => (key !== "advisor" || persistAdvisor) && (key !== "executor" || persistExecutor);
-var applyChangedConfigValues = (data, current, changedKeys, persistAdvisor, persistExecutor) => {
+var applyChangedConfigValues = (existing, current, changedKeys, persistAdvisor, persistExecutor) => {
+  const dropped = new Set;
+  const data = { ...existing };
   for (const key of changedKeys) {
     if (!shouldPersistConfigKey(key, persistAdvisor, persistExecutor)) {
       continue;
@@ -904,11 +942,21 @@ var applyChangedConfigValues = (data, current, changedKeys, persistAdvisor, pers
     const value = current[key];
     const isEmptyModelRef = (key === "advisor" || key === "executor") && !value;
     if (value === undefined || isEmptyModelRef) {
-      delete data[key];
+      dropped.add(key);
     } else {
       data[key] = value;
     }
   }
+  if (dropped.size === 0) {
+    return data;
+  }
+  const retained = {};
+  for (const key of Object.keys(data)) {
+    if (!dropped.has(key)) {
+      retained[key] = data[key];
+    }
+  }
+  return retained;
 };
 var loadedConfigState;
 var loadedConfigPath;
@@ -971,17 +1019,16 @@ var saveConfig = (_ctx, options = {}) => {
   if (changedKeys.length === 0) {
     return path;
   }
-  const data = { ...existing };
-  applyChangedConfigValues(data, current, changedKeys, persistAdvisor, persistExecutor);
+  const data = applyChangedConfigValues(existing, current, changedKeys, persistAdvisor, persistExecutor);
   writeFileSync(path, `${JSON.stringify(data, null, 2)}
 `);
   resetConfigCache();
   const nextLoadedState = { ...current };
   if (!persistAdvisor) {
-    nextLoadedState.advisor = baseline ? baseline.advisor : configuredModelRef(typeof existing.advisor === "string" ? existing.advisor : undefined);
+    nextLoadedState.advisor = baseline ? baseline.advisor : configuredModelRef(isString(existing.advisor) ? existing.advisor : undefined);
   }
   if (!persistExecutor) {
-    nextLoadedState.executor = baseline ? baseline.executor : configuredModelRef(typeof existing.executor === "string" ? existing.executor : undefined);
+    nextLoadedState.executor = baseline ? baseline.executor : configuredModelRef(isString(existing.executor) ? existing.executor : undefined);
   }
   loadedConfigState = nextLoadedState;
   loadedConfigPath = path;
@@ -1021,7 +1068,7 @@ var selectedEffort = (choice) => {
   return effort === DEFAULT_EFFORT_LEVEL ? undefined : effort;
 };
 var ADVISOR_ACTIVATION_EXPLANATION = "The Advisor is a second-opinion model that reviews the Executor's context and returns risks, alternatives, and verification steps without changing files or running tools.";
-var ARGUMENT_WHITESPACE2 = /\s+/;
+var ARGUMENT_WHITESPACE2 = /\s+/u;
 var hasModelOverride = (args, key) => args.trim().split(ARGUMENT_WHITESPACE2).some((token) => {
   const [tokenKey, value] = token.split("=");
   return tokenKey === key && Boolean(value);
@@ -1068,17 +1115,17 @@ var findConfiguredModel = (ctx, ref) => {
   return ctx.modelRegistry.find(provider, modelId);
 };
 var getAvailableModelRefs = (ctx) => {
-  if (typeof ctx.modelRegistry.getAvailable !== "function") {
+  if (!ctx.modelRegistry.getAvailable) {
     return;
   }
   return ctx.modelRegistry.getAvailable().map((model) => `${model.provider}/${model.id}`);
 };
 var getConfiguredModelRefs = (ctx) => {
   const registry = ctx.modelRegistry;
-  const models = typeof registry?.getAvailable === "function" ? registry.getAvailable() : [];
+  const models = registry?.getAvailable ? registry.getAvailable() : [];
   return [
     ...new Set(models.map((model) => `${model.provider}/${model.id}`))
-  ].sort((left, right) => left.localeCompare(right));
+  ].toSorted((left, right) => left.localeCompare(right));
 };
 var isSelectableModel = (ctx, ref, availableRefs) => {
   if (!ref) {
@@ -1114,6 +1161,29 @@ var planActivationModels = (ctx, executor, advisor, pendingExecutorRef, persiste
   };
 };
 
+// src/ui/model-selector-adapter.ts
+class ModelSelectorAdapter {
+  list;
+  constructor(list) {
+    this.list = list;
+  }
+  get focused() {
+    return this.list.focused;
+  }
+  set focused(value) {
+    this.list.focused = value;
+  }
+  invalidate() {
+    this.list.invalidate();
+  }
+  render(width) {
+    return this.list.render(width);
+  }
+  handleInput(keyData) {
+    this.list.handleInput(keyData);
+  }
+}
+
 // src/ui/searchable-model-list.ts
 import { fuzzyFilter, Input, truncateToWidth } from "@earendil-works/pi-tui";
 
@@ -1147,7 +1217,7 @@ class SearchableModelList {
     this.currentOption = !this.multiSelect && requestedCurrentOption && options.allOptions.includes(requestedCurrentOption) ? requestedCurrentOption : undefined;
     let allOptions;
     if (this.multiSelect) {
-      allOptions = [...new Set(options.allOptions)].sort((left, right) => left.localeCompare(right));
+      allOptions = [...new Set(options.allOptions)].toSorted((left, right) => left.localeCompare(right));
     } else if (this.currentOption) {
       allOptions = [
         this.currentOption,
@@ -1196,8 +1266,7 @@ class SearchableModelList {
         lines.push(`  ${this.theme.fg("muted", `  (${this.selectedIndex + 1}/${total})`)}`);
       }
     }
-    lines.push("", `  ${this.theme.fg("dim", this.interactionHint())}`);
-    lines.push(this.theme.fg("border", "─".repeat(width)));
+    lines.push("", `  ${this.theme.fg("dim", this.interactionHint())}`, this.theme.fg("border", "─".repeat(width)));
     return lines.map((line) => truncateToWidth(line, width));
   }
   handleInput(keyData) {
@@ -1274,28 +1343,6 @@ class SearchableModelList {
 }
 
 // src/ui/model-selector.ts
-class ModelSelectorAdapter {
-  list;
-  constructor(list) {
-    this.list = list;
-  }
-  get focused() {
-    return this.list.focused;
-  }
-  set focused(value) {
-    this.list.focused = value;
-  }
-  invalidate() {
-    this.list.invalidate();
-  }
-  render(width) {
-    return this.list.render(width);
-  }
-  handleInput(keyData) {
-    this.list.handleInput(keyData);
-  }
-}
-
 class SearchableModelSelector extends ModelSelectorAdapter {
   constructor(options) {
     super(new SearchableModelList({
@@ -1308,12 +1355,6 @@ class SearchableModelSelector extends ModelSelectorAdapter {
         }
       }
     }));
-  }
-}
-
-class SearchableModelMultiSelector extends ModelSelectorAdapter {
-  constructor(options) {
-    super(new SearchableModelList(options));
   }
 }
 
@@ -1379,43 +1420,20 @@ var selectAdvisorModels = async (ctx, options) => {
   return { advisor, advisorEffort, executor, executorEffort };
 };
 
-// src/herdr.ts
+// src/herdr-shared.ts
 import net from "node:net";
-
-// src/content-utils.ts
-var isRecord = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
-var byteLength = (value) => Buffer.byteLength(value, "utf-8");
-var contentParts = (content) => {
-  if (typeof content === "string") {
-    return [content];
-  }
-  return Array.isArray(content) ? content : [];
-};
-var capUtf8Bytes = (value, maxBytes) => {
-  let result = "";
-  let used = 0;
-  for (const character of value) {
-    const characterBytes = byteLength(character);
-    if (used + characterBytes > maxBytes) {
-      break;
-    }
-    result += character;
-    used += characterBytes;
-  }
-  return result;
-};
 
 // src/redaction.ts
 var REDACTION_MARKER = "[REDACTED SECRET]";
-var PEM_BEGIN_PATTERN = /-----BEGIN(?: [A-Z0-9]+)? PRIVATE KEY-----/gi;
-var PEM_END_PATTERN = /-----END(?: [A-Z0-9]+)? PRIVATE KEY-----/i;
+var PEM_BEGIN_PATTERN = /-----BEGIN(?: [A-Z0-9]+)? PRIVATE KEY-----/giu;
+var PEM_END_PATTERN = /-----END(?: [A-Z0-9]+)? PRIVATE KEY-----/iu;
 var SECRET_PATTERNS = [
-  /-----BEGIN(?: [A-Z0-9]+)? PRIVATE KEY-----[\s\S]*?-----END(?: [A-Z0-9]+)? PRIVATE KEY-----/gi,
-  /\bBearer\s+[A-Za-z0-9._~+/=-]{8,}/gi,
-  /\b(?:api[_-]?key|token|secret|password|passwd)\s*[:=]\s*(?:"[^"]*"|'[^']*'|[^\s"'&,;)}\]]+)/gi,
-  /([a-z][a-z0-9+.-]*:\/\/)[^\s/@:]+:[^\s/@]+@/gi,
-  /\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/g,
-  /\b(?:aws_secret_access_key|aws_session_token)\s*[:=]\s*[^\s"'&,;)}\]]+/gi
+  /-----BEGIN(?: [A-Z0-9]+)? PRIVATE KEY-----[\s\S]*?-----END(?: [A-Z0-9]+)? PRIVATE KEY-----/giu,
+  /\bBearer\s+[A-Za-z0-9._~+/=-]{8,}/giu,
+  /\b(?:api[_-]?key|token|secret|password|passwd)\s*[:=]\s*(?:"[^"]*"|'[^']*'|[^\s"'&,;)}\]]+)/giu,
+  /(?<scheme>[a-z][a-z0-9+.-]*:\/\/)[^\s/@:]+:[^\s/@]+@/giu,
+  /\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/gu,
+  /\b(?:aws_secret_access_key|aws_session_token)\s*[:=]\s*[^\s"'&,;)}\]]+/giu
 ];
 var redactUnterminatedPem = (value) => {
   const begins = [...value.matchAll(PEM_BEGIN_PATTERN)];
@@ -1429,7 +1447,7 @@ var redactUnterminatedPem = (value) => {
 var redactSecrets = (value) => {
   let redacted = redactUnterminatedPem(value);
   for (const pattern of SECRET_PATTERNS) {
-    redacted = redacted.replace(pattern, (_match, scheme) => typeof scheme === "string" ? `${scheme}${REDACTION_MARKER}@` : REDACTION_MARKER);
+    redacted = redacted.replace(pattern, (_match, scheme) => isString(scheme) ? `${scheme}${REDACTION_MARKER}@` : REDACTION_MARKER);
   }
   return redacted;
 };
@@ -1438,11 +1456,11 @@ var redactAndCapText = (value, maxBytes, redact = true) => {
   return capUtf8Bytes(source, maxBytes);
 };
 
-// src/herdr.ts
+// src/herdr-shared.ts
 var HERDR_NOTIFICATION_METHOD = "notification.show";
 var SOURCE = "pi-advisor:advisor-activity";
-var BLOCK_SOURCE = "pi-advisor:advisor-block";
 var NOTIFICATION_SOURCE = "pi-advisor:advisor-notification";
+var BLOCK_SOURCE = "pi-advisor:advisor-block";
 var HERDR_PI_SOURCE = "herdr:pi";
 var sequence = Date.now() * 1000;
 var nextSequence = () => {
@@ -1459,17 +1477,7 @@ var safeEmitBlocked = (active, label = "Advisor blocked") => {
   } catch {}
 };
 var isControlCharacter = (character) => character <= "\x1F" || character === "";
-var cleanNotification = (value, max) => [...redactSecrets(value)].map((character) => isControlCharacter(character) ? " " : character).join("").replaceAll(/\s+/g, " ").trim().slice(0, max);
-var createHerdrNotificationRequest = (title, body) => ({
-  id: `${NOTIFICATION_SOURCE}:${nextSequence()}`,
-  method: HERDR_NOTIFICATION_METHOD,
-  params: {
-    body: cleanNotification(body, 240),
-    position: "top-left",
-    sound: "request",
-    title: cleanNotification(title, 80)
-  }
-});
+var cleanNotification = (value, max) => [...redactSecrets(value)].map((character) => isControlCharacter(character) ? " " : character).join("").replaceAll(/\s+/gu, " ").trim().slice(0, max);
 var sendToHerdr = (request) => {
   if (process.env.HERDR_ENV !== "1") {
     return;
@@ -1489,61 +1497,18 @@ var sendToHerdr = (request) => {
   socket.once("error", () => socket.destroy());
   socket.once("close", () => clearTimeout(timeout));
 };
+var createHerdrNotificationRequest = (title, body) => ({
+  id: `${NOTIFICATION_SOURCE}:${nextSequence()}`,
+  method: HERDR_NOTIFICATION_METHOD,
+  params: {
+    body: cleanNotification(body, 240),
+    position: "top-left",
+    sound: "request",
+    title: cleanNotification(title, 80)
+  }
+});
 
-class HerdrAdvisorActivity {
-  #activeConsultations = 0;
-  report;
-  enabled;
-  constructor(report = sendToHerdr, enabled = () => true) {
-    this.report = report;
-    this.enabled = enabled;
-  }
-  start() {
-    if (!this.enabled()) {
-      return;
-    }
-    this.#activeConsultations += 1;
-    if (this.#activeConsultations === 1) {
-      this.safeReport(false);
-    }
-  }
-  finish() {
-    if (this.#activeConsultations === 0) {
-      return;
-    }
-    this.#activeConsultations -= 1;
-    if (this.#activeConsultations === 0) {
-      this.safeReport(true);
-    }
-  }
-  clear() {
-    if (this.#activeConsultations === 0) {
-      return;
-    }
-    this.#activeConsultations = 0;
-    this.safeReport(true);
-  }
-  safeReport(clear) {
-    try {
-      this.report(this.request(clear));
-    } catch {}
-  }
-  request(clear) {
-    return {
-      id: `${SOURCE}:${nextSequence()}`,
-      method: "pane.report_metadata",
-      params: {
-        agent: "pi",
-        applies_to_source: HERDR_PI_SOURCE,
-        pane_id: process.env.HERDR_PANE_ID ?? "",
-        source: SOURCE,
-        ...clear ? { clear_state_labels: true } : { state_labels: { working: "seeking advice" } },
-        seq: nextSequence()
-      }
-    };
-  }
-}
-
+// src/herdr-block.ts
 class HerdrAdvisorBlock {
   #blocked = false;
   report;
@@ -1603,6 +1568,60 @@ class HerdrAdvisorBlock {
     } catch {}
   }
 }
+
+// src/herdr.ts
+var metadataRequest = (clear) => ({
+  id: `${SOURCE}:${nextSequence()}`,
+  method: "pane.report_metadata",
+  params: {
+    agent: "pi",
+    applies_to_source: HERDR_PI_SOURCE,
+    pane_id: process.env.HERDR_PANE_ID ?? "",
+    source: SOURCE,
+    ...clear ? { clear_state_labels: true } : { state_labels: { working: "seeking advice" } },
+    seq: nextSequence()
+  }
+});
+
+class HerdrAdvisorActivity {
+  #activeConsultations = 0;
+  report;
+  enabled;
+  constructor(report = sendToHerdr, enabled = () => true) {
+    this.report = report;
+    this.enabled = enabled;
+  }
+  start() {
+    if (!this.enabled()) {
+      return;
+    }
+    this.#activeConsultations += 1;
+    if (this.#activeConsultations === 1) {
+      this.safeReport(false);
+    }
+  }
+  finish() {
+    if (this.#activeConsultations === 0) {
+      return;
+    }
+    this.#activeConsultations -= 1;
+    if (this.#activeConsultations === 0) {
+      this.safeReport(true);
+    }
+  }
+  clear() {
+    if (this.#activeConsultations === 0) {
+      return;
+    }
+    this.#activeConsultations = 0;
+    this.safeReport(true);
+  }
+  safeReport(clear) {
+    try {
+      this.report(metadataRequest(clear));
+    } catch {}
+  }
+}
 var notifyHerdrAdvisorFailure = (title, body) => {
   if (!getAdvisorSettings().herdrIntegration) {
     return;
@@ -1624,7 +1643,8 @@ var resolveConfiguredModel = async (ctx, ref, label) => {
     throw new Error(`${label} model not configured`);
   }
   const [provider, modelId] = splitRef(ref);
-  const model = ctx.modelRegistry.find(provider, modelId);
+  const lookup = [provider, modelId];
+  const model = ctx.modelRegistry.find(...lookup);
   if (!model) {
     throw new Error(`${label} model not found: ${ref}`);
   }
@@ -1644,16 +1664,16 @@ var resolveConfiguredModel = async (ctx, ref, label) => {
   };
 };
 var ADVISOR_STREAM_UPDATE_INTERVAL_MS = 90;
-var createCoalescedUpdate = (publish, intervalMs = ADVISOR_STREAM_UPDATE_INTERVAL_MS, scheduler = {
+var defaultScheduler = {
   clearTimeout,
   now: Date.now,
   setTimeout: (callback, delay) => setTimeout(callback, delay)
-}) => {
+};
+var createCoalescedUpdate = (publish, intervalMs = ADVISOR_STREAM_UPDATE_INTERVAL_MS, scheduler = defaultScheduler) => {
   if (!Number.isFinite(intervalMs) || intervalMs <= 0) {
     throw new Error("Coalesced update interval must be positive and finite.");
   }
   let closed = false;
-  let hasPending = false;
   let pending;
   let lastPublishedAt;
   let timer;
@@ -1667,12 +1687,11 @@ var createCoalescedUpdate = (publish, intervalMs = ADVISOR_STREAM_UPDATE_INTERVA
   };
   const publishPending = () => {
     timer = undefined;
-    if (!hasPending) {
+    if (!pending) {
       return;
     }
-    const value = pending;
+    const { value } = pending;
     pending = undefined;
-    hasPending = false;
     lastPublishedAt = scheduler.now();
     try {
       publish(value);
@@ -1698,7 +1717,6 @@ var createCoalescedUpdate = (publish, intervalMs = ADVISOR_STREAM_UPDATE_INTERVA
       closed = true;
       clearTimer();
       pending = undefined;
-      hasPending = false;
     },
     flush: () => {
       if (!closed) {
@@ -1715,8 +1733,7 @@ var createCoalescedUpdate = (publish, intervalMs = ADVISOR_STREAM_UPDATE_INTERVA
       if (publishFailed) {
         throw publishError;
       }
-      pending = value;
-      hasPending = true;
+      pending = { value };
       if (timer === undefined) {
         schedule();
       }
@@ -1729,14 +1746,17 @@ var createCoalescedUpdate = (publish, intervalMs = ADVISOR_STREAM_UPDATE_INTERVA
 var collectTextStream = async (resolved, options, streamModel = stream) => {
   let thinking = "";
   let text = "";
-  const eventStream = streamModel(resolved.model, { messages: options.messages, systemPrompt: options.systemPrompt }, {
+  const streamOptions = {
     apiKey: resolved.apiKey,
     env: resolved.env,
     headers: resolved.headers,
     reasoning: options.reasoning,
-    ...options.reasoning === undefined ? {} : { reasoningEffort: options.reasoning },
     signal: options.signal
-  });
+  };
+  if (options.reasoning !== undefined) {
+    streamOptions.reasoningEffort = options.reasoning;
+  }
+  const eventStream = streamModel(resolved.model, { messages: options.messages, systemPrompt: options.systemPrompt }, streamOptions);
   for await (const event of eventStream) {
     if (event.type === "thinking_delta") {
       thinking += event.delta;
@@ -1770,14 +1790,14 @@ import { lstat, open, realpath } from "node:fs/promises";
 import { isAbsolute, relative, resolve } from "node:path";
 var ADVISOR_FILE_MAX_BYTES = 8 * 1024;
 var ADVISOR_FILES_TOTAL_MAX_BYTES = 24 * 1024;
-var PATH_SEGMENTS = /[\\/]/;
+var PATH_SEGMENTS = /[\\/]/u;
 var within = (root, candidate) => {
   const path = relative(root, candidate);
   return path !== "" && !path.startsWith("..") && !path.includes("../");
 };
 var normalizeRelativePath = (root, path) => relative(root, resolve(root, path));
 var normalizeRequestedPath = (root, value) => {
-  if (typeof value !== "string" || !value || isAbsolute(value) || value.split(PATH_SEGMENTS).includes("..")) {
+  if (!isString(value) || !value || isAbsolute(value) || value.split(PATH_SEGMENTS).includes("..")) {
     return;
   }
   return normalizeRelativePath(root, value);
@@ -1835,7 +1855,7 @@ var readAttachment = async (root, normalizedName, redact, available) => {
   if (!within(root, resolved)) {
     return;
   }
-  const flags = constants.O_NOFOLLOW ? constants.O_RDONLY | constants.O_NOFOLLOW : constants.O_RDONLY;
+  const flags = constants.O_NOFOLLOW ? constants.O_RDONLY + constants.O_NOFOLLOW : constants.O_RDONLY;
   const file = await open(resolved, flags);
   try {
     const openedStats = await file.stat();
@@ -1937,6 +1957,19 @@ import { createHash } from "node:crypto";
 
 // src/tool-result-cap.ts
 var OMITTED_MARKER = "[... omitted tool-result section ...]";
+var collect = (candidates, maxEntries, maxContentBytes) => {
+  const selected = [];
+  let used = 0;
+  for (const line of candidates.slice(0, maxEntries)) {
+    const next = used + byteLength(line) + (selected.length ? 1 : 0);
+    if (next > maxContentBytes) {
+      break;
+    }
+    selected.push(line);
+    used = next;
+  }
+  return selected;
+};
 var capToolResult = (value, maxLines = DEFAULT_ADVISOR_TOOL_RESULT_MAX_LINES, maxBytes = DEFAULT_ADVISOR_TOOL_RESULT_MAX_BYTES) => {
   const lines = value.split(`
 `);
@@ -1972,19 +2005,6 @@ var capToolResult = (value, maxLines = DEFAULT_ADVISOR_TOOL_RESULT_MAX_LINES, ma
   }
   const headCount = Math.floor((maxLines - 1) / 2);
   const tailCount = maxLines - 1 - headCount;
-  const collect = (candidates, maxEntries, maxContentBytes) => {
-    const selected = [];
-    let used = 0;
-    for (const line of candidates.slice(0, maxEntries)) {
-      const next = used + byteLength(line) + (selected.length ? 1 : 0);
-      if (next > maxContentBytes) {
-        break;
-      }
-      selected.push(line);
-      used = next;
-    }
-    return selected;
-  };
   const availableBytes = maxBytes - markerBytes - 2;
   const head = collect(lines, headCount, Math.floor(availableBytes / 2));
   const tail = collect(lines.slice(Math.max(head.length, lines.length - tailCount)), tailCount, availableBytes - byteLength(head.join(`
@@ -2002,13 +2022,13 @@ var capToolResult = (value, maxLines = DEFAULT_ADVISOR_TOOL_RESULT_MAX_LINES, ma
 
 // src/conversation.ts
 var textFromPart = (part) => {
-  if (typeof part === "string") {
+  if (isString(part)) {
     return part;
   }
-  if (!isRecord(part) || part.type !== "text") {
+  if (!isRecordOf(part) || part.type !== "text") {
     return "";
   }
-  return typeof part.text === "string" ? part.text : "";
+  return isString(part.text) ? part.text : "";
 };
 var textFrom = (content) => contentParts(content).map(textFromPart).join(`
 `).trim();
@@ -2019,10 +2039,10 @@ var assistantEntry = (message, policies, redact) => {
     parts.push(redact ? redactSecrets(text) : text);
   }
   for (const part of contentParts(message.content)) {
-    if (!isRecord(part) || part.type !== "toolCall") {
+    if (!isRecordOf(part) || part.type !== "toolCall") {
       continue;
     }
-    const toolName = typeof part.name === "string" ? part.name : "unknown";
+    const toolName = isString(part.name) ? part.name : "unknown";
     const policy = policies[toolName] ?? "full";
     if (policy === "exclude") {
       parts.push(`[Tool Call: ${toolName}] (excluded by Advisor tool policy)`);
@@ -2040,7 +2060,7 @@ var assistantEntry = (message, policies, redact) => {
 };
 var toolResultEntry = (message, toolResultMaxLines, toolResultMaxBytes, policies, redact) => {
   const status = message.isError ? "error" : "success";
-  const toolName = typeof message.toolName === "string" ? message.toolName : "unknown";
+  const toolName = isString(message.toolName) ? message.toolName : "unknown";
   const policy = policies[toolName] ?? "full";
   const source = textFrom(message.content);
   if (policy === "exclude") {
@@ -2056,13 +2076,13 @@ var toolResultEntry = (message, toolResultMaxLines, toolResultMaxBytes, policies
 ${capped.content}`;
 };
 var conversationEntry = (entry, toolResultMaxLines, toolResultMaxBytes, policies, redact) => {
-  if (!isRecord(entry)) {
+  if (!isRecordOf(entry)) {
     return;
   }
-  if (entry.type === "compaction" && typeof entry.summary === "string") {
+  if (entry.type === "compaction" && isString(entry.summary)) {
     return `[System Compaction Summary]: ${redact ? redactSecrets(entry.summary) : entry.summary}`;
   }
-  if (entry.type !== "message" || !isRecord(entry.message)) {
+  if (entry.type !== "message" || !isRecordOf(entry.message)) {
     return;
   }
   const { message } = entry;
@@ -2127,30 +2147,29 @@ var invalid = (message) => ({
   reason: "invalid-protocol"
 });
 var toolCalls = (message) => contentParts(message.content).filter((part) => isRecord(part) && part.type === "toolCall");
-var toolCallId = (part) => typeof part.id === "string" ? part.id : undefined;
-var indexToolCalls = (entries) => {
-  const callOwners = new Map;
-  const resultsByCall = new Map;
-  const state = { latestUserIndex: -1 };
-  for (let index = 0;index < entries.length; index += 1) {
-    const failure = indexEntry(entries[index], index, callOwners, resultsByCall, state);
-    if (failure) {
-      return failure;
+var toolCallId = (part) => isString(part.id) ? part.id : undefined;
+var indexAssistantCalls = (message, index, callOwners) => {
+  for (const call of toolCalls(message)) {
+    const id = toolCallId(call);
+    if (!id || callOwners.has(id)) {
+      return invalid(`Assistant tool calls at context entry ${index} have missing or duplicate IDs.`);
     }
+    callOwners.set(id, {
+      index,
+      name: isString(call.name) ? call.name : "unknown"
+    });
   }
-  for (const [id, results] of resultsByCall) {
-    if (results.length > 1) {
-      return invalid(`Tool call ${id} has duplicate result messages.`);
-    }
+  return;
+};
+var indexToolResult = (entry, message, index, resultsByCall) => {
+  const id = message.toolCallId;
+  if (!isString(id)) {
+    return invalid(`Tool result at context entry ${index} has no tool-call ID.`);
   }
-  return {
-    index: {
-      callOwners,
-      latestUserIndex: state.latestUserIndex,
-      resultsByCall
-    },
-    ok: true
-  };
+  const results = resultsByCall.get(id) ?? [];
+  results.push({ entry, index });
+  resultsByCall.set(id, results);
+  return;
 };
 var indexEntry = (entry, index, callOwners, resultsByCall, state) => {
   if (entry.type !== "message" || !isRecord(entry.message)) {
@@ -2167,28 +2186,32 @@ var indexEntry = (entry, index, callOwners, resultsByCall, state) => {
   }
   return;
 };
-var indexToolResult = (entry, message, index, resultsByCall) => {
-  const id = message.toolCallId;
-  if (typeof id !== "string") {
-    return invalid(`Tool result at context entry ${index} has no tool-call ID.`);
-  }
-  const results = resultsByCall.get(id) ?? [];
-  results.push({ entry, index });
-  resultsByCall.set(id, results);
-  return;
-};
-var indexAssistantCalls = (message, index, callOwners) => {
-  for (const call of toolCalls(message)) {
-    const id = toolCallId(call);
-    if (!id || callOwners.has(id)) {
-      return invalid(`Assistant tool calls at context entry ${index} have missing or duplicate IDs.`);
+var indexToolCalls = (entries) => {
+  const callOwners = new Map;
+  const resultsByCall = new Map;
+  const state = { latestUserIndex: -1 };
+  for (let index = 0;index < entries.length; index += 1) {
+    const entry = entries[index];
+    if (isRecord(entry)) {
+      const failure = indexEntry(entry, index, callOwners, resultsByCall, state);
+      if (failure) {
+        return failure;
+      }
     }
-    callOwners.set(id, {
-      index,
-      name: typeof call.name === "string" ? call.name : "unknown"
-    });
   }
-  return;
+  for (const [id, results] of resultsByCall) {
+    if (results.length > 1) {
+      return invalid(`Tool call ${id} has duplicate result messages.`);
+    }
+  }
+  return {
+    index: {
+      callOwners,
+      latestUserIndex: state.latestUserIndex,
+      resultsByCall
+    },
+    ok: true
+  };
 };
 
 // src/scout-types.ts
@@ -2200,8 +2223,8 @@ var SCOUT_SELECTION_MAX_IDS = 32;
 var SCOUT_SYNTHESIS_MAX_BYTES = 4 * 1024;
 
 // src/scout-groups.ts
-var SPEAKER_PREFIX = /^(User|Executor):\s*/;
-var boundedLabel = (value) => [...value.replaceAll(/\s+/g, " ").trim()].slice(0, SCOUT_LABEL_MAX_CHARS).join("");
+var SPEAKER_PREFIX = /^(?<speaker>User|Executor):\s*/u;
+var boundedLabel = (value) => [...value.replaceAll(/\s+/gu, " ").trim()].slice(0, SCOUT_LABEL_MAX_CHARS).join("");
 var labelFor = (kind, content) => {
   const preview = boundedLabel(content.replace(SPEAKER_PREFIX, ""));
   const prefix = {
@@ -2232,10 +2255,8 @@ var createGroup = (originalIndex, entryIds, kind, content, required) => ({
   originalIndex,
   required
 });
-var pendingAdvisorArguments = (value) => {
-  if (!isRecord(value)) {
-    return {};
-  }
+var pendingAdvisorArguments = (part) => {
+  const value = isRecord(part.arguments) ? part.arguments : {};
   const allowed = {};
   for (const key of ["gitContext", "question"]) {
     if (key in value) {
@@ -2248,41 +2269,17 @@ var pendingInvocationDisclosure = (entry, invocationId, toolResultMaxLines, tool
   if (!isRecord(entry.message)) {
     return disclosed;
   }
-  const content = contentParts(entry.message.content).map((part) => {
+  const message = entry.message;
+  const content = contentParts(message.content).map((part) => {
     if (!isRecord(part) || part.type !== "toolCall" || toolCallId(part) !== invocationId || part.name !== "ask_advisor") {
       return part;
     }
-    return { ...part, arguments: pendingAdvisorArguments(part.arguments) };
+    return { ...part, arguments: pendingAdvisorArguments(part) };
   });
-  return conversationEntry({ ...entry, message: { ...entry.message, content } }, toolResultMaxLines, toolResultMaxBytes, policies, redact);
-};
-var toolExchangeGroup = (entry, index, entryId, disclosed, immediate, indexed, consumedResultIndexes, caps) => {
-  const calls = toolCalls(entry.message);
-  const callIds = calls.map(toolCallId);
-  const adjacentFailure = adjacentResultMismatch(immediate, index, callIds, indexed.callOwners);
-  if (adjacentFailure) {
-    return { kind: "invalid", message: adjacentFailure };
-  }
-  const missing = new Set;
-  const resultParts = [];
-  const resultEntryIds = [];
-  const matchFailure = collectResults(calls, callIds, index, indexed.resultsByCall, consumedResultIndexes, caps, missing, resultParts, resultEntryIds);
-  if (matchFailure) {
-    return { kind: "invalid", message: matchFailure };
-  }
-  if (missing.size > 0) {
-    return missingOutcome(entry, index, entryId, disclosed, callIds, missing, resultParts, resultEntryIds, caps);
-  }
-  return {
-    group: createGroup(index, [entryId, ...resultEntryIds], "tool-exchange", [disclosed, ...resultParts].join(`
-
-`), false),
-    kind: "group"
-  };
+  return conversationEntry({ ...entry, message: { ...message, content } }, toolResultMaxLines, toolResultMaxBytes, policies, redact);
 };
 var adjacentResultMismatch = (immediate, index, callIds, callOwners) => {
-  const next = immediate;
-  if (next?.type === "message" && isRecord(next.message) && next.message.role === "toolResult" && typeof next.message.toolCallId === "string" && !callIds.includes(next.message.toolCallId) && !callOwners.has(next.message.toolCallId)) {
+  if (immediate?.type === "message" && isRecord(immediate.message) && immediate.message.role === "toolResult" && isString(immediate.message.toolCallId) && !callIds.includes(immediate.message.toolCallId) && !callOwners.has(immediate.message.toolCallId)) {
     return `Tool result at context entry ${index + 1} does not match its adjacent assistant group.`;
   }
   return;
@@ -2298,7 +2295,8 @@ var collectResults = (calls, callIds, index, resultsByCall, consumedResultIndexe
       return `Tool result at context entry ${resultMatch.index} precedes its assistant call.`;
     }
     const resultMessage = resultMatch.entry.message;
-    const expectedName = typeof calls[callIndex].name === "string" ? calls[callIndex].name : "unknown";
+    const call = calls[callIndex];
+    const expectedName = isString(call.name) ? call.name : "unknown";
     if (!isRecord(resultMessage) || resultMessage.toolName !== expectedName) {
       return `Tool result at context entry ${resultMatch.index} conflicts with call ${callId}.`;
     }
@@ -2307,7 +2305,7 @@ var collectResults = (calls, callIds, index, resultsByCall, consumedResultIndexe
     if (resultText) {
       resultParts.push(resultText);
     }
-    resultEntryIds.push(typeof resultMatch.entry.id === "string" ? resultMatch.entry.id : String(resultMatch.index));
+    resultEntryIds.push(isString(resultMatch.entry.id) ? resultMatch.entry.id : String(resultMatch.index));
   }
   return;
 };
@@ -2330,37 +2328,47 @@ var missingOutcome = (entry, index, entryId, disclosed, callIds, missing, result
     kind: "group"
   };
 };
-var buildGroups = (entries, indexed, caps) => {
-  const groups = [];
-  const consumedResultIndexes = new Set;
-  let protocolOmittedBytes = 0;
-  let protocolOmittedCount = 0;
-  for (let index = 0;index < entries.length; index += 1) {
-    const entry = entries[index];
-    const disclosed = conversationEntry(entry, caps.toolResultMaxLines, caps.toolResultMaxBytes, caps.policies, caps.redact);
-    if (!disclosed) {
-      continue;
-    }
-    const outcome = groupForEntry(entry, index, disclosed, entries[index + 1], indexed, consumedResultIndexes, caps);
-    if (outcome.kind === "invalid") {
-      return invalid(outcome.message);
-    }
-    if (outcome.kind === "omitted") {
-      protocolOmittedCount += 1;
-      protocolOmittedBytes += outcome.bytes;
-    } else if (outcome.kind === "group") {
-      groups.push(outcome.group);
-    }
+var toolExchangeGroup = (entry, message, index, entryId, disclosed, immediate, indexed, consumedResultIndexes, caps) => {
+  const calls = toolCalls(message);
+  const callIds = calls.map(toolCallId).filter(isString);
+  const adjacentFailure = adjacentResultMismatch(immediate, index, callIds, indexed.callOwners);
+  if (adjacentFailure) {
+    return { kind: "invalid", message: adjacentFailure };
+  }
+  const missing = new Set;
+  const resultParts = [];
+  const resultEntryIds = [];
+  const matchFailure = collectResults(calls, callIds, index, indexed.resultsByCall, consumedResultIndexes, caps, missing, resultParts, resultEntryIds);
+  if (matchFailure) {
+    return { kind: "invalid", message: matchFailure };
+  }
+  if (missing.size > 0) {
+    return missingOutcome(entry, index, entryId, disclosed, callIds, missing, resultParts, resultEntryIds, caps);
   }
   return {
-    groups,
-    ok: true,
-    protocolOmittedBytes,
-    protocolOmittedCount
+    group: createGroup(index, [entryId, ...resultEntryIds], "tool-exchange", [disclosed, ...resultParts].join(`
+
+`), false),
+    kind: "group"
   };
 };
+var ownerOf = (message, callOwners) => isString(message.toolCallId) ? callOwners.get(message.toolCallId) : undefined;
+var contentPartsOf = (message) => Array.isArray(message.content) ? message.content : [];
+var hasCalls = (message) => contentPartsOf(message).some((part) => isRecord(part) && part.type === "toolCall");
+var toolResultOutcome = (message, index, disclosed, callOwners, consumedResultIndexes) => {
+  if (consumedResultIndexes.has(index)) {
+    return { kind: "skipped" };
+  }
+  if (ownerOf(message, callOwners)) {
+    return {
+      kind: "invalid",
+      message: `Tool result at context entry ${index} precedes or conflicts with its retained call.`
+    };
+  }
+  return { bytes: byteLength(disclosed), kind: "omitted" };
+};
 var groupForEntry = (entry, index, disclosed, immediate, indexed, consumedResultIndexes, caps) => {
-  const entryId = typeof entry.id === "string" ? entry.id : String(index);
+  const entryId = isString(entry.id) ? entry.id : String(index);
   if (entry.type !== "message" || !isRecord(entry.message)) {
     return {
       group: createGroup(index, [entryId], "compaction", disclosed, false),
@@ -2386,23 +2394,42 @@ var groupForEntry = (entry, index, disclosed, immediate, indexed, consumedResult
       kind: "group"
     };
   }
-  return toolExchangeGroup(entry, index, entryId, disclosed, immediate, indexed, consumedResultIndexes, caps);
+  return toolExchangeGroup(entry, message, index, entryId, disclosed, immediate, indexed, consumedResultIndexes, caps);
 };
-var toolResultOutcome = (message, index, disclosed, callOwners, consumedResultIndexes) => {
-  if (consumedResultIndexes.has(index)) {
-    return { kind: "skipped" };
+var buildGroups = (entries, indexed, caps) => {
+  const groups = [];
+  const consumedResultIndexes = new Set;
+  let protocolOmittedBytes = 0;
+  let protocolOmittedCount = 0;
+  for (let index = 0;index < entries.length; index += 1) {
+    const entry = entries[index];
+    if (!isRecord(entry)) {
+      continue;
+    }
+    const disclosed = conversationEntry(entry, caps.toolResultMaxLines, caps.toolResultMaxBytes, caps.policies, caps.redact);
+    if (!disclosed) {
+      continue;
+    }
+    const next = entries[index + 1];
+    const immediate = isRecord(next) ? next : undefined;
+    const outcome = groupForEntry(entry, index, disclosed, immediate, indexed, consumedResultIndexes, caps);
+    if (outcome.kind === "invalid") {
+      return invalid(outcome.message);
+    }
+    if (outcome.kind === "omitted") {
+      protocolOmittedCount += 1;
+      protocolOmittedBytes += outcome.bytes;
+    } else if (outcome.kind === "group") {
+      groups.push(outcome.group);
+    }
   }
-  if (ownerOf(message, callOwners)) {
-    return {
-      kind: "invalid",
-      message: `Tool result at context entry ${index} precedes or conflicts with its retained call.`
-    };
-  }
-  return { bytes: byteLength(disclosed), kind: "omitted" };
+  return {
+    groups,
+    ok: true,
+    protocolOmittedBytes,
+    protocolOmittedCount
+  };
 };
-var ownerOf = (message, callOwners) => typeof message.toolCallId === "string" ? callOwners.get(message.toolCallId) : undefined;
-var hasCalls = (message) => contentPartsOf(message).some((part) => isRecord(part) && part.type === "toolCall");
-var contentPartsOf = (message) => Array.isArray(message.content) ? message.content : [];
 
 // src/scout-reconstruct.ts
 var prefixWithinCharBudget = (value, maxChars) => {
@@ -2417,7 +2444,7 @@ var prefixWithinCharBudget = (value, maxChars) => {
 };
 var reconstructScoutConversation = (manifest, selectedIds, synthesis, maxChars = Number.MAX_SAFE_INTEGER) => {
   const selected = new Set(selectedIds);
-  const evidence = manifest.groups.filter((group) => group.required || selected.has(group.id)).sort((left, right) => left.originalIndex - right.originalIndex).map((group) => group.content);
+  const evidence = manifest.groups.filter((group) => group.required || selected.has(group.id)).toSorted((left, right) => left.originalIndex - right.originalIndex).map((group) => group.content);
   const evidenceText = evidence.join(`
 
 `);
@@ -2454,21 +2481,25 @@ var resolveCaps = (options) => ({
   toolResultMaxBytes: options.toolResultMaxBytes ?? advisorToolResultMaxBytesRef,
   toolResultMaxLines: options.toolResultMaxLines ?? advisorToolResultMaxLinesRef
 });
-var buildScoutManifest = (ctx, options = {}) => {
-  const entries = ctx.sessionManager.buildContextEntries();
-  const caps = resolveCaps(options);
-  const indexed = indexToolCalls(entries);
-  if (!indexed.ok) {
-    return indexed;
+var contentChars = (items) => items.reduce((sum, group) => sum + group.content.length, 0) + Math.max(0, items.length - 1) * 2;
+var requiredOverflow = (required, caps) => {
+  if (required.some((group) => group.bytes > caps.maxGroupBytes) || required.length > caps.maxGroups || required.reduce((sum, group) => sum + groupWireBytes(group), 0) > caps.maxManifestBytes) {
+    return {
+      message: "Required Scout context exceeds the Scout manifest transport limit.",
+      ok: false,
+      reason: "required-group-overflow"
+    };
   }
-  const built = buildGroups(entries, indexed.index, caps);
-  if (!built.ok) {
-    return built;
+  if (caps.maxConversationChars !== undefined && contentChars(required) > caps.maxConversationChars) {
+    return {
+      message: "Required Scout context exceeds the Advisor conversation budget.",
+      ok: false,
+      reason: "required-group-overflow"
+    };
   }
-  return fitToBudget(built, caps);
+  return;
 };
 var fits = (selected, caps) => selected.length <= caps.maxGroups && selected.reduce((sum, group) => sum + groupWireBytes(group), 0) <= caps.maxManifestBytes && (caps.maxConversationChars === undefined || contentChars(selected) <= caps.maxConversationChars);
-var contentChars = (items) => items.reduce((sum, group) => sum + group.content.length, 0) + Math.max(0, items.length - 1) * 2;
 var fitToBudget = (built, caps) => {
   const { groups, protocolOmittedBytes, protocolOmittedCount } = built;
   const availableCount = groups.length + protocolOmittedCount;
@@ -2515,33 +2546,29 @@ var fitToBudget = (built, caps) => {
     ok: true
   };
 };
-var requiredOverflow = (required, caps) => {
-  if (required.some((group) => group.bytes > caps.maxGroupBytes) || required.length > caps.maxGroups || required.reduce((sum, group) => sum + groupWireBytes(group), 0) > caps.maxManifestBytes) {
-    return {
-      message: "Required Scout context exceeds the Scout manifest transport limit.",
-      ok: false,
-      reason: "required-group-overflow"
-    };
+var buildScoutManifest = (ctx, options = {}) => {
+  const entries = ctx.sessionManager.buildContextEntries();
+  const caps = resolveCaps(options);
+  const indexed = indexToolCalls(entries);
+  if (!indexed.ok) {
+    return indexed;
   }
-  if (caps.maxConversationChars !== undefined && contentChars(required) > caps.maxConversationChars) {
-    return {
-      message: "Required Scout context exceeds the Advisor conversation budget.",
-      ok: false,
-      reason: "required-group-overflow"
-    };
+  const built = buildGroups(entries, indexed.index, caps);
+  if (!built.ok) {
+    return built;
   }
-  return;
+  return fitToBudget(built, caps);
 };
 
 // src/usage.ts
-var finite = (value) => typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : undefined;
+var finite = (value) => isNumber(value) && Number.isFinite(value) && value >= 0 ? value : undefined;
 var add = (left, right) => left === undefined || right === undefined ? left ?? right : left + right;
 var costFields = ["input", "output", "cacheRead", "cacheWrite", "total"];
 var snapshotAdvisorUsage = (usage) => {
-  if (!isRecord(usage)) {
+  if (!isRecordOf(usage)) {
     return;
   }
-  const cost = isRecord(usage.cost) ? usage.cost : undefined;
+  const cost = isRecordOf(usage.cost) ? usage.cost : undefined;
   const snapshot = {
     cacheRead: finite(usage.cacheRead),
     cacheWrite: finite(usage.cacheWrite),
@@ -2556,21 +2583,19 @@ var snapshotAdvisorUsage = (usage) => {
 var advisorUsageCost = (usage) => snapshotAdvisorUsage(usage)?.cost;
 var advisorUsageForPi = (usage) => {
   const snapshot = snapshotAdvisorUsage(usage);
-  if (!(snapshot && isRecord(usage))) {
+  if (!(snapshot && isRecordOf(usage))) {
     return;
   }
-  const cost = isRecord(usage.cost) ? usage.cost : undefined;
+  const cost = isRecordOf(usage.cost) ? usage.cost : undefined;
   const input = snapshot.input ?? 0;
   const output = snapshot.output ?? 0;
   const cacheRead = snapshot.cacheRead ?? 0;
   const cacheWrite = snapshot.cacheWrite ?? 0;
   const cacheWrite1h = finite(usage.cacheWrite1h);
   const reasoning = finite(usage.reasoning);
-  return {
+  const piUsage = {
     cacheRead,
     cacheWrite,
-    ...cacheWrite1h === undefined ? {} : { cacheWrite1h },
-    ...reasoning === undefined ? {} : { reasoning },
     cost: {
       cacheRead: finite(cost?.cacheRead) ?? 0,
       cacheWrite: finite(cost?.cacheWrite) ?? 0,
@@ -2582,6 +2607,13 @@ var advisorUsageForPi = (usage) => {
     output,
     totalTokens: snapshot.totalTokens ?? input + output + cacheRead + cacheWrite
   };
+  if (cacheWrite1h !== undefined) {
+    piUsage.cacheWrite1h = cacheWrite1h;
+  }
+  if (reasoning !== undefined) {
+    piUsage.reasoning = reasoning;
+  }
+  return piUsage;
 };
 var emptyAdvisorUsageTotals = () => ({
   calls: 0,
@@ -2677,7 +2709,7 @@ var defaultDependencies = {
   resolve: resolveConfiguredModel
 };
 var byteLength2 = (value) => Buffer.byteLength(value, "utf-8");
-var AUTH_ERROR_PATTERN = /api key|auth|login|credential/i;
+var AUTH_ERROR_PATTERN = /api key|auth|login|credential/iu;
 var manifestMessage = (manifest) => ({
   content: [
     {
@@ -2694,6 +2726,7 @@ var manifestMessage = (manifest) => ({
   role: "user",
   timestamp: Date.now()
 });
+var isStringArray = (value) => Array.isArray(value) && value.every(isString);
 var parseScoutSelection = (text, manifest) => {
   if (!text.trim()) {
     throw new Error("Scout returned an empty response.");
@@ -2704,18 +2737,17 @@ var parseScoutSelection = (text, manifest) => {
   } catch (error) {
     throw new Error("Scout response is not a JSON object.", { cause: error });
   }
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
+  if (!isRecord(value)) {
     throw new Error("Scout response must be a JSON object.");
   }
-  const record = value;
-  const keys = Object.keys(record).sort();
+  const keys = Object.keys(value).toSorted();
   if (keys.length !== 2 || keys[0] !== "selectedIds" || keys[1] !== "synthesis") {
     throw new Error("Scout response must contain only selectedIds and synthesis.");
   }
-  if (!(Array.isArray(record.selectedIds) && record.selectedIds.every((id) => typeof id === "string"))) {
+  if (!isStringArray(value.selectedIds)) {
     throw new Error("Scout selectedIds must be an array of strings.");
   }
-  const selectedIds = record.selectedIds;
+  const { selectedIds } = value;
   if (new Set(selectedIds).size !== selectedIds.length) {
     throw new Error("Scout selected duplicate group IDs.");
   }
@@ -2729,15 +2761,15 @@ var parseScoutSelection = (text, manifest) => {
   const optionalIds = knownSelectedIds.filter((id) => !required.has(id)).slice(0, SCOUT_SELECTION_MAX_IDS - requiredIds.length);
   const retained = new Set([...requiredIds, ...optionalIds]);
   const normalizedIds = manifest.groups.filter((group) => retained.has(group.id)).map((group) => group.id);
-  if (typeof record.synthesis !== "string") {
+  if (!isString(value.synthesis)) {
     throw new TypeError("Scout synthesis must be a string.");
   }
-  if (byteLength2(record.synthesis) > SCOUT_SYNTHESIS_MAX_BYTES) {
+  if (byteLength2(value.synthesis) > SCOUT_SYNTHESIS_MAX_BYTES) {
     throw new Error(`Scout synthesis exceeds ${SCOUT_SYNTHESIS_MAX_BYTES} UTF-8 bytes.`);
   }
   return {
     selectedIds: normalizedIds,
-    synthesis: knownSelectedIds.length > 0 ? record.synthesis : ""
+    synthesis: knownSelectedIds.length > 0 ? value.synthesis : ""
   };
 };
 var baseMetrics = (manifest, startedAt) => ({
@@ -2755,6 +2787,61 @@ var classifyResolutionError = (message) => {
     return "auth-error";
   }
   return "provider-error";
+};
+var setupAbortWatch = (parentSignal, timeoutMs) => {
+  const controller = new AbortController;
+  let timedOut = false;
+  const abortFromParent = () => controller.abort(parentSignal?.reason);
+  parentSignal?.addEventListener("abort", abortFromParent, { once: true });
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort(new Error("Scout timed out."));
+  }, timeoutMs);
+  timer.unref?.();
+  const { promise: abortPromise, reject: rejectOnAbort } = Promise.withResolvers();
+  const onControllerAbort = () => rejectOnAbort(controller.signal.reason ?? new Error("Scout aborted."));
+  controller.signal.addEventListener("abort", onControllerAbort, {
+    once: true
+  });
+  return {
+    abortPromise,
+    controller,
+    teardown: () => {
+      clearTimeout(timer);
+      parentSignal?.removeEventListener("abort", abortFromParent);
+      controller.signal.removeEventListener("abort", onControllerAbort);
+    },
+    wasTimedOut: () => timedOut
+  };
+};
+var streamScoutResponse = async (dependencies, resolved, manifest, parentSignal, timeoutMs, publish) => {
+  const { abortPromise, controller, teardown, wasTimedOut } = setupAbortWatch(parentSignal, timeoutMs);
+  try {
+    const collection = dependencies.collect(resolved, {
+      messages: [manifestMessage(manifest)],
+      onChunk: (thinking, text) => {
+        if (!controller.signal.aborted) {
+          publish({ model: executorRef, text, thinking, type: "chunk" });
+        }
+      },
+      reasoning: executorEffortRef,
+      signal: controller.signal,
+      systemPrompt: SCOUT_SYSTEM
+    });
+    return {
+      ok: true,
+      streamed: await Promise.race([collection, abortPromise])
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return wasTimedOut() ? {
+      category: "timeout",
+      message: `Scout timed out after ${timeoutMs} ms.`,
+      ok: false
+    } : { category: "provider-error", message, ok: false };
+  } finally {
+    teardown();
+  }
 };
 var runAdvisorScout = async (ctx, manifest, parentSignal, onEvent, timeoutMs = SCOUT_TIMEOUT_MS, dependencies = defaultDependencies) => {
   const startedAt = Date.now();
@@ -2793,60 +2880,22 @@ var runAdvisorScout = async (ctx, manifest, parentSignal, onEvent, timeoutMs = S
     return cancelled();
   }
   publish({ model: executorRef, type: "call" });
-  const controller = new AbortController;
-  let timedOut = false;
-  const abortFromParent = () => controller.abort(parentSignal?.reason);
-  parentSignal?.addEventListener("abort", abortFromParent, { once: true });
-  const timer = setTimeout(() => {
-    timedOut = true;
-    controller.abort(new Error("Scout timed out."));
-  }, timeoutMs);
-  timer.unref?.();
-  let rejectOnAbort;
-  const onControllerAbort = () => rejectOnAbort?.(controller.signal.reason ?? new Error("Scout aborted."));
-  const abortPromise = new Promise((_resolve, reject) => {
-    rejectOnAbort = reject;
-    controller.signal.addEventListener("abort", onControllerAbort, {
-      once: true
-    });
-  });
-  const teardown = () => {
-    clearTimeout(timer);
-    parentSignal?.removeEventListener("abort", abortFromParent);
-    controller.signal.removeEventListener("abort", onControllerAbort);
-  };
-  let streamed;
-  try {
-    const collection = dependencies.collect(resolved, {
-      messages: [manifestMessage(manifest)],
-      onChunk: (thinking, text) => {
-        if (!controller.signal.aborted) {
-          publish({ model: executorRef, text, thinking, type: "chunk" });
-        }
-      },
-      reasoning: executorEffortRef,
-      signal: controller.signal,
-      systemPrompt: SCOUT_SYSTEM
-    });
-    streamed = await Promise.race([collection, abortPromise]);
-  } catch (error) {
-    teardown();
+  const streamed = await streamScoutResponse(dependencies, resolved, manifest, parentSignal, timeoutMs, publish);
+  if (!streamed.ok) {
     if (parentSignal?.aborted) {
       return cancelled();
     }
-    const message = error instanceof Error ? error.message : String(error);
-    return timedOut ? fallback("timeout", `Scout timed out after ${timeoutMs} ms.`) : fallback("provider-error", message);
+    return fallback(streamed.category, streamed.message);
   }
-  teardown();
   if (parentSignal?.aborted) {
     return cancelled();
   }
   let selection;
   try {
-    selection = parseScoutSelection(streamed.text, manifest);
+    selection = parseScoutSelection(streamed.streamed.text, manifest);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    return fallback(streamed.text.trim() ? "invalid-selection" : "empty-response", message, snapshotAdvisorUsage(streamed.usage));
+    return fallback(streamed.streamed.text.trim() ? "invalid-selection" : "empty-response", message, snapshotAdvisorUsage(streamed.streamed.usage));
   }
   const outcome = {
     conversation: reconstructScoutConversation(manifest, selection.selectedIds, selection.synthesis),
@@ -2856,7 +2905,7 @@ var runAdvisorScout = async (ctx, manifest, parentSignal, onEvent, timeoutMs = S
         ...selection.selectedIds,
         ...manifest.groups.filter((group) => group.required).map((group) => group.id)
       ]).size,
-      usage: snapshotAdvisorUsage(streamed.usage)
+      usage: snapshotAdvisorUsage(streamed.streamed.usage)
     },
     model: executorRef,
     ok: true,
@@ -2948,31 +2997,21 @@ ${question}` : ""}`;
   return text.trim() || "No conversation context is available. State that you cannot review without context.";
 };
 var advisorGitContextBudget = (contextMaxChars, gitContextMaxChars) => Math.min(gitContextMaxChars, Math.floor(contextMaxChars / 2));
+var LEVEL_WITHHELD = {
+  collected: true,
+  "no-changes": false
+};
+var STATUS_NOTES = {
+  disabled: "Repository context was disabled or had no disclosure budget; it was withheld. Do not assume the working tree is clean.",
+  failed: "Repository context could not be collected. Do not assume the working tree is clean.",
+  "no-changes": "The working tree has no uncommitted changes.",
+  "not-a-repository": "No Git repository is available for this session."
+};
 var gitContextNote = (result, requested, allowed) => {
   if (requested !== allowed && LEVEL_WITHHELD[result.status]) {
     return `Repository context was limited to "${allowed}" by user configuration; a fuller view was requested but withheld.`;
   }
-  switch (result.status) {
-    case "disabled": {
-      return "Repository context was disabled or had no disclosure budget; it was withheld. Do not assume the working tree is clean.";
-    }
-    case "no-changes": {
-      return "The working tree has no uncommitted changes.";
-    }
-    case "not-a-repository": {
-      return "No Git repository is available for this session.";
-    }
-    case "failed": {
-      return "Repository context could not be collected. Do not assume the working tree is clean.";
-    }
-    default: {
-      return;
-    }
-  }
-};
-var LEVEL_WITHHELD = {
-  collected: true,
-  "no-changes": false
+  return STATUS_NOTES[result.status];
 };
 var advisorRepositoryContext = (result, requested, allowed, budget) => {
   const note = gitContextNote(result, requested, allowed);
@@ -3051,9 +3090,10 @@ var assembleConsultationContext = async (options) => {
 };
 
 // src/tools/gate-protocol.ts
-var DECISION_LINE = /^Decision\s*:\s*(proceed|revise|blocked)\s*$/i;
-var CODE_FENCE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
-var LINE_BREAK = /\r?\n/;
+var namedGroups = (match) => match.groups ?? {};
+var DECISION_LINE = /^Decision\s*:\s*(?<decision>proceed|revise|blocked)\s*$/iu;
+var CODE_FENCE = /^ {0,3}(?<marker>`{3,}|~{3,})(?<suffix>.*)$/u;
+var LINE_BREAK = /\r?\n/u;
 var advanceFence = (openingFence, marker, suffix) => {
   if (!openingFence) {
     if (marker[0] === "`" && suffix.includes("`")) {
@@ -3089,7 +3129,7 @@ var parseAutomaticDecision = (text) => {
       ok: false
     };
   }
-  const decision = match[1].toLowerCase();
+  const decision = namedGroups(match).decision.toLowerCase();
   let openingFence;
   const decisions = [];
   let pendingFencedDecisions = [];
@@ -3097,7 +3137,8 @@ var parseAutomaticDecision = (text) => {
     const trimmed = line.trim();
     const fence = CODE_FENCE.exec(line);
     if (fence) {
-      const { closed, openingFence: nextOpeningFence } = advanceFence(openingFence, fence[1], fence[2]);
+      const groups = namedGroups(fence);
+      const { closed, openingFence: nextOpeningFence } = advanceFence(openingFence, groups.marker, groups.suffix);
       openingFence = nextOpeningFence;
       if (closed) {
         pendingFencedDecisions = [];
@@ -3108,7 +3149,7 @@ var parseAutomaticDecision = (text) => {
     if (!subsequent) {
       continue;
     }
-    const repeated = subsequent[1].trim().toLowerCase();
+    const repeated = namedGroups(subsequent).decision.trim().toLowerCase();
     if (openingFence) {
       pendingFencedDecisions.push(repeated);
     } else {
@@ -3118,16 +3159,14 @@ var parseAutomaticDecision = (text) => {
   if (openingFence) {
     decisions.push(...pendingFencedDecisions);
   }
-  for (const repeated of decisions) {
-    if (repeated === decision) {
-      return {
-        category: "duplicate-decision",
-        markdown: text,
-        message: "Advisor gate response contains duplicate decision lines.",
-        ok: false
-      };
-    }
-    return {
+  const [repeated] = decisions;
+  if (repeated !== undefined) {
+    return repeated === decision ? {
+      category: "duplicate-decision",
+      markdown: text,
+      message: "Advisor gate response contains duplicate decision lines.",
+      ok: false
+    } : {
       category: "contradictory-decision",
       markdown: text,
       message: "Advisor gate response contains contradictory decision lines.",
@@ -3155,17 +3194,20 @@ var currentModelRef = (ctx) => {
 var advisorModelAccess = (ctx) => {
   const modelRef = currentModelRef(ctx);
   if (advisorModelWhitelistRef.length === 0) {
-    return { allowed: true, ...modelRef ? { modelRef } : {} };
+    return modelRef ? { allowed: true, modelRef } : { allowed: true };
   }
   if (modelRef && advisorModelWhitelistRef.includes(modelRef)) {
     return { allowed: true, modelRef };
   }
   const current = modelRef ?? "no current model";
-  return {
+  const denial = {
     allowed: false,
-    ...modelRef ? { modelRef } : {},
     reason: `Advisor calls are restricted to the configured model whitelist (${advisorModelWhitelistRef.join(", ")}). Current model: ${current}.`
   };
+  if (modelRef) {
+    denial.modelRef = modelRef;
+  }
+  return denial;
 };
 var advisorModelIsAllowed = (ctx) => advisorModelAccess(ctx).allowed;
 var advisorModelAccessReason = (ctx) => {
@@ -3216,7 +3258,7 @@ var collectAdvisorResponse = async (options) => {
   if (!markdown.trim()) {
     throw new AdvisorNoAdviceError;
   }
-  return {
+  const response = {
     draftBytes: context.draftText ? Buffer.byteLength(context.draftText, "utf-8") : undefined,
     markdown,
     model: advisorRef,
@@ -3224,9 +3266,12 @@ var collectAdvisorResponse = async (options) => {
     thinkingText: streamed.thinking,
     trackedBytes: context.tracked.reduce((sum, item) => sum + item.bytes, 0) || undefined,
     untrackedBytes: context.untracked.reduce((sum, item) => sum + item.bytes, 0) || undefined,
-    usage: streamed.usage,
-    ...context.scout ? { scout: context.scout } : {}
+    usage: streamed.usage
   };
+  if (context.scout) {
+    response.scout = context.scout;
+  }
+  return response;
 };
 var consultAdvisor = async (ctx, question, signal, onChunk, trigger = "executor-requested", gitContext, draft, includeUntracked, includeTracked, onScout, currentInvocationId) => {
   const result = await collectAdvisorResponse({
@@ -3309,7 +3354,7 @@ var settingsIdentity = (path) => {
 var readHideThinking = (path) => {
   try {
     const parsed = JSON.parse(readFileSync2(path, "utf-8"));
-    return typeof parsed === "object" && parsed !== null && parsed.hideThinkingBlock === true;
+    return isRecord(parsed) && parsed.hideThinkingBlock === true;
   } catch {
     return false;
   }
@@ -3345,6 +3390,9 @@ var SPINNER_FRAMES = [
 ];
 var THINKING_PREFIX = "  ";
 var THINKING_PREFIX_WIDTH = visibleWidth(THINKING_PREFIX);
+var noop = () => {
+  return;
+};
 
 class ThinkingMarkdown {
   markdown;
@@ -3366,18 +3414,14 @@ class ThinkingMarkdown {
     this.markdown.invalidate();
   }
 }
-
-class HiddenThinkingLabel {
-  label;
-  constructor(theme) {
-    this.label = theme.fg("thinkingText", `${THINKING_PREFIX}Thinking…`);
-  }
-  render() {
-    return [this.label];
-  }
-  invalidate() {}
-}
-var renderThinkingMarkdown = (thinking, theme) => piHideThinkingEnabled() ? new HiddenThinkingLabel(theme) : new ThinkingMarkdown(thinking, theme);
+var hiddenThinkingLabel = (theme) => {
+  const label = theme.fg("thinkingText", `${THINKING_PREFIX}Thinking…`);
+  return {
+    invalidate: noop,
+    render: () => [label]
+  };
+};
+var renderThinkingMarkdown = (thinking, theme) => piHideThinkingEnabled() ? hiddenThinkingLabel(theme) : new ThinkingMarkdown(thinking, theme);
 var resolveAdvisorRequest = (question) => question?.trim() || undefined;
 var renderAdvisorCallBox = (question, theme) => {
   const box = new Box(1, 1, (text) => theme.bg("customMessageBg", text));
@@ -3388,7 +3432,7 @@ ${theme.fg("dim", `  ${question}`)}` : `${label} ${title}`, 0, 0));
   return box;
 };
 var COLLAPSED_ADVICE_LINES = 12;
-var SOUND_VERDICT = /^Verdict:\s*sound$/;
+var SOUND_VERDICT = /^Verdict:\s*sound$/u;
 var hasSoundVerdict = (advice) => SOUND_VERDICT.test((advice.split(`
 `).find((line) => line.trim()) ?? "").trim());
 var renderAdvisorResponseHeader = (sound, theme) => sound ? theme.fg("accent", theme.bold("◆ ADVISOR · SOUND")) : theme.fg("warning", theme.bold("◆ ADVISOR RESPONSE"));
@@ -3516,13 +3560,27 @@ var scoutTitle = (scout, frame) => {
   }
   return "◆ SCOUT · FALLBACK";
 };
+var scoutSummaryLine = (scout) => `  ${scout.model}${scout.selectedCount === undefined ? "" : ` · ${scout.selectedCount} kept / ${Math.max(0, (scout.availableCount ?? 0) - scout.selectedCount)} omitted`}${scout.latencyMs === undefined ? "" : ` · ${(scout.latencyMs / 1000).toFixed(1)}s`}`;
+var scoutExpandedLines = (scout, expanded, theme) => {
+  const lines = [];
+  if (expanded && scout.selectedLabels?.length) {
+    lines.push(theme.fg("dim", `  Selected: ${scout.selectedLabels.join("; ")}`));
+  }
+  if (expanded && scout.synthesis) {
+    lines.push(theme.fg("dim", `  Scout synthesis (untrusted inference): ${scout.synthesis}`));
+  }
+  if (expanded && scout.omittedBeforeScout) {
+    lines.push(theme.fg("dim", `  ${scout.omittedBeforeScout} group(s) omitted before Scout`));
+  }
+  return lines;
+};
 var renderScoutDetails = (box, scout, expanded, theme) => {
   const active = scout.status === "calling" || scout.status === "streaming";
   const frame = SPINNER_FRAMES[Math.floor(Date.now() / 80) % SPINNER_FRAMES.length];
   const title = scoutTitle(scout, frame);
   const lines = [
     theme.fg(scout.status === "fallback" || scout.status === "cancelled" ? "warning" : "accent", theme.bold(title)),
-    theme.fg("dim", `  ${scout.model}${scout.selectedCount === undefined ? "" : ` · ${scout.selectedCount} kept / ${Math.max(0, (scout.availableCount ?? 0) - scout.selectedCount)} omitted`}${scout.latencyMs === undefined ? "" : ` · ${(scout.latencyMs / 1000).toFixed(1)}s`}`)
+    theme.fg("dim", scoutSummaryLine(scout))
   ];
   if (getAdvisorSettings().showUsageDetails) {
     const usage = formatAdvisorUsage(scout.usage);
@@ -3539,16 +3597,7 @@ var renderScoutDetails = (box, scout, expanded, theme) => {
   if (thinking.trim()) {
     box.addChild(renderThinkingMarkdown(thinking, theme));
   }
-  const expandedLines = [];
-  if (expanded && scout.selectedLabels?.length) {
-    expandedLines.push(theme.fg("dim", `  Selected: ${scout.selectedLabels.join("; ")}`));
-  }
-  if (expanded && scout.synthesis) {
-    expandedLines.push(theme.fg("dim", `  Scout synthesis (untrusted inference): ${scout.synthesis}`));
-  }
-  if (expanded && scout.omittedBeforeScout) {
-    expandedLines.push(theme.fg("dim", `  ${scout.omittedBeforeScout} group(s) omitted before Scout`));
-  }
+  const expandedLines = scoutExpandedLines(scout, expanded, theme);
   if (expandedLines.length > 0) {
     box.addChild(new Text2(expandedLines.join(`
 `), 0, 0));
@@ -3578,6 +3627,31 @@ var addJevUsage = (totals, usage) => {
   totals.inputTokens += usage.inputTokens;
   totals.outputTokens += usage.outputTokens;
 };
+var savingsLine = (costs, skipped) => {
+  if (costs.length === 0) {
+    return "Estimated saving from skips: unavailable — no observed consultation cost this session";
+  }
+  const mean = costs.reduce((sum, cost) => sum + cost, 0) / costs.length;
+  return `Estimated saving from skips: ≤ $${(mean * skipped).toFixed(4)} — upper bound; assumes each skipped consultation would have cost this session's mean allowed-consultation cost ($${mean.toFixed(4)}), which the skipped calls would likely have undercut`;
+};
+var formatJevTokens = (usage) => `↑${formatTokenCount(usage.inputTokens + usage.outputTokens)}`;
+var markdownCosts = (invocations) => invocations.filter((item) => item.kind === "markdown" && typeof item.cost === "number").map((item) => item.cost);
+var filterLine = (filter) => {
+  const head = `${filter.screened} screened (${filter.allowed} allowed, ${filter.skipped} skipped${filter.repeatSkipped > 0 ? ` [${filter.repeatSkipped} repeat]` : ""})`;
+  const parts = [head];
+  if (filter.overrides > 0) {
+    parts.push(`${filter.overrides} override${filter.overrides === 1 ? "" : "s"}`);
+  }
+  if (filter.failures > 0) {
+    parts.push(`${filter.failures} failure${filter.failures === 1 ? "" : "s"}`);
+  }
+  return `Jev filter: ${parts.join(", ")}`;
+};
+var gateLine = (gate, invocations) => {
+  const consultationCosts = invocations.filter((item) => item.trigger === "turn-gate" && typeof item.cost === "number").map((item) => item.cost);
+  const gateSpend = consultationCosts.reduce((sum, cost) => sum + cost, 0);
+  return `Turn gate: ${gate.checks} check${gate.checks === 1 ? "" : "s"} (Jev ${formatJevTokens(gate.usage)} · $${gate.usage.cost.toFixed(4)}), ${gate.consultations} consultation${gate.consultations === 1 ? "" : "s"} ($${gateSpend.toFixed(4)})`;
+};
 
 class AdvisorJevLedgerState {
   #ledger = freshJevLedger();
@@ -3599,10 +3673,11 @@ class AdvisorJevLedgerState {
     if (repeat) {
       this.#ledger.filter.repeatSkipped += 1;
     }
-    this.#lastSkip = {
-      ...normalizedQuestion ? { normalizedQuestion } : {},
-      turn
-    };
+    const skip = { turn };
+    if (normalizedQuestion) {
+      skip.normalizedQuestion = normalizedQuestion;
+    }
+    this.#lastSkip = skip;
   }
   recordFilterOverride() {
     this.#ledger.filter.overrides += 1;
@@ -3636,19 +3711,19 @@ class AdvisorJevLedgerState {
       if (filter.overrides > 0) {
         parts.push(`${filter.overrides} override${filter.overrides === 1 ? "" : "s"}`);
       }
-      lines.push(`Consultation dedup: ${parts.join(", ")}`, this.#savingsLine(this.#markdownCosts(invocations), filter.skipped));
+      lines.push(`Consultation dedup: ${parts.join(", ")}`, savingsLine(markdownCosts(invocations), filter.skipped));
     } else if (this.#filterActive()) {
-      lines.push(this.#filterLine(filter));
+      lines.push(filterLine(filter));
       const jevTokens = usage.inputTokens + usage.outputTokens;
       if (jevTokens > 0) {
-        lines.push(`Jev cost: ${this.#formatJevTokens(usage)} tokens · $${usage.cost.toFixed(4)} (input only; output free)`);
+        lines.push(`Jev cost: ${formatJevTokens(usage)} tokens · $${usage.cost.toFixed(4)} (input only; output free)`);
       }
       if (filter.skipped > 0) {
-        lines.push(this.#savingsLine(this.#markdownCosts(invocations), filter.skipped));
+        lines.push(savingsLine(markdownCosts(invocations), filter.skipped));
       }
     }
     if (gate.checks > 0 || gate.consultations > 0) {
-      lines.push(this.#gateLine(gate, invocations));
+      lines.push(gateLine(gate, invocations));
     }
     return lines;
   }
@@ -3656,39 +3731,10 @@ class AdvisorJevLedgerState {
     const { filter } = this.#ledger;
     return filter.screened > 0 || filter.overrides > 0 || filter.failures > 0;
   }
-  #savingsLine(markdownCosts, skipped) {
-    if (markdownCosts.length === 0) {
-      return "Estimated saving from skips: unavailable — no observed consultation cost this session";
-    }
-    const mean = markdownCosts.reduce((sum, cost) => sum + cost, 0) / markdownCosts.length;
-    return `Estimated saving from skips: ≤ $${(mean * skipped).toFixed(4)} — upper bound; assumes each skipped consultation would have cost this session's mean allowed-consultation cost ($${mean.toFixed(4)}), which the skipped calls would likely have undercut`;
-  }
-  #gateLine(gate, invocations) {
-    const consultationCosts = invocations.filter((item) => item.trigger === "turn-gate" && typeof item.cost === "number").map((item) => item.cost);
-    const gateSpend = consultationCosts.reduce((sum, cost) => sum + cost, 0);
-    return `Turn gate: ${gate.checks} check${gate.checks === 1 ? "" : "s"} (Jev ${this.#formatJevTokens(gate.usage)} · $${gate.usage.cost.toFixed(4)}), ${gate.consultations} consultation${gate.consultations === 1 ? "" : "s"} ($${gateSpend.toFixed(4)})`;
-  }
-  #formatJevTokens(usage) {
-    return `↑${formatTokenCount(usage.inputTokens + usage.outputTokens)}`;
-  }
-  #markdownCosts(invocations) {
-    return invocations.filter((item) => item.kind === "markdown" && typeof item.cost === "number").map((item) => item.cost);
-  }
-  #filterLine(filter) {
-    const head = `${filter.screened} screened (${filter.allowed} allowed, ${filter.skipped} skipped${filter.repeatSkipped > 0 ? ` [${filter.repeatSkipped} repeat]` : ""})`;
-    const parts = [head];
-    if (filter.overrides > 0) {
-      parts.push(`${filter.overrides} override${filter.overrides === 1 ? "" : "s"}`);
-    }
-    if (filter.failures > 0) {
-      parts.push(`${filter.failures} failure${filter.failures === 1 ? "" : "s"}`);
-    }
-    return `Jev filter: ${parts.join(", ")}`;
-  }
 }
 
 // src/session-state.ts
-var WHITESPACE = /\s/;
+var WHITESPACE = /\s/u;
 var TIMESTAMP_KEYS = new Set([
   "createdat",
   "date",
@@ -3698,7 +3744,7 @@ var TIMESTAMP_KEYS = new Set([
   "updatedat"
 ]);
 var REQUEST_ID_KEYS = new Set(["correlationid", "requestid", "traceid"]);
-var normalizedKey = (key) => key.replaceAll(/[-_]/g, "").toLowerCase();
+var normalizedKey = (key) => key.replaceAll(/[-_]/gu, "").toLowerCase();
 var isVolatileKey = (key, keys) => keys.has(normalizedKey(key));
 var normalizeShellWhitespace = (command) => {
   let result = "";
@@ -3731,10 +3777,10 @@ var normalizeShellWhitespace = (command) => {
   }
   return result;
 };
-var normalizeString = (value) => value.replaceAll(/\/(?:private\/)?tmp\/[^\s/]+/g, "/tmp/<temporary>").replaceAll(/\/var\/folders\/[^\s/]+/g, "/var/folders/<temporary>");
+var normalizeString = (value) => value.replaceAll(/\/(?:private\/)?tmp\/[^\s/]+/gu, "/tmp/<temporary>").replaceAll(/\/var\/folders\/[^\s/]+/gu, "/var/folders/<temporary>");
 var normalizeToolInput = (toolName, input) => {
   const visit = (value, key) => {
-    if (typeof value === "string") {
+    if (isString(value)) {
       if (key && isVolatileKey(key, TIMESTAMP_KEYS)) {
         return "<timestamp>";
       }
@@ -3747,9 +3793,8 @@ var normalizeToolInput = (toolName, input) => {
     if (Array.isArray(value)) {
       return value.map((item) => visit(item));
     }
-    if (value && typeof value === "object") {
-      const record = value;
-      return Object.fromEntries(Object.keys(record).sort().map((childKey) => [childKey, visit(record[childKey], childKey)]));
+    if (isRecordOf(value)) {
+      return Object.fromEntries(Object.keys(value).toSorted().map((childKey) => [childKey, visit(value[childKey], childKey)]));
     }
     return value;
   };
@@ -3856,11 +3901,11 @@ class AdvisorSessionState {
     addAdvisorUsage(this.#usage.totals, record.usage);
   }
   issueAdvice(id, advice, trigger, draft = false, normalizedQuestion) {
-    this.#ledger.issued.set(id, {
-      advice,
-      ...normalizedQuestion ? { normalizedQuestion } : {},
-      trigger
-    });
+    const issued = { advice, trigger };
+    if (normalizedQuestion) {
+      issued.normalizedQuestion = normalizedQuestion;
+    }
+    this.#ledger.issued.set(id, issued);
     this.#ledger.lastAdvice = advice;
     if (draft) {
       this.#ledger.draftConsultations += 1;
@@ -3883,9 +3928,9 @@ class AdvisorSessionState {
       return false;
     }
     const mentioned = paths.every((path) => {
-      const escaped = path.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const boundary = `(^|[\\s\\"'\`()\\[])${escaped}(?=$|[\\s\\"'\`),;:!?\\]]|\\.(?=\\s|$))`;
-      return new RegExp(boundary).test(advice);
+      const escaped = path.replaceAll(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+      const boundary = `(^|[\\s"'\`()\\[])${escaped}(?=$|[\\s"'\`),;:!?\\]]|\\.(?=\\s|$))`;
+      return new RegExp(boundary, "u").test(advice);
     });
     if (!mentioned) {
       return false;
@@ -4010,6 +4055,16 @@ var notify = (ctx, message, level) => {
     ctx.ui.notify(message, level);
   }
 };
+var reportManualBudgetExhausted = (ctx) => {
+  const message = "Advisor call budget exhausted for this session.";
+  notify(ctx, message, "warning");
+  notifyHerdrAdvisorFailure("Advisor budget exhausted", message);
+};
+var requestManualRender = (ctx) => {
+  if (ctx.hasUI) {
+    ctx.ui.setStatus("advisor-manual", undefined);
+  }
+};
 
 class CommandRuntime {
   advisorSessionState;
@@ -4017,7 +4072,9 @@ class CommandRuntime {
   manualProgress = new Map;
   manualProgressTimers = new Map;
   pi;
+  reportManualBudgetExhausted = reportManualBudgetExhausted;
   requestAdvisor;
+  requestManualRender = requestManualRender;
   scoutStatus;
   manualProgressSequence = 0;
   pendingExecutorModelRef;
@@ -4046,16 +4103,6 @@ class CommandRuntime {
   updateAdvisorUsageStatus(ctx) {
     if (ctx.hasUI) {
       ctx.ui.setStatus("advisor-usage", getAdvisorSettings().showUsageFooter ? this.advisorSessionState.usageStatus() : undefined);
-    }
-  }
-  reportManualBudgetExhausted(ctx) {
-    const message = "Advisor call budget exhausted for this session.";
-    notify(ctx, message, "warning");
-    notifyHerdrAdvisorFailure("Advisor budget exhausted", message);
-  }
-  requestManualRender(ctx) {
-    if (ctx.hasUI) {
-      ctx.ui.setStatus("advisor-manual", undefined);
     }
   }
 }
@@ -4341,6 +4388,7 @@ var renderManualAdvisorDialog = (view) => {
 
 // src/ui/manual-dialog.ts
 var TUI_INPUT_TAB = ["tui", "input", "tab"].join(".");
+var isShiftTab = (keyData) => matchesKey(keyData, Key.shift("tab"));
 
 class ManualAdvisorDialog {
   options;
@@ -4363,7 +4411,7 @@ class ManualAdvisorDialog {
   }
   constructor(options) {
     this.options = options;
-    this.gitLevels = GIT_CONTEXT_LEVELS.filter((level) => clampGitContextLevel(level, options.gitContext) === level).reverse();
+    this.gitLevels = GIT_CONTEXT_LEVELS.filter((level) => clampGitContextLevel(level, options.gitContext) === level).toReversed();
     this.gitIndex = Math.max(0, this.gitLevels.indexOf(options.gitContext));
     const editorTheme = {
       borderColor: (text) => options.theme.fg("border", text),
@@ -4395,7 +4443,7 @@ class ManualAdvisorDialog {
       this.cancel();
       return;
     }
-    if (this.isShiftTab(keyData)) {
+    if (isShiftTab(keyData)) {
       this.changeFocus(-1);
       return;
     }
@@ -4403,23 +4451,12 @@ class ManualAdvisorDialog {
       this.changeFocus(1);
       return;
     }
-    switch (this.focusTarget) {
-      case "editor": {
-        this.handleEditorInput(keyData);
-        return;
-      }
-      case "git": {
-        this.handleGitInput(keyData);
-        return;
-      }
-      case "actions": {
-        this.handleActionInput(keyData);
-        return;
-      }
-      default: {
-        return;
-      }
-    }
+    const handlers = {
+      actions: (key) => this.handleActionInput(key),
+      editor: (key) => this.handleEditorInput(key),
+      git: (key) => this.handleGitInput(key)
+    };
+    handlers[this.focusTarget](keyData);
   }
   render(width) {
     const renderWidth = Math.max(1, Math.floor(width));
@@ -4527,9 +4564,6 @@ class ManualAdvisorDialog {
   isTab(keyData) {
     return this.matches(keyData, TUI_INPUT_TAB, Key.tab) && !matchesKey(keyData, Key.shift("tab"));
   }
-  isShiftTab(keyData) {
-    return matchesKey(keyData, Key.shift("tab"));
-  }
   isCancel(keyData) {
     return matchesKey(keyData, Key.escape) || this.options.keybindings.matches(keyData, "tui.select.cancel");
   }
@@ -4541,10 +4575,13 @@ class ManualAdvisorDialog {
       return;
     }
     this.state.completed = true;
-    this.options.onSubmit({
-      gitContext: this.gitLevels[this.gitIndex] ?? "off",
-      ...message ? { message } : {}
-    });
+    const request = {
+      gitContext: this.gitLevels[this.gitIndex] ?? "off"
+    };
+    if (message) {
+      request.message = message;
+    }
+    this.options.onSubmit(request);
   }
   cancel() {
     if (this.state.completed) {
@@ -4555,31 +4592,31 @@ class ManualAdvisorDialog {
   }
 }
 
-// src/jev/client.ts
-class JevFailure extends Error {
+// src/jev/failure.ts
+class JevFailureError extends Error {
   category;
   constructor(category, message) {
     super(message);
-    this.name = "JevFailure";
+    this.name = "JevFailureError";
     this.category = category;
   }
 }
+
+// src/jev/client.ts
 var ENDPOINTS = {
   openrouter: "https://openrouter.ai/api/alpha/decisions",
   typesafe: "https://api.typesafe.ai/v1/systemone"
 };
+var range = (from, to) => Array.from({ length: to - from + 1 }, (_, index) => from + index);
 var RETRYABLE_STATUSES = new Set([408, 429, ...range(500, 599)]);
 var RETRY_BACKOFF_MS = 250;
 var MAX_ATTEMPTS = 2;
-function range(from, to) {
-  return Array.from({ length: to - from + 1 }, (_, index) => from + index);
-}
-var finiteTokens = (value) => typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : 0;
+var finiteTokens = (value) => isNumber(value) && Number.isFinite(value) && value >= 0 ? value : 0;
 var errorDetail = (error) => {
-  if (typeof error === "string") {
+  if (isString(error)) {
     return error;
   }
-  if (error && typeof error === "object" && "message" in error) {
+  if (isRecordOf(error) && "message" in error) {
     return String(error.message);
   }
   return "";
@@ -4593,7 +4630,22 @@ var statusCategory = (status) => {
   }
   return "error";
 };
+var isObjectLike = (value) => typeof value === "object";
 var openRouterModelId = (model) => model.includes("/") ? model : `~typesafe/${model}`;
+var connectionFailure = (error) => {
+  const message = redactSecrets(error instanceof Error ? error.message : String(error));
+  return {
+    failure: new JevFailureError("network", `Jev connection failed: ${message}`)
+  };
+};
+var sleepWithAbort = (signal, ms) => new Promise((resolve) => {
+  const timer = setTimeout(resolve, ms);
+  timer.unref?.();
+  signal.addEventListener("abort", () => {
+    clearTimeout(timer);
+    resolve();
+  }, { once: true });
+});
 
 class JevClient {
   #apiKey;
@@ -4642,7 +4694,7 @@ class JevClient {
         if (!outcome.retryable || attempt >= MAX_ATTEMPTS) {
           break;
         }
-        await this.#backoff(deadline.signal);
+        await sleepWithAbort(deadline.signal, RETRY_BACKOFF_MS);
         if (deadline.signal.aborted) {
           break;
         }
@@ -4652,11 +4704,11 @@ class JevClient {
       if (signal?.aborted && !deadlineHit) {
         throw error;
       }
-      if (error instanceof JevFailure) {
+      if (error instanceof JevFailureError) {
         throw error;
       }
       const message = redactSecrets(error instanceof Error ? error.message : String(error));
-      throw deadlineHit ? new JevFailure("timeout", `Jev call exceeded its ${this.#timeoutMs} ms wall-time budget.`) : new JevFailure("error", message);
+      throw deadlineHit ? new JevFailureError("timeout", `Jev call exceeded its ${this.#timeoutMs} ms wall-time budget.`) : new JevFailureError("error", message);
     } finally {
       clearTimeout(timer);
       signal?.removeEventListener("abort", abortFromCaller);
@@ -4667,7 +4719,7 @@ class JevClient {
       return this.#result(outcome);
     }
     if (deadlineHit && outcome.failure?.category !== "auth") {
-      throw new JevFailure("timeout", `Jev call exceeded its ${this.#timeoutMs} ms wall-time budget.`);
+      throw new JevFailureError("timeout", `Jev call exceeded its ${this.#timeoutMs} ms wall-time budget.`);
     }
     if (outcome.failure) {
       throw outcome.failure;
@@ -4675,21 +4727,7 @@ class JevClient {
     if (signal?.aborted) {
       throw new Error("Jev call aborted by the caller.");
     }
-    throw new JevFailure("error", "Jev call failed.");
-  }
-  async#backoff(signal) {
-    if (signal.aborted) {
-      return;
-    }
-    await new Promise((resolve) => {
-      const timer = setTimeout(resolve, RETRY_BACKOFF_MS);
-      timer.unref?.();
-      const onAbort = () => {
-        clearTimeout(timer);
-        resolve();
-      };
-      signal.addEventListener("abort", onAbort, { once: true });
-    });
+    throw new JevFailureError("error", "Jev call failed.");
   }
   async#attempt(body, signal) {
     if (signal.aborted) {
@@ -4712,7 +4750,7 @@ class JevClient {
       }
       return {
         retryable: true,
-        ...this.#connectionFailure(error)
+        ...connectionFailure(error)
       };
     }
     if (response.ok) {
@@ -4724,23 +4762,17 @@ class JevClient {
       retryable: RETRYABLE_STATUSES.has(response.status)
     };
   }
-  #connectionFailure(error) {
-    const message = redactSecrets(error instanceof Error ? error.message : String(error));
-    return {
-      failure: new JevFailure("network", `Jev connection failed: ${message}`)
-    };
-  }
   async#failureFromStatus(response) {
     let detail = "";
     try {
       const parsed = await response.json();
-      const error = parsed?.error;
+      const error = isRecord(parsed) ? parsed.error : undefined;
       detail = errorDetail(error);
     } catch {
       detail = "";
     }
     const message = redactSecrets(`Jev ${this.#transportLabel()} request failed with HTTP ${response.status}${detail ? `: ${detail}` : ""}.`);
-    return new JevFailure(statusCategory(response.status), message);
+    return new JevFailureError(statusCategory(response.status), message);
   }
   #transportLabel() {
     return this.#endpoint === ENDPOINTS.openrouter ? "OpenRouter" : "TypeSafe";
@@ -4751,23 +4783,25 @@ class JevClient {
       parsed = await response.json();
     } catch (error) {
       return {
-        failure: new JevFailure("malformed", `Jev response was not JSON: ${redactSecrets(error instanceof Error ? error.message : String(error))}`)
+        failure: new JevFailureError("malformed", `Jev response was not JSON: ${redactSecrets(error instanceof Error ? error.message : String(error))}`)
       };
     }
-    const record = parsed;
-    if (!record || typeof record !== "object" || !record.answers || typeof record.answers !== "object") {
+    if (!isRecord(parsed) || !parsed.answers || !isObjectLike(parsed.answers)) {
       return {
-        failure: new JevFailure("malformed", "Jev response did not include an answers object.")
+        failure: new JevFailureError("malformed", "Jev response did not include an answers object.")
       };
     }
     return {
-      answers: record.answers,
-      model: typeof record.model === "string" ? record.model : this.#model,
-      usage: record.usage
+      answers: parsed.answers,
+      model: isString(parsed.model) ? parsed.model : this.#model,
+      usage: isRecordOf(parsed.usage) ? {
+        input_tokens: parsed.usage.input_tokens,
+        output_tokens: parsed.usage.output_tokens
+      } : undefined
     };
   }
   #result(outcome) {
-    const usage = outcome.usage;
+    const { usage } = outcome;
     const inputTokens = finiteTokens(usage?.input_tokens);
     const outputTokens = finiteTokens(usage?.output_tokens);
     const price = this.#pricePerMtok ?? advisorJevPricePerMtokRef;
@@ -4806,7 +4840,10 @@ var TYPESAFE_KEY_NAME = "typesafe-api-key";
 var TYPESAFE_KEY_CONFIG_FIELD = "typesafe_api_key";
 var KEY_FILE_MODE = 384;
 var keyFilePath = () => join4(getAgentDir3(), "typesafe_api_key");
-var runtimeSecrets = () => globalThis.Bun?.secrets;
+var runtimeSecrets = () => {
+  const bun = globalThis;
+  return bun.Bun?.secrets;
+};
 var normalizeKey = (value) => value?.trim() || undefined;
 var readAdvisorJsonConfig = () => readExistingConfig(join4(getAgentDir3(), "advisor.json"));
 var defaultReadFileStore = () => {
@@ -4851,7 +4888,7 @@ var resolveTypeSafeKey = async (deps = {}) => {
   }
   const config = (deps.readAdvisorJson ?? readAdvisorJsonConfig)();
   const staged = config[TYPESAFE_KEY_CONFIG_FIELD];
-  if (typeof staged === "string") {
+  if (isString(staged)) {
     const fromConfig = normalizeKey(staged);
     if (fromConfig) {
       return { key: fromConfig, source: "advisor-json" };
@@ -4936,8 +4973,8 @@ var removeTypeSafeKeyFromAdvisorJson = () => {
     if (!(TYPESAFE_KEY_CONFIG_FIELD in existing)) {
       return { message: "No plaintext key in advisor.json.", ok: true };
     }
-    delete existing[TYPESAFE_KEY_CONFIG_FIELD];
-    writeFileSync2(path, `${JSON.stringify(existing, null, 2)}
+    const retained = Object.fromEntries(Object.entries(existing).filter(([key]) => key !== TYPESAFE_KEY_CONFIG_FIELD));
+    writeFileSync2(path, `${JSON.stringify(retained, null, 2)}
 `);
     resetConfigCache();
     return { message: "Plaintext key removed from advisor.json.", ok: true };
@@ -4979,15 +5016,14 @@ var screeningQuestions = {
     type: "score"
   }
 };
-var NUMERIC_KEY_PATTERN = /^\d+$/;
-var isRecord2 = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
-var finiteNumber = (value) => typeof value === "number" && Number.isFinite(value) ? value : undefined;
+var NUMERIC_KEY_PATTERN = /^\d+$/u;
+var finiteNumber = (value) => isNumber(value) && Number.isFinite(value) ? value : undefined;
 var lowestStakesProbability = (answer) => {
-  if (!isRecord2(answer)) {
+  if (!isRecordOf(answer)) {
     return;
   }
-  const probabilities = isRecord2(answer.probabilities) ? answer.probabilities : {};
-  const legend = isRecord2(answer.legend) ? answer.legend : undefined;
+  const probabilities = isRecordOf(answer.probabilities) ? answer.probabilities : {};
+  const legend = isRecordOf(answer.legend) ? answer.legend : undefined;
   if (legend) {
     const exact = Object.keys(legend).find((key) => legend[key] === STAKES_RUBRIC[0]);
     if (exact) {
@@ -4998,12 +5034,17 @@ var lowestStakesProbability = (answer) => {
   if (numericKeys.length === 0) {
     return;
   }
-  const lowest = numericKeys.reduce((left, right) => Number(left) <= Number(right) ? left : right);
+  let [lowest] = numericKeys;
+  for (const key of numericKeys) {
+    if (Number(key) < Number(lowest)) {
+      lowest = key;
+    }
+  }
   return finiteNumber(probabilities[lowest]);
 };
-var selfAnswerableNoul = (answer) => isRecord2(answer) ? finiteNumber(answer.noul) : undefined;
+var selfAnswerableNoul = (answer) => isRecordOf(answer) ? finiteNumber(answer.noul) : undefined;
 var composeScreeningVerdict = (answers, { noulMargin, skipConfidence }) => {
-  if (!isRecord2(answers)) {
+  if (!isRecordOf(answers)) {
     return { skip: false };
   }
   const negligibleMass = lowestStakesProbability(answers.stakes);
@@ -5017,29 +5058,29 @@ var composeScreeningVerdict = (answers, { noulMargin, skipConfidence }) => {
   };
 };
 var composeTurnGateVerdict = (answers, threshold) => {
-  if (!isRecord2(answers)) {
+  if (!isRecordOf(answers)) {
     return false;
   }
   const answer = answers.should_consult;
-  const noul = isRecord2(answer) ? finiteNumber(answer.noul) : undefined;
+  const noul = isRecordOf(answer) ? finiteNumber(answer.noul) : undefined;
   return noul !== undefined && noul >= threshold;
 };
 
 // src/jev/state.ts
 var JEV_TEXT_CAP_BYTES = 8 * 1024;
 var buildJevState = (ctx, input = {}) => {
-  const state = { role: "executor" };
+  const fields = new Map([["role", "executor"]]);
   if (input.question) {
-    state.executor_question = redactAndCapText(input.question, JEV_TEXT_CAP_BYTES, advisorRedactSecretsRef);
+    fields.set("executor_question", redactAndCapText(input.question, JEV_TEXT_CAP_BYTES, advisorRedactSecretsRef));
   }
   if (input.draft) {
-    state.executor_draft = redactAndCapText(input.draft, JEV_TEXT_CAP_BYTES, advisorRedactSecretsRef);
+    fields.set("executor_draft", redactAndCapText(input.draft, JEV_TEXT_CAP_BYTES, advisorRedactSecretsRef));
   }
   const digest = recentConversation(ctx, advisorJevDigestMaxCharsRef);
   if (digest) {
-    state.recent_conversation = digest;
+    fields.set("recent_conversation", digest);
   }
-  return state;
+  return Object.fromEntries(fields);
 };
 
 // src/jev/transport.ts
@@ -5054,11 +5095,14 @@ var resolveJevTransport = async (ctx, deps = {}) => {
     const resolveTypesafe = deps.resolveTypesafe ?? resolveTypeSafeKey;
     const resolution = await resolveTypesafe();
     if (resolution.key) {
-      return {
+      const credentials = {
         apiKey: resolution.key,
-        ...resolution.source ? { source: resolution.source } : {},
         transport: "typesafe"
       };
+      if (resolution.source) {
+        credentials.source = resolution.source;
+      }
+      return credentials;
     }
   }
   if (preference === "typesafe") {
@@ -5089,7 +5133,7 @@ var createOutageNotifier = (format) => {
 };
 
 // src/tools/jev-filter.ts
-var normalizeScreeningQuestion = (question) => question?.trim().toLowerCase().replaceAll(/\s+/g, " ") || undefined;
+var normalizeScreeningQuestion = (question) => question?.trim().toLowerCase().replaceAll(/\s+/gu, " ") || undefined;
 var REATTACHED_ADVICE_CAP_BYTES = 4 * 1024;
 var SCREENED_SKIP_TEXT = "Advisor consultation skipped (screened out): the stakes are low and you can resolve this yourself with available tools and context. Proceed on your own judgment with what you already have.";
 var repeatSkipText = (advice) => `Advisor consultation skipped (already answered): this question was answered earlier in this session; the earlier advice is reattached below. Consult again only if the situation has materially changed.
@@ -5099,30 +5143,6 @@ var outageNotifier = createOutageNotifier((category, message) => `Advisor Jev fi
 var notifyOutageOnce = outageNotifier.notify;
 var resetJevOutageNotification = outageNotifier.reset;
 var allow = () => ({ decision: "allow" });
-var screenConsultation = (ctx, session, options, deps = {}) => {
-  if (isSimpleMode()) {
-    return Promise.resolve(allow());
-  }
-  const normalizedQuestion = normalizeScreeningQuestion(options.question);
-  const bypass = bypassOutcome(session, options, normalizedQuestion);
-  if (bypass) {
-    return Promise.resolve(bypass);
-  }
-  const reattached = session.reattachedAdviceFor(normalizedQuestion);
-  if (reattached) {
-    session.recordJevFilterSkipped(true, normalizedQuestion);
-    return Promise.resolve({
-      decision: "skip",
-      kind: "repeat",
-      reason: "already answered earlier in this session",
-      reattachedAdvice: reattached.slice(0, REATTACHED_ADVICE_CAP_BYTES)
-    });
-  }
-  if (!advisorJevFilterEnabledRef) {
-    return Promise.resolve(allow());
-  }
-  return screenWithJev(ctx, session, options, deps, normalizedQuestion);
-};
 var bypassOutcome = (session, options, normalizedQuestion) => {
   const lastSkip = session.lastJevSkip;
   if (options.force) {
@@ -5170,7 +5190,7 @@ var screenWithJev = async (ctx, session, options, deps, normalizedQuestion) => {
     return allow();
   } catch (error) {
     session.recordJevFilterFailure();
-    if (error instanceof JevFailure) {
+    if (error instanceof JevFailureError) {
       notifyOutageOnce(ctx, error.category, error.message);
     } else if (options.signal?.aborted) {
       throw error;
@@ -5180,10 +5200,34 @@ var screenWithJev = async (ctx, session, options, deps, normalizedQuestion) => {
     return allow();
   }
 };
+var screenConsultation = (ctx, session, options, deps = {}) => {
+  if (isSimpleMode()) {
+    return Promise.resolve(allow());
+  }
+  const normalizedQuestion = normalizeScreeningQuestion(options.question);
+  const bypass = bypassOutcome(session, options, normalizedQuestion);
+  if (bypass) {
+    return Promise.resolve(bypass);
+  }
+  const reattached = session.reattachedAdviceFor(normalizedQuestion);
+  if (reattached) {
+    session.recordJevFilterSkipped(true, normalizedQuestion);
+    return Promise.resolve({
+      decision: "skip",
+      kind: "repeat",
+      reason: "already answered earlier in this session",
+      reattachedAdvice: reattached.slice(0, REATTACHED_ADVICE_CAP_BYTES)
+    });
+  }
+  if (!advisorJevFilterEnabledRef) {
+    return Promise.resolve(allow());
+  }
+  return screenWithJev(ctx, session, options, deps, normalizedQuestion);
+};
 var screeningSkipText = (outcome) => outcome.kind === "repeat" && outcome.reattachedAdvice ? repeatSkipText(outcome.reattachedAdvice) : SCREENED_SKIP_TEXT;
 
 // src/commands/manual-consultation.ts
-var startManualConsultation = (runtime, ctx, question, controller, scoutStatusToken, progress, gitContext) => {
+var startManualConsultation = async (runtime, ctx, question, controller, scoutStatusToken, progress, gitContext) => {
   herdrAdvisorActivity.start();
   progress.phase = "preparing";
   runtime.requestManualRender(ctx);
@@ -5198,23 +5242,24 @@ var startManualConsultation = (runtime, ctx, question, controller, scoutStatusTo
     runtime.manualProgressTimers.set(controller, timer);
   }
   let scoutDetails;
-  return runtime.requestAdvisor(ctx, question, controller.signal, (thinking, text) => {
-    if (controller.signal.aborted) {
-      return;
-    }
-    progress.phase = "active";
-    progress.thinking = thinking;
-    progress.text = text;
-    runtime.requestManualRender(ctx);
-  }, (event) => {
-    if (!controller.signal.aborted) {
-      runtime.scoutStatus.update(ctx, scoutStatusToken, event);
-      scoutDetails = appendScoutLifecycleEntry(runtime.pi, event, scoutDetails);
-      progress.scout = scoutDetails;
+  try {
+    const { adviceId, markdown, usage } = await runtime.requestAdvisor(ctx, question, controller.signal, (thinking, text) => {
+      if (controller.signal.aborted) {
+        return;
+      }
       progress.phase = "active";
+      progress.thinking = thinking;
+      progress.text = text;
       runtime.requestManualRender(ctx);
-    }
-  }, gitContext).then(({ adviceId, markdown, usage }) => {
+    }, (event) => {
+      if (!controller.signal.aborted) {
+        runtime.scoutStatus.update(ctx, scoutStatusToken, event);
+        scoutDetails = appendScoutLifecycleEntry(runtime.pi, event, scoutDetails);
+        progress.scout = scoutDetails;
+        progress.phase = "active";
+        runtime.requestManualRender(ctx);
+      }
+    }, gitContext);
     if (controller.signal.aborted) {
       return;
     }
@@ -5228,28 +5273,31 @@ var startManualConsultation = (runtime, ctx, question, controller, scoutStatusTo
       trigger: "manual",
       usage
     });
-    if (typeof adviceId === "string") {
+    if (isString(adviceId)) {
       runtime.advisorSessionState.issueAdvice(adviceId, markdown, "manual", false, normalizeScreeningQuestion(question));
     }
     runtime.updateAdvisorUsageStatus(ctx);
+    const details = {
+      advisor: advisorRef,
+      question,
+      text: markdown
+    };
     const normalizedUsage = snapshotAdvisorUsage(usage);
+    if (normalizedUsage) {
+      details.usage = normalizedUsage;
+    }
     runtime.pi.sendMessage({
       content: `Manual Advisor consultation${question ? ` (${question})` : ""} — for your awareness; no action or follow-up consultation is needed unless the user asks:
 
 ${markdown}`,
       customType: "advisor-manual-result",
-      details: {
-        advisor: advisorRef,
-        question,
-        text: markdown,
-        ...normalizedUsage ? { usage: normalizedUsage } : {}
-      },
+      details,
       display: true
     }, {
       deliverAs: "steer",
       triggerTurn: true
     });
-  }).catch((error) => {
+  } catch (error) {
     if (controller.signal.aborted) {
       return;
     }
@@ -5275,7 +5323,7 @@ ${markdown}`,
     }, { deliverAs: "steer", triggerTurn: true });
     notify(ctx, `Advisor consultation failed: ${message}`, "error");
     notifyHerdrAdvisorFailure("Advisor consultation failed", message);
-  }).finally(() => {
+  } finally {
     if (controller.signal.aborted) {
       progress.phase = "cancelled";
     }
@@ -5288,7 +5336,7 @@ ${markdown}`,
     runtime.scoutStatus.release(ctx, scoutStatusToken);
     runtime.manualConsultations.delete(controller);
     herdrAdvisorActivity.finish();
-  });
+  }
 };
 
 // src/commands/manual-command.ts
@@ -5453,33 +5501,35 @@ class ManualAdvisorProgressComponent {
     }
     return box.render(width);
   }
-  invalidate() {}
+  invalidate = noop;
 }
 
 // src/commands/renderers.ts
+var manualCallRenderer = (runtime) => (entry, { expanded }, theme) => {
+  const { progressId, question } = entry.data ?? {};
+  const progress = progressId ? runtime.manualProgress.get(progressId) : undefined;
+  return progress ? new ManualAdvisorProgressComponent(question, progress, Boolean(expanded), theme) : renderAdvisorCallBox(question, theme);
+};
+var manualResultRenderer = (message, { expanded }, theme) => {
+  const { details } = message;
+  const box = new Box2(1, 1, (text) => theme.bg("customMessageBg", text));
+  const advice = details?.text ?? (isString(message.content) ? message.content : "(Advisor returned no advice.)");
+  box.addChild(new Text4(renderAdvisorResponseHeader(hasSoundVerdict(advice), theme), 0, 0));
+  if (details?.advisor) {
+    box.addChild(new Text4(theme.fg("dim", `  ${details.advisor}`), 0, 0));
+  }
+  if (getAdvisorSettings().showUsageDetails) {
+    const usage = formatAdvisorUsage(details?.usage);
+    if (usage) {
+      box.addChild(new Text4(theme.fg("dim", `  Usage: ${usage}`), 0, 0));
+    }
+  }
+  box.addChild(new Markdown3(adviceForDisplay(advice, expanded), 0, 0, getMarkdownTheme3()));
+  return box;
+};
 var registerCommandRenderers = (runtime) => {
-  runtime.pi.registerEntryRenderer?.("advisor-manual-call", (entry, { expanded }, theme) => {
-    const { progressId, question } = entry.data ?? {};
-    const progress = progressId ? runtime.manualProgress.get(progressId) : undefined;
-    return progress ? new ManualAdvisorProgressComponent(question, progress, Boolean(expanded), theme) : renderAdvisorCallBox(question, theme);
-  });
-  runtime.pi.registerMessageRenderer?.("advisor-manual-result", (message, { expanded }, theme) => {
-    const details = message.details;
-    const box = new Box2(1, 1, (text) => theme.bg("customMessageBg", text));
-    const advice = details?.text ?? (typeof message.content === "string" ? message.content : "(Advisor returned no advice.)");
-    box.addChild(new Text4(renderAdvisorResponseHeader(hasSoundVerdict(advice), theme), 0, 0));
-    if (details?.advisor) {
-      box.addChild(new Text4(theme.fg("dim", `  ${details.advisor}`), 0, 0));
-    }
-    if (getAdvisorSettings().showUsageDetails) {
-      const usage = formatAdvisorUsage(details?.usage);
-      if (usage) {
-        box.addChild(new Text4(theme.fg("dim", `  Usage: ${usage}`), 0, 0));
-      }
-    }
-    box.addChild(new Markdown3(adviceForDisplay(advice, expanded), 0, 0, getMarkdownTheme3()));
-    return box;
-  });
+  runtime.pi.registerEntryRenderer?.("advisor-manual-call", manualCallRenderer(runtime));
+  runtime.pi.registerMessageRenderer?.("advisor-manual-result", manualResultRenderer);
 };
 
 // src/ui/settings-selector.ts
@@ -5502,7 +5552,7 @@ var SIMPLE_MODE_GRADIENT_COLORS = [
 var withCurrentValue = (current, values) => values.includes(current) ? values : [current, ...values];
 var numericValues = (current, values) => {
   const all = values.includes(current) ? values : [...values, current];
-  return all.sort((a, b) => a - b).map(String);
+  return all.toSorted((a, b) => a - b).map(String);
 };
 var maxCallValues = (current) => {
   const values = ["0", "1", "2", "3", "5", "10", "25", "50", "∞"];
@@ -5519,9 +5569,18 @@ var maxCallValues = (current) => {
 };
 var settingValue = (value, defaultValue) => value ?? defaultValue ? "On" : "Off";
 var currentContextLabel = (presets, contextMaxChars) => presets.find((preset) => preset.value === contextMaxChars)?.label ?? String(contextMaxChars);
+var closestPresetIndex = (presets, contextMaxChars) => {
+  let closestIndex = 0;
+  for (let index = 0;index < presets.length; index += 1) {
+    if (Math.abs(presets[index].value - contextMaxChars) < Math.abs(presets[closestIndex].value - contextMaxChars)) {
+      closestIndex = index;
+    }
+  }
+  return closestIndex;
+};
 var contextDescription = (presets, contextMaxChars) => {
   const exactIndex = presets.findIndex((preset) => preset.value === contextMaxChars);
-  const selectedIndex = exactIndex !== -1 ? exactIndex : presets.reduce((closestIndex, preset, index) => Math.abs(preset.value - contextMaxChars) < Math.abs(presets[closestIndex].value - contextMaxChars) ? index : closestIndex, 0);
+  const selectedIndex = exactIndex === -1 ? closestPresetIndex(presets, contextMaxChars) : exactIndex;
   const selectedPreset = presets[selectedIndex];
   const isFullContext = selectedPreset?.value === Number.MAX_SAFE_INTEGER || selectedPreset?.label.toUpperCase() === "FULL" || selectedPreset?.label.toUpperCase() === "ALL";
   const progress = isFullContext ? 1 : selectedIndex / Math.max(1, presets.length - 1);
@@ -5539,7 +5598,7 @@ var contextDescription = (presets, contextMaxChars) => {
   const markerColumn = meterPrefix.length + marker;
   const labelStart = Math.max(0, Math.min(meterPrefix.length + meter.length + 2 - labelWidth, markerColumn - Math.floor((labelWidth - 1) / 2)));
   const markerLabel = `${" ".repeat(labelStart)}${label}`;
-  const description = exactIndex !== -1 ? selectedPreset?.description : "Custom context limit.";
+  const description = exactIndex === -1 ? "Custom context limit." : selectedPreset?.description;
   return `${description ?? "Custom context limit."}
 ${meterPrefix}${meter}  full
 ${markerLabel}`;
@@ -5656,6 +5715,19 @@ class MaskedInput {
 }
 
 // src/ui/jev-setup-submenu.ts
+var ACTION_LABELS = {
+  disable: "Disable",
+  "disable-clear": "Disable and clear stored key",
+  done: "Done",
+  "enter-key": "Enter a TypeSafe API key",
+  "verify-again": "Verify again",
+  "verify-enable": "Verify and enable"
+};
+var fireAndForget = async (action) => {
+  try {
+    await action;
+  } catch {}
+};
 var transportLabel = (credentials) => {
   if (credentials.transport === "openrouter") {
     return "OpenRouter (reusing pi login)";
@@ -5711,7 +5783,7 @@ class JevSetupSubmenu {
       onSubmit: (value) => this.submitEnteredKey(value),
       placeholder: "Paste a TypeSafe API key"
     });
-    this.refresh().catch(() => {});
+    fireAndForget(this.refresh());
   }
   get focused() {
     return this._focused;
@@ -5787,19 +5859,8 @@ class JevSetupSubmenu {
     actions.push("done");
     return actions;
   }
-  actionLabels() {
-    return {
-      disable: "Disable",
-      "disable-clear": "Disable and clear stored key",
-      done: "Done",
-      "enter-key": "Enter a TypeSafe API key",
-      "verify-again": "Verify again",
-      "verify-enable": "Verify and enable"
-    };
-  }
   labels() {
-    const labels = this.actionLabels();
-    return this.actions().map((action) => labels[action]);
+    return this.actions().map((action) => ACTION_LABELS[action]);
   }
   async refresh() {
     const wasVerifying = this.mode === "verifying";
@@ -5816,36 +5877,25 @@ class JevSetupSubmenu {
     this.options.tui.requestRender();
   }
   activate(action) {
-    switch (action) {
-      case "done": {
-        this.options.done();
-        return;
-      }
-      case "enter-key": {
-        this.mode = "key-entry";
-        return;
-      }
-      case "disable": {
-        this.notice = undefined;
-        this.options.done("Off");
-        return;
-      }
-      case "disable-clear": {
-        this.disableAndClear().catch(() => {
-          return;
-        });
-        return;
-      }
-      case "verify-again":
-      case "verify-enable": {
-        this.verifyAndEnable().catch(() => {
-          return;
-        });
-        return;
-      }
-      default: {
-        return;
-      }
+    if (action === "done") {
+      this.options.done();
+      return;
+    }
+    if (action === "enter-key") {
+      this.mode = "key-entry";
+      return;
+    }
+    if (action === "disable") {
+      this.notice = undefined;
+      this.options.done("Off");
+      return;
+    }
+    if (action === "disable-clear") {
+      fireAndForget(this.disableAndClear());
+      return;
+    }
+    if (action === "verify-again" || action === "verify-enable") {
+      fireAndForget(this.verifyAndEnable());
     }
   }
   async disableAndClear() {
@@ -5914,6 +5964,13 @@ class JevSetupSubmenu {
     this.notice = `${stored.message} Verification succeeded.`;
     await this.refresh();
     this.options.done("On");
+  }
+}
+
+// src/ui/model-multi-selector.ts
+class SearchableModelMultiSelector extends ModelSelectorAdapter {
+  constructor(options) {
+    super(new SearchableModelList(options));
   }
 }
 
@@ -6314,134 +6371,160 @@ class SettingsListAdapter {
 }
 
 // src/ui/settings-mutations.ts
-var BOOLEAN_SETTING_IDS = new Set([
+var BOOLEAN_SETTING_FIELDS = [
+  "autoLoopGate",
+  "blockOnBlocked",
+  "collapseResponses",
+  "completionGate",
+  "failureGate",
+  "herdrIntegration",
+  "outcomeLogging",
+  "planGate",
+  "redactSecrets",
   "scoutEnabled",
+  "sessionSummary",
   "showUsageDetails",
   "showUsageFooter",
-  "planGate",
-  "failureGate",
-  "completionGate",
-  "collapseResponses",
-  "blockOnBlocked",
-  "autoLoopGate",
-  "sessionSummary",
-  "herdrIntegration",
-  "redactSecrets",
   "trackedFileContent",
-  "untrackedContent",
-  "outcomeLogging"
-]);
+  "untrackedContent"
+];
+var BOOLEAN_SETTING_IDS = new Set(BOOLEAN_SETTING_FIELDS);
 var parseModelWhitelist = (value) => [
   ...new Set(value.split(",").map((model) => model.trim()).filter(Boolean))
 ];
-var mutateAdvisorSettings = (settings, id, value, presets) => {
+var applyCoreMutation = (settings, id, value, presets) => {
   switch (id) {
     case "context": {
       settings.contextMaxChars = presets.find((preset) => preset.label === value)?.value ?? settings.contextMaxChars;
-      break;
+      return true;
     }
     case "simpleMode": {
       settings.simpleMode = value === "On";
-      break;
+      return true;
     }
     case "alwaysOn": {
       settings.alwaysOn = value === "On";
-      break;
+      return true;
     }
     case "effort": {
       settings.effort = value;
-      break;
+      return true;
     }
     case "customRule": {
       settings.customRule = value.trim() || undefined;
-      break;
+      return true;
     }
     case "toolPolicies": {
       settings.toolPolicies = JSON.parse(value);
-      break;
+      return true;
     }
     case "loopThreshold": {
       settings.loopThreshold = Number(value.replace("After ", "").replace(" repeats", ""));
-      break;
+      return true;
     }
     case "maxCallsPerSession": {
       settings.maxCallsPerSession = value === "∞" ? undefined : Number(value);
-      break;
+      return true;
     }
     case "modelWhitelist": {
       settings.modelWhitelist = parseModelWhitelist(value);
-      break;
+      return true;
     }
     case "failureMode": {
       settings.failureMode = value;
-      break;
+      return true;
     }
     case "gitContext": {
       settings.gitContext = value;
-      break;
+      return true;
     }
+    default: {
+      return false;
+    }
+  }
+};
+var applyNumericMutation = (settings, id, value) => {
+  switch (id) {
     case "toolResultMaxLines": {
       settings.toolResultMaxLines = Number(value);
-      break;
+      return true;
     }
     case "toolResultMaxBytes": {
       settings.toolResultMaxBytes = Number(value);
-      break;
+      return true;
     }
     case "gitContextMaxChars": {
       settings.gitContextMaxChars = Number(value);
-      break;
+      return true;
     }
+    default: {
+      return false;
+    }
+  }
+};
+var applyJevMutation = (settings, id, value) => {
+  switch (id) {
     case "jevFilter": {
       settings.jevFilterEnabled = value === "On";
-      break;
+      return true;
     }
     case "jevFilterSkipConfidence": {
       settings.jevFilterSkipConfidence = Number(value);
-      break;
+      return true;
     }
     case "jevFilterNoulMargin": {
       settings.jevFilterNoulMargin = Number(value);
-      break;
+      return true;
     }
     case "jevFilterOverrideWindow": {
       settings.jevFilterOverrideWindow = Number(value.replace(" turns", ""));
-      break;
+      return true;
     }
     case "jevTurnGateEveryTurns": {
-      settings.jevTurnGateEveryTurns = value === "Off" ? 0 : Number(value.replace(/[^0-9]/g, ""));
-      break;
+      settings.jevTurnGateEveryTurns = value === "Off" ? 0 : Number(value.replaceAll(/[^0-9]/gu, ""));
+      return true;
     }
     case "jevTurnGateNoulThreshold": {
       settings.jevTurnGateNoulThreshold = Number(value);
-      break;
+      return true;
     }
     case "jevModel": {
       settings.jevModel = value.trim() || DEFAULT_JEV_MODEL;
-      break;
+      return true;
     }
     case "jevTimeoutMs": {
       settings.jevTimeoutMs = Number(value);
-      break;
+      return true;
     }
     case "jevDigestMaxChars": {
       settings.jevDigestMaxChars = Number(value);
-      break;
+      return true;
     }
     case "jevPricePerMtok": {
       settings.jevPricePerMtok = Number(value);
-      break;
+      return true;
     }
     case "jevTransport": {
       settings.jevTransport = value;
-      break;
+      return true;
     }
     default: {
-      if (BOOLEAN_SETTING_IDS.has(id)) {
-        settings[id] = value === "On";
-      }
-      break;
+      return false;
     }
+  }
+};
+var mutateAdvisorSettings = (settings, id, value, presets) => {
+  if (applyCoreMutation(settings, id, value, presets)) {
+    return;
+  }
+  if (applyNumericMutation(settings, id, value)) {
+    return;
+  }
+  if (applyJevMutation(settings, id, value)) {
+    return;
+  }
+  if (BOOLEAN_SETTING_IDS.has(id)) {
+    settings[id] = value === "On";
   }
 };
 
@@ -6472,7 +6555,7 @@ class AdvisorSettingsSelector {
         label: String(configuredContext),
         value: configuredContext
       }
-    ].sort((a, b) => a.value - b.value);
+    ].toSorted((a, b) => a.value - b.value);
     if (this.settings.simpleMode) {
       this.startSimpleModeGradient();
     }
@@ -6555,7 +6638,7 @@ class AdvisorSettingsSelector {
 }
 
 // src/commands/settings-persistence.ts
-var applyAdvisorSettings = (settings) => {
+var applySessionSettings = (settings) => {
   setAdvisorEffortRef(settings.effort === "Default (Model Default)" ? undefined : settings.effort);
   setContextMaxCharsRef(settings.contextMaxChars);
   setAdvisorPlanGateRef(settings.planGate);
@@ -6576,6 +6659,8 @@ var applyAdvisorSettings = (settings) => {
   setAlwaysOnRef(settings.alwaysOn ?? false);
   setAdvisorFailureModeRef(settings.failureMode ?? "block-session");
   setAdvisorHerdrIntegrationRef(settings.herdrIntegration ?? true);
+};
+var applyJevSettings = (settings) => {
   setAdvisorJevFilterEnabledRef(settings.jevFilterEnabled ?? false);
   setAdvisorJevFilterSkipConfidenceRef(settings.jevFilterSkipConfidence ?? DEFAULT_JEV_FILTER_SKIP_CONFIDENCE);
   setAdvisorJevFilterNoulMarginRef(settings.jevFilterNoulMargin ?? DEFAULT_JEV_FILTER_NOUL_MARGIN);
@@ -6587,6 +6672,8 @@ var applyAdvisorSettings = (settings) => {
   setAdvisorJevTransportRef(settings.jevTransport ?? DEFAULT_JEV_TRANSPORT);
   setAdvisorJevTurnGateEveryTurnsRef(settings.jevTurnGateEveryTurns ?? DEFAULT_JEV_TURN_GATE_EVERY_TURNS);
   setAdvisorJevTurnGateNoulThresholdRef(settings.jevTurnGateNoulThreshold ?? DEFAULT_JEV_TURN_GATE_NOUL_THRESHOLD);
+};
+var applyDisclosureSettings = (settings) => {
   setAdvisorToolResultMaxLinesRef(settings.toolResultMaxLines ?? 2000);
   setAdvisorToolResultMaxBytesRef(settings.toolResultMaxBytes ?? 50 * 1024);
   setAdvisorRedactSecretsRef(settings.redactSecrets ?? false);
@@ -6596,6 +6683,11 @@ var applyAdvisorSettings = (settings) => {
   setAdvisorTrackedFileContentRef(settings.trackedFileContent ?? false);
   setAdvisorUntrackedContentRef(settings.untrackedContent ?? false);
   setAdvisorOutcomeLoggingRef(settings.outcomeLogging ?? false);
+};
+var applyAdvisorSettings = (settings) => {
+  applySessionSettings(settings);
+  applyJevSettings(settings);
+  applyDisclosureSettings(settings);
 };
 var saveAdvisorSettings = (ctx, settings) => {
   applyAdvisorSettings(settings);
@@ -6621,7 +6713,7 @@ var registerSettingsCommands = (runtime) => {
         initial,
         keybindings,
         modelRefs: getConfiguredModelRefs(ctx),
-        onCancel: () => done(),
+        onCancel: () => done(undefined),
         onChange: (settings) => {
           try {
             saveAdvisorSettings(ctx, settings);
@@ -6681,6 +6773,7 @@ import {
   writeFile
 } from "node:fs/promises";
 import { join as join5 } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import { getAgentDir as getAgentDir4 } from "@earendil-works/pi-coding-agent";
 var ADOPTIONS = [
   "followed",
@@ -6696,6 +6789,7 @@ var VALIDATIONS = [
 var MAX_LOG_BYTES = 1024 * 1024;
 var statePath = () => join5(getAgentDir4(), "advisor-outcomes-salt");
 var outcomeLogPath = () => join5(getAgentDir4(), "advisor-outcomes.jsonl");
+var isErrnoException = (error) => error instanceof Error && ("code" in error);
 var salt = async () => {
   const path = statePath();
   await mkdir(getAgentDir4(), { mode: 448, recursive: true });
@@ -6707,7 +6801,7 @@ var salt = async () => {
       }
       await unlink(path);
     } catch (error) {
-      if (error.code !== "ENOENT") {
+      if (!isErrnoException(error) || error.code !== "ENOENT") {
         throw error;
       }
     }
@@ -6718,11 +6812,13 @@ var salt = async () => {
       await link(temporary, path);
       return value;
     } catch (error) {
-      if (error.code !== "EEXIST") {
+      if (!isErrnoException(error) || error.code !== "EEXIST") {
         throw error;
       }
     } finally {
-      await unlink(temporary).catch(() => {});
+      await unlink(temporary).catch(() => {
+        return;
+      });
     }
   }
   throw new Error("Advisor outcome salt initialization did not complete.");
@@ -6738,24 +6834,34 @@ var withOutcomeLock = async (run) => {
         return await run();
       } finally {
         await lock.close();
-        const current = await stat(lockPath).catch(() => {});
+        const current = await stat(lockPath).catch(() => {
+          return;
+        });
         if (current && sameFile(identity, current)) {
-          await unlink(lockPath).catch(() => {});
+          await unlink(lockPath).catch(() => {
+            return;
+          });
         }
       }
     } catch (error) {
-      if (error.code !== "EEXIST") {
+      if (!isErrnoException(error) || error.code !== "EEXIST") {
         throw error;
       }
-      const observed = await stat(lockPath).catch(() => {});
+      const observed = await stat(lockPath).catch(() => {
+        return;
+      });
       if (observed && Date.now() - observed.mtimeMs > 30000) {
-        const current = await stat(lockPath).catch(() => {});
+        const current = await stat(lockPath).catch(() => {
+          return;
+        });
         if (current && sameFile(observed, current)) {
-          await unlink(lockPath).catch(() => {});
+          await unlink(lockPath).catch(() => {
+            return;
+          });
         }
         continue;
       }
-      await new Promise((resolve) => setTimeout(resolve, 5));
+      await sleep(5);
     }
   }
   throw new Error("Timed out waiting to append an Advisor outcome.");
@@ -6781,11 +6887,8 @@ var appendOutcome = async (record) => {
       }
       throw error;
     });
-    if (currentBytes + Buffer.byteLength(line) > MAX_LOG_BYTES) {
-      await writeFile(path, line, { encoding: "utf-8", mode: 384 });
-    } else {
-      await appendFile(path, line, { encoding: "utf-8", mode: 384 });
-    }
+    const overflow = currentBytes + Buffer.byteLength(line) > MAX_LOG_BYTES;
+    await (overflow ? writeFile(path, line, { encoding: "utf-8", mode: 384 }) : appendFile(path, line, { encoding: "utf-8", mode: 384 }));
     await chmod(path, 384);
     return next;
   });
@@ -6943,7 +7046,7 @@ var handleJevTurnEnd = async (registration, ctx) => {
     }
   } catch (error) {
     session.recordJevGateFailure();
-    if (error instanceof JevFailure) {
+    if (error instanceof JevFailureError) {
       notifyFailureOnce(ctx, error.category, error.message);
     } else if (!ctx.signal?.aborted) {
       notifyFailureOnce(ctx, "error", error instanceof Error ? error.message : String(error));
@@ -6958,9 +7061,7 @@ var registerJevTurnGate = (on, registration) => {
 import { Type } from "typebox";
 
 // src/tools/render-advisor-result.ts
-import {
-  getMarkdownTheme as getMarkdownTheme4
-} from "@earendil-works/pi-coding-agent";
+import { getMarkdownTheme as getMarkdownTheme4 } from "@earendil-works/pi-coding-agent";
 import { Box as Box3, Markdown as Markdown4, Spacer, Text as Text5 } from "@earendil-works/pi-tui";
 var advisorResultDetails = (result) => result.details;
 var syncRenderPhase = (context, phase) => {
@@ -7017,6 +7118,24 @@ var renderPartialAdvisorResult = (box, result, expanded, theme, context) => {
     box.addChild(new Markdown4(adviceForDisplay(details.text, expanded), 0, 0, getMarkdownTheme4()));
   }
 };
+var thinkingPreview = (details) => details?.thinking?.trim() ? `${details.thinking.slice(0, 300)}${details.thinking.length > 300 ? "…" : ""}` : "";
+var finalResultLines = (details, advice, theme) => {
+  const lines = [renderAdvisorResponseHeader(hasSoundVerdict(advice), theme)];
+  if (details?.advisor) {
+    lines.push(theme.fg("dim", `  ${details.advisor}`));
+  }
+  if (getAdvisorSettings().showUsageDetails) {
+    const usage = formatAdvisorUsage(details?.usage);
+    if (usage) {
+      lines.push(theme.fg("dim", `  Usage: ${usage}`));
+    }
+  }
+  const attachments = attachmentLabels(details);
+  if (attachments.length) {
+    lines.push(theme.fg("dim", `  ${attachments.join(" · ")}`));
+  }
+  return lines;
+};
 var renderFinalAdvisorResult = (box, result, expanded, theme, context) => {
   syncRenderPhase(context, "final");
   if (context.state.timerId) {
@@ -7039,21 +7158,8 @@ var renderFinalAdvisorResult = (box, result, expanded, theme, context) => {
     return;
   }
   const advice = details?.text || textFrom(result.content);
-  const lines = [renderAdvisorResponseHeader(hasSoundVerdict(advice), theme)];
-  if (details?.advisor) {
-    lines.push(theme.fg("dim", `  ${details.advisor}`));
-  }
-  if (getAdvisorSettings().showUsageDetails) {
-    const usage = formatAdvisorUsage(details?.usage);
-    if (usage) {
-      lines.push(theme.fg("dim", `  Usage: ${usage}`));
-    }
-  }
-  const attachments = attachmentLabels(details);
-  if (attachments.length) {
-    lines.push(theme.fg("dim", `  ${attachments.join(" · ")}`));
-  }
-  const thinking = details?.thinking?.trim() ? `${details.thinking.slice(0, 300)}${details.thinking.length > 300 ? "…" : ""}` : "";
+  const thinking = thinkingPreview(details);
+  const lines = finalResultLines(details, advice, theme);
   const displayAdvice = advice || "(Advisor returned no advice.)";
   box.addChild(new Text5(lines.join(`
 `), 0, 0));
@@ -7177,7 +7283,22 @@ var registerAskAdvisorTool = ({
         const usage = snapshotAdvisorUsage(result.usage);
         const piUsage = advisorUsageForPi(result.usage);
         updateAdvisorUsageStatus(ctx, session);
-        return {
+        const details = {
+          adviceId: result.adviceId,
+          advisor: result.model,
+          draftBytes: result.draftBytes,
+          preferenceBytes: result.preferenceBytes,
+          question: resolveAdvisorRequest(params.question),
+          scout: scoutDetails,
+          text: result.markdown,
+          thinking: result.thinkingText,
+          trackedBytes: result.trackedBytes,
+          untrackedBytes: result.untrackedBytes
+        };
+        if (usage) {
+          details.usage = usage;
+        }
+        const response = {
           content: [
             {
               text: `Advisor (${result.model})
@@ -7186,21 +7307,12 @@ ${result.markdown}`,
               type: "text"
             }
           ],
-          details: {
-            adviceId: result.adviceId,
-            advisor: result.model,
-            draftBytes: result.draftBytes,
-            preferenceBytes: result.preferenceBytes,
-            question: resolveAdvisorRequest(params.question),
-            scout: scoutDetails,
-            text: result.markdown,
-            thinking: result.thinkingText,
-            trackedBytes: result.trackedBytes,
-            untrackedBytes: result.untrackedBytes,
-            ...usage ? { usage } : {}
-          },
-          ...piUsage ? { usage: piUsage } : {}
+          details
         };
+        if (piUsage) {
+          response.usage = piUsage;
+        }
+        return response;
       } catch (error) {
         coalescedUpdate.flush();
         const message = error instanceof Error ? error.message : String(error);
@@ -7268,27 +7380,31 @@ var sendAutomaticGateCall = (pi, event) => {
   }, { deliverAs: "steer" });
 };
 var sendAutomaticGateFailure = (pi, markdown, usage) => {
-  const normalizedUsage = snapshotAdvisorUsage(usage);
+  const details = { text: markdown };
+  if (usage) {
+    details.usage = usage;
+  }
   pi.sendMessage({
     content: markdown,
     customType: "advisor-loop-result",
-    details: {
-      text: markdown,
-      ...normalizedUsage ? { usage: normalizedUsage } : {}
-    },
+    details,
     display: true
   }, { deliverAs: "steer" });
 };
 var sendAutomaticGateResult = (pi, result) => {
+  const details = {
+    advisor: result.model,
+    decision: result.decision,
+    text: result.markdown
+  };
+  const normalizedUsage = snapshotAdvisorUsage(result.usage);
+  if (normalizedUsage) {
+    details.usage = normalizedUsage;
+  }
   pi.sendMessage({
     content: adviceForGateText(result),
     customType: "advisor-loop-result",
-    details: {
-      advisor: result.model,
-      decision: result.decision,
-      text: result.markdown,
-      ...snapshotAdvisorUsage(result.usage) ? { usage: snapshotAdvisorUsage(result.usage) } : {}
-    },
+    details,
     display: true
   }, { deliverAs: "steer" });
 };
@@ -7304,7 +7420,7 @@ var applyGateDecision = (pi, ctx, session, result, reason, failureMode) => {
     });
     updateAdvisorUsageStatus(ctx, session);
     const failure = failureEffect(result.category, result.message, ctx, session, failureMode);
-    sendAutomaticGateFailure(pi, `**Advisor gate failure (${result.category}):** ${result.message}`, result.usage);
+    sendAutomaticGateFailure(pi, `**Advisor gate failure (${result.category}):** ${result.message}`, snapshotAdvisorUsage(result.usage));
     return failure.block ? { block: true, reason: `${reason}
 ${failure.reason}` } : undefined;
   }
@@ -7549,61 +7665,57 @@ var registerOutcomeTool = ({
 // src/tools/register-renderers.ts
 import { getMarkdownTheme as getMarkdownTheme5 } from "@earendil-works/pi-coding-agent";
 import { Box as Box4, Markdown as Markdown5, Text as Text7 } from "@earendil-works/pi-tui";
+var addUsageLine = (box, details, theme) => {
+  if (!getAdvisorSettings().showUsageDetails) {
+    return;
+  }
+  const usageText = formatAdvisorUsage(details?.usage);
+  if (usageText) {
+    box.addChild(new Text7(theme.fg("dim", `  Usage: ${usageText}`), 0, 0));
+  }
+};
+var callQuestionRenderer = (message, _options, theme) => renderAdvisorCallBox(message.details?.question, theme);
+var scoutResultRenderer = (entry, { expanded }, theme) => {
+  const box = new Box4(1, 1, (text) => theme.bg("customMessageBg", text));
+  renderScoutDetails(box, entry.data, Boolean(expanded), theme);
+  return box;
+};
+var turnGateResultRenderer = (message, { expanded }, theme) => {
+  const { details } = message;
+  const box = new Box4(1, 1, (text) => theme.bg("customMessageBg", text));
+  box.addChild(new Text7(theme.fg("warning", theme.bold("◆ ADVISOR · TURN REVIEW")), 0, 0));
+  if (details?.advisor) {
+    box.addChild(new Text7(theme.fg("dim", `  ${details.advisor}`), 0, 0));
+  }
+  addUsageLine(box, details, theme);
+  if (details?.text) {
+    box.addChild(new Markdown5(adviceForDisplay(details.text, Boolean(expanded)), 0, 0, getMarkdownTheme5()));
+  } else {
+    box.addChild(new Text7(theme.fg("error", isString(message.content) ? message.content : "Advisor turn review failed."), 0, 0));
+  }
+  return box;
+};
+var loopResultRenderer = (message, { expanded }, theme) => {
+  const { details } = message;
+  const box = new Box4(1, 1, (text) => theme.bg("customMessageBg", text));
+  box.addChild(new Text7(theme.fg("warning", theme.bold(`◆ ADVISOR GATE: ${details?.decision ?? "failure"}`)), 0, 0));
+  if (details?.advisor) {
+    box.addChild(new Text7(theme.fg("dim", `  ${details.advisor}`), 0, 0));
+  }
+  addUsageLine(box, details, theme);
+  if (details?.text) {
+    box.addChild(new Markdown5(adviceForDisplay(details.text, Boolean(expanded)), 0, 0, getMarkdownTheme5()));
+  } else {
+    box.addChild(new Text7(theme.fg("error", isString(message.content) ? message.content : "Advisor gate failed."), 0, 0));
+  }
+  return box;
+};
 var registerToolRenderers = (pi) => {
-  pi.registerEntryRenderer?.("advisor-scout-result", (entry, { expanded }, theme) => {
-    const scout = entry.data;
-    const box = new Box4(1, 1, (text) => theme.bg("customMessageBg", text));
-    renderScoutDetails(box, scout, Boolean(expanded), theme);
-    return box;
-  });
-  pi.registerMessageRenderer?.("advisor-turn-gate-call", (message, _options, theme) => {
-    const details = message.details;
-    return renderAdvisorCallBox(details?.question, theme);
-  });
-  pi.registerMessageRenderer?.("advisor-turn-gate-result", (message, { expanded }, theme) => {
-    const details = message.details;
-    const box = new Box4(1, 1, (text) => theme.bg("customMessageBg", text));
-    box.addChild(new Text7(theme.fg("warning", theme.bold("◆ ADVISOR · TURN REVIEW")), 0, 0));
-    if (details?.advisor) {
-      box.addChild(new Text7(theme.fg("dim", `  ${details.advisor}`), 0, 0));
-    }
-    if (getAdvisorSettings().showUsageDetails) {
-      const usage = formatAdvisorUsage(details?.usage);
-      if (usage) {
-        box.addChild(new Text7(theme.fg("dim", `  Usage: ${usage}`), 0, 0));
-      }
-    }
-    if (details?.text) {
-      box.addChild(new Markdown5(adviceForDisplay(details.text, Boolean(expanded)), 0, 0, getMarkdownTheme5()));
-    } else {
-      box.addChild(new Text7(theme.fg("error", typeof message.content === "string" ? message.content : "Advisor turn review failed."), 0, 0));
-    }
-    return box;
-  });
-  pi.registerMessageRenderer?.("advisor-loop-call", (message, _options, theme) => {
-    const details = message.details;
-    return renderAdvisorCallBox(details?.question, theme);
-  });
-  pi.registerMessageRenderer?.("advisor-loop-result", (message, { expanded }, theme) => {
-    const details = message.details;
-    const box = new Box4(1, 1, (text) => theme.bg("customMessageBg", text));
-    box.addChild(new Text7(theme.fg("warning", theme.bold(`◆ ADVISOR GATE: ${details?.decision ?? "failure"}`)), 0, 0));
-    if (details?.advisor) {
-      box.addChild(new Text7(theme.fg("dim", `  ${details.advisor}`), 0, 0));
-    }
-    if (getAdvisorSettings().showUsageDetails) {
-      const usage = formatAdvisorUsage(details?.usage);
-      if (usage) {
-        box.addChild(new Text7(theme.fg("dim", `  Usage: ${usage}`), 0, 0));
-      }
-    }
-    if (details?.text) {
-      box.addChild(new Markdown5(adviceForDisplay(details.text, Boolean(expanded)), 0, 0, getMarkdownTheme5()));
-    } else {
-      box.addChild(new Text7(theme.fg("error", typeof message.content === "string" ? message.content : "Advisor gate failed."), 0, 0));
-    }
-    return box;
-  });
+  pi.registerEntryRenderer?.("advisor-scout-result", scoutResultRenderer);
+  pi.registerMessageRenderer?.("advisor-turn-gate-call", callQuestionRenderer);
+  pi.registerMessageRenderer?.("advisor-turn-gate-result", turnGateResultRenderer);
+  pi.registerMessageRenderer?.("advisor-loop-call", callQuestionRenderer);
+  pi.registerMessageRenderer?.("advisor-loop-result", loopResultRenderer);
 };
 
 // src/tools/registration.ts
@@ -7622,20 +7734,23 @@ var registerAdvisorTool = (pi, session = advisorSessionState, dependencies = {})
   registerToolLifecycle(registration);
   registerAskAdvisorTool(registration);
   registerOutcomeTool(registration);
-  registerJevTurnGate((event, handler) => pi.on(event, handler), {
+  const turnGate = {
     activeTools: () => pi.getActiveTools(),
     consult: registration.consult,
-    ...dependencies.turnGateDeps ? { deps: dependencies.turnGateDeps } : {},
     send: (message) => pi.sendMessage(message, { deliverAs: "steer" }),
     session
-  });
+  };
+  if (dependencies.turnGateDeps) {
+    turnGate.deps = dependencies.turnGateDeps;
+  }
+  registerJevTurnGate((event, handler) => pi.on(event, handler), turnGate);
 };
 
 // extensions/index.ts
 var consultAdvisor2 = (...args) => consultAdvisor(...args);
 var parseAutomaticDecision2 = (...args) => parseAutomaticDecision(...args);
 var runAdvisorGate2 = (...args) => runAdvisorGate(...args);
-function extensions_default(pi) {
+function registerPiAdvisor(pi) {
   const sessionState = new AdvisorSessionState;
   const scoutStatus = new ScoutStatusManager;
   setHerdrBlockedEmitter((active, label) => pi.events.emit("herdr:blocked", { active, label }));
@@ -7649,7 +7764,7 @@ function extensions_default(pi) {
 }
 export {
   consultAdvisor2 as consultAdvisor,
-  extensions_default as default,
+  registerPiAdvisor as default,
   parseAutomaticDecision2 as parseAutomaticDecision,
   runAdvisorGate2 as runAdvisorGate
 };

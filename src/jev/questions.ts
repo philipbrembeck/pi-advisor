@@ -1,5 +1,8 @@
 import type { Questions } from "@typesafe-ai/sdk";
 
+import { isNumber, isRecordOf } from "../content-utils.ts";
+import type { JsonValue } from "../content-utils.ts";
+
 /** Exact rubric text for the stakes Score question; level 0 is the skip level. */
 export const STAKES_RUBRIC = [
   "Negligible: routine, low-risk, mechanical, or reversible; a wrong call costs little and is easy to undo.",
@@ -39,11 +42,8 @@ export type ScreeningVerdict = { skip: false } | { skip: true };
 
 const NUMERIC_KEY_PATTERN = /^\d+$/u;
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  Boolean(value) && typeof value === "object" && !Array.isArray(value);
-
-const finiteNumber = (value: unknown): number | undefined =>
-  typeof value === "number" && Number.isFinite(value) ? value : undefined;
+const finiteNumber = (value: JsonValue | undefined): number | undefined =>
+  isNumber(value) && Number.isFinite(value) ? value : undefined;
 
 /**
  * Probability mass on the lowest stakes level, resolved through the answer's
@@ -51,16 +51,16 @@ const finiteNumber = (value: unknown): number | undefined =>
  * smallest numeric index key only when no legend resolves. Shape-independent:
  * never hardcodes a level key and never uses `ceil(score)`.
  */
-export const lowestStakesProbability = (
-  answer: unknown
+export const lowestStakesProbability = <Answer>(
+  answer: Answer
 ): number | undefined => {
-  if (!isRecord(answer)) {
+  if (!isRecordOf(answer)) {
     return undefined;
   }
-  const probabilities = isRecord(answer.probabilities)
+  const probabilities = isRecordOf(answer.probabilities)
     ? answer.probabilities
     : {};
-  const legend = isRecord(answer.legend) ? answer.legend : undefined;
+  const legend = isRecordOf(answer.legend) ? answer.legend : undefined;
   if (legend) {
     const exact = Object.keys(legend).find(
       (key) => legend[key] === STAKES_RUBRIC[0]
@@ -75,23 +75,26 @@ export const lowestStakesProbability = (
   if (numericKeys.length === 0) {
     return undefined;
   }
-  const lowest = numericKeys.reduce((left, right) =>
-    Number(left) <= Number(right) ? left : right
-  );
+  let [lowest] = numericKeys;
+  for (const key of numericKeys) {
+    if (Number(key) < Number(lowest)) {
+      lowest = key;
+    }
+  }
   return finiteNumber(probabilities[lowest]);
 };
 
-const selfAnswerableNoul = (answer: unknown): number | undefined =>
-  isRecord(answer) ? finiteNumber(answer.noul) : undefined;
+const selfAnswerableNoul = <Answer>(answer: Answer): number | undefined =>
+  isRecordOf(answer) ? finiteNumber(answer.noul) : undefined;
 
 /** Pure composition: skip requires the hard conjunction of confident
  * negligible stakes AND confident self-answerability. Any missing, NaN, or
  * malformed input allows. Never a weighted sum. */
-export const composeScreeningVerdict = (
-  answers: unknown,
+export const composeScreeningVerdict = <Answers>(
+  answers: Answers,
   { noulMargin, skipConfidence }: ScreeningCriteria
 ): ScreeningVerdict => {
-  if (!isRecord(answers)) {
+  if (!isRecordOf(answers)) {
     return { skip: false };
   }
   const negligibleMass = lowestStakesProbability(answers.stakes);
@@ -106,14 +109,14 @@ export const composeScreeningVerdict = (
 };
 
 /** Confident-true only; any uncertainty means no invocation. */
-export const composeTurnGateVerdict = (
-  answers: unknown,
+export const composeTurnGateVerdict = <Answers>(
+  answers: Answers,
   threshold: number
 ): boolean => {
-  if (!isRecord(answers)) {
+  if (!isRecordOf(answers)) {
     return false;
   }
   const answer = answers.should_consult;
-  const noul = isRecord(answer) ? finiteNumber(answer.noul) : undefined;
+  const noul = isRecordOf(answer) ? finiteNumber(answer.noul) : undefined;
   return noul !== undefined && noul >= threshold;
 };

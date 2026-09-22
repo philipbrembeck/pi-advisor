@@ -7,9 +7,7 @@ export interface MaskedInputOptions {
   placeholder?: string;
 }
 
-interface InputPrivateFields {
-  cursor: number;
-}
+type InputWithCursor = Input & { cursor: number };
 
 /** Single-line secret input rendering bullets; the value never reaches the screen. */
 export class MaskedInput implements Component, Focusable {
@@ -52,8 +50,8 @@ export class MaskedInput implements Component, Focusable {
 
   render(width: number): string[] {
     const value = this.input.getValue();
-    // Compatibility-only read for the caret position; Input does not expose it.
-    const { cursor } = this.input as unknown as InputPrivateFields;
+    // SAFETY: compatibility-only read of Input's private cursor; Input does not expose it.
+    const { cursor } = this.input as InputWithCursor;
     const masked = `${"•".repeat(Math.min(cursor, value.length))}█${"•".repeat(Math.max(0, value.length - cursor))}`;
     const placeholder =
       value.length === 0 && this.options.placeholder

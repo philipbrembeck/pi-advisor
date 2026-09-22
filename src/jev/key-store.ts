@@ -10,6 +10,8 @@ import { join } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 
 import { readExistingConfig, resetConfigCache } from "../config/storage.ts";
+import { isString } from "../content-utils.ts";
+import type { RecordValue } from "../content-utils.ts";
 import { redactSecrets } from "../redaction.ts";
 
 export type JevKeySource = "bun-secrets" | "env" | "file" | "advisor-json";
@@ -31,7 +33,7 @@ export interface JevSecretEntry {
 }
 
 export interface JevSecretsLike {
-  delete: (options: JevSecretEntry) => Promise<unknown>;
+  delete: (options: JevSecretEntry) => Promise<boolean | undefined>;
   get: (options: JevSecretEntry) => Promise<string | null | undefined>;
   set: (options: JevSecretEntry & { value: string }) => Promise<void>;
 }
@@ -39,8 +41,8 @@ export interface JevSecretsLike {
 export interface JevKeyStoreDeps {
   /** Deletes the extension-managed key file; injectable for tests. */
   deleteFileStore?: () => void;
-  env?: Record<string, string | undefined>;
-  readAdvisorJson?: () => Record<string, unknown>;
+  env?: NodeJS.ProcessEnv;
+  readAdvisorJson?: () => RecordValue;
   /** Reads the extension-managed 0600 key file; injectable for tests. */
   readFileStore?: () => string | undefined;
   /** Inject `null` to simulate a runtime without a secret store. */
@@ -57,8 +59,15 @@ const KEY_FILE_MODE = 0o600;
 
 const keyFilePath = () => join(getAgentDir(), "typesafe_api_key");
 
-const runtimeSecrets = (): JevSecretsLike | undefined =>
-  (globalThis as { Bun?: { secrets?: JevSecretsLike } }).Bun?.secrets;
+interface BunGlobal {
+  Bun?: { secrets?: JevSecretsLike };
+}
+
+const runtimeSecrets = (): JevSecretsLike | undefined => {
+  // SAFETY: only Bun runtimes expose Bun.secrets on globalThis; others leave it undefined.
+  const bun = globalThis as BunGlobal;
+  return bun.Bun?.secrets;
+};
 
 /** Whether the current runtime offers a Bun.secrets store. */
 export const hasRuntimeSecretStore = () => runtimeSecrets() !== undefined;
@@ -66,7 +75,7 @@ export const hasRuntimeSecretStore = () => runtimeSecrets() !== undefined;
 const normalizeKey = (value: string | null | undefined): string | undefined =>
   value?.trim() || undefined;
 
-const readAdvisorJsonConfig = (): Record<string, unknown> =>
+const readAdvisorJsonConfig = (): RecordValue =>
   readExistingConfig(join(getAgentDir(), "advisor.json"));
 
 const defaultReadFileStore = (): string | undefined => {
@@ -88,7 +97,7 @@ const defaultDeleteFileStore = () => {
   rmSync(keyFilePath(), { force: true });
 };
 
-const messageOf = (error: unknown) =>
+const messageOf = <E>(error: E) =>
   redactSecrets(error instanceof Error ? error.message : String(error));
 
 /** Resolves the TypeSafe API key: Bun.secrets → env var → the extension's
@@ -125,7 +134,7 @@ export const resolveTypeSafeKey = async (
   }
   const config = (deps.readAdvisorJson ?? readAdvisorJsonConfig)();
   const staged = config[TYPESAFE_KEY_CONFIG_FIELD];
-  if (typeof staged === "string") {
+  if (isString(staged)) {
     const fromConfig = normalizeKey(staged);
     if (fromConfig) {
       return { key: fromConfig, source: "advisor-json" };
@@ -225,8 +234,12 @@ export const removeTypeSafeKeyFromAdvisorJson = (): JevKeyStoreResult => {
     if (!(TYPESAFE_KEY_CONFIG_FIELD in existing)) {
       return { message: "No plaintext key in advisor.json.", ok: true };
     }
-    delete existing[TYPESAFE_KEY_CONFIG_FIELD];
-    writeFileSync(path, `${JSON.stringify(existing, null, 2)}\n`);
+    const retained = Object.fromEntries(
+      Object.entries(existing).filter(
+        ([key]) => key !== TYPESAFE_KEY_CONFIG_FIELD
+      )
+    );
+    writeFileSync(path, `${JSON.stringify(retained, null, 2)}\n`);
     resetConfigCache();
     return { message: "Plaintext key removed from advisor.json.", ok: true };
   } catch (error) {

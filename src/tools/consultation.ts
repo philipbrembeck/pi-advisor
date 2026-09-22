@@ -24,7 +24,7 @@ import {
 } from "./prompts.ts";
 import type { AdvisorConsultationResult, AdvisorGateOutcome } from "./types.ts";
 
-// biome-ignore lint/performance/noBarrelFile: preserves the tools facade's historical re-export of the moved curation entry point.
+// Re-export preserves the tools facade's historical curation entry point.
 export { curateAdvisorConversation } from "../scout-curation.ts";
 
 /** Thrown when the Advisor produced an empty response body. */
@@ -102,7 +102,7 @@ const collectAdvisorResponse = async (
   if (!markdown.trim()) {
     throw new AdvisorNoAdviceError();
   }
-  return {
+  const response: Omit<AdvisorConsultationResult, "adviceId" | "trigger"> = {
     draftBytes: context.draftText
       ? Buffer.byteLength(context.draftText, "utf-8")
       : undefined,
@@ -115,8 +115,11 @@ const collectAdvisorResponse = async (
     untrackedBytes:
       context.untracked.reduce((sum, item) => sum + item.bytes, 0) || undefined,
     usage: streamed.usage,
-    ...(context.scout ? { scout: context.scout } : {}),
   };
+  if (context.scout) {
+    response.scout = context.scout;
+  }
+  return response;
 };
 
 export const consultAdvisor = async (

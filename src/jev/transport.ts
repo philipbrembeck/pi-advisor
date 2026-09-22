@@ -43,11 +43,14 @@ export const resolveJevTransport = async (
     const resolveTypesafe = deps.resolveTypesafe ?? resolveTypeSafeKey;
     const resolution = await resolveTypesafe();
     if (resolution.key) {
-      return {
+      const credentials: JevCredentials = {
         apiKey: resolution.key,
-        ...(resolution.source ? { source: resolution.source } : {}),
         transport: "typesafe",
       };
+      if (resolution.source) {
+        credentials.source = resolution.source;
+      }
+      return credentials;
     }
   }
   if (preference === "typesafe") {

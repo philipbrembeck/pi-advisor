@@ -18,17 +18,20 @@ export const advisorModelAccess = (
 ): AdvisorModelAccess => {
   const modelRef = currentModelRef(ctx);
   if (advisorModelWhitelistRef.length === 0) {
-    return { allowed: true, ...(modelRef ? { modelRef } : {}) };
+    return modelRef ? { allowed: true, modelRef } : { allowed: true };
   }
   if (modelRef && advisorModelWhitelistRef.includes(modelRef)) {
     return { allowed: true, modelRef };
   }
   const current = modelRef ?? "no current model";
-  return {
+  const denial: AdvisorModelAccess = {
     allowed: false,
-    ...(modelRef ? { modelRef } : {}),
     reason: `Advisor calls are restricted to the configured model whitelist (${advisorModelWhitelistRef.join(", ")}). Current model: ${current}.`,
   };
+  if (modelRef) {
+    denial.modelRef = modelRef;
+  }
+  return denial;
 };
 
 export const advisorModelIsAllowed = (

@@ -15,7 +15,7 @@ import {
 } from "../config/types.ts";
 import { isValidAdvisorToolPolicies } from "../config/validation.ts";
 import { JevSetupSubmenu } from "./jev-setup-submenu.ts";
-import { SearchableModelMultiSelector } from "./model-selector.ts";
+import { SearchableModelMultiSelector } from "./model-multi-selector.ts";
 import {
   contextDescription,
   currentContextLabel,

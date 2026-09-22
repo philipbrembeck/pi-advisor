@@ -1,7 +1,12 @@
 import { createHash } from "node:crypto";
 
 import type { AdvisorToolPolicies } from "./config/types.ts";
-import { byteLength, contentParts, isRecord } from "./content-utils.ts";
+import {
+  byteLength,
+  contentParts,
+  isRecord,
+  isString,
+} from "./content-utils.ts";
 import type { RecordValue } from "./content-utils.ts";
 import { conversationEntry } from "./conversation.ts";
 import { invalid, toolCallId, toolCalls } from "./scout-protocol.ts";
@@ -19,7 +24,7 @@ export interface GroupPass {
   protocolOmittedCount: number;
 }
 
-const SPEAKER_PREFIX = /^(User|Executor):\s*/u;
+const SPEAKER_PREFIX = /^(?<speaker>User|Executor):\s*/u;
 
 const boundedLabel = (value: string) =>
   [...value.replaceAll(/\s+/gu, " ").trim()]
@@ -78,10 +83,8 @@ const createGroup = (
   required,
 });
 
-const pendingAdvisorArguments = (value: unknown): RecordValue => {
-  if (!isRecord(value)) {
-    return {};
-  }
+const pendingAdvisorArguments = (part: RecordValue): RecordValue => {
+  const value = isRecord(part.arguments) ? part.arguments : {};
   const allowed: RecordValue = {};
   for (const key of ["gitContext", "question"]) {
     if (key in value) {
@@ -103,7 +106,8 @@ const pendingInvocationDisclosure = (
   if (!isRecord(entry.message)) {
     return disclosed;
   }
-  const content = contentParts(entry.message.content).map((part) => {
+  const message: RecordValue = entry.message;
+  const content = contentParts(message.content).map((part) => {
     if (
       !isRecord(part) ||
       part.type !== "toolCall" ||
@@ -112,10 +116,10 @@ const pendingInvocationDisclosure = (
     ) {
       return part;
     }
-    return { ...part, arguments: pendingAdvisorArguments(part.arguments) };
+    return { ...part, arguments: pendingAdvisorArguments(part) };
   });
   return conversationEntry(
-    { ...entry, message: { ...entry.message, content } },
+    { ...entry, message: { ...message, content } },
     toolResultMaxLines,
     toolResultMaxBytes,
     policies,
@@ -136,88 +140,19 @@ type ToolExchangeOutcome =
   | { kind: "omitted"; bytes: number }
   | { kind: "invalid"; message: string };
 
-/** Groups an assistant message with its tool calls and matched results into
- * one indivisible tool-exchange (or pending-invocation) group. */
-const toolExchangeGroup = (
-  entry: RecordValue,
-  index: number,
-  entryId: string,
-  disclosed: string,
-  immediate: unknown,
-  indexed: {
-    callOwners: Map<string, { index: number; name: string }>;
-    resultsByCall: Map<string, { entry: RecordValue; index: number }[]>;
-  },
-  consumedResultIndexes: Set<number>,
-  caps: DisclosureCaps
-): ToolExchangeOutcome => {
-  const calls = toolCalls(entry.message as RecordValue);
-  const callIds = calls.map(toolCallId) as string[];
-  const adjacentFailure = adjacentResultMismatch(
-    immediate,
-    index,
-    callIds,
-    indexed.callOwners
-  );
-  if (adjacentFailure) {
-    return { kind: "invalid", message: adjacentFailure };
-  }
-  const missing = new Set<string>();
-  const resultParts: string[] = [];
-  const resultEntryIds: string[] = [];
-  const matchFailure = collectResults(
-    calls,
-    callIds,
-    index,
-    indexed.resultsByCall,
-    consumedResultIndexes,
-    caps,
-    missing,
-    resultParts,
-    resultEntryIds
-  );
-  if (matchFailure) {
-    return { kind: "invalid", message: matchFailure };
-  }
-  if (missing.size > 0) {
-    return missingOutcome(
-      entry,
-      index,
-      entryId,
-      disclosed,
-      callIds,
-      missing,
-      resultParts,
-      resultEntryIds,
-      caps
-    );
-  }
-  return {
-    group: createGroup(
-      index,
-      [entryId, ...resultEntryIds],
-      "tool-exchange",
-      [disclosed, ...resultParts].join("\n\n"),
-      false
-    ),
-    kind: "group",
-  };
-};
-
 const adjacentResultMismatch = (
-  immediate: unknown,
+  immediate: RecordValue | undefined,
   index: number,
   callIds: string[],
   callOwners: Map<string, { index: number; name: string }>
 ): string | undefined => {
-  const next = immediate as RecordValue | undefined;
   if (
-    next?.type === "message" &&
-    isRecord(next.message) &&
-    next.message.role === "toolResult" &&
-    typeof next.message.toolCallId === "string" &&
-    !callIds.includes(next.message.toolCallId) &&
-    !callOwners.has(next.message.toolCallId)
+    immediate?.type === "message" &&
+    isRecord(immediate.message) &&
+    immediate.message.role === "toolResult" &&
+    isString(immediate.message.toolCallId) &&
+    !callIds.includes(immediate.message.toolCallId) &&
+    !callOwners.has(immediate.message.toolCallId)
   ) {
     return `Tool result at context entry ${index + 1} does not match its adjacent assistant group.`;
   }
@@ -245,10 +180,8 @@ const collectResults = (
       return `Tool result at context entry ${resultMatch.index} precedes its assistant call.`;
     }
     const resultMessage = resultMatch.entry.message;
-    const expectedName =
-      typeof calls[callIndex].name === "string"
-        ? calls[callIndex].name
-        : "unknown";
+    const call = calls[callIndex];
+    const expectedName = isString(call.name) ? call.name : "unknown";
     if (!isRecord(resultMessage) || resultMessage.toolName !== expectedName) {
       return `Tool result at context entry ${resultMatch.index} conflicts with call ${callId}.`;
     }
@@ -264,7 +197,7 @@ const collectResults = (
       resultParts.push(resultText);
     }
     resultEntryIds.push(
-      typeof resultMatch.entry.id === "string"
+      isString(resultMatch.entry.id)
         ? resultMatch.entry.id
         : String(resultMatch.index)
     );
@@ -316,61 +249,88 @@ const missingOutcome = (
   };
 };
 
-/** Second entry pass: groups each disclosed entry, delegating
- * assistant-with-calls entries to the tool-exchange builder. */
-export const buildGroups = (
-  entries: unknown[],
+/** Groups an assistant message with its tool calls and matched results into
+ * one indivisible tool-exchange (or pending-invocation) group. */
+const toolExchangeGroup = (
+  entry: RecordValue,
+  message: RecordValue,
+  index: number,
+  entryId: string,
+  disclosed: string,
+  immediate: RecordValue | undefined,
   indexed: {
     callOwners: Map<string, { index: number; name: string }>;
-    latestUserIndex: number;
     resultsByCall: Map<string, { entry: RecordValue; index: number }[]>;
   },
-  caps: DisclosureCaps & {
-    maxGroupBytes: number;
+  consumedResultIndexes: Set<number>,
+  caps: DisclosureCaps
+): ToolExchangeOutcome => {
+  const calls = toolCalls(message);
+  const callIds = calls.map(toolCallId).filter(isString);
+  const adjacentFailure = adjacentResultMismatch(
+    immediate,
+    index,
+    callIds,
+    indexed.callOwners
+  );
+  if (adjacentFailure) {
+    return { kind: "invalid", message: adjacentFailure };
   }
-): GroupPass | InvalidProtocolResult => {
-  const groups: ScoutContextGroup[] = [];
-  const consumedResultIndexes = new Set<number>();
-  let protocolOmittedBytes = 0;
-  let protocolOmittedCount = 0;
-  for (let index = 0; index < entries.length; index += 1) {
-    const entry = entries[index] as unknown as RecordValue;
-    const disclosed = conversationEntry(
-      entry,
-      caps.toolResultMaxLines,
-      caps.toolResultMaxBytes,
-      caps.policies,
-      caps.redact
-    );
-    if (!disclosed) {
-      continue;
-    }
-    const outcome = groupForEntry(
+  const missing = new Set<string>();
+  const resultParts: string[] = [];
+  const resultEntryIds: string[] = [];
+  const matchFailure = collectResults(
+    calls,
+    callIds,
+    index,
+    indexed.resultsByCall,
+    consumedResultIndexes,
+    caps,
+    missing,
+    resultParts,
+    resultEntryIds
+  );
+  if (matchFailure) {
+    return { kind: "invalid", message: matchFailure };
+  }
+  if (missing.size > 0) {
+    return missingOutcome(
       entry,
       index,
+      entryId,
       disclosed,
-      entries[index + 1],
-      indexed,
-      consumedResultIndexes,
+      callIds,
+      missing,
+      resultParts,
+      resultEntryIds,
       caps
     );
-    if (outcome.kind === "invalid") {
-      return invalid(outcome.message);
-    }
-    if (outcome.kind === "omitted") {
-      protocolOmittedCount += 1;
-      protocolOmittedBytes += outcome.bytes;
-    } else if (outcome.kind === "group") {
-      groups.push(outcome.group);
-    }
   }
   return {
-    groups,
-    ok: true,
-    protocolOmittedBytes,
-    protocolOmittedCount,
+    group: createGroup(
+      index,
+      [entryId, ...resultEntryIds],
+      "tool-exchange",
+      [disclosed, ...resultParts].join("\n\n"),
+      false
+    ),
+    kind: "group",
   };
 };
+
+const ownerOf = (
+  message: RecordValue,
+  callOwners: Map<string, { index: number; name: string }>
+) =>
+  isString(message.toolCallId) ? callOwners.get(message.toolCallId) : undefined;
+
+const contentPartsOf = (message: RecordValue) =>
+  Array.isArray(message.content) ? message.content : [];
+
+const hasCalls = (message: RecordValue) =>
+  contentPartsOf(message).some(
+    (part) => isRecord(part) && part.type === "toolCall"
+  );
 
 type EntryOutcome =
   | { kind: "group"; group: ScoutContextGroup }
@@ -378,11 +338,32 @@ type EntryOutcome =
   | { kind: "invalid"; message: string }
   | { kind: "skipped" };
 
+const toolResultOutcome = (
+  message: RecordValue,
+  index: number,
+  disclosed: string,
+  callOwners: Map<string, { index: number; name: string }>,
+  consumedResultIndexes: Set<number>
+): EntryOutcome => {
+  if (consumedResultIndexes.has(index)) {
+    return { kind: "skipped" };
+  }
+  if (ownerOf(message, callOwners)) {
+    return {
+      kind: "invalid",
+      message: `Tool result at context entry ${index} precedes or conflicts with its retained call.`,
+    };
+  }
+  // Retained results without their call are unavailable optional evidence
+  // and are never offered to Scout.
+  return { bytes: byteLength(disclosed), kind: "omitted" };
+};
+
 const groupForEntry = (
   entry: RecordValue,
   index: number,
   disclosed: string,
-  immediate: unknown,
+  immediate: RecordValue | undefined,
   indexed: {
     callOwners: Map<string, { index: number; name: string }>;
     latestUserIndex: number;
@@ -391,7 +372,7 @@ const groupForEntry = (
   consumedResultIndexes: Set<number>,
   caps: DisclosureCaps
 ): EntryOutcome => {
-  const entryId = typeof entry.id === "string" ? entry.id : String(index);
+  const entryId = isString(entry.id) ? entry.id : String(index);
   if (entry.type !== "message" || !isRecord(entry.message)) {
     return {
       group: createGroup(index, [entryId], "compaction", disclosed, false),
@@ -431,6 +412,7 @@ const groupForEntry = (
   }
   return toolExchangeGroup(
     entry,
+    message,
     index,
     entryId,
     disclosed,
@@ -441,42 +423,66 @@ const groupForEntry = (
   );
 };
 
-const toolResultOutcome = (
-  message: RecordValue,
-  index: number,
-  disclosed: string,
-  callOwners: Map<string, { index: number; name: string }>,
-  consumedResultIndexes: Set<number>
-): EntryOutcome => {
-  if (consumedResultIndexes.has(index)) {
-    return { kind: "skipped" };
+/** Second entry pass: groups each disclosed entry, delegating
+ * assistant-with-calls entries to the tool-exchange builder. */
+export const buildGroups = (
+  entries: unknown[],
+  indexed: {
+    callOwners: Map<string, { index: number; name: string }>;
+    latestUserIndex: number;
+    resultsByCall: Map<string, { entry: RecordValue; index: number }[]>;
+  },
+  caps: DisclosureCaps & {
+    maxGroupBytes: number;
   }
-  if (ownerOf(message, callOwners)) {
-    return {
-      kind: "invalid",
-      message: `Tool result at context entry ${index} precedes or conflicts with its retained call.`,
-    };
+): GroupPass | InvalidProtocolResult => {
+  const groups: ScoutContextGroup[] = [];
+  const consumedResultIndexes = new Set<number>();
+  let protocolOmittedBytes = 0;
+  let protocolOmittedCount = 0;
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index];
+    if (!isRecord(entry)) {
+      continue;
+    }
+    const disclosed = conversationEntry(
+      entry,
+      caps.toolResultMaxLines,
+      caps.toolResultMaxBytes,
+      caps.policies,
+      caps.redact
+    );
+    if (!disclosed) {
+      continue;
+    }
+    const next = entries[index + 1];
+    const immediate = isRecord(next) ? next : undefined;
+    const outcome = groupForEntry(
+      entry,
+      index,
+      disclosed,
+      immediate,
+      indexed,
+      consumedResultIndexes,
+      caps
+    );
+    if (outcome.kind === "invalid") {
+      return invalid(outcome.message);
+    }
+    if (outcome.kind === "omitted") {
+      protocolOmittedCount += 1;
+      protocolOmittedBytes += outcome.bytes;
+    } else if (outcome.kind === "group") {
+      groups.push(outcome.group);
+    }
   }
-  // Retained results without their call are unavailable optional evidence
-  // and are never offered to Scout.
-  return { bytes: byteLength(disclosed), kind: "omitted" };
+  return {
+    groups,
+    ok: true,
+    protocolOmittedBytes,
+    protocolOmittedCount,
+  };
 };
-
-const ownerOf = (
-  message: RecordValue,
-  callOwners: Map<string, { index: number; name: string }>
-) =>
-  typeof message.toolCallId === "string"
-    ? callOwners.get(message.toolCallId)
-    : undefined;
-
-const hasCalls = (message: RecordValue) =>
-  contentPartsOf(message).some(
-    (part) => isRecord(part) && part.type === "toolCall"
-  );
-
-const contentPartsOf = (message: RecordValue) =>
-  Array.isArray(message.content) ? message.content : [];
 
 /** Final pass: selects groups within the transport and conversation budgets,
  * keeping every required group. */

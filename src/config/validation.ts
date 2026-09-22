@@ -1,12 +1,10 @@
-import {
-  type ConfigKeySchema,
-  CONFIG_SCHEMA,
-  type ConfigKey,
-  SCHEMA_BY_KEY,
-} from "./schema.ts";
+import { isBoolean, isRecord, isString } from "../content-utils.ts";
+import type { JsonValue } from "../content-utils.ts";
+import type { ConfigKey, ConfigKeySchema } from "./schema.ts";
+import { configKeys, SCHEMA_BY_KEY } from "./schema.ts";
 import type { AdvisorConfig } from "./types.ts";
 
-// biome-ignore lint/performance/noBarrelFile: re-exports keep the isValid* validators on their historical module for the config facade.
+// Re-exports keep the isValid* validators on their historical module for the config facade.
 export {
   isValidAdvisorModelWhitelist,
   isValidAdvisorToolPolicies,
@@ -18,19 +16,15 @@ export {
   isValidToolResultMaxLines,
 } from "./schema.ts";
 
-const CONFIG_KEYS = new Set<ConfigKey>(
-  Object.keys(CONFIG_SCHEMA) as ConfigKey[]
-);
+const CONFIG_KEYS = new Set<string>(configKeys);
 
 const keysOfType = (type: ConfigKeySchema["type"]): readonly ConfigKey[] =>
-  (Object.keys(CONFIG_SCHEMA) as ConfigKey[]).filter(
-    (key) => SCHEMA_BY_KEY[key].type === type
-  );
+  configKeys.filter((key) => SCHEMA_BY_KEY[key].type === type);
 
 const BOOLEAN_CONFIG_KEYS = keysOfType("boolean");
 const STRING_CONFIG_KEYS = keysOfType("string");
 
-type ConfigRecord = Record<string, unknown>;
+type ConfigRecord = Record<string, JsonValue>;
 
 const invalidConfigValue = (
   path: string,
@@ -42,12 +36,12 @@ const invalidConfigValue = (
   );
 };
 
-export const unknownConfigKeys = (config: ConfigRecord) =>
-  Object.keys(config).filter((key) => !CONFIG_KEYS.has(key as ConfigKey));
+export const unknownConfigKeys = (config: AdvisorConfig) =>
+  Object.keys(config).filter((key) => !CONFIG_KEYS.has(key));
 
 const validateStringValues = (config: ConfigRecord, path: string) => {
   for (const key of STRING_CONFIG_KEYS) {
-    if (config[key] !== undefined && typeof config[key] !== "string") {
+    if (config[key] !== undefined && !isString(config[key])) {
       invalidConfigValue(path, key, SCHEMA_BY_KEY[key].accepted);
     }
   }
@@ -55,7 +49,7 @@ const validateStringValues = (config: ConfigRecord, path: string) => {
 
 const validateBooleanValues = (config: ConfigRecord, path: string) => {
   for (const key of BOOLEAN_CONFIG_KEYS) {
-    if (config[key] !== undefined && typeof config[key] !== "boolean") {
+    if (config[key] !== undefined && !isBoolean(config[key])) {
       invalidConfigValue(path, key, SCHEMA_BY_KEY[key].accepted);
     }
   }
@@ -117,17 +111,16 @@ export const validateConfig = (
   value: unknown,
   path = "advisor.json"
 ): value is AdvisorConfig => {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
+  if (!isRecord(value)) {
     throw new TypeError(
       `Invalid advisor configuration at ${path}: expected a JSON object.`
     );
   }
-  const config = value as ConfigRecord;
-  validateStringValues(config, path);
-  validateBooleanValues(config, path);
-  validateNumericValues(config, path);
-  validateObjectValues(config, path);
-  validateArrayValues(config, path);
-  validateEnumValues(config, path);
+  validateStringValues(value, path);
+  validateBooleanValues(value, path);
+  validateNumericValues(value, path);
+  validateObjectValues(value, path);
+  validateArrayValues(value, path);
+  validateEnumValues(value, path);
   return true;
 };

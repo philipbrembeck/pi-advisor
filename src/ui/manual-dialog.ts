@@ -13,12 +13,21 @@ import { renderManualAdvisorDialog } from "./manual-dialog-render.ts";
 import type {
   ManualAdvisorDialogOptions,
   ManualAdvisorFocus,
+  ManualAdvisorRequest,
 } from "./types.ts";
 
-// Keep the keybinding components separate from Socket's URL-string heuristic.
+// SAFETY: the joined literal is exactly the registered "tui.input.tab" keybinding path.
 const TUI_INPUT_TAB: keyof Keybindings = ["tui", "input", "tab"].join(
   "."
 ) as keyof Keybindings;
+
+interface ManualDialogState {
+  completed: boolean;
+  focused: boolean;
+}
+
+const isShiftTab = (keyData: string): boolean =>
+  matchesKey(keyData, Key.shift("tab"));
 
 /** The small, non-persistent /advisor-manual form; callers own budget and consultation decisions. */
 export class ManualAdvisorDialog implements Component, Focusable {
@@ -28,7 +37,7 @@ export class ManualAdvisorDialog implements Component, Focusable {
   private gitIndex: number;
   private actionIndex = 0;
   private focusTarget: ManualAdvisorFocus = "editor";
-  private readonly state: { completed: boolean; focused: boolean } = {
+  private readonly state: ManualDialogState = {
     completed: false,
     focused: false,
   };
@@ -86,7 +95,7 @@ export class ManualAdvisorDialog implements Component, Focusable {
       this.cancel();
       return;
     }
-    if (this.isShiftTab(keyData)) {
+    if (isShiftTab(keyData)) {
       this.changeFocus(-1);
       return;
     }
@@ -94,28 +103,12 @@ export class ManualAdvisorDialog implements Component, Focusable {
       this.changeFocus(1);
       return;
     }
-
-    switch (this.focusTarget) {
-      case "editor": {
-        // Editor owns Enter/Shift+Enter and all cursor/editing semantics. Its
-        // onSubmit callback above is the sole editor submission path. At the
-        // edge of the message, a directional key also moves to the adjacent
-        // form control so the Git selector is reachable without Tab.
-        this.handleEditorInput(keyData);
-        return;
-      }
-      case "git": {
-        this.handleGitInput(keyData);
-        return;
-      }
-      case "actions": {
-        this.handleActionInput(keyData);
-        return;
-      }
-      default: {
-        return;
-      }
-    }
+    const handlers: Record<ManualAdvisorFocus, (keyData: string) => void> = {
+      actions: (key) => this.handleActionInput(key),
+      editor: (key) => this.handleEditorInput(key),
+      git: (key) => this.handleGitInput(key),
+    };
+    handlers[this.focusTarget](keyData);
   }
 
   render(width: number): string[] {
@@ -137,6 +130,10 @@ export class ManualAdvisorDialog implements Component, Focusable {
   }
 
   private handleEditorInput(keyData: string): void {
+    // Editor owns Enter/Shift+Enter and all cursor/editing semantics. Its
+    // onSubmit callback above is the sole editor submission path. At the
+    // edge of the message, a directional key also moves to the adjacent
+    // form control so the Git selector is reachable without Tab.
     let direction: -1 | 1 | undefined;
     if (this.matches(keyData, "tui.editor.cursorDown", Key.down)) {
       direction = 1;
@@ -257,10 +254,6 @@ export class ManualAdvisorDialog implements Component, Focusable {
     );
   }
 
-  private isShiftTab(keyData: string): boolean {
-    return matchesKey(keyData, Key.shift("tab"));
-  }
-
   private isCancel(keyData: string): boolean {
     return (
       matchesKey(keyData, Key.escape) ||
@@ -284,10 +277,13 @@ export class ManualAdvisorDialog implements Component, Focusable {
       return;
     }
     this.state.completed = true;
-    this.options.onSubmit({
+    const request: ManualAdvisorRequest = {
       gitContext: this.gitLevels[this.gitIndex] ?? "off",
-      ...(message ? { message } : {}),
-    });
+    };
+    if (message) {
+      request.message = message;
+    }
+    this.options.onSubmit(request);
   }
 
   private cancel(): void {

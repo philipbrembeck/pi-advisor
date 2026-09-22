@@ -16,8 +16,9 @@ import {
 } from "../config/state.ts";
 import type { GateFailureMode } from "../config/types.ts";
 import { herdrAdvisorActivity } from "../herdr.ts";
-import type { AdvisorSessionState } from "../session-state.ts";
+import type { AdvisorSessionState, GateDecision } from "../session-state.ts";
 import { advisorUsageCost, snapshotAdvisorUsage } from "../usage.ts";
+import type { AdvisorUsageSnapshot } from "../usage.ts";
 import type { runAdvisorGate } from "./consultation.ts";
 import {
   blockedDecisionEffect,
@@ -46,20 +47,27 @@ const sendAutomaticGateCall = (pi: ExtensionAPI, event: ToolCallEvent) => {
   );
 };
 
+interface LoopResultDetails {
+  advisor?: string;
+  decision?: GateDecision;
+  text: string;
+  usage?: AdvisorUsageSnapshot;
+}
+
 const sendAutomaticGateFailure = (
   pi: ExtensionAPI,
   markdown: string,
-  usage?: unknown
+  usage?: AdvisorUsageSnapshot
 ) => {
-  const normalizedUsage = snapshotAdvisorUsage(usage);
+  const details: LoopResultDetails = { text: markdown };
+  if (usage) {
+    details.usage = usage;
+  }
   pi.sendMessage(
     {
       content: markdown,
       customType: "advisor-loop-result",
-      details: {
-        text: markdown,
-        ...(normalizedUsage ? { usage: normalizedUsage } : {}),
-      },
+      details,
       display: true,
     },
     { deliverAs: "steer" }
@@ -70,18 +78,20 @@ const sendAutomaticGateResult = (
   pi: ExtensionAPI,
   result: AdvisorGateResult
 ) => {
+  const details: LoopResultDetails = {
+    advisor: result.model,
+    decision: result.decision,
+    text: result.markdown,
+  };
+  const normalizedUsage = snapshotAdvisorUsage(result.usage);
+  if (normalizedUsage) {
+    details.usage = normalizedUsage;
+  }
   pi.sendMessage(
     {
       content: adviceForGateText(result),
       customType: "advisor-loop-result",
-      details: {
-        advisor: result.model,
-        decision: result.decision,
-        text: result.markdown,
-        ...(snapshotAdvisorUsage(result.usage)
-          ? { usage: snapshotAdvisorUsage(result.usage) }
-          : {}),
-      },
+      details,
       display: true,
     },
     { deliverAs: "steer" }
@@ -118,7 +128,7 @@ const applyGateDecision = (
     sendAutomaticGateFailure(
       pi,
       `**Advisor gate failure (${result.category}):** ${result.message}`,
-      result.usage
+      snapshotAdvisorUsage(result.usage)
     );
     return failure.block
       ? { block: true, reason: `${reason}\n${failure.reason}` }

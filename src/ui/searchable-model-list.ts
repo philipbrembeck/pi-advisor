@@ -132,8 +132,11 @@ export class SearchableModelList implements Component, Focusable {
         );
       }
     }
-    lines.push("", `  ${this.theme.fg("dim", this.interactionHint())}`);
-    lines.push(this.theme.fg("border", "─".repeat(width)));
+    lines.push(
+      "",
+      `  ${this.theme.fg("dim", this.interactionHint())}`,
+      this.theme.fg("border", "─".repeat(width))
+    );
     return lines.map((line) => truncateToWidth(line, width));
   }
 

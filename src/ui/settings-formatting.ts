@@ -54,6 +54,22 @@ export const currentContextLabel = (
   presets.find((preset) => preset.value === contextMaxChars)?.label ??
   String(contextMaxChars);
 
+const closestPresetIndex = (
+  presets: ContextPreset[],
+  contextMaxChars: number
+): number => {
+  let closestIndex = 0;
+  for (let index = 0; index < presets.length; index += 1) {
+    if (
+      Math.abs(presets[index].value - contextMaxChars) <
+      Math.abs(presets[closestIndex].value - contextMaxChars)
+    ) {
+      closestIndex = index;
+    }
+  }
+  return closestIndex;
+};
+
 export const contextDescription = (
   presets: ContextPreset[],
   contextMaxChars: number
@@ -62,16 +78,9 @@ export const contextDescription = (
     (preset) => preset.value === contextMaxChars
   );
   const selectedIndex =
-    exactIndex !== -1
-      ? exactIndex
-      : presets.reduce(
-          (closestIndex, preset, index) =>
-            Math.abs(preset.value - contextMaxChars) <
-            Math.abs(presets[closestIndex].value - contextMaxChars)
-              ? index
-              : closestIndex,
-          0
-        );
+    exactIndex === -1
+      ? closestPresetIndex(presets, contextMaxChars)
+      : exactIndex;
   const selectedPreset = presets[selectedIndex];
   const isFullContext =
     selectedPreset?.value === Number.MAX_SAFE_INTEGER ||
@@ -101,7 +110,7 @@ export const contextDescription = (
   );
   const markerLabel = `${" ".repeat(labelStart)}${label}`;
   const description =
-    exactIndex !== -1 ? selectedPreset?.description : "Custom context limit.";
+    exactIndex === -1 ? "Custom context limit." : selectedPreset?.description;
   return `${description ?? "Custom context limit."}\n${meterPrefix}${meter}  full\n${markerLabel}`;
 };
 

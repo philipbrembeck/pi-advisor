@@ -25,14 +25,14 @@ export const registerSettingsCommands = (runtime: CommandRuntime) => {
       }
 
       const initial = getAdvisorSettings();
-      await ctx.ui.custom<void>(
+      await ctx.ui.custom<undefined>(
         (tui, theme, keybindings, done) =>
           new AdvisorSettingsSelector({
             effortLevels: EFFORT_LEVELS,
             initial,
             keybindings,
             modelRefs: getConfiguredModelRefs(ctx),
-            onCancel: () => done(),
+            onCancel: () => done(undefined),
             onChange: (settings) => {
               try {
                 saveAdvisorSettings(ctx, settings);

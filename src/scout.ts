@@ -2,6 +2,7 @@ import type { Message } from "@earendil-works/pi-ai/compat";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 import { executorEffortRef, executorRef } from "./config/state.ts";
+import { isRecord, isString } from "./content-utils.ts";
 import { collectTextStream, resolveConfiguredModel } from "./model-stream.ts";
 import type {
   CollectedTextStream,
@@ -15,6 +16,7 @@ import {
 } from "./scout-types.ts";
 import type { ScoutManifest } from "./scout-types.ts";
 import { snapshotAdvisorUsage } from "./usage.ts";
+import type { AdvisorUsageSnapshot } from "./usage.ts";
 
 const SCOUT_TIMEOUT_MS = 30_000;
 
@@ -48,7 +50,7 @@ interface ScoutMetrics {
   latencyMs: number;
   omittedBeforeScout: number;
   selectedCount: number;
-  usage?: unknown;
+  usage?: AdvisorUsageSnapshot;
 }
 
 export interface ScoutSelection {
@@ -120,6 +122,9 @@ const manifestMessage = (manifest: ScoutManifest): Message => ({
   timestamp: Date.now(),
 });
 
+const isStringArray = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every(isString);
+
 export const parseScoutSelection = (
   text: string,
   manifest: ScoutManifest
@@ -133,11 +138,10 @@ export const parseScoutSelection = (
   } catch (error) {
     throw new Error("Scout response is not a JSON object.", { cause: error });
   }
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
+  if (!isRecord(value)) {
     throw new Error("Scout response must be a JSON object.");
   }
-  const record = value as Record<string, unknown>;
-  const keys = Object.keys(record).toSorted();
+  const keys = Object.keys(value).toSorted();
   if (
     keys.length !== 2 ||
     keys[0] !== "selectedIds" ||
@@ -147,15 +151,10 @@ export const parseScoutSelection = (
       "Scout response must contain only selectedIds and synthesis."
     );
   }
-  if (
-    !(
-      Array.isArray(record.selectedIds) &&
-      record.selectedIds.every((id) => typeof id === "string")
-    )
-  ) {
+  if (!isStringArray(value.selectedIds)) {
     throw new Error("Scout selectedIds must be an array of strings.");
   }
-  const selectedIds = record.selectedIds as string[];
+  const { selectedIds } = value;
   if (new Set(selectedIds).size !== selectedIds.length) {
     throw new Error("Scout selected duplicate group IDs.");
   }
@@ -177,17 +176,17 @@ export const parseScoutSelection = (
   const normalizedIds = manifest.groups
     .filter((group) => retained.has(group.id))
     .map((group) => group.id);
-  if (typeof record.synthesis !== "string") {
+  if (!isString(value.synthesis)) {
     throw new TypeError("Scout synthesis must be a string.");
   }
-  if (byteLength(record.synthesis) > SCOUT_SYNTHESIS_MAX_BYTES) {
+  if (byteLength(value.synthesis) > SCOUT_SYNTHESIS_MAX_BYTES) {
     throw new Error(
       `Scout synthesis exceeds ${SCOUT_SYNTHESIS_MAX_BYTES} UTF-8 bytes.`
     );
   }
   return {
     selectedIds: normalizedIds,
-    synthesis: knownSelectedIds.length > 0 ? record.synthesis : "",
+    synthesis: knownSelectedIds.length > 0 ? value.synthesis : "",
   };
 };
 
@@ -212,6 +211,84 @@ const classifyResolutionError = (message: string): ScoutFallbackCategory => {
   return "provider-error";
 };
 
+const setupAbortWatch = (
+  parentSignal: AbortSignal | undefined,
+  timeoutMs: number
+) => {
+  const controller = new AbortController();
+  let timedOut = false;
+  const abortFromParent = () => controller.abort(parentSignal?.reason);
+  parentSignal?.addEventListener("abort", abortFromParent, { once: true });
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort(new Error("Scout timed out."));
+  }, timeoutMs);
+  timer.unref?.();
+  const { promise: abortPromise, reject: rejectOnAbort } =
+    Promise.withResolvers<never>();
+  const onControllerAbort = () =>
+    rejectOnAbort(controller.signal.reason ?? new Error("Scout aborted."));
+  controller.signal.addEventListener("abort", onControllerAbort, {
+    once: true,
+  });
+  return {
+    abortPromise,
+    controller,
+    teardown: () => {
+      clearTimeout(timer);
+      parentSignal?.removeEventListener("abort", abortFromParent);
+      controller.signal.removeEventListener("abort", onControllerAbort);
+    },
+    wasTimedOut: () => timedOut,
+  };
+};
+
+type ScoutStreamResult =
+  | { ok: true; streamed: CollectedTextStream }
+  | { ok: false; category: ScoutFallbackCategory; message: string };
+
+const streamScoutResponse = async (
+  dependencies: ScoutDependencies,
+  resolved: ResolvedConfiguredModel,
+  manifest: ScoutManifest,
+  parentSignal: AbortSignal | undefined,
+  timeoutMs: number,
+  publish: (event: ScoutLifecycleEvent) => void
+): Promise<ScoutStreamResult> => {
+  const { abortPromise, controller, teardown, wasTimedOut } = setupAbortWatch(
+    parentSignal,
+    timeoutMs
+  );
+  try {
+    const collection = dependencies.collect(resolved, {
+      messages: [manifestMessage(manifest)],
+      onChunk: (thinking, text) => {
+        if (!controller.signal.aborted) {
+          publish({ model: executorRef, text, thinking, type: "chunk" });
+        }
+      },
+      reasoning: executorEffortRef,
+      signal: controller.signal,
+      systemPrompt: SCOUT_SYSTEM,
+    });
+    return {
+      ok: true,
+      streamed: await Promise.race([collection, abortPromise]),
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return wasTimedOut()
+      ? {
+          category: "timeout",
+          message: `Scout timed out after ${timeoutMs} ms.`,
+          ok: false,
+        }
+      : { category: "provider-error", message, ok: false };
+  } finally {
+    teardown();
+  }
+};
+
 export const runAdvisorScout = async (
   ctx: ExtensionContext,
   manifest: ScoutManifest,
@@ -231,7 +308,7 @@ export const runAdvisorScout = async (
   const fallback = (
     category: ScoutFallbackCategory,
     message: string,
-    usage?: unknown
+    usage?: AdvisorUsageSnapshot
   ): ScoutOutcome => {
     const outcome = {
       category,
@@ -266,69 +343,34 @@ export const runAdvisorScout = async (
     return cancelled();
   }
   publish({ model: executorRef, type: "call" });
-  const controller = new AbortController();
-  let timedOut = false;
-  const abortFromParent = () => controller.abort(parentSignal?.reason);
-  parentSignal?.addEventListener("abort", abortFromParent, { once: true });
-  const timer = setTimeout(() => {
-    timedOut = true;
-    controller.abort(new Error("Scout timed out."));
-  }, timeoutMs);
-  timer.unref?.();
 
-  let rejectOnAbort: ((reason?: unknown) => void) | undefined;
-  const onControllerAbort = () =>
-    rejectOnAbort?.(controller.signal.reason ?? new Error("Scout aborted."));
-  const abortPromise = new Promise<never>((_resolve, reject) => {
-    rejectOnAbort = reject;
-    controller.signal.addEventListener("abort", onControllerAbort, {
-      once: true,
-    });
-  });
-  const teardown = () => {
-    clearTimeout(timer);
-    parentSignal?.removeEventListener("abort", abortFromParent);
-    controller.signal.removeEventListener("abort", onControllerAbort);
-  };
-
-  let streamed: CollectedTextStream;
-  try {
-    const collection = dependencies.collect(resolved, {
-      messages: [manifestMessage(manifest)],
-      onChunk: (thinking, text) => {
-        if (!controller.signal.aborted) {
-          publish({ model: executorRef, text, thinking, type: "chunk" });
-        }
-      },
-      reasoning: executorEffortRef,
-      signal: controller.signal,
-      systemPrompt: SCOUT_SYSTEM,
-    });
-    streamed = await Promise.race([collection, abortPromise]);
-  } catch (error) {
-    teardown();
+  const streamed = await streamScoutResponse(
+    dependencies,
+    resolved,
+    manifest,
+    parentSignal,
+    timeoutMs,
+    publish
+  );
+  if (!streamed.ok) {
     if (parentSignal?.aborted) {
       return cancelled();
     }
-    const message = error instanceof Error ? error.message : String(error);
-    return timedOut
-      ? fallback("timeout", `Scout timed out after ${timeoutMs} ms.`)
-      : fallback("provider-error", message);
+    return fallback(streamed.category, streamed.message);
   }
-  teardown();
   if (parentSignal?.aborted) {
     return cancelled();
   }
 
   let selection: ScoutSelection;
   try {
-    selection = parseScoutSelection(streamed.text, manifest);
+    selection = parseScoutSelection(streamed.streamed.text, manifest);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return fallback(
-      streamed.text.trim() ? "invalid-selection" : "empty-response",
+      streamed.streamed.text.trim() ? "invalid-selection" : "empty-response",
       message,
-      snapshotAdvisorUsage(streamed.usage)
+      snapshotAdvisorUsage(streamed.streamed.usage)
     );
   }
 
@@ -346,7 +388,7 @@ export const runAdvisorScout = async (
           .filter((group) => group.required)
           .map((group) => group.id),
       ]).size,
-      usage: snapshotAdvisorUsage(streamed.usage),
+      usage: snapshotAdvisorUsage(streamed.streamed.usage),
     },
     model: executorRef,
     ok: true as const,

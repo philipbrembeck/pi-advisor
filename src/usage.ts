@@ -1,5 +1,8 @@
 import type { Usage } from "@earendil-works/pi-ai/compat";
 
+import { isNumber, isRecordOf } from "./content-utils.ts";
+import type { JsonValue } from "./content-utils.ts";
+
 /** Normalized usage returned by an Advisor or Scout provider response. */
 export interface AdvisorUsageSnapshot {
   cacheRead?: number;
@@ -22,26 +25,22 @@ export interface AdvisorUsageTotals {
   totalTokens?: number;
 }
 
-const finite = (value: unknown) =>
-  typeof value === "number" && Number.isFinite(value) && value >= 0
-    ? value
-    : undefined;
+const finite = (value: JsonValue | undefined): number | undefined =>
+  isNumber(value) && Number.isFinite(value) && value >= 0 ? value : undefined;
 
 const add = (left: number | undefined, right: number | undefined) =>
   left === undefined || right === undefined ? (left ?? right) : left + right;
 
-import { isRecord } from "./content-utils.ts";
-
 const costFields = ["input", "output", "cacheRead", "cacheWrite", "total"];
 
 /** Extracts provider-agnostic usage fields without trusting provider metadata. */
-export const snapshotAdvisorUsage = (
-  usage: unknown
+export const snapshotAdvisorUsage = <Input>(
+  usage: Input
 ): AdvisorUsageSnapshot | undefined => {
-  if (!isRecord(usage)) {
+  if (!isRecordOf(usage)) {
     return undefined;
   }
-  const cost = isRecord(usage.cost) ? usage.cost : undefined;
+  const cost = isRecordOf(usage.cost) ? usage.cost : undefined;
   const snapshot = {
     cacheRead: finite(usage.cacheRead),
     cacheWrite: finite(usage.cacheWrite),
@@ -60,7 +59,7 @@ export const snapshotAdvisorUsage = (
 };
 
 /** Returns the reported provider cost, when the response includes one. */
-export const advisorUsageCost = (usage: unknown): number | undefined =>
+export const advisorUsageCost = <Input>(usage: Input): number | undefined =>
   snapshotAdvisorUsage(usage)?.cost;
 
 /**
@@ -68,23 +67,21 @@ export const advisorUsageCost = (usage: unknown): number | undefined =>
  * Missing fields become zero only at this Pi API boundary; absent usage remains
  * undefined so an unavailable request is never presented as a zero-cost call.
  */
-export const advisorUsageForPi = (usage: unknown): Usage | undefined => {
+export const advisorUsageForPi = <Input>(usage: Input): Usage | undefined => {
   const snapshot = snapshotAdvisorUsage(usage);
-  if (!(snapshot && isRecord(usage))) {
+  if (!(snapshot && isRecordOf(usage))) {
     return undefined;
   }
-  const cost = isRecord(usage.cost) ? usage.cost : undefined;
+  const cost = isRecordOf(usage.cost) ? usage.cost : undefined;
   const input = snapshot.input ?? 0;
   const output = snapshot.output ?? 0;
   const cacheRead = snapshot.cacheRead ?? 0;
   const cacheWrite = snapshot.cacheWrite ?? 0;
   const cacheWrite1h = finite(usage.cacheWrite1h);
   const reasoning = finite(usage.reasoning);
-  return {
+  const piUsage: Usage = {
     cacheRead,
     cacheWrite,
-    ...(cacheWrite1h === undefined ? {} : { cacheWrite1h }),
-    ...(reasoning === undefined ? {} : { reasoning }),
     cost: {
       cacheRead: finite(cost?.cacheRead) ?? 0,
       cacheWrite: finite(cost?.cacheWrite) ?? 0,
@@ -97,6 +94,13 @@ export const advisorUsageForPi = (usage: unknown): Usage | undefined => {
     totalTokens:
       snapshot.totalTokens ?? input + output + cacheRead + cacheWrite,
   };
+  if (cacheWrite1h !== undefined) {
+    piUsage.cacheWrite1h = cacheWrite1h;
+  }
+  if (reasoning !== undefined) {
+    piUsage.reasoning = reasoning;
+  }
+  return piUsage;
 };
 
 /** Creates empty totals without treating absent usage as zero usage. */
@@ -107,7 +111,10 @@ export const emptyAdvisorUsageTotals = (): AdvisorUsageTotals => ({
 });
 
 /** Adds one direct Advisor response to session-local usage totals. */
-export const addAdvisorUsage = (totals: AdvisorUsageTotals, usage: unknown) => {
+export const addAdvisorUsage = <Input>(
+  totals: AdvisorUsageTotals,
+  usage: Input
+) => {
   totals.calls += 1;
   const snapshot = snapshotAdvisorUsage(usage);
   if (!snapshot) {
@@ -165,7 +172,7 @@ const formatUsageFields = (usage: AdvisorUsageSnapshot): string | undefined => {
   return tokens.join(" · ") || undefined;
 };
 
-export const formatAdvisorUsage = (usage: unknown): string | undefined => {
+export const formatAdvisorUsage = <Input>(usage: Input): string | undefined => {
   const snapshot = snapshotAdvisorUsage(usage);
   return snapshot ? formatUsageFields(snapshot) : undefined;
 };
