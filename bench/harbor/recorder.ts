@@ -132,23 +132,22 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("message_end", (event) => {
-    if (!isRecord(event.message) || event.message.role !== "assistant") {
+    const message = event.message;
+    if (message?.role !== "assistant") {
       return;
     }
     const provider =
-      typeof event.message.provider === "string"
-        ? event.message.provider
-        : undefined;
+      typeof message.provider === "string" ? message.provider : undefined;
     const model =
-      typeof event.message.model === "string" && provider
-        ? `${provider}/${event.message.model}`
+      typeof message.model === "string" && provider
+        ? `${provider}/${message.model}`
         : undefined;
     appendRecord({
       kind: "usage",
       model,
       role: "executor",
       source: "message_end",
-      usage: readUsage(event.message.usage),
+      usage: readUsage(message.usage),
     });
   });
 

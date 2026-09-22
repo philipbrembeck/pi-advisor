@@ -4,13 +4,7 @@ import core from "ultracite/oxlint/core";
 
 export default defineConfig({
   extends: [core, antiSlop],
-  ignorePatterns: [
-    ...core.ignorePatterns,
-    "bench/**",
-    "dist/**",
-    "docs/**",
-    "tools/**",
-  ],
+  ignorePatterns: [...core.ignorePatterns, "bench/**", "dist/**", "docs/**"],
   jsPlugins: [
     {
       name: "local-rules",

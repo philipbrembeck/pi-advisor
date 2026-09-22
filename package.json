@@ -1,6 +1,6 @@
 {
   "name": "pi-advisor-flow",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Advanced Executor/Advisor flow for Pi, fully configurable and extendable.",
   "keywords": [
     "advisor",
@@ -51,9 +51,9 @@
     "format:check": "oxfmt --check"
   },
   "devDependencies": {
-    "@earendil-works/pi-ai": "^0.85.1",
-    "@earendil-works/pi-coding-agent": "^0.85.1",
-    "@earendil-works/pi-tui": "^0.85.1",
+    "@earendil-works/pi-ai": "0.87.1",
+    "@earendil-works/pi-coding-agent": "0.87.1",
+    "@earendil-works/pi-tui": "0.87.1",
     "@oxlint/plugins": "1.85.0",
     "@types/node": "^26.6.2",
     "@typesafe-ai/sdk": "^0.6.0",
@@ -68,9 +68,9 @@
     "ultracite": "7.12.0"
   },
   "peerDependencies": {
-    "@earendil-works/pi-ai": "^0.84.1 || ^0.85.1",
-    "@earendil-works/pi-coding-agent": "^0.84.1 || ^0.85.1",
-    "@earendil-works/pi-tui": "^0.84.1 || ^0.85.1",
+    "@earendil-works/pi-ai": "^0.85.1 || ^0.87.1",
+    "@earendil-works/pi-coding-agent": "^0.85.1 || ^0.87.1",
+    "@earendil-works/pi-tui": "^0.85.1 || ^0.87.1",
     "typebox": "^1.1.38"
   },
   "peerDependenciesMeta": {
@@ -98,9 +98,16 @@
     "undici": "8.9.0"
   },
   "lint-staged": {
-    "*.{json,jsonc,ts}": [
+    "*.{ts,tsx}": [
       "oxfmt",
       "oxlint --fix"
+    ],
+    "{src,test,scripts,tools,extensions}/**/*.{ts,tsx}": [
+      "oxfmt",
+      "oxlint --fix"
+    ],
+    "*.{json,jsonc}": [
+      "oxfmt"
     ]
   },
   "pi": {

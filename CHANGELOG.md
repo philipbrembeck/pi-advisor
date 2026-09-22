@@ -4,18 +4,18 @@ All notable changes to this project are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
-## Unreleased
-
-### Changed
-
-- Replaced the Biome linter and formatter with Oxlint and Oxfmt, keeping Ultracite presets and the existing scanner rules (`noConsole`, `noFloatingPromises`, `useImportExtensions`, undeclared-dependency checks via a local Oxlint rule; `noPrivateImports` remains enforced by `tsc --noEmit`).
-- Added the Ultracite-bundled anti-slop ruleset (unjustified type assertions, `unknown` leakage, Reflect access, module mocking) and remediated all findings.
-
-## Unreleased
+## 0.8.0 - 2026-09-22
 
 ### Added
 
 - Added the optional `advisorModelWhitelist` setting. Exact `provider/model` Executor references in the list may use `ask_advisor` or automatic Advisor gates; an empty list preserves the previous unrestricted behavior.
+
+### Changed
+
+- Dropped peer-dependency support for Pi 0.84.x hosts; supported versions are 0.85.x and 0.87.x.
+- Replaced the Biome linter and formatter with Oxlint and Oxfmt, keeping Ultracite presets and the existing scanner rules (`noConsole`, `noFloatingPromises`, `useImportExtensions`, undeclared-dependency checks via a local Oxlint rule; `noPrivateImports` remains enforced by `tsc --noEmit`).
+- Added the Ultracite-bundled anti-slop ruleset (unjustified type assertions, `unknown` leakage, Reflect access, module mocking) and remediated all findings.
+- Updated the Pi development and peer dependencies to `@earendil-works/*` 0.87.1.
 
 ## 0.7.0 - 2026-09-19
 
