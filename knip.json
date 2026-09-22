@@ -2,6 +2,9 @@
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "entry": [
     "extensions/index.ts",
+    "oxlint.config.ts",
+    "oxfmt.config.ts",
+    "tools/oxlint-rules/index.ts",
     "scripts/check-module-boundaries.mjs",
     "scripts/check-package.mjs",
     "test/**/*.{test.ts,mjs}",
@@ -15,7 +18,6 @@
   ],
   "ignore": ["dist/**", "node_modules/**"],
   "ignoreDependencies": [
-    "@biomejs/biome",
     "@earendil-works/pi-ai",
     "@earendil-works/pi-coding-agent",
     "@earendil-works/pi-tui",

@@ -6,6 +6,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## Unreleased
 
+### Changed
+
+- Replaced the Biome linter and formatter with Oxlint and Oxfmt, keeping Ultracite presets and the existing scanner rules (`noConsole`, `noFloatingPromises`, `useImportExtensions`, undeclared-dependency checks via a local Oxlint rule; `noPrivateImports` remains enforced by `tsc --noEmit`).
+- Added the Ultracite-bundled anti-slop ruleset (unjustified type assertions, `unknown` leakage, Reflect access, module mocking) and remediated all findings.
+
+## Unreleased
+
 ### Added
 
 - Added the optional `advisorModelWhitelist` setting. Exact `provider/model` Executor references in the list may use `ask_advisor` or automatic Advisor gates; an empty list preserves the previous unrestricted behavior.
@@ -16,7 +23,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 - **Jev consultation filter** — an optional gate in front of `ask_advisor`. Jev, a small classification model by TypeSafe, takes one quick, inexpensive look at each consultation request; when it is clearly low-stakes and resolvable without the Advisor, the consultation is skipped with a short note telling the Executor to carry on — saving a full Advisor call. Everything else consults exactly as before, and if Jev cannot be reached the consultation simply goes through. Off by default.
 - **Proactive turn gate** — pi-advisor can now notice when the Executor has worked through several turns without any advice. Every N turns, one quick Jev check asks whether a senior second opinion is warranted right now; on a confident yes the Advisor consults and its advice is delivered to the Executor between turns. Also off by default.
-- **One-step setup** — open `/advisor-settings` → *Jev consultation filter* for guided setup: it verifies your access with one live call before turning anything on. Either paste a TypeSafe API key (stored securely — in your system's secret store when available, otherwise a dedicated owner-only file under `~/.pi/agent/`) or skip keys entirely: with an existing OpenRouter login in Pi, Jev reuses it automatically. A hand-placed plaintext key in `advisor.json` keeps working read-only and can be migrated to secure storage from the same screen.
+- **One-step setup** — open `/advisor-settings` → _Jev consultation filter_ for guided setup: it verifies your access with one live call before turning anything on. Either paste a TypeSafe API key (stored securely — in your system's secret store when available, otherwise a dedicated owner-only file under `~/.pi/agent/`) or skip keys entirely: with an existing OpenRouter login in Pi, Jev reuses it automatically. A hand-placed plaintext key in `advisor.json` keeps working read-only and can be migrated to secure storage from the same screen.
 - **Skip-aware accounting** — the Session Advisor Summary shows how many consultations were screened, skipped, or overridden, what the Jev checks cost, and a labelled upper-bound estimate of what the skips saved; skipped consultations never touch the Advisor-call budget.
 - `/advisor-manual` consultations are now remembered by their question: if the Executor later asks the Advisor the exact same thing, the earlier advice is reattached instead of running another consultation. This deduplication is instant, free, and works even with the Jev screening filter turned off; sessions without any Jev activity report it as `Consultation dedup:` in the summary.
 - All Jev thresholds, costs, and the turn-gate interval are tunable from the `Jev …` rows in `/advisor-settings` without editing files. The default Jev call timeout is provisional pending real-world measurements.
@@ -96,22 +103,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
-- Added a repository-only failsafe benchmark with an offline replay tier, a
-  24-item decision-point corpus, a fail-closed Pi/Harbor ReactBench adapter,
-  pinned live-tier controls, hard budget limits, and task-level
-  uplift/dominance reporting. See [Benchmarking](docs/benchmark.md).
-- Added bounded local Harbor runtime controls for Apple Container experiments,
-  Docker build-cache cleanup, and a recorded one-hour agent timeout for complex
-  ReactBench tasks.
-- Added a disposable, credential-free GitHub build compatibility layer for
-  pinned ReactBench Dockerfiles whose Git 2.39 transport is rejected by the
-  GitHub endpoint, with bounded pre-agent Harbor infrastructure retries and
-  per-attempt artifacts for transient build and transport failures.
-- Derived the host Harbor command timeout from the bounded agent timeout and
-  made timeout cleanup terminate the full Harbor process group, including the
-  broker and descendants.
-- Ensured configured Advisor reasoning effort reaches the provider-facing
-  request field used by current Pi AI adapters.
+- Added a repository-only failsafe benchmark with an offline replay tier, a 24-item decision-point corpus, a fail-closed Pi/Harbor ReactBench adapter, pinned live-tier controls, hard budget limits, and task-level uplift/dominance reporting. See [Benchmarking](docs/benchmark.md).
+- Added bounded local Harbor runtime controls for Apple Container experiments, Docker build-cache cleanup, and a recorded one-hour agent timeout for complex ReactBench tasks.
+- Added a disposable, credential-free GitHub build compatibility layer for pinned ReactBench Dockerfiles whose Git 2.39 transport is rejected by the GitHub endpoint, with bounded pre-agent Harbor infrastructure retries and per-attempt artifacts for transient build and transport failures.
+- Derived the host Harbor command timeout from the bounded agent timeout and made timeout cleanup terminate the full Harbor process group, including the broker and descendants.
+- Ensured configured Advisor reasoning effort reaches the provider-facing request field used by current Pi AI adapters.
 
 ### Fixed
 
@@ -386,7 +382,6 @@ This version was never published to npm; its changes shipped in 0.2.6.
 - Advisor responses now require validated JSON and safely fall back to `insufficient-evidence` when the response is malformed.
 - Manual, Executor-requested, and automatic Advisor consultations share the configured session call limit.
 - Herdr activity and blocked state use separate extension metadata sources so clearing one does not clear the other.
-
 
 ## [0.1.7]
 

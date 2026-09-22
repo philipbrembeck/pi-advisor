@@ -131,7 +131,9 @@ var setAdvisorMaxCallsPerSessionRef = (value) => {
   advisorMaxCallsPerSessionRef = value;
 };
 var setAdvisorModelWhitelistRef = (models) => {
-  advisorModelWhitelistRef = Array.from(new Set(models.map((model) => model.trim()).filter(Boolean)));
+  advisorModelWhitelistRef = [
+    ...new Set(models.map((model) => model.trim()).filter(Boolean))
+  ];
 };
 var setAdvisorSessionSummaryRef = (enabled) => {
   advisorSessionSummaryRef = enabled;
@@ -276,7 +278,7 @@ var LEVEL_RANK = {
   summary: 1
 };
 var clampGitContextLevel = (requested, allowed) => LEVEL_RANK[requested] <= LEVEL_RANK[allowed] ? requested : allowed;
-var escapeRepositoryText = (value) => value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+var escapeRepositoryText = (value) => value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 var TRUNCATION_NOTICE = `
 [Repository context truncated: it exceeded the configured limit.]`;
 var capRepositoryContext = (value, maxChars) => {
@@ -301,7 +303,7 @@ var deadlineRunner = () => {
     }
     return execFileSync("git", args, {
       cwd,
-      encoding: "utf8",
+      encoding: "utf-8",
       maxBuffer: GIT_MAX_BUFFER,
       shell: false,
       stdio: ["ignore", "pipe", "pipe"],
@@ -775,10 +777,7 @@ var parseArgs = (args) => {
 // src/config/storage.ts
 import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import {
-  CONFIG_DIR_NAME,
-  getAgentDir
-} from "@earendil-works/pi-coding-agent";
+import { CONFIG_DIR_NAME, getAgentDir } from "@earendil-works/pi-coding-agent";
 
 // src/config/defaults.ts
 var resetDefaults = () => {
@@ -890,7 +889,7 @@ var sameConfigValue = (left, right) => JSON.stringify(left) === JSON.stringify(r
 var RESERVED_ADVISOR_JSON_KEYS = new Set(["typesafe_api_key"]);
 var readExistingConfig = (path) => {
   try {
-    const parsed = JSON.parse(readFileSync(path, "utf8"));
+    const parsed = JSON.parse(readFileSync(path, "utf-8"));
     return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
   } catch {
     return {};
@@ -914,7 +913,7 @@ var applyChangedConfigValues = (data, current, changedKeys, persistAdvisor, pers
 var loadedConfigState;
 var loadedConfigPath;
 var readConfig = (path) => {
-  const config = JSON.parse(readFileSync(path, "utf8"));
+  const config = JSON.parse(readFileSync(path, "utf-8"));
   validateConfig(config, path);
   return config;
 };
@@ -1077,7 +1076,9 @@ var getAvailableModelRefs = (ctx) => {
 var getConfiguredModelRefs = (ctx) => {
   const registry = ctx.modelRegistry;
   const models = typeof registry?.getAvailable === "function" ? registry.getAvailable() : [];
-  return Array.from(new Set(models.map((model) => `${model.provider}/${model.id}`))).sort((left, right) => left.localeCompare(right));
+  return [
+    ...new Set(models.map((model) => `${model.provider}/${model.id}`))
+  ].sort((left, right) => left.localeCompare(right));
 };
 var isSelectableModel = (ctx, ref, availableRefs) => {
   if (!ref) {
@@ -1114,11 +1115,7 @@ var planActivationModels = (ctx, executor, advisor, pendingExecutorRef, persiste
 };
 
 // src/ui/searchable-model-list.ts
-import {
-  fuzzyFilter,
-  Input,
-  truncateToWidth
-} from "@earendil-works/pi-tui";
+import { fuzzyFilter, Input, truncateToWidth } from "@earendil-works/pi-tui";
 
 class SearchableModelList {
   tui;
@@ -1181,8 +1178,7 @@ class SearchableModelList {
     const lines = [this.theme.fg("border", "─".repeat(width))];
     lines.push(`  ${this.theme.fg("accent", this.theme.bold(this.title))}`);
     const inputLines = this.searchInput.render(Math.max(1, width - 10));
-    lines.push(`  ${this.theme.fg("accent", "Search: ")}${inputLines[0] || ""}`);
-    lines.push("");
+    lines.push(`  ${this.theme.fg("accent", "Search: ")}${inputLines[0] || ""}`, "");
     const query = this.searchInput.getValue().trim();
     this.filteredOptions = query ? fuzzyFilter(this.allOptions, query, (item) => item) : this.allOptions;
     this.selectedIndex = Math.min(this.selectedIndex, Math.max(0, this.filteredOptions.length - 1));
@@ -1197,11 +1193,10 @@ class SearchableModelList {
         lines.push(this.renderOption(this.filteredOptions[i], i));
       }
       if (total > maxVisible) {
-        lines.push("  " + this.theme.fg("muted", `  (${this.selectedIndex + 1}/${total})`));
+        lines.push(`  ${this.theme.fg("muted", `  (${this.selectedIndex + 1}/${total})`)}`);
       }
     }
-    lines.push("");
-    lines.push(`  ${this.theme.fg("dim", this.interactionHint())}`);
+    lines.push("", `  ${this.theme.fg("dim", this.interactionHint())}`);
     lines.push(this.theme.fg("border", "─".repeat(width)));
     return lines.map((line) => truncateToWidth(line, width));
   }
@@ -1389,7 +1384,7 @@ import net from "node:net";
 
 // src/content-utils.ts
 var isRecord = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
-var byteLength = (value) => Buffer.byteLength(value, "utf8");
+var byteLength = (value) => Buffer.byteLength(value, "utf-8");
 var contentParts = (content) => {
   if (typeof content === "string") {
     return [content];
@@ -1464,7 +1459,7 @@ var safeEmitBlocked = (active, label = "Advisor blocked") => {
   } catch {}
 };
 var isControlCharacter = (character) => character <= "\x1F" || character === "";
-var cleanNotification = (value, max) => [...redactSecrets(value)].map((character) => isControlCharacter(character) ? " " : character).join("").replace(/\s+/g, " ").trim().slice(0, max);
+var cleanNotification = (value, max) => [...redactSecrets(value)].map((character) => isControlCharacter(character) ? " " : character).join("").replaceAll(/\s+/g, " ").trim().slice(0, max);
 var createHerdrNotificationRequest = (title, body) => ({
   id: `${NOTIFICATION_SOURCE}:${nextSequence()}`,
   method: HERDR_NOTIFICATION_METHOD,
@@ -1623,9 +1618,7 @@ var herdrAdvisorBlock = new HerdrAdvisorBlock(sendToHerdr, () => getAdvisorSetti
 import { randomUUID } from "node:crypto";
 
 // src/model-stream.ts
-import {
-  stream
-} from "@earendil-works/pi-ai/compat";
+import { stream } from "@earendil-works/pi-ai/compat";
 var resolveConfiguredModel = async (ctx, ref, label) => {
   if (!ref) {
     throw new Error(`${label} model not configured`);
@@ -1791,7 +1784,7 @@ var normalizeRequestedPath = (root, value) => {
 };
 var git = (cwd, args) => execFileSync2("git", args, {
   cwd,
-  encoding: "utf8",
+  encoding: "utf-8",
   maxBuffer: 16 * 1024 * 1024,
   shell: false,
   stdio: ["ignore", "pipe", "pipe"],
@@ -1802,7 +1795,7 @@ var repositoryRoot = (cwd) => {
   try {
     return realpath(git(cwd, ["rev-parse", "--show-toplevel"]).trim());
   } catch {
-    return Promise.resolve(undefined);
+    return Promise.resolve();
   }
 };
 var untracked = (cwd, path) => {
@@ -1851,13 +1844,13 @@ var readAttachment = async (root, normalizedName, redact, available) => {
     }
     const buffer = Buffer.alloc(available + 1);
     const { bytesRead } = await file.read(buffer, 0, buffer.length, 0);
-    const raw = buffer.subarray(0, bytesRead).toString("utf8");
+    const raw = buffer.subarray(0, bytesRead).toString("utf-8");
     if (raw.includes("\x00")) {
       return;
     }
     const text = redactAndCapText(raw, available, redact);
     return {
-      bytes: Buffer.byteLength(text, "utf8"),
+      bytes: Buffer.byteLength(text, "utf-8"),
       path: normalizedName,
       text
     };
@@ -1930,9 +1923,9 @@ var readProjectPreferences = async (ctx, maxBytes = PREFERENCES_MAX_BYTES, redac
     try {
       const buffer = Buffer.alloc(maxBytes + 1);
       const { bytesRead } = await file.read(buffer, 0, buffer.length, 0);
-      const source = buffer.subarray(0, bytesRead).toString("utf8");
+      const source = buffer.subarray(0, bytesRead).toString("utf-8");
       const capped = redactAndCapText(source, maxBytes, redact);
-      return { bytes: Buffer.byteLength(capped, "utf8"), text: capped };
+      return { bytes: Buffer.byteLength(capped, "utf-8"), text: capped };
     } finally {
       await file.close();
     }
@@ -2208,7 +2201,7 @@ var SCOUT_SYNTHESIS_MAX_BYTES = 4 * 1024;
 
 // src/scout-groups.ts
 var SPEAKER_PREFIX = /^(User|Executor):\s*/;
-var boundedLabel = (value) => [...value.replace(/\s+/g, " ").trim()].slice(0, SCOUT_LABEL_MAX_CHARS).join("");
+var boundedLabel = (value) => [...value.replaceAll(/\s+/g, " ").trim()].slice(0, SCOUT_LABEL_MAX_CHARS).join("");
 var labelFor = (kind, content) => {
   const preview = boundedLabel(content.replace(SPEAKER_PREFIX, ""));
   const prefix = {
@@ -2449,6 +2442,97 @@ ${synthesis.trim()}` : undefined;
   return `${evidenceText}${separator}${prefixWithinCharBudget(inference, remaining)}`;
 };
 
+// src/scout-context.ts
+var resolveCaps = (options) => ({
+  currentInvocationId: options.currentInvocationId,
+  maxConversationChars: options.maxConversationChars,
+  maxGroupBytes: options.maxGroupBytes ?? SCOUT_GROUP_MAX_BYTES,
+  maxGroups: options.maxGroups ?? SCOUT_MANIFEST_MAX_GROUPS,
+  maxManifestBytes: options.maxManifestBytes ?? options.maxBytes ?? SCOUT_MANIFEST_MAX_BYTES,
+  policies: options.policies ?? advisorToolPoliciesRef,
+  redact: options.redact ?? advisorRedactSecretsRef,
+  toolResultMaxBytes: options.toolResultMaxBytes ?? advisorToolResultMaxBytesRef,
+  toolResultMaxLines: options.toolResultMaxLines ?? advisorToolResultMaxLinesRef
+});
+var buildScoutManifest = (ctx, options = {}) => {
+  const entries = ctx.sessionManager.buildContextEntries();
+  const caps = resolveCaps(options);
+  const indexed = indexToolCalls(entries);
+  if (!indexed.ok) {
+    return indexed;
+  }
+  const built = buildGroups(entries, indexed.index, caps);
+  if (!built.ok) {
+    return built;
+  }
+  return fitToBudget(built, caps);
+};
+var fits = (selected, caps) => selected.length <= caps.maxGroups && selected.reduce((sum, group) => sum + groupWireBytes(group), 0) <= caps.maxManifestBytes && (caps.maxConversationChars === undefined || contentChars(selected) <= caps.maxConversationChars);
+var contentChars = (items) => items.reduce((sum, group) => sum + group.content.length, 0) + Math.max(0, items.length - 1) * 2;
+var fitToBudget = (built, caps) => {
+  const { groups, protocolOmittedBytes, protocolOmittedCount } = built;
+  const availableCount = groups.length + protocolOmittedCount;
+  const availableBytes = groups.reduce((sum, group) => sum + groupWireBytes(group), 0) + protocolOmittedBytes;
+  if (caps.maxManifestBytes <= 0) {
+    return {
+      manifest: {
+        availableBytes: 0,
+        availableCount: 0,
+        groups: [],
+        omittedBytes: 0,
+        omittedCount: 0
+      },
+      ok: true
+    };
+  }
+  const required = groups.filter((group) => group.required);
+  const overflow = requiredOverflow(required, caps);
+  if (overflow) {
+    return overflow;
+  }
+  const selected = groups.filter((group) => group.required || group.bytes <= caps.maxGroupBytes);
+  while (!fits(selected, caps)) {
+    const optionalIndex = selected.findIndex((group) => !group.required);
+    if (optionalIndex === -1) {
+      return {
+        message: "Required Scout context exceeds fixed manifest limits.",
+        ok: false,
+        reason: "required-group-overflow"
+      };
+    }
+    selected.splice(optionalIndex, 1);
+  }
+  const selectedIds = new Set(selected.map((group) => group.id));
+  const omitted = groups.filter((group) => !selectedIds.has(group.id));
+  return {
+    manifest: {
+      availableBytes,
+      availableCount,
+      groups: selected,
+      omittedBytes: protocolOmittedBytes + omitted.reduce((sum, group) => sum + group.bytes, 0),
+      omittedCount: protocolOmittedCount + omitted.length
+    },
+    ok: true
+  };
+};
+var requiredOverflow = (required, caps) => {
+  if (required.some((group) => group.bytes > caps.maxGroupBytes) || required.length > caps.maxGroups || required.reduce((sum, group) => sum + groupWireBytes(group), 0) > caps.maxManifestBytes) {
+    return {
+      message: "Required Scout context exceeds the Scout manifest transport limit.",
+      ok: false,
+      reason: "required-group-overflow"
+    };
+  }
+  if (caps.maxConversationChars !== undefined && contentChars(required) > caps.maxConversationChars) {
+    return {
+      message: "Required Scout context exceeds the Advisor conversation budget.",
+      ok: false,
+      reason: "required-group-overflow"
+    };
+  }
+  return;
+};
+
 // src/usage.ts
 var finite = (value) => typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : undefined;
 var add = (left, right) => left === undefined || right === undefined ? left ?? right : left + right;
@@ -2592,7 +2676,7 @@ var defaultDependencies = {
   collect: collectTextStream,
   resolve: resolveConfiguredModel
 };
-var byteLength2 = (value) => Buffer.byteLength(value, "utf8");
+var byteLength2 = (value) => Buffer.byteLength(value, "utf-8");
 var AUTH_ERROR_PATTERN = /api key|auth|login|credential/i;
 var manifestMessage = (manifest) => ({
   content: [
@@ -2646,7 +2730,7 @@ var parseScoutSelection = (text, manifest) => {
   const retained = new Set([...requiredIds, ...optionalIds]);
   const normalizedIds = manifest.groups.filter((group) => retained.has(group.id)).map((group) => group.id);
   if (typeof record.synthesis !== "string") {
-    throw new Error("Scout synthesis must be a string.");
+    throw new TypeError("Scout synthesis must be a string.");
   }
   if (byteLength2(record.synthesis) > SCOUT_SYNTHESIS_MAX_BYTES) {
     throw new Error(`Scout synthesis exceeds ${SCOUT_SYNTHESIS_MAX_BYTES} UTF-8 bytes.`);
@@ -2783,97 +2867,6 @@ var runAdvisorScout = async (ctx, manifest, parentSignal, onEvent, timeoutMs = S
   return outcome;
 };
 
-// src/scout-context.ts
-var resolveCaps = (options) => ({
-  currentInvocationId: options.currentInvocationId,
-  maxConversationChars: options.maxConversationChars,
-  maxGroupBytes: options.maxGroupBytes ?? SCOUT_GROUP_MAX_BYTES,
-  maxGroups: options.maxGroups ?? SCOUT_MANIFEST_MAX_GROUPS,
-  maxManifestBytes: options.maxManifestBytes ?? options.maxBytes ?? SCOUT_MANIFEST_MAX_BYTES,
-  policies: options.policies ?? advisorToolPoliciesRef,
-  redact: options.redact ?? advisorRedactSecretsRef,
-  toolResultMaxBytes: options.toolResultMaxBytes ?? advisorToolResultMaxBytesRef,
-  toolResultMaxLines: options.toolResultMaxLines ?? advisorToolResultMaxLinesRef
-});
-var buildScoutManifest = (ctx, options = {}) => {
-  const entries = ctx.sessionManager.buildContextEntries();
-  const caps = resolveCaps(options);
-  const indexed = indexToolCalls(entries);
-  if (!indexed.ok) {
-    return indexed;
-  }
-  const built = buildGroups(entries, indexed.index, caps);
-  if (!built.ok) {
-    return built;
-  }
-  return fitToBudget(built, caps);
-};
-var fits = (selected, caps) => selected.length <= caps.maxGroups && selected.reduce((sum, group) => sum + groupWireBytes(group), 0) <= caps.maxManifestBytes && (caps.maxConversationChars === undefined || contentChars(selected) <= caps.maxConversationChars);
-var contentChars = (items) => items.reduce((sum, group) => sum + group.content.length, 0) + Math.max(0, items.length - 1) * 2;
-var fitToBudget = (built, caps) => {
-  const { groups, protocolOmittedBytes, protocolOmittedCount } = built;
-  const availableCount = groups.length + protocolOmittedCount;
-  const availableBytes = groups.reduce((sum, group) => sum + groupWireBytes(group), 0) + protocolOmittedBytes;
-  if (caps.maxManifestBytes <= 0) {
-    return {
-      manifest: {
-        availableBytes: 0,
-        availableCount: 0,
-        groups: [],
-        omittedBytes: 0,
-        omittedCount: 0
-      },
-      ok: true
-    };
-  }
-  const required = groups.filter((group) => group.required);
-  const overflow = requiredOverflow(required, caps);
-  if (overflow) {
-    return overflow;
-  }
-  const selected = groups.filter((group) => group.required || group.bytes <= caps.maxGroupBytes);
-  while (!fits(selected, caps)) {
-    const optionalIndex = selected.findIndex((group) => !group.required);
-    if (optionalIndex < 0) {
-      return {
-        message: "Required Scout context exceeds fixed manifest limits.",
-        ok: false,
-        reason: "required-group-overflow"
-      };
-    }
-    selected.splice(optionalIndex, 1);
-  }
-  const selectedIds = new Set(selected.map((group) => group.id));
-  const omitted = groups.filter((group) => !selectedIds.has(group.id));
-  return {
-    manifest: {
-      availableBytes,
-      availableCount,
-      groups: selected,
-      omittedBytes: protocolOmittedBytes + omitted.reduce((sum, group) => sum + group.bytes, 0),
-      omittedCount: protocolOmittedCount + omitted.length
-    },
-    ok: true
-  };
-};
-var requiredOverflow = (required, caps) => {
-  if (required.some((group) => group.bytes > caps.maxGroupBytes) || required.length > caps.maxGroups || required.reduce((sum, group) => sum + groupWireBytes(group), 0) > caps.maxManifestBytes) {
-    return {
-      message: "Required Scout context exceeds the Scout manifest transport limit.",
-      ok: false,
-      reason: "required-group-overflow"
-    };
-  }
-  if (caps.maxConversationChars !== undefined && contentChars(required) > caps.maxConversationChars) {
-    return {
-      message: "Required Scout context exceeds the Advisor conversation budget.",
-      ok: false,
-      reason: "required-group-overflow"
-    };
-  }
-  return;
-};
-
 // src/scout-curation.ts
 var curateAdvisorConversation = async (ctx, legacyConversation, signal, onScout, enabled = advisorScoutEnabledRef, runScout = runAdvisorScout, currentInvocationId, maxChars) => {
   if (!enabled) {
@@ -2904,7 +2897,7 @@ var curateAdvisorConversation = async (ctx, legacyConversation, signal, onScout,
     onScout?.({ outcome: scout, type: "fallback" });
     return { conversation: legacyConversation, scout };
   }
-  const outcome = await runScout(ctx, built.manifest, signal, onScout, undefined, undefined);
+  const outcome = await runScout(ctx, built.manifest, signal, onScout);
   if (!outcome.ok && outcome.cancelled) {
     throw signal?.reason instanceof Error ? signal.reason : new Error("Advisor operation cancelled during Scout.");
   }
@@ -2960,16 +2953,21 @@ var gitContextNote = (result, requested, allowed) => {
     return `Repository context was limited to "${allowed}" by user configuration; a fuller view was requested but withheld.`;
   }
   switch (result.status) {
-    case "disabled":
+    case "disabled": {
       return "Repository context was disabled or had no disclosure budget; it was withheld. Do not assume the working tree is clean.";
-    case "no-changes":
+    }
+    case "no-changes": {
       return "The working tree has no uncommitted changes.";
-    case "not-a-repository":
+    }
+    case "not-a-repository": {
       return "No Git repository is available for this session.";
-    case "failed":
+    }
+    case "failed": {
       return "Repository context could not be collected. Do not assume the working tree is clean.";
-    default:
+    }
+    default: {
       return;
+    }
   }
 };
 var LEVEL_WITHHELD = {
@@ -3219,7 +3217,7 @@ var collectAdvisorResponse = async (options) => {
     throw new AdvisorNoAdviceError;
   }
   return {
-    draftBytes: context.draftText ? Buffer.byteLength(context.draftText, "utf8") : undefined,
+    draftBytes: context.draftText ? Buffer.byteLength(context.draftText, "utf-8") : undefined,
     markdown,
     model: advisorRef,
     preferenceBytes: context.preferences?.bytes,
@@ -3310,7 +3308,7 @@ var settingsIdentity = (path) => {
 };
 var readHideThinking = (path) => {
   try {
-    const parsed = JSON.parse(readFileSync2(path, "utf8"));
+    const parsed = JSON.parse(readFileSync2(path, "utf-8"));
     return typeof parsed === "object" && parsed !== null && parsed.hideThinkingBlock === true;
   } catch {
     return false;
@@ -3638,8 +3636,7 @@ class AdvisorJevLedgerState {
       if (filter.overrides > 0) {
         parts.push(`${filter.overrides} override${filter.overrides === 1 ? "" : "s"}`);
       }
-      lines.push(`Consultation dedup: ${parts.join(", ")}`);
-      lines.push(this.#savingsLine(this.#markdownCosts(invocations), filter.skipped));
+      lines.push(`Consultation dedup: ${parts.join(", ")}`, this.#savingsLine(this.#markdownCosts(invocations), filter.skipped));
     } else if (this.#filterActive()) {
       lines.push(this.#filterLine(filter));
       const jevTokens = usage.inputTokens + usage.outputTokens;
@@ -3701,7 +3698,7 @@ var TIMESTAMP_KEYS = new Set([
   "updatedat"
 ]);
 var REQUEST_ID_KEYS = new Set(["correlationid", "requestid", "traceid"]);
-var normalizedKey = (key) => key.replace(/[-_]/g, "").toLowerCase();
+var normalizedKey = (key) => key.replaceAll(/[-_]/g, "").toLowerCase();
 var isVolatileKey = (key, keys) => keys.has(normalizedKey(key));
 var normalizeShellWhitespace = (command) => {
   let result = "";
@@ -3734,7 +3731,7 @@ var normalizeShellWhitespace = (command) => {
   }
   return result;
 };
-var normalizeString = (value) => value.replace(/\/(?:private\/)?tmp\/[^\s/]+/g, "/tmp/<temporary>").replace(/\/var\/folders\/[^\s/]+/g, "/var/folders/<temporary>");
+var normalizeString = (value) => value.replaceAll(/\/(?:private\/)?tmp\/[^\s/]+/g, "/tmp/<temporary>").replaceAll(/\/var\/folders\/[^\s/]+/g, "/var/folders/<temporary>");
 var normalizeToolInput = (toolName, input) => {
   const visit = (value, key) => {
     if (typeof value === "string") {
@@ -3886,8 +3883,8 @@ class AdvisorSessionState {
       return false;
     }
     const mentioned = paths.every((path) => {
-      const escaped = path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const boundary = "(^|[\\s\\\"'`()\\[])" + escaped + "(?=$|[\\s\\\"'`),;:!?\\]]|\\.(?=\\s|$))";
+      const escaped = path.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const boundary = `(^|[\\s\\"'\`()\\[])${escaped}(?=$|[\\s\\"'\`),;:!?\\]]|\\.(?=\\s|$))`;
       return new RegExp(boundary).test(advice);
     });
     if (!mentioned) {
@@ -4029,7 +4026,7 @@ class CommandRuntime {
     this.pi = pi;
     this.advisorSessionState = dependencies.sessionState ?? advisorSessionState;
     this.scoutStatus = dependencies.statusManager ?? new ScoutStatusManager(false);
-    this.requestAdvisor = dependencies.consult ?? ((ctx, question, signal, onChunk, onScout, gitContext) => consultAdvisor(ctx, question, signal, onChunk, "manual", gitContext, undefined, undefined, undefined, onScout, undefined));
+    this.requestAdvisor = dependencies.consult ?? ((ctx, question, signal, onChunk, onScout, gitContext) => consultAdvisor(ctx, question, signal, onChunk, "manual", gitContext, undefined, undefined, undefined, onScout));
   }
   flowEnabled() {
     return this.pi.getActiveTools().includes("ask_advisor");
@@ -4248,11 +4245,7 @@ var registerCommandLifecycle = (runtime, activateAdvisor) => {
 };
 
 // src/ui/manual-dialog.ts
-import {
-  Editor,
-  Key,
-  matchesKey
-} from "@earendil-works/pi-tui";
+import { Editor, Key, matchesKey } from "@earendil-works/pi-tui";
 
 // src/ui/manual-dialog-render.ts
 import {
@@ -4411,17 +4404,21 @@ class ManualAdvisorDialog {
       return;
     }
     switch (this.focusTarget) {
-      case "editor":
+      case "editor": {
         this.handleEditorInput(keyData);
         return;
-      case "git":
+      }
+      case "git": {
         this.handleGitInput(keyData);
         return;
-      case "actions":
+      }
+      case "actions": {
         this.handleActionInput(keyData);
         return;
-      default:
+      }
+      default: {
         return;
+      }
     }
   }
   render(width) {
@@ -4814,7 +4811,7 @@ var normalizeKey = (value) => value?.trim() || undefined;
 var readAdvisorJsonConfig = () => readExistingConfig(join4(getAgentDir3(), "advisor.json"));
 var defaultReadFileStore = () => {
   try {
-    return normalizeKey(readFileSync3(keyFilePath(), "utf8"));
+    return normalizeKey(readFileSync3(keyFilePath(), "utf-8"));
   } catch {
     return;
   }
@@ -5092,7 +5089,7 @@ var createOutageNotifier = (format) => {
 };
 
 // src/tools/jev-filter.ts
-var normalizeScreeningQuestion = (question) => question?.trim().toLowerCase().replace(/\s+/g, " ") || undefined;
+var normalizeScreeningQuestion = (question) => question?.trim().toLowerCase().replaceAll(/\s+/g, " ") || undefined;
 var REATTACHED_ADVICE_CAP_BYTES = 4 * 1024;
 var SCREENED_SKIP_TEXT = "Advisor consultation skipped (screened out): the stakes are low and you can resolve this yourself with available tools and context. Proceed on your own judgment with what you already have.";
 var repeatSkipText = (advice) => `Advisor consultation skipped (already answered): this question was answered earlier in this session; the earlier advice is reattached below. Consult again only if the situation has materially changed.
@@ -5487,10 +5484,7 @@ var registerCommandRenderers = (runtime) => {
 
 // src/ui/settings-selector.ts
 import { getSettingsListTheme } from "@earendil-works/pi-coding-agent";
-import {
-  SettingsList,
-  truncateToWidth as truncateToWidth7
-} from "@earendil-works/pi-tui";
+import { SettingsList, truncateToWidth as truncateToWidth7 } from "@earendil-works/pi-tui";
 
 // src/ui/settings-formatting.ts
 import { visibleWidth as visibleWidth3 } from "@earendil-works/pi-tui";
@@ -5527,7 +5521,7 @@ var settingValue = (value, defaultValue) => value ?? defaultValue ? "On" : "Off"
 var currentContextLabel = (presets, contextMaxChars) => presets.find((preset) => preset.value === contextMaxChars)?.label ?? String(contextMaxChars);
 var contextDescription = (presets, contextMaxChars) => {
   const exactIndex = presets.findIndex((preset) => preset.value === contextMaxChars);
-  const selectedIndex = exactIndex >= 0 ? exactIndex : presets.reduce((closestIndex, preset, index) => Math.abs(preset.value - contextMaxChars) < Math.abs(presets[closestIndex].value - contextMaxChars) ? index : closestIndex, 0);
+  const selectedIndex = exactIndex !== -1 ? exactIndex : presets.reduce((closestIndex, preset, index) => Math.abs(preset.value - contextMaxChars) < Math.abs(presets[closestIndex].value - contextMaxChars) ? index : closestIndex, 0);
   const selectedPreset = presets[selectedIndex];
   const isFullContext = selectedPreset?.value === Number.MAX_SAFE_INTEGER || selectedPreset?.label.toUpperCase() === "FULL" || selectedPreset?.label.toUpperCase() === "ALL";
   const progress = isFullContext ? 1 : selectedIndex / Math.max(1, presets.length - 1);
@@ -5545,7 +5539,7 @@ var contextDescription = (presets, contextMaxChars) => {
   const markerColumn = meterPrefix.length + marker;
   const labelStart = Math.max(0, Math.min(meterPrefix.length + meter.length + 2 - labelWidth, markerColumn - Math.floor((labelWidth - 1) / 2)));
   const markerLabel = `${" ".repeat(labelStart)}${label}`;
-  const description = exactIndex >= 0 ? selectedPreset?.description : "Custom context limit.";
+  const description = exactIndex !== -1 ? selectedPreset?.description : "Custom context limit.";
   return `${description ?? "Custom context limit."}
 ${meterPrefix}${meter}  full
 ${markerLabel}`;
@@ -5571,16 +5565,10 @@ var rainbowGradient = (text, startedAt) => {
 };
 
 // src/ui/settings-items.ts
-import {
-  getKeybindings
-} from "@earendil-works/pi-tui";
+import { getKeybindings } from "@earendil-works/pi-tui";
 
 // src/ui/jev-setup-submenu.ts
-import {
-  Key as Key2,
-  matchesKey as matchesKey2,
-  truncateToWidth as truncateToWidth5
-} from "@earendil-works/pi-tui";
+import { Key as Key2, matchesKey as matchesKey2, truncateToWidth as truncateToWidth5 } from "@earendil-works/pi-tui";
 
 // node_modules/@typesafe-ai/sdk/dist/index.mjs
 var range2 = (from, to) => Array.from({ length: to - from }, (_, i) => from + i);
@@ -5626,10 +5614,7 @@ var describeRuntime = () => {
 var RUNTIME = describeRuntime();
 
 // src/ui/masked-input.ts
-import {
-  Input as Input2,
-  truncateToWidth as truncateToWidth4
-} from "@earendil-works/pi-tui";
+import { Input as Input2, truncateToWidth as truncateToWidth4 } from "@earendil-works/pi-tui";
 
 class MaskedInput {
   input;
@@ -5676,14 +5661,18 @@ var transportLabel = (credentials) => {
     return "OpenRouter (reusing pi login)";
   }
   switch (credentials.source) {
-    case "advisor-json":
+    case "advisor-json": {
       return "TypeSafe (key: advisor.json — plaintext, not recommended)";
-    case "bun-secrets":
+    }
+    case "bun-secrets": {
       return "TypeSafe (key: Bun.secrets)";
-    case "file":
+    }
+    case "file": {
       return "TypeSafe (key: stored file, mode 0600)";
-    default:
+    }
+    default: {
       return "TypeSafe (key: TYPESAFE_API_KEY)";
+    }
   }
 };
 var defaultVerify = async (credentials) => {
@@ -5722,9 +5711,7 @@ class JevSetupSubmenu {
       onSubmit: (value) => this.submitEnteredKey(value),
       placeholder: "Paste a TypeSafe API key"
     });
-    this.refresh().catch(() => {
-      return;
-    });
+    this.refresh().catch(() => {});
   }
   get focused() {
     return this._focused;
@@ -5765,24 +5752,20 @@ class JevSetupSubmenu {
       ""
     ];
     if (this.credentials) {
-      lines.push(`  Transport: ${transportLabel(this.credentials)}`);
-      lines.push(`  Filter: ${enabled ? "On" : "Off"}`);
+      lines.push(`  Transport: ${transportLabel(this.credentials)}`, `  Filter: ${enabled ? "On" : "Off"}`);
     } else if (this.mode === "verifying") {
       lines.push("  Checking available Jev credentials…");
     } else {
-      lines.push("  No Jev credentials found. Enter a TypeSafe API key below, or add");
-      lines.push("  an OpenRouter login in pi; it is reused automatically.");
+      lines.push("  No Jev credentials found. Enter a TypeSafe API key below, or add", "  an OpenRouter login in pi; it is reused automatically.");
     }
     if (this.notice) {
-      lines.push("");
-      lines.push(theme.fg("warning", `  ${this.notice}`));
+      lines.push("", theme.fg("warning", `  ${this.notice}`));
     }
     lines.push("");
     if (this.mode === "verifying") {
       lines.push("  Verifying with a live Jev call…");
     } else if (this.mode === "key-entry") {
-      lines.push(`  ${this.maskedInput.render(Math.max(10, width - 4))[0] ?? ""}`);
-      lines.push(theme.fg("dim", "  Enter: verify · Esc: cancel"));
+      lines.push(`  ${this.maskedInput.render(Math.max(10, width - 4))[0] ?? ""}`, theme.fg("dim", "  Enter: verify · Esc: cancel"));
     } else {
       for (const [index, label] of this.labels().entries()) {
         const prefix = index === this.selectedIndex ? "→ " : "  ";
@@ -5834,29 +5817,35 @@ class JevSetupSubmenu {
   }
   activate(action) {
     switch (action) {
-      case "done":
+      case "done": {
         this.options.done();
         return;
-      case "enter-key":
+      }
+      case "enter-key": {
         this.mode = "key-entry";
         return;
-      case "disable":
+      }
+      case "disable": {
         this.notice = undefined;
         this.options.done("Off");
         return;
-      case "disable-clear":
+      }
+      case "disable-clear": {
         this.disableAndClear().catch(() => {
           return;
         });
         return;
+      }
       case "verify-again":
-      case "verify-enable":
+      case "verify-enable": {
         this.verifyAndEnable().catch(() => {
           return;
         });
         return;
-      default:
+      }
+      default: {
         return;
+      }
     }
   }
   async disableAndClear() {
@@ -5929,10 +5918,7 @@ class JevSetupSubmenu {
 }
 
 // src/ui/text-setting-submenu.ts
-import {
-  Input as Input3,
-  truncateToWidth as truncateToWidth6
-} from "@earendil-works/pi-tui";
+import { Input as Input3, truncateToWidth as truncateToWidth6 } from "@earendil-works/pi-tui";
 
 class TextSettingSubmenu {
   input = new Input3;
@@ -6257,10 +6243,7 @@ var createSettingsItems = ({
 };
 
 // src/ui/settings-list-adapter.ts
-import {
-  Key as Key3,
-  matchesKey as matchesKey3
-} from "@earendil-works/pi-tui";
+import { Key as Key3, matchesKey as matchesKey3 } from "@earendil-works/pi-tui";
 
 class SettingsListAdapter {
   list;
@@ -6288,7 +6271,7 @@ class SettingsListAdapter {
   }
   setSelectedId(items, selectedId) {
     const selectedIndex = items.findIndex((item) => item.id === selectedId);
-    if (selectedIndex >= 0) {
+    if (selectedIndex !== -1) {
       this.privateFields().selectedIndex = selectedIndex;
     }
   }
@@ -6348,89 +6331,117 @@ var BOOLEAN_SETTING_IDS = new Set([
   "untrackedContent",
   "outcomeLogging"
 ]);
-var parseModelWhitelist = (value) => Array.from(new Set(value.split(",").map((model) => model.trim()).filter(Boolean)));
+var parseModelWhitelist = (value) => [
+  ...new Set(value.split(",").map((model) => model.trim()).filter(Boolean))
+];
 var mutateAdvisorSettings = (settings, id, value, presets) => {
   switch (id) {
-    case "context":
+    case "context": {
       settings.contextMaxChars = presets.find((preset) => preset.label === value)?.value ?? settings.contextMaxChars;
       break;
-    case "simpleMode":
+    }
+    case "simpleMode": {
       settings.simpleMode = value === "On";
       break;
-    case "alwaysOn":
+    }
+    case "alwaysOn": {
       settings.alwaysOn = value === "On";
       break;
-    case "effort":
+    }
+    case "effort": {
       settings.effort = value;
       break;
-    case "customRule":
+    }
+    case "customRule": {
       settings.customRule = value.trim() || undefined;
       break;
-    case "toolPolicies":
+    }
+    case "toolPolicies": {
       settings.toolPolicies = JSON.parse(value);
       break;
-    case "loopThreshold":
+    }
+    case "loopThreshold": {
       settings.loopThreshold = Number(value.replace("After ", "").replace(" repeats", ""));
       break;
-    case "maxCallsPerSession":
+    }
+    case "maxCallsPerSession": {
       settings.maxCallsPerSession = value === "∞" ? undefined : Number(value);
       break;
-    case "modelWhitelist":
+    }
+    case "modelWhitelist": {
       settings.modelWhitelist = parseModelWhitelist(value);
       break;
-    case "failureMode":
+    }
+    case "failureMode": {
       settings.failureMode = value;
       break;
-    case "gitContext":
+    }
+    case "gitContext": {
       settings.gitContext = value;
       break;
-    case "toolResultMaxLines":
+    }
+    case "toolResultMaxLines": {
       settings.toolResultMaxLines = Number(value);
       break;
-    case "toolResultMaxBytes":
+    }
+    case "toolResultMaxBytes": {
       settings.toolResultMaxBytes = Number(value);
       break;
-    case "gitContextMaxChars":
+    }
+    case "gitContextMaxChars": {
       settings.gitContextMaxChars = Number(value);
       break;
-    case "jevFilter":
+    }
+    case "jevFilter": {
       settings.jevFilterEnabled = value === "On";
       break;
-    case "jevFilterSkipConfidence":
+    }
+    case "jevFilterSkipConfidence": {
       settings.jevFilterSkipConfidence = Number(value);
       break;
-    case "jevFilterNoulMargin":
+    }
+    case "jevFilterNoulMargin": {
       settings.jevFilterNoulMargin = Number(value);
       break;
-    case "jevFilterOverrideWindow":
+    }
+    case "jevFilterOverrideWindow": {
       settings.jevFilterOverrideWindow = Number(value.replace(" turns", ""));
       break;
-    case "jevTurnGateEveryTurns":
+    }
+    case "jevTurnGateEveryTurns": {
       settings.jevTurnGateEveryTurns = value === "Off" ? 0 : Number(value.replace(/[^0-9]/g, ""));
       break;
-    case "jevTurnGateNoulThreshold":
+    }
+    case "jevTurnGateNoulThreshold": {
       settings.jevTurnGateNoulThreshold = Number(value);
       break;
-    case "jevModel":
+    }
+    case "jevModel": {
       settings.jevModel = value.trim() || DEFAULT_JEV_MODEL;
       break;
-    case "jevTimeoutMs":
+    }
+    case "jevTimeoutMs": {
       settings.jevTimeoutMs = Number(value);
       break;
-    case "jevDigestMaxChars":
+    }
+    case "jevDigestMaxChars": {
       settings.jevDigestMaxChars = Number(value);
       break;
-    case "jevPricePerMtok":
+    }
+    case "jevPricePerMtok": {
       settings.jevPricePerMtok = Number(value);
       break;
-    case "jevTransport":
+    }
+    case "jevTransport": {
       settings.jevTransport = value;
       break;
-    default:
+    }
+    default: {
       if (BOOLEAN_SETTING_IDS.has(id)) {
         settings[id] = value === "On";
       }
       break;
+    }
   }
 };
 
@@ -6535,7 +6546,7 @@ class AdvisorSettingsSelector {
     (this.options.onChange ?? this.options.onSave)?.({
       ...this.settings,
       showUsageDetails: this.settings.showUsageDetails ?? true,
-      toolPolicies: { ...this.settings.toolPolicies ?? {} }
+      toolPolicies: { ...this.settings.toolPolicies }
     });
     if (id === "context" || id === "simpleMode" || id === "customRule" || id === "modelWhitelist" || id === "toolPolicies") {
       this.settingsList = this.createSettingsList(id);
@@ -6711,9 +6722,7 @@ var salt = async () => {
         throw error;
       }
     } finally {
-      await unlink(temporary).catch(() => {
-        return;
-      });
+      await unlink(temporary).catch(() => {});
     }
   }
   throw new Error("Advisor outcome salt initialization did not complete.");
@@ -6729,30 +6738,20 @@ var withOutcomeLock = async (run) => {
         return await run();
       } finally {
         await lock.close();
-        const current = await stat(lockPath).catch(() => {
-          return;
-        });
+        const current = await stat(lockPath).catch(() => {});
         if (current && sameFile(identity, current)) {
-          await unlink(lockPath).catch(() => {
-            return;
-          });
+          await unlink(lockPath).catch(() => {});
         }
       }
     } catch (error) {
       if (error.code !== "EEXIST") {
         throw error;
       }
-      const observed = await stat(lockPath).catch(() => {
-        return;
-      });
+      const observed = await stat(lockPath).catch(() => {});
       if (observed && Date.now() - observed.mtimeMs > 30000) {
-        const current = await stat(lockPath).catch(() => {
-          return;
-        });
+        const current = await stat(lockPath).catch(() => {});
         if (current && sameFile(observed, current)) {
-          await unlink(lockPath).catch(() => {
-            return;
-          });
+          await unlink(lockPath).catch(() => {});
         }
         continue;
       }
@@ -6783,9 +6782,9 @@ var appendOutcome = async (record) => {
       throw error;
     });
     if (currentBytes + Buffer.byteLength(line) > MAX_LOG_BYTES) {
-      await writeFile(path, line, { encoding: "utf8", mode: 384 });
+      await writeFile(path, line, { encoding: "utf-8", mode: 384 });
     } else {
-      await appendFile(path, line, { encoding: "utf8", mode: 384 });
+      await appendFile(path, line, { encoding: "utf-8", mode: 384 });
     }
     await chmod(path, 384);
     return next;
@@ -7548,9 +7547,7 @@ var registerOutcomeTool = ({
 };
 
 // src/tools/register-renderers.ts
-import {
-  getMarkdownTheme as getMarkdownTheme5
-} from "@earendil-works/pi-coding-agent";
+import { getMarkdownTheme as getMarkdownTheme5 } from "@earendil-works/pi-coding-agent";
 import { Box as Box4, Markdown as Markdown5, Text as Text7 } from "@earendil-works/pi-tui";
 var registerToolRenderers = (pi) => {
   pi.registerEntryRenderer?.("advisor-scout-result", (entry, { expanded }, theme) => {

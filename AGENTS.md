@@ -4,12 +4,12 @@ Pi extension providing an Executor/Advisor flow and optional Herdr integration.
 
 ## Stack
 
-| Layer         | Tool                              |
-| ------------- | --------------------------------- |
-| Runtime       | Bun + TypeScript (ESM, strict)    |
-| Extension API | `@earendil-works/pi-coding-agent` |
-| UI            | `@earendil-works/pi-tui`          |
-| Tests         | `bun test`                        |
+| Layer         | Tool                                   |
+| ------------- | -------------------------------------- |
+| Runtime       | Bun + TypeScript (ESM, strict)         |
+| Extension API | `@earendil-works/pi-coding-agent`      |
+| UI            | `@earendil-works/pi-tui`               |
+| Tests         | `bun test`                             |
 | Release       | GitHub Actions manages tags/publishing |
 
 ## Development
@@ -17,6 +17,8 @@ Pi extension providing an Executor/Advisor flow and optional Herdr integration.
 ```bash
 bun test
 bun run typecheck
+bun run lint
+bun run format:check
 git -c diff.stat=false diff --no-ext-diff --check --no-stat
 ```
 
@@ -51,8 +53,8 @@ git -c diff.stat=false diff --no-ext-diff --check --no-stat
 
 ## Load when needed
 
-| What             | Where                                                                                                                                            | When                                 |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------ |
+| What | Where | When |
+| --- | --- | --- |
 | Pi extension API | [Pi extension docs](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/extensions.md) | Hooks, tools, UI, sessions, messages |
-| Herdr protocol   | [project guide](docs/herdr.md), [`src/herdr.ts`](src/herdr.ts), and [upstream stable API](https://herdr.dev/docs/socket-api/)                     | Herdr state/reporting changes        |
-| Release workflow | [`.github/workflows/publish.yml`](.github/workflows/publish.yml)                                                                                  | Versioning, publishing, tags         |
+| Herdr protocol | [project guide](docs/herdr.md), [`src/herdr.ts`](src/herdr.ts), and [upstream stable API](https://herdr.dev/docs/socket-api/) | Herdr state/reporting changes |
+| Release workflow | [`.github/workflows/publish.yml`](.github/workflows/publish.yml) | Versioning, publishing, tags |
