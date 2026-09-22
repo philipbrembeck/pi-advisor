@@ -8,6 +8,7 @@ import { resetConfigCache } from "../src/config.ts";
 import { AdvisorSessionState } from "../src/session-state.ts";
 import { advisorSessionState, registerAdvisorTool } from "../src/tools.ts";
 import { withAgentDir } from "./helpers/config-fixture.ts";
+import { asExtensionContext } from "./helpers/extension-context.ts";
 import { mockPi } from "./helpers/mock-pi.ts";
 
 describe("Advisor loop-gate budget behavior", () => {
@@ -38,14 +39,14 @@ describe("Advisor loop-gate budget behavior", () => {
           ),
           session,
           {
-            runGate: (async (
-              _ctx: unknown,
-              _question: string,
-              _trigger: string,
-              _signal: AbortSignal | undefined,
-              _onChunk: unknown,
-              onScout: any,
-              currentInvocationId: unknown
+            runGate: async (
+              _ctx: any,
+              _question?: string,
+              _trigger?: string,
+              _signal?: AbortSignal | undefined,
+              _onChunk?: any,
+              onScout?: any,
+              currentInvocationId?: string
             ) => {
               invocationIds.push(currentInvocationId);
               await Promise.resolve();
@@ -67,12 +68,12 @@ describe("Advisor loop-gate budget behavior", () => {
                 type: "fallback",
               });
               return {
-                decision: "proceed",
+                decision: "proceed" as const,
                 markdown: "Decision: proceed",
                 model: "provider/advisor",
-                ok: true,
+                ok: true as const,
                 thinkingText: "",
-                trigger: "repeated-tool-call",
+                trigger: "repeated-tool-call" as const,
                 usage: {
                   cacheRead: 4,
                   cost: { total: 0.02 },
@@ -80,16 +81,16 @@ describe("Advisor loop-gate budget behavior", () => {
                   output: 20,
                 },
               };
-            }) as any,
+            },
           }
         );
         const toolCall = events.get("tool_call");
-        const ctx = {
+        const ctx = asExtensionContext({
           cwd: agentDir,
           hasUI: false,
           isProjectTrusted: () => false,
           signal: new AbortController().signal,
-        } as any;
+        });
         await toolCall(
           { input: { command: "pwd" }, toolCallId: "one", toolName: "bash" },
           ctx
@@ -164,7 +165,7 @@ describe("Advisor loop-gate budget behavior", () => {
           }
         );
         const toolCall = events.get("tool_call");
-        const ctx = {
+        const ctx = asExtensionContext({
           abort: () => {
             aborted = true;
           },
@@ -176,7 +177,7 @@ describe("Advisor loop-gate budget behavior", () => {
             notify: () => {},
             setStatus: () => {},
           },
-        } as any;
+        });
         // The modes share the process-global configuration refs, so each case
         // must finish before the next one rewrites its configuration.
         // biome-ignore lint/performance/noAwaitInLoops: table-driven cases intentionally run sequentially.
@@ -267,11 +268,11 @@ describe("Advisor loop-gate budget behavior", () => {
         },
         sessionState: state,
       });
-      const ctx = {
+      const ctx = asExtensionContext({
         cwd: agentDir,
         hasUI: false,
         isProjectTrusted: () => false,
-      } as any;
+      });
       await commands.get("advisor-manual").handler("", ctx);
       expect(consultations).toBe(0);
 
@@ -292,7 +293,7 @@ describe("Advisor loop-gate budget behavior", () => {
         mockPi(
           { commands, sent },
           {
-            sendMessage: (message: unknown) => sent.push(message),
+            sendMessage: (message: any) => sent.push(message),
           }
         ),
         {
@@ -307,11 +308,15 @@ describe("Advisor loop-gate budget behavior", () => {
       );
       await commands
         .get("advisor-manual")
-        .handler("what is 2+2?", { cwd: "/", hasUI: false } as any);
+        .handler(
+          "what is 2+2?",
+          asExtensionContext({ cwd: "/", hasUI: false })
+        );
       await new Promise((resolve) => setTimeout(resolve, 0));
       expect(state.reattachedAdviceFor("what is 2+2?")).toBe(
         "The answer is 4."
       );
+      // SAFETY: manual result messages carry string content by construction.
       const content = sent.find(
         (message) => message.customType === "advisor-manual-result"
       )?.content as string;

@@ -32,6 +32,7 @@ import {
   setExecutorRef,
   simpleModeRef,
 } from "../src/config.ts";
+import { asExtensionContext } from "./helpers/extension-context.ts";
 
 const AGENT_DIR_ENV = "PI_CODING_AGENT_DIR";
 const INVALID_GIT_CONTEXT_PATTERN = /off.*summary.*full/u;
@@ -58,13 +59,13 @@ describe("Project and repository config rules", () => {
     process.env[AGENT_DIR_ENV] = agentDir;
 
     try {
-      expect(loadConfig({ cwd, isProjectTrusted: () => true } as any)).toBe(
-        join(agentDir, "advisor.json")
-      );
+      expect(
+        loadConfig(asExtensionContext({ cwd, isProjectTrusted: () => true }))
+      ).toBe(join(agentDir, "advisor.json"));
       expect(executorRef).toBe("global/executor");
     } finally {
       if (previousAgentDir === undefined) {
-        delete process.env[AGENT_DIR_ENV];
+        delete process.env.PI_CODING_AGENT_DIR;
       } else {
         process.env[AGENT_DIR_ENV] = previousAgentDir;
       }
@@ -102,14 +103,14 @@ describe("Project and repository config rules", () => {
       })
     );
     try {
-      loadConfig({ cwd, isProjectTrusted: () => true } as any);
+      loadConfig(asExtensionContext({ cwd, isProjectTrusted: () => true }));
       expect(advisorRef).toBe("global/advisor");
       expect(advisorRedactSecretsRef).toBe(true);
       expect(simpleModeRef).toBe(false);
       expect(advisorCollapseResponsesRef).toBe(false);
     } finally {
       if (previousAgentDir === undefined) {
-        delete process.env[AGENT_DIR_ENV];
+        delete process.env.PI_CODING_AGENT_DIR;
       } else {
         process.env[AGENT_DIR_ENV] = previousAgentDir;
       }
@@ -124,7 +125,10 @@ describe("Project and repository config rules", () => {
     const previousAgentDir = process.env[AGENT_DIR_ENV];
     process.env[AGENT_DIR_ENV] = agentDir;
     const configPath = join(agentDir, "advisor.json");
-    const ctx = { cwd: tmpdir(), isProjectTrusted: () => false } as any;
+    const ctx = asExtensionContext({
+      cwd: tmpdir(),
+      isProjectTrusted: () => false,
+    });
 
     try {
       writeFileSync(configPath, JSON.stringify({ contextMaxChars: 10_000 }));
@@ -143,7 +147,7 @@ describe("Project and repository config rules", () => {
       expect(contextMaxCharsRef).toBe(20_000);
     } finally {
       if (previousAgentDir === undefined) {
-        delete process.env[AGENT_DIR_ENV];
+        delete process.env.PI_CODING_AGENT_DIR;
       } else {
         process.env[AGENT_DIR_ENV] = previousAgentDir;
       }
@@ -160,14 +164,16 @@ describe("Project and repository config rules", () => {
     resetConfigCache();
 
     try {
-      loadConfig({ cwd: tmpdir(), isProjectTrusted: () => false } as any);
+      loadConfig(
+        asExtensionContext({ cwd: tmpdir(), isProjectTrusted: () => false })
+      );
       expect(advisorGitContextRef).toBe("summary");
       expect(advisorGitContextMaxCharsRef).toBe(
         DEFAULT_ADVISOR_GIT_CONTEXT_MAX_CHARS
       );
     } finally {
       if (previousAgentDir === undefined) {
-        delete process.env[AGENT_DIR_ENV];
+        delete process.env.PI_CODING_AGENT_DIR;
       } else {
         process.env[AGENT_DIR_ENV] = previousAgentDir;
       }
@@ -188,11 +194,13 @@ describe("Project and repository config rules", () => {
 
     try {
       expect(() =>
-        loadConfig({ cwd: tmpdir(), isProjectTrusted: () => false } as any)
+        loadConfig(
+          asExtensionContext({ cwd: tmpdir(), isProjectTrusted: () => false })
+        )
       ).toThrow(INVALID_GIT_CONTEXT_PATTERN);
     } finally {
       if (previousAgentDir === undefined) {
-        delete process.env[AGENT_DIR_ENV];
+        delete process.env.PI_CODING_AGENT_DIR;
       } else {
         process.env[AGENT_DIR_ENV] = previousAgentDir;
       }
@@ -216,14 +224,16 @@ describe("Project and repository config rules", () => {
     );
 
     try {
-      loadConfig({ cwd: tmpdir(), isProjectTrusted: () => false } as any);
+      loadConfig(
+        asExtensionContext({ cwd: tmpdir(), isProjectTrusted: () => false })
+      );
       expect(executorRef).toBe("");
       expect(advisorRef).toBe("");
       expect(executorEffortRef).toBeUndefined();
       expect(advisorEffortRef).toBeUndefined();
     } finally {
       if (previousAgentDir === undefined) {
-        delete process.env[AGENT_DIR_ENV];
+        delete process.env.PI_CODING_AGENT_DIR;
       } else {
         process.env[AGENT_DIR_ENV] = previousAgentDir;
       }

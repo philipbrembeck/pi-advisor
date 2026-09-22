@@ -1,7 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 export interface MockPiCapture {
-  /** Tools returned by getActiveTools; mutable when passed in. */
+  /** Tool names returned by getActiveTools; mutable when passed in. */
   activeTools?: string[];
   /** Registered command configs by name. */
   commands?: Map<string, any>;
@@ -21,41 +21,43 @@ export interface MockPiCapture {
 
 /**
  * Builds an ExtensionAPI stand-in for registration tests. Each collector
- * passed in activates the matching surface; unprovided surfaces are inert
- * no-ops. Extra keys in `overrides` replace the defaults entirely.
+ * passed in activates the matching surface; unpassed surfaces are inert
+ * no-ops. Members of `overrides` replace the defaults wholesale.
  */
-export const mockPi = (
+export const mockPi = <TOverrides extends object>(
   capture: MockPiCapture = {},
-  overrides: Record<string, unknown> = {}
+  overrides?: TOverrides
 ): ExtensionAPI => {
   const { activeTools, ...collectors } = capture;
   const tools = activeTools ?? [];
-  return {
-    appendEntry(type: string, data: unknown) {
+  const api = {
+    appendEntry<T>(type: string, data: T) {
       collectors.entries?.push({ data, type });
     },
     getActiveTools: () => [...tools],
-    on(event: string, handler: unknown) {
+    on<T>(event: string, handler: T) {
       collectors.events?.set(event, handler);
     },
-    registerCommand(name: string, config: unknown) {
+    registerCommand(name: string, config: any) {
       collectors.commands?.set(name, config);
     },
-    registerEntryRenderer(name: string, renderer: unknown) {
+    registerEntryRenderer<T>(name: string, renderer: T) {
       collectors.entryRenderers?.set(name, renderer);
     },
-    registerMessageRenderer(type: string, renderer: unknown) {
+    registerMessageRenderer<T>(type: string, renderer: T) {
       collectors.messageRenderers?.set(type, renderer);
     },
     registerTool(tool: { name: string }) {
       collectors.tools?.set(tool.name, tool);
     },
-    sendMessage(message: unknown, options: unknown) {
+    sendMessage<T>(message: T, options: any) {
       collectors.sent?.push({ message, options });
     },
     setActiveTools(next: string[]) {
       tools.splice(0, tools.length, ...next);
     },
     ...overrides,
-  } as unknown as ExtensionAPI;
+  };
+  // SAFETY: mock implements the ExtensionAPI registration surface tests consume; overrides replace members.
+  return api as ExtensionAPI;
 };

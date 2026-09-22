@@ -2,12 +2,11 @@ import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
-import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-
 import { setAdvisorRedactSecretsRef } from "../src/config/state.ts";
 import { JevClient } from "../src/jev/client.ts";
 import { composeScreeningVerdict } from "../src/jev/questions.ts";
 import { buildJevState } from "../src/jev/state.ts";
+import { asExtensionContext } from "./helpers/extension-context.ts";
 import { branchFromLines, systemOneMock } from "./helpers/jev-mock.ts";
 
 const ONLY_Q = /^q+$/u;
@@ -28,6 +27,7 @@ const fixtureFiles = () =>
     .filter((name) => name.endsWith(".json"))
     .toSorted()
     .map((name) => ({
+      // SAFETY: fixture files are authored to the ScreeningFixture schema in this repo.
       fixture: JSON.parse(
         readFileSync(join(FIXTURE_DIR, name), "utf-8")
       ) as ScreeningFixture,
@@ -43,12 +43,12 @@ describe("Jev screening fixtures", () => {
           ...(fixture.conversation ?? []),
           ["user", `Scratch note: api_key: ${PRIVACY_CANARY}`],
         ];
-        const ctx = {
+        const ctx = asExtensionContext({
           cwd: "/",
           hasUI: false,
           isProjectTrusted: () => false,
           sessionManager: { getBranch: () => branchFromLines(conversation) },
-        } as unknown as ExtensionContext;
+        });
         const state = buildJevState(ctx, {
           draft: fixture.draft,
           question: fixture.question,
@@ -84,12 +84,12 @@ describe("Jev screening fixtures", () => {
   });
 
   test("question and draft are capped in the outbound state", () => {
-    const ctx = {
+    const ctx = asExtensionContext({
       cwd: "/",
       hasUI: false,
       isProjectTrusted: () => false,
       sessionManager: { getBranch: () => [] },
-    } as unknown as ExtensionContext;
+    });
     const state = buildJevState(ctx, {
       draft: "d".repeat(20 * 1024),
       question: "q".repeat(20 * 1024),

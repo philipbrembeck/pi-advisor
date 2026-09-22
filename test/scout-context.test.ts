@@ -4,8 +4,9 @@ import {
   buildScoutManifest,
   reconstructScoutConversation,
 } from "../src/scout-context.ts";
+import { asExtensionContext } from "./helpers/extension-context.ts";
 
-const entry = (id: string, message: unknown) => ({
+const entry = (id: string, message: any) => ({
   id,
   message,
   parentId: null,
@@ -34,8 +35,10 @@ const result = (id: string, callId: string, name: string, content: string) =>
     toolCallId: callId,
     toolName: name,
   });
-const context = (entries: unknown[]) =>
-  ({ sessionManager: { buildContextEntries: () => entries } }) as any;
+const context = (entries: any[]) =>
+  asExtensionContext({
+    sessionManager: { buildContextEntries: () => entries },
+  });
 
 describe("Scout context", () => {
   test("groups parallel tool calls and all matching results atomically", () => {

@@ -5,11 +5,12 @@ import { initTheme } from "@earendil-works/pi-coding-agent";
 import { setShowUsageDetailsRef } from "../src/config/state.ts";
 import { registerToolRenderers } from "../src/tools/register-renderers.ts";
 import { mockPi } from "./helpers/mock-pi.ts";
+import { plainThemeMock } from "./helpers/theme.ts";
 
 initTheme();
 
-// biome-ignore lint/suspicious/noControlCharactersInRegex: strips terminal SGR codes
-const SGR_CODE = /\u001B\[[0-9;]*m/gu;
+const ESC = String.fromCodePoint(27);
+const SGR_CODE = new RegExp(`${ESC}\\[[0-9;]*m`, "gu");
 
 describe("Jev turn-gate steer renderers", () => {
   test("are registered and mirror the loop-gate shapes", () => {
@@ -23,11 +24,7 @@ describe("Jev turn-gate steer renderers", () => {
       expect(messageRenderers.has(customType)).toBe(true);
     }
 
-    const theme = {
-      bg: (_name: string, text: string) => text,
-      bold: (text: string) => text,
-      fg: (_color: string, text: string) => text,
-    } as never;
+    const theme = plainThemeMock;
     const callBox = messageRenderers.get("advisor-turn-gate-call")(
       {
         content: "Proactive Advisor turn review",

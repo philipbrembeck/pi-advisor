@@ -13,45 +13,47 @@ import { loadConfig, resetConfigCache } from "../src/config.ts";
 import { AdvisorSessionState } from "../src/session-state.ts";
 import { registerAdvisorTool } from "../src/tools.ts";
 import { withAgentDir } from "./helpers/config-fixture.ts";
+import { asExtensionContext } from "./helpers/extension-context.ts";
 import { mockPi } from "./helpers/mock-pi.ts";
 
-describe("Tracked file handoff", () => {
-  const registerHandoffTool = (
-    state: AdvisorSessionState,
-    consulted: (string[] | undefined)[]
-  ) => {
-    const tools = new Map<string, any>();
-    registerAdvisorTool(mockPi({ tools }), state, {
-      consult: (
-        _ctx: unknown,
-        _question: unknown,
-        _signal: unknown,
-        _onChunk: unknown,
-        _trigger: unknown,
-        _gitContext: unknown,
-        _draft: unknown,
-        _untracked: string[] | undefined,
-        includeTracked: string[] | undefined
-      ) => {
-        consulted.push(includeTracked);
-        return Promise.resolve({
-          adviceId: "advice-2",
-          markdown: "Done.",
-          model: "provider/advisor",
-          thinkingText: "",
-          trigger: "executor-requested" as const,
-        });
-      },
-    });
-    return () => tools.get("ask_advisor");
-  };
-  const handoffContext = (cwd: string) =>
-    ({
-      cwd,
-      hasUI: false,
-      isProjectTrusted: () => false,
-    }) as any;
+const registerHandoffTool = (
+  state: AdvisorSessionState,
+  consulted: (string[] | undefined)[]
+) => {
+  const tools = new Map<string, any>();
+  registerAdvisorTool(mockPi({ tools }), state, {
+    consult: async (
+      _ctx,
+      _question,
+      _signal,
+      _onChunk,
+      _trigger,
+      _gitContext,
+      _draft,
+      _untracked,
+      includeTracked
+    ) => {
+      consulted.push(includeTracked);
+      return {
+        adviceId: "advice-2",
+        markdown: "Done.",
+        model: "provider/advisor",
+        thinkingText: "",
+        trigger: "executor-requested" as const,
+      };
+    },
+  });
+  return () => tools.get("ask_advisor");
+};
 
+const handoffContext = (cwd: string) =>
+  asExtensionContext({
+    cwd,
+    hasUI: false,
+    isProjectTrusted: () => false,
+  });
+
+describe("Tracked file handoff", () => {
   test("rejects disabled consent without consuming the one-shot handoff", async () => {
     await withAgentDir(
       { advisorTrackedFileContent: false },
@@ -207,7 +209,7 @@ describe("Tracked file handoff", () => {
               return fauxAssistantMessage("Advice after review.");
             },
           ]);
-          const ctx = {
+          const ctx = asExtensionContext({
             cwd: repoDir,
             hasUI: false,
             isProjectTrusted: () => false,
@@ -217,7 +219,7 @@ describe("Tracked file handoff", () => {
                 Promise.resolve({ apiKey: "key", ok: true }),
             },
             sessionManager: { getBranch: () => [] },
-          } as any;
+          });
           loadConfig(ctx);
           const result = await tools
             .get("ask_advisor")

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { Fetch } from "@typesafe-ai/sdk";
 
 import {
   setAdvisorJevTurnGateEveryTurnsRef,
@@ -15,6 +16,8 @@ import {
   handleJevTurnEnd,
   resetJevTurnGateNotification,
 } from "../src/tools/jev-turn-gate.ts";
+import type { AdvisorConsultationResult } from "../src/tools/types.ts";
+import { asExtensionContext } from "./helpers/extension-context.ts";
 import { branchFromLines, systemOneMock } from "./helpers/jev-mock.ts";
 
 const credentials = { apiKey: "tsk-test", transport: "typesafe" as const };
@@ -24,7 +27,7 @@ const noulResponse = (noul: number) => ({
   usage: { input_tokens: 800, output_tokens: 0 },
 });
 
-const aborted = () => ({ aborted: false, reason: undefined }) as never;
+const idleSignal = () => new AbortController().signal;
 
 interface Harness {
   consultCount: () => number;
@@ -34,9 +37,9 @@ interface Harness {
 }
 
 const harness = (
-  fetch: (input: string, init?: RequestInit) => Promise<Response>,
+  fetch: Fetch,
   options: {
-    consultResult?: () => Promise<unknown>;
+    consultResult?: () => Promise<AdvisorConsultationResult>;
     notifications?: string[];
   } = {}
 ): Harness => {
@@ -45,22 +48,20 @@ const harness = (
   let consults = 0;
   const registration: JevTurnGateRegistration = {
     activeTools: () => ["ask_advisor"],
-    consult: (() => {
+    consult: async () => {
       consults += 1;
-      return (
-        options.consultResult?.() ??
-        Promise.resolve({
-          adviceId: "id",
-          markdown: "Proactive advice.",
-          model: "test/advisor",
-          thinkingText: "",
-          trigger: "turn-gate",
-          usage: { cost: { total: 0.081 }, input: 5000, output: 900 },
-        })
-      );
-    }) as never,
+      const fallback: AdvisorConsultationResult = {
+        adviceId: "id",
+        markdown: "Proactive advice.",
+        model: "test/advisor",
+        thinkingText: "",
+        trigger: "turn-gate",
+        usage: { cost: { total: 0.081 }, input: 5000, output: 900 },
+      };
+      return (await options.consultResult?.()) ?? fallback;
+    },
     deps: {
-      fetch: fetch as never,
+      fetch,
       resolveTransport: () => Promise.resolve(credentials),
     },
     send: (message) => sent.push(message),
@@ -70,19 +71,19 @@ const harness = (
 };
 
 const ctxWith = (notifications: string[] = []) =>
-  ({
+  asExtensionContext({
     cwd: "/",
     hasUI: true,
     isProjectTrusted: () => false,
     sessionManager: {
       getBranch: () => branchFromLines([["user", "Do the work."]]),
     },
-    signal: aborted(),
+    signal: idleSignal(),
     ui: {
       notify: (message: string) => notifications.push(message),
       setStatus: () => {},
     },
-  }) as unknown as ExtensionContext;
+  });
 
 const turn = (h: Harness, ctx?: ExtensionContext) =>
   handleJevTurnEnd(h.registration, ctx ?? ctxWith());
@@ -217,7 +218,14 @@ describe("handleJevTurnEnd", () => {
     const session = new AdvisorSessionState();
     const registration: JevTurnGateRegistration = {
       activeTools: () => ["ask_advisor"],
-      consult: (() => Promise.resolve({})) as never,
+      consult: () =>
+        Promise.resolve({
+          adviceId: "unused",
+          markdown: "",
+          model: "unused",
+          thinkingText: "",
+          trigger: "turn-gate",
+        }),
       deps: { resolveTransport: () => Promise.resolve(undefined) },
       send: () => undefined,
       session,

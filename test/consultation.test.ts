@@ -16,10 +16,11 @@ import {
 } from "../src/config.ts";
 import { advisorRequestConversation } from "../src/tools.ts";
 import { withAgentDir } from "./helpers/config-fixture.ts";
+import { asExtensionContext } from "./helpers/extension-context.ts";
 import { mockPi } from "./helpers/mock-pi.ts";
 
 const fauxContext = (agentDir: string, faux: any) =>
-  ({
+  asExtensionContext({
     cwd: agentDir,
     isProjectTrusted: () => false,
     modelRegistry: {
@@ -27,12 +28,12 @@ const fauxContext = (agentDir: string, faux: any) =>
       getApiKeyAndHeaders: () => Promise.resolve({ apiKey: "key", ok: true }),
     },
     sessionManager: { getBranch: () => [] },
-  }) as any;
+  });
 
 describe("Advisor consultation request construction", () => {
   test("applies redaction at the Advisor request-context boundary", () => {
     const secret = "AKIAABCDEFGHIJKLMNOP";
-    const ctx = {
+    const ctx = asExtensionContext({
       sessionManager: {
         getBranch: () => [
           {
@@ -49,7 +50,7 @@ describe("Advisor consultation request construction", () => {
           },
         ],
       },
-    } as any;
+    });
     setAdvisorRedactSecretsRef(true);
     setAdvisorToolPoliciesRef({});
     try {

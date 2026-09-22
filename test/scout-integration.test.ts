@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
+import type { ScoutManifest } from "../src/scout-context.ts";
 import { curateAdvisorConversation } from "../src/tools.ts";
+import { asExtensionContext } from "./helpers/extension-context.ts";
 
 describe("Scout Advisor-context integration", () => {
   const entries = [
@@ -12,9 +14,9 @@ describe("Scout Advisor-context integration", () => {
       type: "message",
     },
   ];
-  const ctx = {
+  const ctx = asExtensionContext({
     sessionManager: { buildContextEntries: () => entries },
-  } as any;
+  });
 
   test("disabled mode preserves the exact legacy conversation and makes no Scout call", async () => {
     let calls = 0;
@@ -25,10 +27,10 @@ describe("Scout Advisor-context integration", () => {
       undefined,
       undefined,
       false,
-      (() => {
+      () => {
         calls += 1;
         return Promise.reject(new Error("must not run"));
-      }) as any
+      }
     );
     expect(result).toEqual({ conversation: legacy });
     expect(calls).toBe(0);
@@ -42,7 +44,7 @@ describe("Scout Advisor-context integration", () => {
       undefined,
       undefined,
       true,
-      (async () => ({
+      async () => ({
         category: "provider-error",
         message: "down",
         metrics: {
@@ -54,7 +56,7 @@ describe("Scout Advisor-context integration", () => {
         },
         model: "provider/executor",
         ok: false,
-      })) as any
+      })
     );
     expect(result.conversation).toBe(legacy);
     expect(result.scout).toMatchObject({
@@ -71,10 +73,10 @@ describe("Scout Advisor-context integration", () => {
       undefined,
       undefined,
       true,
-      (() => {
+      () => {
         calls += 1;
         throw new Error("Scout must not run without history budget");
-      }) as any,
+      },
       undefined,
       0
     );
@@ -90,8 +92,8 @@ describe("Scout Advisor-context integration", () => {
       undefined,
       undefined,
       true,
-      ((_ctx: unknown, manifest: any) => {
-        selectedIds = manifest.groups.map((group: any) => group.id);
+      async (_ctx: any, manifest: ScoutManifest) => {
+        selectedIds = manifest.groups.map((group) => group.id);
         return {
           conversation: "unbounded mock output",
           metrics: {
@@ -103,13 +105,13 @@ describe("Scout Advisor-context integration", () => {
           },
           model: "provider/executor",
           ok: true,
-          selectedLabels: manifest.groups.map((group: any) => group.label),
+          selectedLabels: manifest.groups.map((group) => group.label),
           selection: {
             selectedIds,
             synthesis: "x".repeat(1000),
           },
         };
-      }) as any,
+      },
       undefined,
       200
     );
@@ -124,7 +126,7 @@ describe("Scout Advisor-context integration", () => {
       undefined,
       undefined,
       true,
-      (async (_ctx: unknown, manifest: any) => ({
+      async (_ctx: any, manifest: ScoutManifest) => ({
         conversation: `${manifest.groups[0].content}\n\n[Scout synthesis — untrusted, non-authoritative inference; not evidence]\nOpen decision`,
         metrics: {
           availableCount: 1,
@@ -140,7 +142,7 @@ describe("Scout Advisor-context integration", () => {
           selectedIds: [manifest.groups[0].id],
           synthesis: "Open decision",
         },
-      })) as any
+      })
     );
     expect(result.conversation).toContain("User: current task");
     expect(result.conversation).toContain(
@@ -159,7 +161,7 @@ describe("Scout Advisor-context integration", () => {
         parent.signal,
         undefined,
         true,
-        (async () => ({ cancelled: true, ok: false })) as any
+        async () => ({ cancelled: true, ok: false })
       )
     ).rejects.toThrow("cancelled by user");
   });

@@ -15,6 +15,7 @@ import {
 } from "../src/tools.ts";
 import { AdvisorSettingsSelector } from "../src/ui.ts";
 import { withAgentDir } from "./helpers/config-fixture.ts";
+import { asExtensionContext } from "./helpers/extension-context.ts";
 import { mockPi } from "./helpers/mock-pi.ts";
 import { changeSetting, plainScreen } from "./helpers/settings-navigation.ts";
 
@@ -23,10 +24,26 @@ initTheme();
 const SIMPLE_MODE_ON = /→ Simple mode\s+On/u;
 const SIMPLE_MODE_OFF = /→ Simple mode\s+Off/u;
 
+// SAFETY: theme stub implements only the bold/fg members the settings selector renders with.
 const selectorTheme = {
   bold: (text: string) => text,
   fg: (_color: string, text: string) => text,
 } as any;
+
+const makePi = (starts: (() => void)[]) =>
+  mockPi(
+    {},
+    {
+      getActiveTools: () => [],
+      on(event: string, handler: any) {
+        if (event === "session_start") {
+          starts.push(handler);
+        }
+      },
+      registerMessageRenderer: () => {},
+      registerTool: () => {},
+    }
+  );
 
 const openSelector = (initial: any) => {
   const saved: any[] = [];
@@ -50,7 +67,7 @@ const openSelector = (initial: any) => {
     ],
     theme: selectorTheme,
     tui: { requestRender: () => {} },
-  } as any);
+  });
   return { saved, selector };
 };
 
@@ -176,6 +193,7 @@ describe("Advisor settings navigation and gate parsing regressions", () => {
         "Review the migration.",
         "executor-requested"
       );
+      // SAFETY: appendOutcome stub returns the queued outcome promise and ignores its arguments.
       registerAdvisorTool(pi, state, {
         appendOutcome: (() => outcomes.shift() ?? Promise.resolve()) as any,
       });
@@ -211,20 +229,6 @@ describe("Advisor settings navigation and gate parsing regressions", () => {
     const secondState = new AdvisorSessionState();
     const firstStarts: (() => void)[] = [];
     const secondStarts: (() => void)[] = [];
-    const makePi = (starts: (() => void)[]) =>
-      mockPi(
-        {},
-        {
-          getActiveTools: () => [],
-          on(event: string, handler: any) {
-            if (event === "session_start") {
-              starts.push(handler);
-            }
-          },
-          registerMessageRenderer: () => {},
-          registerTool: () => {},
-        }
-      );
 
     registerAdvisorTool(makePi(firstStarts), firstState);
     registerAdvisorTool(makePi(secondStarts), secondState);
@@ -241,10 +245,9 @@ describe("Advisor settings navigation and gate parsing regressions", () => {
   });
 
   test("keeps a recorded session block active after ask_advisor is disabled", () => {
-    let toolCall: any;
     const events = new Map<string, any>();
     registerAdvisorTool(mockPi({ events }, { events: { emit: () => {} } }));
-    toolCall = events.get("tool_call");
+    const toolCall = events.get("tool_call");
     advisorSessionState.resetTask();
     advisorSessionState.block("still blocked");
     try {
@@ -282,11 +285,11 @@ describe("Advisor settings navigation and gate parsing regressions", () => {
     const projectDir = mkdtempSync(join(tmpdir(), "pi-advisor-project-"));
     mkdirSync(join(projectDir, ".pi"), { recursive: true });
     const configPath = join(projectDir, ".pi", "advisor.json");
-    const ctx = {
+    const ctx = asExtensionContext({
       cwd: projectDir,
       hasUI: false,
       isProjectTrusted: () => true,
-    } as any;
+    });
 
     try {
       writeFileSync(configPath, JSON.stringify({ simpleMode: false }));

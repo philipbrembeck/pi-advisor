@@ -12,7 +12,9 @@ import {
   advisorMessageText,
   resolveAdvisorRequest,
 } from "../src/tools.ts";
+import { agentDir } from "./helpers/config-fixture.ts";
 import { mockPi } from "./helpers/mock-pi.ts";
+import { plainThemeMock } from "./helpers/theme.ts";
 
 const SPINNER_PATTERN = /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/u;
 
@@ -23,6 +25,13 @@ const renderTheme = () => ({
   bold: (text: string) => text,
   fg: (_color: string, text: string) => text,
 });
+
+interface RenderStateFixture {
+  phase?: string;
+  timerId?: ReturnType<typeof setInterval>;
+}
+
+const emptyRenderState = (): RenderStateFixture => ({});
 
 const registerForRendering = (): any => {
   const tools = new Map<string, any>();
@@ -48,7 +57,7 @@ describe("Advisor tool rendering", () => {
     );
   });
   afterEach(() => {
-    rmSync(process.env.PI_CODING_AGENT_DIR as string, {
+    rmSync(agentDir(), {
       force: true,
       recursive: true,
     });
@@ -231,7 +240,7 @@ describe("Advisor tool rendering", () => {
     const context = {
       invalidate: () => {},
       lastComponent: undefined,
-      state: {} as { phase?: string; timerId?: ReturnType<typeof setInterval> },
+      state: emptyRenderState(),
     };
     const scouting = advisorTool
       .renderResult(
@@ -266,7 +275,7 @@ describe("Advisor tool rendering", () => {
     const context = {
       invalidate: () => {},
       lastComponent: undefined,
-      state: {} as { phase?: string; timerId?: ReturnType<typeof setInterval> },
+      state: emptyRenderState(),
     };
     advisorTool.renderResult(
       {
@@ -322,7 +331,7 @@ describe("Advisor tool rendering", () => {
     const context = {
       invalidate: () => {},
       lastComponent: undefined,
-      state: {} as { phase?: string; timerId?: ReturnType<typeof setInterval> },
+      state: emptyRenderState(),
     };
     advisorTool.renderResult(
       {
@@ -373,7 +382,7 @@ describe("Advisor tool rendering", () => {
     const context = {
       invalidate: () => {},
       lastComponent: undefined,
-      state: {} as any,
+      state: emptyRenderState(),
     };
     advisorTool.renderResult(
       {
@@ -409,7 +418,7 @@ describe("Advisor tool rendering", () => {
     const context = {
       invalidate: () => {},
       lastComponent: undefined,
-      state: {} as { timerId?: ReturnType<typeof setInterval> },
+      state: emptyRenderState(),
     };
     const partial = advisorTool
       .renderResult(
@@ -444,12 +453,12 @@ describe("Pi hide_thinking integration", () => {
     const { piHideThinkingEnabled } = await import("../src/pi-settings.ts");
     const { renderThinkingMarkdown } =
       await import("../src/tools/render-common.ts");
-    const agentDir = mkdtempSync(join(tmpdir(), "pi-advisor-hidden-"));
+    const hiddenAgentDir = mkdtempSync(join(tmpdir(), "pi-advisor-hidden-"));
     const previous = process.env.PI_CODING_AGENT_DIR;
-    process.env.PI_CODING_AGENT_DIR = agentDir;
+    process.env.PI_CODING_AGENT_DIR = hiddenAgentDir;
     try {
       writeFileSync(
-        join(agentDir, "settings.json"),
+        join(hiddenAgentDir, "settings.json"),
         JSON.stringify({ hideThinkingBlock: true })
       );
       expect(piHideThinkingEnabled()).toBe(true);
@@ -467,7 +476,7 @@ describe("Pi hide_thinking integration", () => {
       } else {
         process.env.PI_CODING_AGENT_DIR = previous;
       }
-      rmSync(agentDir, { force: true, recursive: true });
+      rmSync(hiddenAgentDir, { force: true, recursive: true });
     }
   });
 });
@@ -478,15 +487,9 @@ describe("ask_advisor result spacing", () => {
     const { renderAdvisorResult } =
       await import("../src/tools/render-advisor-result.ts");
     const { Container } = await import("@earendil-works/pi-tui");
-    const theme = renderTheme();
     // Mirrors pi's renderShell "self": unpadded container, prefixed by one blank line.
     const container = new Container();
-    container.addChild(
-      renderAdvisorCallBox(
-        "test",
-        theme as unknown as Parameters<typeof renderAdvisorCallBox>[1]
-      )
-    );
+    container.addChild(renderAdvisorCallBox("test", plainThemeMock));
     container.addChild(
       renderAdvisorResult(
         {
@@ -504,16 +507,16 @@ describe("ask_advisor result spacing", () => {
           },
         },
         { expanded: false, isPartial: false },
-        theme as unknown as Parameters<typeof renderAdvisorResult>[2],
+        plainThemeMock,
         {
-          invalidate: () => {},
+          invalidate: () => undefined,
           lastComponent: undefined,
-          state: {} as any,
-        } as any
+          state: emptyRenderState(),
+        }
       )
     );
-    // biome-ignore lint/suspicious/noControlCharactersInRegex: strips terminal SGR codes
-    const sgr = /\u001B\[[0-9;]*m/gu;
+    const ESC = String.fromCodePoint(27);
+    const sgr = new RegExp(`${ESC}\\[[0-9;]*m`, "gu");
     const lines = ["", ...container.render(120)].map((line) =>
       line.replace(sgr, "")
     );

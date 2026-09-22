@@ -11,12 +11,13 @@ import { join } from "node:path";
 
 import { readProjectPreferences } from "../src/preferences.ts";
 import { advisorMessageText } from "../src/tools.ts";
+import { asExtensionContext } from "./helpers/extension-context.ts";
 
 const context = (cwd: string, trusted: boolean) =>
-  ({
+  asExtensionContext({
     cwd,
     isProjectTrusted: () => trusted,
-  }) as any;
+  });
 
 describe("project preferences", () => {
   test("reads only a trusted regular project-local file and redacts before capping", async () => {

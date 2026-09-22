@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { recentConversation, textFrom } from "../src/conversation.ts";
 import { redactSecrets } from "../src/redaction.ts";
 import { capToolResult } from "../src/tool-result-cap.ts";
+import { asExtensionContext } from "./helpers/extension-context.ts";
 
 describe("Conversation Module", () => {
   test("textFrom should parse simple strings", () => {
@@ -25,25 +26,25 @@ describe("Conversation Module", () => {
   });
 
   test("recentConversation omits history when configured to zero", () => {
-    const ctx = {
+    const ctx = asExtensionContext({
       sessionManager: {
         getBranch: () => [
           { message: { content: "keep out", role: "user" }, type: "message" },
         ],
       },
-    } as any;
+    });
     expect(recentConversation(ctx, 0)).toBe("");
   });
 
   test("recentConversation keeps complete semantic entries and marks omitted older context", () => {
-    const ctx = {
+    const ctx = asExtensionContext({
       sessionManager: {
         getBranch: () => [
           { message: { content: "old", role: "user" }, type: "message" },
           { message: { content: "new", role: "assistant" }, type: "message" },
         ],
       },
-    } as any;
+    });
     const result = recentConversation(ctx, 22);
     expect(result.length).toBeLessThanOrEqual(22);
     expect(result).toContain("[Older context");
@@ -51,7 +52,7 @@ describe("Conversation Module", () => {
   });
 
   test("truncates a lone oversized newest entry within the full marker budget", () => {
-    const ctx = {
+    const ctx = asExtensionContext({
       sessionManager: {
         getBranch: () => [
           {
@@ -60,7 +61,7 @@ describe("Conversation Module", () => {
           },
         ],
       },
-    } as any;
+    });
     const result = recentConversation(ctx, 60);
     expect(result.length).toBeLessThanOrEqual(60);
     expect(result).not.toContain("complete entries");
@@ -68,14 +69,14 @@ describe("Conversation Module", () => {
   });
 
   test("budgets an omitted-context marker that consumes the whole cap", () => {
-    const ctx = {
+    const ctx = asExtensionContext({
       sessionManager: {
         getBranch: () => [
           { message: { content: "old", role: "user" }, type: "message" },
           { message: { content: "new", role: "user" }, type: "message" },
         ],
       },
-    } as any;
+    });
     const result = recentConversation(ctx, 10);
     expect(result).toHaveLength(10);
     expect(result).not.toContain("0 complete entries");
@@ -99,7 +100,7 @@ describe("Conversation Module", () => {
       10
     );
     expect(oversized.content.split("\n")).toHaveLength(1);
-    const ctx = {
+    const ctx = asExtensionContext({
       sessionManager: {
         getBranch: () => [
           {
@@ -112,7 +113,7 @@ describe("Conversation Module", () => {
           },
         ],
       },
-    } as any;
+    });
     const result = recentConversation(ctx, Number.MAX_SAFE_INTEGER, 2, 100);
     expect(result).toContain("[Tool Result for bash]");
     expect(result).toContain("a");
@@ -121,7 +122,7 @@ describe("Conversation Module", () => {
 
   test("redacts secrets from messages, tool arguments, and full results", () => {
     const secret = "AKIAABCDEFGHIJKLMNOP";
-    const ctx = {
+    const ctx = asExtensionContext({
       sessionManager: {
         getBranch: () => [
           {
@@ -151,7 +152,7 @@ describe("Conversation Module", () => {
           },
         ],
       },
-    } as any;
+    });
     const result = recentConversation(
       ctx,
       Number.MAX_SAFE_INTEGER,
@@ -189,7 +190,7 @@ describe("Conversation Module", () => {
   test("redacts complete secrets before applying tool-output limits", () => {
     const secret =
       "-----BEGIN PRIVATE KEY-----\nvery-private\n-----END PRIVATE KEY-----";
-    const ctx = {
+    const ctx = asExtensionContext({
       sessionManager: {
         getBranch: () => [
           {
@@ -198,7 +199,7 @@ describe("Conversation Module", () => {
           },
         ],
       },
-    } as any;
+    });
     const result = recentConversation(
       ctx,
       Number.MAX_SAFE_INTEGER,
@@ -217,7 +218,7 @@ describe("Conversation Module", () => {
     const source = "private result bytes";
     const callArguments = "private call argument";
     const contextFor = (toolName: string) =>
-      ({
+      asExtensionContext({
         sessionManager: {
           getBranch: () => [
             {
@@ -239,7 +240,7 @@ describe("Conversation Module", () => {
             },
           ],
         },
-      }) as any;
+      });
     const full = recentConversation(
       contextFor("custom"),
       Number.MAX_SAFE_INTEGER,
@@ -275,7 +276,7 @@ describe("Conversation Module", () => {
   });
 
   test("preserves representative conversation bytes with privacy defaults", () => {
-    const ctx = {
+    const ctx = asExtensionContext({
       sessionManager: {
         getBranch: () => [
           { message: { content: "first", role: "user" }, type: "message" },
@@ -299,7 +300,7 @@ describe("Conversation Module", () => {
           },
         ],
       },
-    } as any;
+    });
     expect(
       recentConversation(
         ctx,
@@ -315,7 +316,7 @@ describe("Conversation Module", () => {
   });
 
   test("ALL preserves the complete semantic branch", () => {
-    const ctx = {
+    const ctx = asExtensionContext({
       sessionManager: {
         getBranch: () => [
           { message: { content: "first", role: "user" }, type: "message" },
@@ -335,7 +336,7 @@ describe("Conversation Module", () => {
           },
         ],
       },
-    } as any;
+    });
     const result = recentConversation(
       ctx,
       Number.MAX_SAFE_INTEGER,

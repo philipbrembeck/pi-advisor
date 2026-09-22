@@ -3,6 +3,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { resetConfigCache } from "../../src/config.ts";
+import type { AdvisorConfig } from "../../src/config/types.ts";
+import type { JsonValue } from "./extension-context.ts";
+
+/** Advisor settings plus arbitrary JSON keys persisted alongside them. */
+export type AdvisorConfigFixture = AdvisorConfig & Record<string, JsonValue>;
 
 /**
  * Runs `run` with PI_CODING_AGENT_DIR pointed at a fresh agent directory
@@ -10,7 +15,7 @@ import { resetConfigCache } from "../../src/config.ts";
  * resets the config cache, and removes the directory in `finally`.
  */
 export const withAgentDir = async (
-  config: Record<string, unknown>,
+  config: AdvisorConfigFixture,
   run: (agentDir: string) => Promise<void> | void
 ) => {
   const agentDir = mkdtempSync(join(tmpdir(), "pi-advisor-agent-"));
@@ -34,6 +39,10 @@ export const withAgentDir = async (
   }
 };
 
-/** Reads the advisor.json currently persisted under `agentDir`. */
-export const savedConfig = (agentDir: string) =>
-  JSON.parse(readFileSync(join(agentDir, "advisor.json"), "utf-8"));
+/** PI_CODING_AGENT_DIR while a withAgentDir callback runs. */
+// SAFETY: withAgentDir always defines PI_CODING_AGENT_DIR while `run` executes.
+export const agentDir = () => process.env.PI_CODING_AGENT_DIR as string;
+
+/** Reads the advisor.json currently persisted under `dir`. */
+export const savedConfig = (dir: string) =>
+  JSON.parse(readFileSync(join(dir, "advisor.json"), "utf-8"));

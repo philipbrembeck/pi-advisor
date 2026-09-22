@@ -10,7 +10,9 @@ import {
 } from "../src/config.ts";
 import { adviceForDisplay } from "../src/tools.ts";
 import { AdvisorSettingsSelector } from "../src/ui.ts";
+import type { AdvisorSettings } from "../src/ui/types.ts";
 import { savedConfig, withAgentDir } from "./helpers/config-fixture.ts";
+import { asExtensionContext } from "./helpers/extension-context.ts";
 import { mockPi } from "./helpers/mock-pi.ts";
 import {
   changeSetting,
@@ -22,15 +24,50 @@ initTheme();
 const SCOUT_ON_PATTERN = /Experimental Advisor Scout\s+On/u;
 const MAX_CALLS_ROW_PATTERN = /Max Advisor calls\/session\s+10/u;
 
+// SAFETY: theme stub implements only the bold/fg members the settings selector renders with.
 const selectorTheme = {
   bold: (text: string) => text,
   fg: (_color: string, text: string) => text,
 } as any;
 
+const custom = async (factory: any) =>
+  new Promise<any>((resolve) => {
+    const selector = factory(
+      { requestRender: () => {} },
+      selectorTheme,
+      {},
+      resolve
+    );
+    focusSettingsRow(selector, "Experimental Advisor Scout");
+    changeSetting(selector, "Experimental Advisor Scout");
+    changeSetting(selector, "Max Advisor calls/session");
+    selector.handleInput("\u001B");
+  });
+
+const reopened = async (factory: any) =>
+  new Promise<any>((resolve) => {
+    const selector = factory(
+      { requestRender: () => {} },
+      selectorTheme,
+      {},
+      resolve
+    );
+    const initialScreen = stripTerminalSequences(
+      selector.render(100).join("\n")
+    );
+    expect(initialScreen).toMatch(SCOUT_ON_PATTERN);
+    for (const key of ["m", "a", "x"]) {
+      selector.handleInput(key);
+    }
+    const screen = stripTerminalSequences(selector.render(100).join("\n"));
+    expect(screen).toMatch(MAX_CALLS_ROW_PATTERN);
+    selector.handleInput("\u001B");
+  });
+
 const openSelector = (overrides: {
   onChange?: (settings: any) => void;
   onSave?: (settings: any) => void;
-  initial?: Record<string, unknown>;
+  initial?: Partial<AdvisorSettings>;
   modelRefs?: string[];
   presets?: { description: string; label: string; value: number }[];
 }) => {
@@ -45,6 +82,7 @@ const openSelector = (overrides: {
       planGate: true,
       ...overrides.initial,
     },
+    // SAFETY: keybindings stub only needs matches() to deny every key sequence.
     keybindings: { matches: () => false } as any,
     modelRefs: overrides.modelRefs ?? ["provider/one", "provider/two"],
     onCancel: () => {},
@@ -192,6 +230,7 @@ describe("Advisor settings selector", () => {
     });
     focusSettingsRow(selector, "Tool disclosure policies");
     selector.handleInput("\r");
+    // SAFETY: settingsList.submenuComponent is the editor the selector renders for this row.
     const editor = (selector as any).settingsList.submenuComponent;
     editor.input.onSubmit('{"bash":"invalid"}');
     expect(selector.render(120).join("\n")).toContain(
@@ -238,54 +277,18 @@ describe("Advisor settings selector", () => {
   });
 
   test("reopens Advisor settings with the value saved in the same session", async () => {
-    await withAgentDir({ advisorMaxCallsPerSession: 5 }, async () => {
+    await withAgentDir({ advisorMaxCallsPerSession: 5 }, async (agentDir) => {
       const commands = new Map<string, any>();
-      const custom = async (factory: any) =>
-        new Promise<any>((resolve) => {
-          const selector = factory(
-            { requestRender: () => {} },
-            selectorTheme,
-            {},
-            resolve
-          );
-          focusSettingsRow(selector, "Experimental Advisor Scout");
-          changeSetting(selector, "Experimental Advisor Scout");
-          changeSetting(selector, "Max Advisor calls/session");
-          selector.handleInput("\u001B");
-        });
-      const reopened = async (factory: any) =>
-        new Promise<any>((resolve) => {
-          const selector = factory(
-            { requestRender: () => {} },
-            selectorTheme,
-            {},
-            resolve
-          );
-          const initialScreen = stripTerminalSequences(
-            selector.render(100).join("\n")
-          );
-          expect(initialScreen).toMatch(SCOUT_ON_PATTERN);
-          for (const key of ["m", "a", "x"]) {
-            selector.handleInput(key);
-          }
-          const screen = stripTerminalSequences(
-            selector.render(100).join("\n")
-          );
-          expect(screen).toMatch(MAX_CALLS_ROW_PATTERN);
-          selector.handleInput("\u001B");
-        });
       registerCommands(mockPi({ commands }));
-      const context = {
+      const context = asExtensionContext({
         cwd: "/",
         hasUI: true,
         isProjectTrusted: () => false,
         ui: { custom, notify: () => {}, setStatus: () => {} },
-      } as any;
+      });
 
       await commands.get("advisor-settings").handler("", context);
-      expect(
-        savedConfig(process.env.PI_CODING_AGENT_DIR as string)
-      ).toMatchObject({
+      expect(savedConfig(agentDir)).toMatchObject({
         advisorMaxCallsPerSession: 10,
         advisorScoutEnabled: true,
       });

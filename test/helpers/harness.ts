@@ -1,9 +1,9 @@
 import { initTheme } from "@earendil-works/pi-coding-agent";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { getKeybindings } from "@earendil-works/pi-tui";
 
 import { registerCommands } from "../../src/commands.ts";
 import type { AdvisorSessionState } from "../../src/session-state.ts";
+import { asExtensionContext } from "./extension-context.ts";
 import { mockPi } from "./mock-pi.ts";
 
 initTheme();
@@ -12,7 +12,7 @@ export const modalTheme = {
   bg: (_color: string, value: string) => value,
   bold: (value: string) => value,
   fg: (_color: string, value: string) => value,
-} as any;
+};
 
 export const plainTheme = modalTheme;
 
@@ -38,7 +38,7 @@ export const modalHarness = (
   const sent: { message: any; options: any }[] = [];
   const statuses: (string | undefined)[] = [];
   const mockPiApi = mockPi({ commands, entries, entryRenderers, events, sent });
-  const ctx = {
+  const ctx = asExtensionContext({
     cwd: agentDir,
     hasUI: true,
     isProjectTrusted: () => false,
@@ -48,7 +48,7 @@ export const modalHarness = (
         new Promise((resolve) => {
           modalOptions.push(options);
           const dialog = factory(
-            { requestRender: () => {}, terminal: { rows: 24 } },
+            { requestRender: () => undefined, terminal: { rows: 24 } },
             modalTheme,
             getKeybindings(),
             resolve
@@ -63,7 +63,7 @@ export const modalHarness = (
         }
       },
     },
-  } as any;
+  });
   registerCommands(mockPiApi, { consult, sessionState: state });
   return {
     commands,
@@ -92,19 +92,19 @@ export const activationHarness = () => {
     { commands, events, messageRenderers: renderers },
     {
       getActiveTools: () => activeTools,
-      registerEntryRenderer: () => {},
+      registerEntryRenderer: () => undefined,
       registerMessageRenderer(type: string, renderer: any) {
         renderers.set(type, renderer);
       },
-      registerTool: () => {},
-      sendMessage: () => {},
+      registerTool: () => undefined,
+      sendMessage: () => undefined,
       setActiveTools(tools: string[]) {
         activeTools.splice(0, activeTools.length, ...tools);
       },
       setModel: () => Promise.resolve(true),
-      setThinkingLevel: () => {},
+      setThinkingLevel: () => undefined,
     }
-  ) as unknown as ExtensionAPI;
+  );
   return {
     commands,
     events,
@@ -116,28 +116,38 @@ export const activationHarness = () => {
   };
 };
 
-/**
- * Activation-command context with a model registry over `models` and a
- * notify collector.
- */
+interface RegistryModel {
+  id: string;
+  provider: string;
+}
+
+interface ActivationModelRegistry {
+  find: (provider: string, id: string) => RegistryModel | undefined;
+  getApiKeyAndHeaders: () => Promise<{ apiKey: string; ok: boolean }>;
+  getAvailable?: () => RegistryModel[];
+}
+
+/** Activation-command context with a model registry over `models`. */
 export const activationContext = (
   agentDir: string,
   notes: string[] = [],
-  models?: { id: string; provider: string }[]
-) =>
-  ({
+  models?: RegistryModel[]
+) => {
+  const registry: ActivationModelRegistry = {
+    find: (provider: string, id: string) =>
+      models
+        ? models.find((model) => model.provider === provider && model.id === id)
+        : { id, provider },
+    getApiKeyAndHeaders: () => Promise.resolve({ apiKey: "key", ok: true }),
+  };
+  if (models) {
+    registry.getAvailable = () => models;
+  }
+  return asExtensionContext({
     cwd: agentDir,
     hasUI: true,
     isProjectTrusted: () => false,
-    modelRegistry: {
-      find: (provider: string, id: string) =>
-        models
-          ? models.find(
-              (model) => model.provider === provider && model.id === id
-            )
-          : { id, provider },
-      getApiKeyAndHeaders: () => Promise.resolve({ apiKey: "key", ok: true }),
-      ...(models ? { getAvailable: () => models } : {}),
-    },
+    modelRegistry: registry,
     ui: { notify: (message: string) => notes.push(message) },
-  }) as any;
+  });
+};

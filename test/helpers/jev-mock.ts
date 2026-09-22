@@ -1,7 +1,9 @@
 import type { Fetch } from "@typesafe-ai/sdk";
 
+import type { JsonValue } from "./extension-context.ts";
+
 export interface CapturedJevRequest {
-  body: Record<string, unknown>;
+  body: Record<string, JsonValue>;
   headers: Record<string, string>;
   url: string;
 }
@@ -11,10 +13,20 @@ export interface SystemOneMock {
   fetch: Fetch;
 }
 
+interface StructuredJevResponse {
+  body: unknown;
+  status: number;
+}
+
+const isStructuredJevResponse = (
+  entry: unknown
+): entry is StructuredJevResponse =>
+  entry !== null && typeof entry === "object" && "status" in entry;
+
 /** Injectable fetch returning one canned systemone response per call, with
  * full request capture for privacy canaries. */
 export const systemOneMock = (
-  responses: (unknown | { body: unknown; status: number })[],
+  responses: unknown[],
   options: { latencyMs?: number } = {}
 ): SystemOneMock => {
   const captured: CapturedJevRequest[] = [];
@@ -23,22 +35,18 @@ export const systemOneMock = (
     new Promise<Response>((resolve, reject) => {
       captured.push({
         body: JSON.parse(String(init?.body ?? "{}")),
+        // SAFETY: mock fetch callers always pass plain header records, never Headers or tuple lists.
         headers: (init?.headers ?? {}) as Record<string, string>,
         url,
       });
       const timer = setTimeout(() => {
         const entry = responses[Math.min(call, responses.length - 1)];
         call += 1;
-        const isStructured =
-          entry !== null &&
-          typeof entry === "object" &&
-          "status" in (entry as Record<string, unknown>);
-        const status = isStructured
-          ? (entry as { status: number }).status
-          : 200;
-        const body = isStructured ? (entry as { body: unknown }).body : entry;
+        const structured = isStructuredJevResponse(entry);
+        const status = structured ? entry.status : 200;
+        const body = structured ? entry.body : entry;
         resolve(
-          new Response(JSON.stringify(body ?? {}), {
+          Response.json(body ?? {}, {
             headers: { "content-type": "application/json" },
             status,
           })

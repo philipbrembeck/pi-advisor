@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import type { JsonValue, RecordValue } from "../src/content-utils.ts";
 import {
   composeScreeningVerdict,
   composeTurnGateVerdict,
@@ -13,15 +14,29 @@ const scoreAnswer = (
   probabilities: Record<string, number>,
   legend?: Record<string, string>,
   score = 1
-) => ({
-  confidence: 0.9,
-  ...(legend ? { legend } : {}),
-  probabilities,
-  score,
-  type: "score",
-});
+): RecordValue => {
+  const answer: RecordValue = {
+    confidence: 0.9,
+    probabilities,
+    score,
+    type: "score",
+  };
+  if (legend) {
+    answer.legend = legend;
+  }
+  return answer;
+};
 
 const criteria = { noulMargin: 0.35, skipConfidence: 0.85 };
+
+const marginAnswer = (margin: number) =>
+  composeScreeningVerdict(
+    {
+      self_answerable: { noul: margin },
+      stakes: { legend: { "0": L0 }, probabilities: { "0": 0.99 } },
+    },
+    criteria
+  );
 
 describe("lowestStakesProbability", () => {
   test("resolves level 0 through a 0-indexed legend", () => {
@@ -141,7 +156,7 @@ describe("composeScreeningVerdict", () => {
   });
 
   test("every malformed or missing input allows", () => {
-    for (const invalid of [
+    const invalidAnswers: (JsonValue | undefined)[] = [
       undefined,
       null,
       "answers",
@@ -163,7 +178,8 @@ describe("composeScreeningVerdict", () => {
         self_answerable: { noul: 0.9 },
         stakes: { legend: { "0": L0 }, probabilities: { "0": "not a number" } },
       },
-    ]) {
+    ];
+    for (const invalid of invalidAnswers) {
       expect(composeScreeningVerdict(invalid, criteria)).toEqual({
         skip: false,
       });
@@ -171,27 +187,27 @@ describe("composeScreeningVerdict", () => {
   });
 
   test("the noul margin rule requires clearance over a coin flip", () => {
-    const at = (margin: number) =>
-      composeScreeningVerdict(
-        {
-          self_answerable: { noul: margin },
-          stakes: { legend: { "0": L0 }, probabilities: { "0": 0.99 } },
-        },
-        criteria
-      );
+    const at = marginAnswer;
     expect(at(0.849)).toEqual({ skip: false });
     expect(at(0.85)).toEqual({ skip: true });
   });
 });
 
+const turnGateAnswers = (noul?: number) => {
+  const answer: RecordValue = {};
+  if (noul !== undefined) {
+    answer.noul = noul;
+  }
+  return { should_consult: answer };
+};
+
 describe("composeTurnGateVerdict", () => {
   test("fires only at or above the confident-true threshold", () => {
-    const answers = (noul: number) => ({ should_consult: { noul } });
+    const answers = turnGateAnswers;
+
     expect(composeTurnGateVerdict(answers(0.79), 0.8)).toBe(false);
     expect(composeTurnGateVerdict(answers(0.8), 0.8)).toBe(true);
-    expect(composeTurnGateVerdict(answers(undefined as never), 0.8)).toBe(
-      false
-    );
+    expect(composeTurnGateVerdict(answers(undefined), 0.8)).toBe(false);
     expect(composeTurnGateVerdict({}, 0.8)).toBe(false);
   });
 });

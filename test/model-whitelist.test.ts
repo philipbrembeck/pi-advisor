@@ -9,21 +9,19 @@ import {
 import { AdvisorSessionState } from "../src/session-state.ts";
 import { registerAdvisorTool } from "../src/tools.ts";
 import { consultAdvisor } from "../src/tools/consultation.ts";
+import type { JevTurnGateRegistration } from "../src/tools/jev-turn-gate.ts";
 import { handleJevTurnEnd } from "../src/tools/jev-turn-gate.ts";
 import {
   advisorModelAccess,
   advisorModelAccessReason,
 } from "../src/tools/model-access.ts";
 import { withAgentDir } from "./helpers/config-fixture.ts";
+import { asExtensionContext } from "./helpers/extension-context.ts";
 import { mockPi } from "./helpers/mock-pi.ts";
 
 const contextFor = (
   model: { id: string; provider: string } | undefined
-): ExtensionContext =>
-  ({
-    hasUI: false,
-    model,
-  }) as ExtensionContext;
+): ExtensionContext => asExtensionContext({ hasUI: false, model });
 
 afterEach(() => {
   setAdvisorJevTurnGateEveryTurnsRef(0);
@@ -77,7 +75,7 @@ describe("Advisor model whitelist", () => {
           ),
           session,
           {
-            runGate: (() => {
+            runGate: async () => {
               gateCalls += 1;
               return {
                 decision: "proceed",
@@ -87,16 +85,16 @@ describe("Advisor model whitelist", () => {
                 thinkingText: "",
                 trigger: "repeated-tool-call" as const,
               };
-            }) as any,
+            },
           }
         );
-        const ctx = {
+        const ctx = asExtensionContext({
           cwd: agentDir,
           hasUI: false,
           isProjectTrusted: () => false,
           model: { id: "other", provider: "provider" },
           signal: new AbortController().signal,
-        } as unknown as ExtensionContext;
+        });
         const toolCall = events.get("tool_call");
 
         expect(
@@ -138,21 +136,30 @@ describe("Advisor model whitelist", () => {
     const session = new AdvisorSessionState();
     let jevChecks = 0;
     let consultations = 0;
-    const registration = {
+    const registration: JevTurnGateRegistration = {
       activeTools: () => ["ask_advisor"],
-      consult: (() => {
+      consult: async () => {
         consultations += 1;
-        return Promise.resolve({});
-      }) as any,
+        return {
+          adviceId: "unused",
+          markdown: "",
+          model: "unused",
+          thinkingText: "",
+          trigger: "executor-requested",
+        };
+      },
       deps: {
         resolveTransport: () => {
           jevChecks += 1;
-          return { apiKey: "test", transport: "typesafe" as const };
+          return Promise.resolve({
+            apiKey: "test",
+            transport: "typesafe" as const,
+          });
         },
       },
       send: () => {},
       session,
-    } as any;
+    };
     const ctx = contextFor({ id: "other", provider: "provider" });
 
     await handleJevTurnEnd(registration, ctx);
@@ -179,7 +186,7 @@ describe("Advisor model whitelist", () => {
           ),
           session,
           {
-            runGate: (() => {
+            runGate: async () => {
               gateCalls += 1;
               return {
                 decision: "proceed",
@@ -189,16 +196,16 @@ describe("Advisor model whitelist", () => {
                 thinkingText: "",
                 trigger: "repeated-tool-call" as const,
               };
-            }) as any,
+            },
           }
         );
-        const ctx = {
+        const ctx = asExtensionContext({
           cwd: agentDir,
           hasUI: false,
           isProjectTrusted: () => false,
           model: { id: "allowed", provider: "provider" },
           signal: new AbortController().signal,
-        } as unknown as ExtensionContext;
+        });
         const toolCall = events.get("tool_call");
 
         await toolCall(

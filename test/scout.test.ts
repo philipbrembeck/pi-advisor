@@ -3,6 +3,12 @@
 import { describe, expect, test } from "bun:test";
 
 import { setExecutorEffortRef, setExecutorRef } from "../src/config.ts";
+import type {
+  CollectTextStreamOptions,
+  ResolvedConfiguredModel,
+  collectTextStream,
+  resolveConfiguredModel,
+} from "../src/model-stream.ts";
 import type { ScoutManifest } from "../src/scout-context.ts";
 import {
   parseScoutSelection,
@@ -10,6 +16,7 @@ import {
   SCOUT_SYSTEM,
 } from "../src/scout.ts";
 import { ScoutStatusManager } from "../src/tools.ts";
+import { asExtensionContext } from "./helpers/extension-context.ts";
 
 const manifest = (): ScoutManifest => ({
   availableBytes: 100,
@@ -47,16 +54,23 @@ const manifest = (): ScoutManifest => ({
   omittedCount: 1,
 });
 
+// SAFETY: fixture model carries only the id/provider fields the mocked collect path reads.
 const resolved = {
   apiKey: "key",
   model: { id: "model", provider: "provider" },
   ref: "provider/model",
-} as any;
+} as ResolvedConfiguredModel;
+/** Deps fixture matching the collect/resolve signatures runAdvisorScout accepts. */
+interface ScoutDepsFixture {
+  collect: typeof collectTextStream;
+  resolve: typeof resolveConfiguredModel;
+}
+
 const successDependencies = (
   text: string,
-  capture?: (options: any) => void
-) => ({
-  collect: (_resolved: unknown, options: any) => {
+  capture?: (options: CollectTextStreamOptions) => void
+): ScoutDepsFixture => ({
+  collect: (_resolved, options) => {
     capture?.(options);
     return Promise.resolve({
       text,
@@ -145,7 +159,7 @@ describe("Advisor Scout", () => {
     let options: any;
     const events: string[] = [];
     const outcome = await runAdvisorScout(
-      {} as any,
+      asExtensionContext({}),
       manifest(),
       undefined,
       (event) => events.push(event.type),
@@ -158,7 +172,7 @@ describe("Advisor Scout", () => {
         (value) => {
           options = value;
         }
-      ) as any
+      )
     );
     expect(outcome.ok).toBe(true);
     if (!outcome.ok) {
@@ -184,7 +198,7 @@ describe("Advisor Scout", () => {
       ["No API key for provider/missing", "auth-error"],
     ] as const) {
       const outcome = await runAdvisorScout(
-        {} as any,
+        asExtensionContext({}),
         manifest(),
         undefined,
         undefined,
@@ -196,7 +210,7 @@ describe("Advisor Scout", () => {
           resolve: async () => {
             throw new Error(message);
           },
-        } as any
+        }
       );
       expect(outcome).toMatchObject({ category, ok: false });
     }
@@ -208,12 +222,12 @@ describe("Advisor Scout", () => {
       ["{}", "invalid-selection"],
     ] as const) {
       const outcome = await runAdvisorScout(
-        {} as any,
+        asExtensionContext({}),
         manifest(),
         undefined,
         undefined,
         100,
-        successDependencies(text) as any
+        successDependencies(text)
       );
       expect(outcome).toMatchObject({ category, ok: false });
     }
@@ -263,7 +277,7 @@ describe("Advisor Scout", () => {
 
   test("curates successfully when the model includes an unknown group ID", async () => {
     const outcome = await runAdvisorScout(
-      {} as any,
+      asExtensionContext({}),
       manifest(),
       undefined,
       undefined,
@@ -273,7 +287,7 @@ describe("Advisor Scout", () => {
           selectedIds: ["g_unknown", "g_failure"],
           synthesis: "Useful failure retained.",
         })
-      ) as any
+      )
     );
     expect(outcome).toMatchObject({
       metrics: { selectedCount: 2 },
@@ -289,27 +303,30 @@ describe("Advisor Scout", () => {
   test("times out as fallback and propagates its abort signal", async () => {
     let childSignal: AbortSignal | undefined;
     const outcome = await runAdvisorScout(
-      {} as any,
+      asExtensionContext({}),
       manifest(),
       undefined,
       undefined,
       5,
       {
-        collect: async (_resolved: unknown, options: any) => {
-          childSignal = options.signal;
+        collect: async (
+          _resolved: ResolvedConfiguredModel,
+          options: CollectTextStreamOptions
+        ) => {
+          const { signal } = options;
+          if (!signal) {
+            throw new Error("scout must pass an abort signal");
+          }
+          childSignal = signal;
           await new Promise((_resolve, reject) =>
-            options.signal.addEventListener(
-              "abort",
-              () => reject(options.signal.reason),
-              {
-                once: true,
-              }
-            )
+            signal.addEventListener("abort", () => reject(signal.reason), {
+              once: true,
+            })
           );
           throw new Error("unreachable");
         },
         resolve: async () => resolved,
-      } as any
+      }
     );
     expect(childSignal?.aborted).toBe(true);
     expect(outcome).toMatchObject({ category: "timeout", ok: false });
@@ -319,15 +336,22 @@ describe("Advisor Scout", () => {
     const parent = new AbortController();
     const events: string[] = [];
     const promise = runAdvisorScout(
-      {} as any,
+      asExtensionContext({}),
       manifest(),
       parent.signal,
       (event) => events.push(event.type),
       1000,
       {
-        collect: async (_resolved: unknown, options: any) => {
+        collect: async (
+          _resolved: ResolvedConfiguredModel,
+          options: CollectTextStreamOptions
+        ) => {
+          const { signal } = options;
+          if (!signal) {
+            throw new Error("scout must pass an abort signal");
+          }
           await new Promise((_resolve, reject) =>
-            options.signal.addEventListener(
+            signal.addEventListener(
               "abort",
               () => reject(new Error("aborted")),
               {
@@ -338,7 +362,7 @@ describe("Advisor Scout", () => {
           throw new Error("unreachable");
         },
         resolve: async () => resolved,
-      } as any
+      }
     );
     parent.abort();
     const outcome = await promise;
@@ -349,7 +373,7 @@ describe("Advisor Scout", () => {
 
   test("provider failures retain separate Scout metrics", async () => {
     const outcome = await runAdvisorScout(
-      {} as any,
+      asExtensionContext({}),
       manifest(),
       undefined,
       undefined,
@@ -359,7 +383,7 @@ describe("Advisor Scout", () => {
           throw new Error("provider unavailable");
         },
         resolve: async () => resolved,
-      } as any
+      }
     );
     expect(outcome).toMatchObject({
       category: "provider-error",
@@ -369,20 +393,23 @@ describe("Advisor Scout", () => {
   });
 });
 
-describe("Scout status ownership", () => {
-  const context = (statuses: (string | undefined)[]) =>
-    ({
-      hasUI: true,
-      ui: {
-        setStatus: (_key: string, value: string | undefined) =>
-          statuses.push(value),
-      },
-    }) as any;
+/** Lifecycle members the status manager reacts to; outcome bodies are illustrative. */
+type ScoutLifecycleEventForStatus = Parameters<ScoutStatusManager["update"]>[2];
 
+const statusContext = (statuses: (string | undefined)[]) =>
+  asExtensionContext({
+    hasUI: true,
+    ui: {
+      setStatus: (_key: string, value: string | undefined) =>
+        statuses.push(value),
+    },
+  });
+
+describe("Scout status ownership", () => {
   test("keeps a newer active status when an older invocation releases", () => {
     const statuses: (string | undefined)[] = [];
     const manager = new ScoutStatusManager();
-    const ctx = context(statuses);
+    const ctx = statusContext(statuses);
     const older = Symbol("older");
     const newer = Symbol("newer");
     manager.update(ctx, older, { model: "executor", type: "call" });
@@ -396,7 +423,7 @@ describe("Scout status ownership", () => {
   test("shutdown clear prevents late callbacks from reacquiring status", () => {
     const statuses: (string | undefined)[] = [];
     const manager = new ScoutStatusManager();
-    const ctx = context(statuses);
+    const ctx = statusContext(statuses);
     const token = Symbol("old-session");
     manager.update(ctx, token, { model: "executor", type: "call" });
     manager.clear(ctx);
@@ -448,10 +475,11 @@ describe("Scout status ownership", () => {
     ] as const) {
       const statuses: (string | undefined)[] = [];
       const manager = new ScoutStatusManager();
-      const ctx = context(statuses);
+      const ctx = statusContext(statuses);
       const token = Symbol("invocation");
       manager.update(ctx, token, { model: "executor", type: "call" });
-      manager.update(ctx, token, event as any);
+      // SAFETY: fixture events carry the union member shapes update() switches on; outcome bodies are illustrative.
+      manager.update(ctx, token, event as ScoutLifecycleEventForStatus);
       expect(statuses.at(-1)).toBeUndefined();
     }
   });

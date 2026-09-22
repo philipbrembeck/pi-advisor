@@ -5,7 +5,13 @@ import {
   createCoalescedUpdate,
   resolveConfiguredModel,
 } from "../src/model-stream.ts";
+import type {
+  CoalescedUpdateScheduler,
+  CollectTextStreamOptions,
+} from "../src/model-stream.ts";
+import { asExtensionContext } from "./helpers/extension-context.ts";
 
+// SAFETY: fixture mirrors the catalogue fields stream() reads; "test-api" is a synthetic Api label.
 const model = {
   api: "test-api",
   baseUrl: "https://example.test",
@@ -19,29 +25,53 @@ const model = {
   reasoning: true,
 } as any;
 
+interface StreamUsageFixture {
+  input: number;
+}
+
+interface AssistantMessageFixture {
+  api: string;
+  content: { text: string; type: string }[];
+  errorMessage?: string;
+  model: string;
+  provider: string;
+  role: string;
+  stopReason: string;
+  timestamp: number;
+  usage: StreamUsageFixture;
+}
+
+const DEFAULT_STREAM_USAGE: StreamUsageFixture = { input: 1 };
+
 const assistant = (
   text: string,
-  usage: unknown = { input: 1 },
+  usage: StreamUsageFixture = DEFAULT_STREAM_USAGE,
   stopReason = "stop",
   errorMessage?: string
-) => ({
-  api: "test-api",
-  content: text ? [{ text, type: "text" }] : [],
-  model: "model",
-  provider: "provider",
-  role: "assistant",
-  stopReason,
-  timestamp: 1,
-  usage,
-  ...(errorMessage ? { errorMessage } : {}),
-});
+) => {
+  const message: AssistantMessageFixture = {
+    api: "test-api",
+    content: text ? [{ text, type: "text" }] : [],
+    model: "model",
+    provider: "provider",
+    role: "assistant",
+    stopReason,
+    timestamp: 1,
+    usage,
+  };
+  if (errorMessage) {
+    message.errorMessage = errorMessage;
+  }
+  return message;
+};
 
+// SAFETY: mock mirrors the stream() async-iterator and result() surface collectTextStream consumes.
 const fakeStream = (
-  events: unknown[],
-  result: unknown,
-  capture?: (options: unknown) => void
+  events: any[],
+  result: any,
+  capture?: (options: CollectTextStreamOptions) => void
 ) =>
-  ((_model: unknown, _context: unknown, options: unknown) => {
+  ((_model: any, _context: any, options: CollectTextStreamOptions) => {
     capture?.(options);
     return {
       async *[Symbol.asyncIterator]() {
@@ -60,22 +90,26 @@ describe("model stream", () => {
     let now = 0;
     let nextTimer = 0;
     const timers = new Map<number, () => void>();
-    const scheduler = {
-      clearTimeout: (timer: ReturnType<typeof setTimeout>) => {
-        timers.delete(timer as unknown as number);
+    const scheduler: CoalescedUpdateScheduler = {
+      clearTimeout: (timer) => {
+        timers.delete(Number(timer));
       },
       now: () => now,
-      setTimeout: (callback: () => void) => {
-        const timer = nextTimer;
+      setTimeout: (task) => {
+        const id = nextTimer;
         nextTimer += 1;
-        timers.set(timer, callback);
-        return timer as unknown as ReturnType<typeof setTimeout>;
+        // SAFETY: fake timer only flows back to this mock's clearTimeout, which reads its numeric id.
+        const timer = { [Symbol.toPrimitive]: () => id } as ReturnType<
+          typeof setTimeout
+        >;
+        timers.set(id, task);
+        return timer;
       },
     };
     const runTimer = (timer: number) => {
-      const callback = timers.get(timer);
+      const task = timers.get(timer);
       timers.delete(timer);
-      callback?.();
+      task?.();
     };
     const coalesced = createCoalescedUpdate(
       (value: string) => updates.push(value),
@@ -138,13 +172,13 @@ describe("model stream", () => {
 
   test("resolves the exact configured model and provider auth", async () => {
     const seen: unknown[] = [];
-    const ctx = {
+    const ctx = asExtensionContext({
       modelRegistry: {
         find: (provider: string, id: string) => {
           seen.push([provider, id]);
           return model;
         },
-        getApiKeyAndHeaders: (value: unknown) => {
+        getApiKeyAndHeaders: (value: any) => {
           seen.push(value);
           return Promise.resolve({
             apiKey: "secret",
@@ -154,7 +188,7 @@ describe("model stream", () => {
           });
         },
       },
-    } as any;
+    });
     const resolved = await resolveConfiguredModel(
       ctx,
       "provider/model",
@@ -173,20 +207,20 @@ describe("model stream", () => {
   test("reports missing models and auth without substitution", async () => {
     await expect(
       resolveConfiguredModel(
-        { modelRegistry: { find: () => {} } } as any,
+        asExtensionContext({ modelRegistry: { find: () => undefined } }),
         "provider/missing",
         "Scout"
       )
     ).rejects.toThrow("Scout model not found: provider/missing");
     await expect(
       resolveConfiguredModel(
-        {
+        asExtensionContext({
           modelRegistry: {
             find: () => model,
             getApiKeyAndHeaders: () =>
               Promise.resolve({ error: "login", ok: false }),
           },
-        } as any,
+        }),
         "provider/model",
         "Scout"
       )
@@ -240,12 +274,12 @@ describe("model stream", () => {
   });
 
   test("omits provider effort when it is not configured", async () => {
-    let optionsSeen: Record<string, unknown> | undefined;
+    let optionsSeen: CollectTextStreamOptions | undefined;
     await collectTextStream(
       { apiKey: "key", model, ref: "provider/model" },
       { messages: [], systemPrompt: "system" },
       fakeStream([], assistant("ok"), (options) => {
-        optionsSeen = options as Record<string, unknown>;
+        optionsSeen = options;
       })
     );
     expect(optionsSeen).not.toHaveProperty("reasoningEffort");

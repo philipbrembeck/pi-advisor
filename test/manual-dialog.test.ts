@@ -32,7 +32,7 @@ describe("Manual Advisor TUI modal", () => {
             for (const character of "migration") {
               dialog.handleInput(character);
             }
-            dialog.handleInput(String.fromCharCode(13));
+            dialog.handleInput(String.fromCodePoint(13));
           },
           (_ctx, question, _signal, _onChunk, _onScout, gitContext) => {
             calls.push({ gitContext, question });
@@ -91,7 +91,7 @@ describe("Manual Advisor TUI modal", () => {
         const harness = modalHarness(
           agentDir,
           state,
-          (dialog) => dialog.handleInput(String.fromCharCode(13)),
+          (dialog) => dialog.handleInput(String.fromCodePoint(13)),
           (_ctx, _question, _signal, chunk, scout) => {
             onChunk = chunk;
             onScout = scout;
@@ -161,11 +161,11 @@ describe("Manual Advisor TUI modal", () => {
           agentDir,
           state,
           (dialog) => {
-            dialog.handleInput(String.fromCharCode(9));
-            dialog.handleInput(`${String.fromCharCode(27)}[B`);
-            dialog.handleInput(`${String.fromCharCode(27)}[B`);
-            dialog.handleInput(String.fromCharCode(9));
-            dialog.handleInput(String.fromCharCode(13));
+            dialog.handleInput(String.fromCodePoint(9));
+            dialog.handleInput(`${String.fromCodePoint(27)}[B`);
+            dialog.handleInput(`${String.fromCodePoint(27)}[B`);
+            dialog.handleInput(String.fromCodePoint(9));
+            dialog.handleInput(String.fromCodePoint(13));
           },
           (_ctx, question, _signal, _onChunk, _onScout, gitContext) => {
             received = { gitContext, question };
@@ -198,7 +198,7 @@ describe("Manual Advisor TUI modal", () => {
         const harness = modalHarness(
           agentDir,
           state,
-          (dialog) => dialog.handleInput(String.fromCharCode(27)),
+          (dialog) => dialog.handleInput(String.fromCodePoint(27)),
           () => {
             consultations += 1;
             return Promise.resolve({
@@ -235,9 +235,9 @@ describe("Manual Advisor TUI modal", () => {
           (dialog) => {
             modalCalls += 1;
             if (modalCalls === 1) {
-              dialog.handleInput(String.fromCharCode(13));
+              dialog.handleInput(String.fromCodePoint(13));
             } else {
-              dialog.handleInput(String.fromCharCode(27));
+              dialog.handleInput(String.fromCodePoint(27));
             }
           },
           (_ctx, _question, signal) => {
@@ -286,7 +286,7 @@ describe("Manual Advisor TUI modal", () => {
           state,
           (dialog) => {
             state.consumeCall();
-            dialog.handleInput(String.fromCharCode(13));
+            dialog.handleInput(String.fromCodePoint(13));
           },
           () => {
             consultations += 1;
@@ -323,7 +323,7 @@ describe("Manual Advisor TUI modal", () => {
           agentDir,
           state,
           (dialog) => {
-            dialog.handleInput(String.fromCharCode(13));
+            dialog.handleInput(String.fromCodePoint(13));
           },
           (_ctx, _question, signal) => {
             if (!signal) {
@@ -373,7 +373,7 @@ describe("Manual Advisor TUI modal", () => {
               })
             );
             resetConfigCache();
-            dialog.handleInput(String.fromCharCode(13));
+            dialog.handleInput(String.fromCodePoint(13));
           },
           (ctx, _question, _signal, _onChunk, _onScout, gitContext) => {
             loadConfig(ctx);

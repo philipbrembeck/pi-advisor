@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { tmpdir } from "node:os";
 
+import type { SessionShutdownEvent } from "@earendil-works/pi-coding-agent";
+
 import registerExtension, {
   consultAdvisor,
   runAdvisorGate,
@@ -12,13 +14,20 @@ import {
   parseAutomaticDecision,
   registerAdvisorTool,
 } from "../src/tools.ts";
+import { asExtensionContext } from "./helpers/extension-context.ts";
+import type { JsonValue } from "./helpers/extension-context.ts";
 import { mockPi } from "./helpers/mock-pi.ts";
+
+type SessionShutdownHandler = (
+  event?: SessionShutdownEvent,
+  ctx?: { hasUI?: boolean }
+) => void;
 
 describe("Extension Registration", () => {
   test("exports the stable consultation and gate contract", () => {
-    expect(typeof consultAdvisor).toBe("function");
-    expect(typeof runAdvisorGate).toBe("function");
-    expect(typeof parseAutomaticDecision).toBe("function");
+    expect(consultAdvisor).toBeInstanceOf(Function);
+    expect(runAdvisorGate).toBeInstanceOf(Function);
+    expect(parseAutomaticDecision).toBeInstanceOf(Function);
   });
   test("registers the ask_advisor tool and the five advisor commands", () => {
     const tools = new Map<string, any>();
@@ -166,7 +175,7 @@ describe("Extension Registration", () => {
         return Promise.resolve({ markdown: "Proceed.", thinkingText: "" });
       },
     });
-    const ctx = {
+    const ctx = asExtensionContext({
       cwd: tmpdir(),
       hasUI: true,
       isProjectTrusted: () => false,
@@ -177,7 +186,7 @@ describe("Extension Registration", () => {
           }
         },
       },
-    } as any;
+    });
 
     await commands.get("advisor-manual").handler("Check", ctx);
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -215,7 +224,7 @@ describe("Extension Registration", () => {
       mockPi(
         { commands },
         {
-          appendEntry(type: string, data: unknown) {
+          appendEntry(type: string, data: JsonValue) {
             entries.push({ data, type });
             timeline.push(type);
           },
@@ -271,10 +280,7 @@ describe("Extension Registration", () => {
 
   test("cancels a manual consultation before its late response can fan out", async () => {
     const commands = new Map<string, any>();
-    const events = new Map<
-      string,
-      (event?: unknown, ctx?: { hasUI?: boolean }) => void
-    >();
+    const events = new Map<string, SessionShutdownHandler>();
     const sent: { message: any; options: any }[] = [];
     let resolveConsult!: (value: {
       markdown: string;
@@ -307,10 +313,7 @@ describe("Extension Registration", () => {
 
   test("suppresses late Scout lifecycle from a shutdown manual consultation", async () => {
     const commands = new Map<string, any>();
-    const events = new Map<
-      string,
-      (event?: unknown, ctx?: { hasUI?: boolean }) => void
-    >();
+    const events = new Map<string, SessionShutdownHandler>();
     const entries: string[] = [];
     let lateScout: ((event: any) => void) | undefined;
     registerCommands(
@@ -350,7 +353,7 @@ describe("Extension Registration", () => {
         return new Promise(() => {});
       },
     });
-    const ctx = {
+    const ctx = asExtensionContext({
       cwd: tmpdir(),
       hasUI: true,
       isProjectTrusted: () => false,
@@ -358,7 +361,7 @@ describe("Extension Registration", () => {
         setStatus: (_key: string, value: string | undefined) =>
           statuses.push(value),
       },
-    } as any;
+    });
     await commands.get("advisor-manual").handler("", ctx);
     expect(statuses.every((status) => status === undefined)).toBe(true);
     events.get("session_shutdown")?.({ reason: "reload" }, ctx);

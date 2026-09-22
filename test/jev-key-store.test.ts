@@ -24,12 +24,13 @@ const fileStoreSpy = () => {
   };
 };
 
+const keyOf = (options: { name: string; service: string }) =>
+  `${options.service}/${options.name}`;
+
 const memorySecrets = (
   initial?: Map<string, string>
 ): JevSecretsLike & { stored: Map<string, string> } => {
   const stored = initial ?? new Map<string, string>();
-  const keyOf = (options: { name: string; service: string }) =>
-    `${options.service}/${options.name}`;
   return {
     delete: (options) => {
       stored.delete(keyOf(options));

@@ -4,11 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { piHideThinkingEnabled } from "../src/pi-settings.ts";
+import type { JsonValue } from "./helpers/extension-context.ts";
 
 const AGENT_DIR_ENV = "PI_CODING_AGENT_DIR";
 
 const withAgentSettings = async (
-  settings: Record<string, unknown> | null,
+  settings: Record<string, JsonValue> | null,
   run: () => Promise<void> | void
 ) => {
   const agentDir = mkdtempSync(join(tmpdir(), "pi-advisor-pi-settings-"));
@@ -25,7 +26,7 @@ const withAgentSettings = async (
     await run();
   } finally {
     if (previousAgentDir === undefined) {
-      delete process.env[AGENT_DIR_ENV];
+      delete process.env.PI_CODING_AGENT_DIR;
     } else {
       process.env[AGENT_DIR_ENV] = previousAgentDir;
     }

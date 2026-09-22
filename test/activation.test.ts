@@ -13,6 +13,7 @@ import {
 } from "../src/config.ts";
 import { registerAdvisorTool } from "../src/tools.ts";
 import { savedConfig, withAgentDir } from "./helpers/config-fixture.ts";
+import { asExtensionContext } from "./helpers/extension-context.ts";
 import {
   activationContext,
   activationHarness,
@@ -22,7 +23,17 @@ import { mockPi } from "./helpers/mock-pi.ts";
 
 initTheme();
 
-const modelsRegistry = (models: { id: string; provider: string }[]) => ({
+interface RegistryModel {
+  id: string;
+  provider: string;
+}
+
+interface SelectorTheme {
+  bold: (value: string) => string;
+  fg: (color: string, value: string) => string;
+}
+
+const modelsRegistry = (models: RegistryModel[]) => ({
   find: (provider: string, id: string) =>
     models.find((model) => model.provider === provider && model.id === id),
   getApiKeyAndHeaders: () => Promise.resolve({ apiKey: "key", ok: true }),
@@ -32,7 +43,7 @@ const modelsRegistry = (models: { id: string; provider: string }[]) => ({
 /** ui.custom that renders the selector, optionally types `search` on the
  * second opening, and submits with Enter. */
 const typingSelectorUi = (
-  theme: any,
+  theme: SelectorTheme,
   options: {
     onOpen?: () => void;
     onValue?: (value: string | undefined) => void;
@@ -78,17 +89,17 @@ describe("Advisor activation flow", () => {
         { id: "executor", provider: "provider" },
         { id: "advisor", provider: "provider" },
       ];
-      const theme = {
+      const theme: SelectorTheme = {
         bold: (value: string) => value,
         fg: (_color: string, value: string) => value,
-      } as any;
-      const ctx = {
+      };
+      const ctx = asExtensionContext({
         cwd: agentDir,
         hasUI: true,
         isProjectTrusted: () => false,
         modelRegistry: modelsRegistry(models),
         ui: typingSelectorUi(theme, { search: "advisor" }),
-      } as any;
+      });
 
       registerCommands(
         mockPi(
@@ -98,7 +109,7 @@ describe("Advisor activation flow", () => {
             setActiveTools(tools: string[]) {
               activeTools = tools;
             },
-            setModel(model: unknown) {
+            setModel(model: RegistryModel) {
               selectedModel = model;
               return Promise.resolve(true);
             },
@@ -131,7 +142,7 @@ describe("Advisor activation flow", () => {
       ];
       const selectedModels: string[] = [];
       const notices: string[] = [];
-      const ctx = {
+      const ctx = asExtensionContext({
         cwd: agentDir,
         hasUI: true,
         isProjectTrusted: () => false,
@@ -147,7 +158,7 @@ describe("Advisor activation flow", () => {
           }),
           notify: (message: string) => notices.push(message),
         },
-      } as any;
+      });
 
       registerCommands(pi);
       await commands.get("advisor").handler("", ctx);
@@ -189,7 +200,7 @@ describe("Advisor activation flow", () => {
           { id: "advisor", provider: "provider" },
         ];
         let customCalls = 0;
-        const ctx = {
+        const ctx = asExtensionContext({
           cwd: agentDir,
           hasUI: true,
           isProjectTrusted: () => false,
@@ -201,7 +212,7 @@ describe("Advisor activation flow", () => {
             },
             notify: () => {},
           },
-        } as any;
+        });
 
         registerCommands(pi);
         await commands.get("advisor").handler("", ctx);
@@ -225,7 +236,7 @@ describe("Advisor activation flow", () => {
           { id: "executor", provider: "provider" },
         ];
         let customCalls = 0;
-        const ctx = {
+        const ctx = asExtensionContext({
           cwd: agentDir,
           hasUI: true,
           isProjectTrusted: () => false,
@@ -238,7 +249,7 @@ describe("Advisor activation flow", () => {
             }),
             select: () => Promise.resolve("✓ Default (Model Default)"),
           },
-        } as any;
+        });
 
         registerCommands(pi);
         await commands.get("advisor").handler("", ctx);
@@ -257,7 +268,7 @@ describe("Advisor activation flow", () => {
     await withAgentDir({}, async (agentDir) => {
       const { commands, pi, setActiveTools } = activationHarness();
       setActiveTools([]);
-      const ctx = {
+      const ctx = asExtensionContext({
         cwd: agentDir,
         hasUI: true,
         isProjectTrusted: () => false,
@@ -274,7 +285,7 @@ describe("Advisor activation flow", () => {
           custom: () => Promise.resolve(),
           notify: () => {},
         },
-      } as any;
+      });
 
       registerCommands(pi);
       await commands.get("advisor").handler("", ctx);
@@ -294,11 +305,11 @@ describe("Advisor activation flow", () => {
           { id: "luna", provider: "provider" },
         ];
         const selectedModels: string[] = [];
-        const theme = {
+        const theme: SelectorTheme = {
           bold: (value: string) => value,
           fg: (_color: string, value: string) => value,
-        } as any;
-        const ctx = {
+        };
+        const ctx = asExtensionContext({
           cwd: agentDir,
           hasUI: true,
           isProjectTrusted: () => false,
@@ -311,7 +322,7 @@ describe("Advisor activation flow", () => {
             },
             search: "luna",
           }),
-        } as any;
+        });
 
         registerCommands(pi);
         setActiveTools([]);

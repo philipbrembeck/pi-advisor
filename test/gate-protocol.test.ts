@@ -8,6 +8,14 @@ import {
   parseAutomaticDecision,
 } from "../src/tools.ts";
 
+const expectFailure = (text: string, category: any) => {
+  const result = parseAutomaticDecision(text);
+  expect(result.ok).toBe(false);
+  if (!result.ok) {
+    expect(result.category).toBe(category);
+  }
+};
+
 describe("Advisor consultation and gate contracts", () => {
   test("keeps automatic decision instructions separate from manual Markdown", () => {
     expect(ADVISOR_SYSTEM).toContain("human-readable Markdown");
@@ -31,13 +39,6 @@ describe("Advisor consultation and gate contracts", () => {
   });
 
   test("classifies missing, malformed, duplicate, and contradictory gate decisions", () => {
-    const expectFailure = (text: string, category: any) => {
-      const result = parseAutomaticDecision(text);
-      expect(result.ok).toBe(false);
-      if (!result.ok) {
-        expect(result.category).toBe(category);
-      }
-    };
     expectFailure("", "empty-response");
     expectFailure("Advice\nDecision: proceed", "missing-decision");
     expectFailure("Decision: proceed now", "malformed-decision");

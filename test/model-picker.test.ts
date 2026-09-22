@@ -4,36 +4,82 @@ import { join } from "node:path";
 
 import { registerCommands } from "../src/commands.ts";
 import { getConfiguredModelRefs } from "../src/commands/model-options.ts";
-import {
-  SearchableModelMultiSelector,
-  SearchableModelSelector,
-} from "../src/ui/model-selector.ts";
+import { SearchableModelMultiSelector } from "../src/ui/model-multi-selector.ts";
+import { SearchableModelSelector } from "../src/ui/model-selector.ts";
 import { withAgentDir } from "./helpers/config-fixture.ts";
+import { asExtensionContext } from "./helpers/extension-context.ts";
 import { mockPi } from "./helpers/mock-pi.ts";
+
+// SAFETY: theme stub implements only the bold/fg members the selectors render with.
+const theme = {
+  bold: (value: string) => value,
+  fg: (_color: string, value: string) => value,
+} as any;
+
+// SAFETY: keybindings stub only needs matches() to deny every key sequence.
+const keybindings = { matches: () => false } as any;
+
+const runModelsCommand = async (agentDir: string) => {
+  const commands = new Map<string, any>();
+  const effortChoicesSeen: string[][] = [];
+  registerCommands(mockPi({ commands }));
+  await commands.get("advisor-models").handler(
+    "",
+    asExtensionContext({
+      cwd: agentDir,
+      hasUI: true,
+      isProjectTrusted: () => false,
+      modelRegistry: {
+        getAvailable: () => [
+          { id: "executor", provider: "provider" },
+          { id: "advisor", provider: "provider" },
+        ],
+      },
+      ui: {
+        custom: (factory: any) =>
+          new Promise((resolve) => {
+            const selector = factory(
+              { requestRender: () => {} },
+              theme,
+              { matches: () => false },
+              resolve
+            );
+            selector.render(100);
+            selector.handleInput("\r");
+          }),
+        notify: () => {},
+        select: (_title: string, choices: string[]) => {
+          effortChoicesSeen.push(choices);
+          return Promise.resolve(choices[0]);
+        },
+      },
+    })
+  );
+  return {
+    effortChoicesSeen,
+    saved: JSON.parse(readFileSync(join(agentDir, "advisor.json"), "utf-8")),
+  };
+};
 
 describe("Searchable model selector", () => {
   test("lists only models available from Pi's model registry", () => {
-    const refs = getConfiguredModelRefs({
-      modelRegistry: {
-        getAll: () => [
-          { id: "unavailable", provider: "provider" },
-          { id: "first", provider: "provider" },
-        ],
-        getAvailable: () => [
-          { id: "second", provider: "provider" },
-          { id: "first", provider: "provider" },
-          { id: "first", provider: "provider" },
-        ],
-      },
-    } as any);
+    const refs = getConfiguredModelRefs(
+      asExtensionContext({
+        modelRegistry: {
+          getAll: () => [
+            { id: "unavailable", provider: "provider" },
+            { id: "first", provider: "provider" },
+          ],
+          getAvailable: () => [
+            { id: "second", provider: "provider" },
+            { id: "first", provider: "provider" },
+            { id: "first", provider: "provider" },
+          ],
+        },
+      })
+    );
     expect(refs).toEqual(["provider/first", "provider/second"]);
   });
-
-  const theme = {
-    bold: (value: string) => value,
-    fg: (_color: string, value: string) => value,
-  } as any;
-  const keybindings = { matches: () => false } as any;
 
   test("shows the current model first and ticked", () => {
     const selector = new SearchableModelSelector({
@@ -187,49 +233,6 @@ describe("Searchable model selector", () => {
 });
 
 describe("Advisor model command thinking levels", () => {
-  const runModelsCommand = async (agentDir: string) => {
-    const commands = new Map<string, any>();
-    const effortChoicesSeen: string[][] = [];
-    const theme = {
-      bold: (value: string) => value,
-      fg: (_color: string, value: string) => value,
-    } as any;
-    registerCommands(mockPi({ commands }));
-    await commands.get("advisor-models").handler("", {
-      cwd: agentDir,
-      hasUI: true,
-      isProjectTrusted: () => false,
-      modelRegistry: {
-        getAvailable: () => [
-          { id: "executor", provider: "provider" },
-          { id: "advisor", provider: "provider" },
-        ],
-      },
-      ui: {
-        custom: (factory: any) =>
-          new Promise((resolve) => {
-            const selector = factory(
-              { requestRender: () => {} },
-              theme,
-              { matches: () => false },
-              resolve
-            );
-            selector.render(100);
-            selector.handleInput("\r");
-          }),
-        notify: () => {},
-        select: (_title: string, choices: string[]) => {
-          effortChoicesSeen.push(choices);
-          return Promise.resolve(choices[0]);
-        },
-      },
-    } as any);
-    return {
-      effortChoicesSeen,
-      saved: JSON.parse(readFileSync(join(agentDir, "advisor.json"), "utf-8")),
-    };
-  };
-
   test("shows configured levels first in the effort choices", async () => {
     await withAgentDir(
       {

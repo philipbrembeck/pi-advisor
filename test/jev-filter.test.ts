@@ -1,7 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
-import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-
 import {
   setAdvisorJevFilterEnabledRef,
   setAdvisorJevFilterOverrideWindowRef,
@@ -14,12 +12,20 @@ import {
   resetJevOutageNotification,
   screenConsultation,
 } from "../src/tools/jev-filter.ts";
+import { asExtensionContext } from "./helpers/extension-context.ts";
 import { branchFromLines, systemOneMock } from "./helpers/jev-mock.ts";
 
 const credentials = { apiKey: "tsk-test", transport: "typesafe" as const };
 
+const summaryLine = (session: AdvisorSessionState) => {
+  const summary = session.summary(undefined) ?? "";
+  return (
+    summary.split("\n").find((line) => line.startsWith("Jev filter:")) ?? ""
+  );
+};
+
 const ctxWith = (options: { notifications?: string[] } = {}) =>
-  ({
+  asExtensionContext({
     cwd: "/",
     hasUI: true,
     isProjectTrusted: () => false,
@@ -29,7 +35,7 @@ const ctxWith = (options: { notifications?: string[] } = {}) =>
     ui: {
       notify: (message: string) => options.notifications?.push(message),
     },
-  }) as unknown as ExtensionContext;
+  });
 
 const verdictResponse = (p0: number, noul: number) => ({
   answers: {
@@ -414,10 +420,3 @@ describe("normalizeScreeningQuestion", () => {
     expect(normalizeScreeningQuestion("   ")).toBeUndefined();
   });
 });
-
-const summaryLine = (session: AdvisorSessionState) => {
-  const summary = session.summary(undefined) ?? "";
-  return (
-    summary.split("\n").find((line) => line.startsWith("Jev filter:")) ?? ""
-  );
-};

@@ -7,23 +7,24 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { join, resolve as resolvePath } from "node:path";
 import { test } from "node:test";
-import { fileURLToPath } from "node:url";
 
 import {
   DefaultResourceLoader,
   initTheme,
 } from "../node_modules/@earendil-works/pi-coding-agent/dist/index.js";
 
-const packageRoot = resolve(import.meta.dirname, "..");
+const packageRoot = resolvePath(import.meta.dirname, "..");
 const packageManifest = JSON.parse(
   readFileSync(join(packageRoot, "package.json"), "utf-8")
 );
-const bundledEntry = resolve(packageRoot, packageManifest.main);
+const bundledEntry = resolvePath(packageRoot, packageManifest.main);
 const CONTEXT_WINDOW_PATTERN = /Context window[\s\S]*100k/u;
 const ADVISOR_EFFORT_PATTERN = /Advisor reasoning[\s\S]*off/u;
 const MODEL_WHITELIST_PATTERN = /Advisor model whitelist/u;
+
+const noop = () => undefined;
 
 const extensionContext = (cwd) => ({
   cwd,
@@ -45,14 +46,9 @@ const runSettingsCommand = async (handler, context, change) => {
   let rendered;
   const ui = {
     custom: async (factory) =>
-      new Promise((resolveDialog) => {
-        const done = () => resolveDialog();
-        const selector = factory(
-          { requestRender: () => {} },
-          fakeTheme,
-          {},
-          done
-        );
+      new Promise((resolve) => {
+        const done = () => resolve();
+        const selector = factory({ requestRender: noop }, fakeTheme, {}, done);
         if (change) {
           // Context starts at 25k: one right-arrow selects 100k. Three down
           // arrows select Advisor reasoning, then right-arrow selects "off".
@@ -65,7 +61,7 @@ const runSettingsCommand = async (handler, context, change) => {
         rendered = selector.render(120).join("\n");
         selector.handleInput("\u001B");
       }),
-    notify: () => {},
+    notify: noop,
   };
   await handler("", { ...context, ui });
   return rendered;

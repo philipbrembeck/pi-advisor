@@ -11,15 +11,6 @@ import { join } from "node:path";
 
 import { CONFIG_DIR_NAME } from "@earendil-works/pi-coding-agent";
 
-const AGENT_DIR_ENV = "PI_CODING_AGENT_DIR";
-const INVALID_FAILURE_MODE_PATTERN =
-  /block-session.*block-tool.*warn-and-continue/u;
-const INVALID_TOOL_POLICIES_PATTERN = /advisorToolPolicies/u;
-const INVALID_SCOUT_ENABLED_PATTERN = /advisorScoutEnabled/u;
-const INVALID_SHOW_USAGE_DETAILS_PATTERN = /showUsageDetails/u;
-const INVALID_SHOW_USAGE_FOOTER_PATTERN = /showUsageFooter/u;
-const INVALID_MODEL_WHITELIST_PATTERN = /advisorModelWhitelist/u;
-
 import {
   advisorFailureModeRef,
   advisorHerdrIntegrationRef,
@@ -74,6 +65,16 @@ import {
   splitRef,
   validateConfig,
 } from "../src/config.ts";
+import { asExtensionContext } from "./helpers/extension-context.ts";
+
+const AGENT_DIR_ENV = "PI_CODING_AGENT_DIR";
+const INVALID_FAILURE_MODE_PATTERN =
+  /block-session.*block-tool.*warn-and-continue/u;
+const INVALID_TOOL_POLICIES_PATTERN = /advisorToolPolicies/u;
+const INVALID_SCOUT_ENABLED_PATTERN = /advisorScoutEnabled/u;
+const INVALID_SHOW_USAGE_DETAILS_PATTERN = /showUsageDetails/u;
+const INVALID_SHOW_USAGE_FOOTER_PATTERN = /showUsageFooter/u;
+const INVALID_MODEL_WHITELIST_PATTERN = /advisorModelWhitelist/u;
 
 describe("Config Module", () => {
   test("splitRef should split provider/model", () => {
@@ -127,7 +128,9 @@ describe("Config Module", () => {
 
     try {
       resetConfigCache();
-      loadConfig({ cwd: tmpdir(), isProjectTrusted: () => false } as any);
+      loadConfig(
+        asExtensionContext({ cwd: tmpdir(), isProjectTrusted: () => false })
+      );
       expect(advisorFailureModeRef).toBe("block-session");
       expect(simpleModeRef).toBe(false);
       expect(alwaysOnRef).toBe(false);
@@ -179,7 +182,7 @@ describe("Config Module", () => {
       }
     } finally {
       if (previousAgentDir === undefined) {
-        delete process.env[AGENT_DIR_ENV];
+        delete process.env.PI_CODING_AGENT_DIR;
       } else {
         process.env[AGENT_DIR_ENV] = previousAgentDir;
       }
@@ -210,13 +213,15 @@ describe("Config Module", () => {
 
     try {
       setAdvisorMaxCallsPerSessionRef(undefined);
-      const path = saveConfig({ cwd, isProjectTrusted: () => false } as any);
+      const path = saveConfig(
+        asExtensionContext({ cwd, isProjectTrusted: () => false })
+      );
       expect(JSON.parse(readFileSync(path, "utf-8"))).not.toHaveProperty(
         "advisorMaxCallsPerSession"
       );
     } finally {
       if (previousAgentDir === undefined) {
-        delete process.env[AGENT_DIR_ENV];
+        delete process.env.PI_CODING_AGENT_DIR;
       } else {
         process.env[AGENT_DIR_ENV] = previousAgentDir;
       }
@@ -241,18 +246,18 @@ describe("Config Module", () => {
     );
     resetConfigCache();
     try {
-      loadConfig({ cwd, isProjectTrusted: () => true } as any);
+      loadConfig(asExtensionContext({ cwd, isProjectTrusted: () => true }));
       expect(advisorOutcomeLoggingRef).toBe(false);
       writeFileSync(
         join(agentDir, "advisor.json"),
         JSON.stringify({ advisorOutcomeLogging: true })
       );
       resetConfigCache();
-      loadConfig({ cwd, isProjectTrusted: () => true } as any);
+      loadConfig(asExtensionContext({ cwd, isProjectTrusted: () => true }));
       expect(advisorOutcomeLoggingRef).toBe(true);
     } finally {
       if (previousAgentDir === undefined) {
-        delete process.env[AGENT_DIR_ENV];
+        delete process.env.PI_CODING_AGENT_DIR;
       } else {
         process.env[AGENT_DIR_ENV] = previousAgentDir;
       }
@@ -278,18 +283,18 @@ describe("Config Module", () => {
     );
     resetConfigCache();
     try {
-      loadConfig({ cwd, isProjectTrusted: () => true } as any);
+      loadConfig(asExtensionContext({ cwd, isProjectTrusted: () => true }));
       expect(advisorScoutEnabledRef).toBe(false);
       writeFileSync(
         join(agentDir, "advisor.json"),
         JSON.stringify({ advisorScoutEnabled: true })
       );
       resetConfigCache();
-      loadConfig({ cwd, isProjectTrusted: () => true } as any);
+      loadConfig(asExtensionContext({ cwd, isProjectTrusted: () => true }));
       expect(advisorScoutEnabledRef).toBe(true);
     } finally {
       if (previousAgentDir === undefined) {
-        delete process.env[AGENT_DIR_ENV];
+        delete process.env.PI_CODING_AGENT_DIR;
       } else {
         process.env[AGENT_DIR_ENV] = previousAgentDir;
       }
@@ -330,7 +335,9 @@ describe("Config Module", () => {
       setAdvisorRedactSecretsRef(true);
       setAdvisorToolPoliciesRef({ bash: "summary", deploy: "exclude" });
       setAdvisorTrackedFileContentRef(true);
-      const path = saveConfig({ cwd, isProjectTrusted: () => false } as any);
+      const path = saveConfig(
+        asExtensionContext({ cwd, isProjectTrusted: () => false })
+      );
       expect(JSON.parse(readFileSync(path, "utf-8"))).toMatchObject({
         advisorAutoLoopGate: false,
         advisorBlockOnBlocked: false,
@@ -359,12 +366,12 @@ describe("Config Module", () => {
       });
 
       const warnings: string[] = [];
-      const ctx = {
+      const ctx = asExtensionContext({
         cwd,
         hasUI: true,
         isProjectTrusted: () => false,
         ui: { notify: (message: string) => warnings.push(message) },
-      } as any;
+      });
       expect(() => loadConfig(ctx)).not.toThrow();
       expect(() => loadConfig(ctx)).not.toThrow();
       expect(warnings).toHaveLength(1);
@@ -374,7 +381,7 @@ describe("Config Module", () => {
       expect(showUsageFooterRef).toBe(true);
     } finally {
       if (previousAgentDir === undefined) {
-        delete process.env[AGENT_DIR_ENV];
+        delete process.env.PI_CODING_AGENT_DIR;
       } else {
         process.env[AGENT_DIR_ENV] = previousAgentDir;
       }

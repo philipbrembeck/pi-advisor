@@ -7,6 +7,7 @@ import { initTheme } from "@earendil-works/pi-coding-agent";
 import { stripTerminalSequences, visibleWidth } from "@earendil-works/pi-tui";
 
 import { renderThinkingMarkdown } from "../src/tools.ts";
+import { agentDir } from "./helpers/config-fixture.ts";
 
 initTheme();
 
@@ -25,7 +26,7 @@ describe("Advisor thinking Markdown rendering", () => {
     );
   });
   afterEach(() => {
-    rmSync(process.env.PI_CODING_AGENT_DIR as string, {
+    rmSync(agentDir(), {
       force: true,
       recursive: true,
     });

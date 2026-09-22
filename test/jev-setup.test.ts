@@ -6,25 +6,27 @@ import {
 } from "../src/config/state.ts";
 import { resetPlaintextKeyWarning } from "../src/jev/key-store.ts";
 import type { JevCredentials, JevTransportKind } from "../src/jev/transport.ts";
+import type { JevSetupDeps } from "../src/ui/jev-setup-submenu.ts";
 import { JevSetupSubmenu } from "../src/ui/jev-setup-submenu.ts";
 import { MaskedInput } from "../src/ui/masked-input.ts";
-
-const theme = {
-  bold: (text: string) => text,
-  fg: (_color: string, text: string) => text,
-} as any;
+import { plainThemeMock } from "./helpers/theme.ts";
 
 const credentials = (
   transport: JevTransportKind,
   source?: JevCredentials["source"]
-): JevCredentials => ({
-  apiKey: "tsk-live-key",
-  ...(source ? { source } : {}),
-  transport,
-});
+): JevCredentials => {
+  const value: JevCredentials = { apiKey: "tsk-live-key", transport };
+  if (source) {
+    value.source = source;
+  }
+  return value;
+};
+
+/** Deps tests inject; hasSecretStore rides along unused by the submenu. */
+type SetupDepsFixture = JevSetupDeps & { hasSecretStore?: () => boolean };
 
 const openSetup = (
-  options: { currentValue?: string; deps?: Record<string, unknown> } = {}
+  options: { currentValue?: string; deps?: SetupDepsFixture } = {}
 ) => {
   const results: (string | undefined)[] = [];
   const renders: string[] = [];
@@ -32,14 +34,14 @@ const openSetup = (
     {
       currentValue: options.currentValue ?? "Off",
       done: (value) => results.push(value),
-      theme,
+      theme: plainThemeMock,
       tui: { requestRender: () => renders.push("render") },
     },
     {
-      resolveTransport: () => Promise.resolve(),
+      resolveTransport: () => Promise.resolve(undefined),
       verify: () => Promise.resolve({ ok: true }),
       ...options.deps,
-    } as never
+    }
   );
   return { renders, results, setup };
 };

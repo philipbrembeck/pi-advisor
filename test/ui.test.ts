@@ -16,20 +16,55 @@ import {
 } from "../src/ui.ts";
 import type { ManualAdvisorRequest } from "../src/ui.ts";
 import { TextSettingSubmenu } from "../src/ui/text-setting-submenu.ts";
+import { plainThemeMock } from "./helpers/theme.ts";
 
-const theme = {
-  bold: (value: string) => value,
-  fg: (_color: string, value: string) => value,
-} as any;
+const theme = plainThemeMock;
+
+interface AnsiCodeTable {
+  accent: number;
+  border: number;
+  dim: number;
+  muted: number;
+  text: number;
+  [color: string]: number;
+}
+
+const actionsRow = (lines: string[]) =>
+  lines
+    .map((line) => stripTerminalSequences(line))
+    .find((line) => line.includes("[Submit]"));
+
+const makeModelSelector = (
+  allOptions: string[],
+  currentOption?: string,
+  testTheme: any = theme
+) => {
+  let selected: string | undefined;
+  const selector = new SearchableModelSelector({
+    allOptions,
+    currentOption,
+    // SAFETY: keybindings mock only answers matches(), the sole method the selector calls.
+    keybindings: { matches: () => false } as any,
+    onCancel: () => {},
+    onSelect: (value) => {
+      selected = value;
+    },
+    theme: testTheme,
+    title: "Select Model",
+    tui: { requestRender: () => {} },
+  });
+  return { selected: () => selected, selector };
+};
 
 const makeTui = () => {
   let renders = 0;
+  // SAFETY: mock implements requestRender and terminal.rows, the members the dialog under test reads.
   const tui = {
     requestRender: () => {
       renders += 1;
     },
     terminal: { rows: 24 },
-  } as unknown as TUI;
+  } as TUI;
   return { renders: () => renders, tui };
 };
 
@@ -240,10 +275,6 @@ describe("ManualAdvisorDialog", () => {
 
   test("centers the action buttons between the borders", () => {
     const { dialog } = makeDialog();
-    const actionsRow = (lines: string[]) =>
-      lines
-        .map((line) => stripTerminalSequences(line))
-        .find((line) => line.includes("[Submit]"));
     const buttons = "[Submit]  [Cancel]".length;
     // Row structure: border(1) + pad(1) + content + pad(1) + border(1), so the
     // centered start is 1 + (width - 2 - buttons) / 2 regardless of focus.
@@ -260,29 +291,8 @@ describe("ManualAdvisorDialog", () => {
 });
 
 describe("SearchableModelSelector", () => {
-  const makeSelector = (
-    allOptions: string[],
-    currentOption?: string,
-    testTheme: any = theme
-  ) => {
-    let selected: string | undefined;
-    const selector = new SearchableModelSelector({
-      allOptions,
-      currentOption,
-      keybindings: { matches: () => false } as any,
-      onCancel: () => {},
-      onSelect: (value) => {
-        selected = value;
-      },
-      theme: testTheme,
-      title: "Select Model",
-      tui: { requestRender: () => {} },
-    });
-    return { selected: () => selected, selector };
-  };
-
   test("keeps every rendered line within the terminal width", () => {
-    const { selector } = makeSelector(
+    const { selector } = makeModelSelector(
       [
         "some-very-long-provider/with-an-extremely-long-model-identifier-name",
         "provider/short",
@@ -300,19 +310,20 @@ describe("SearchableModelSelector", () => {
   test("frames the list with single border rules and a dim hint row", () => {
     // The mock must emit real ANSI escapes: the component's final
     // truncateToWidth treats them as zero-width, unlike literal text.
-    const codes: Record<string, number> = {
+    const codes: AnsiCodeTable = {
       accent: 36,
       border: 90,
       dim: 2,
       muted: 37,
       text: 39,
     };
+    // SAFETY: recording theme emits real ANSI escapes so width math sees them as zero-width.
     const recordingTheme = {
       bold: (value: string) => `\u001B[1m${value}\u001B[22m`,
       fg: (color: string, value: string) =>
         `\u001B[${codes[color] ?? 39}m${value}\u001B[39m`,
     } as any;
-    const { selector } = makeSelector(
+    const { selector } = makeModelSelector(
       ["provider/one"],
       undefined,
       recordingTheme
@@ -326,7 +337,7 @@ describe("SearchableModelSelector", () => {
   });
 
   test("still selects the highlighted model after truncation", () => {
-    const { selected, selector } = makeSelector([
+    const { selected, selector } = makeModelSelector([
       "a-very-long-provider-name/and-a-very-long-model-name",
     ]);
     selector.render(30);
@@ -392,6 +403,7 @@ describe("AdvisorSettingsSelector simple mode label", () => {
       onCancel: () => {},
       onChange: () => {},
       presets,
+      // SAFETY: formatting theme pairs every fg color name with the text for render assertions.
       theme: {
         bold: (value: string) => value,
         fg: (color: string, value: string) => `[${color}]${value}`,

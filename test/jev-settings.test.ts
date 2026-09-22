@@ -21,15 +21,17 @@ import {
 import { saveConfig } from "../src/config/storage.ts";
 import { validateConfig } from "../src/config/validation.ts";
 import { AdvisorSettingsSelector } from "../src/ui.ts";
-import { savedConfig, withAgentDir } from "./helpers/config-fixture.ts";
+import {
+  agentDir,
+  savedConfig,
+  withAgentDir,
+} from "./helpers/config-fixture.ts";
+import { asExtensionContext } from "./helpers/extension-context.ts";
+import type { JsonValue } from "./helpers/extension-context.ts";
 import { changeSetting, plainScreen } from "./helpers/settings-navigation.ts";
+import { plainThemeMock } from "./helpers/theme.ts";
 
 initTheme();
-
-const selectorTheme = {
-  bold: (text: string) => text,
-  fg: (_color: string, text: string) => text,
-} as any;
 
 const openSelector = (initial: any = {}) => {
   const saved: any[] = [];
@@ -50,13 +52,13 @@ const openSelector = (initial: any = {}) => {
       { description: "none", label: "0", value: 0 },
       { description: "15k", label: "15k", value: 15_000 },
     ],
-    theme: selectorTheme,
-    tui: { requestRender: () => {} },
-  } as any);
+    theme: plainThemeMock,
+    tui: { requestRender: () => undefined },
+  });
   return { saved, selector };
 };
 
-const INVALID_SETTINGS: [Record<string, unknown>, RegExp][] = [
+const INVALID_SETTINGS: [Record<string, JsonValue>, RegExp][] = [
   [{ advisorJevTimeoutMs: 0 }, /advisorJevTimeoutMs/u],
   [{ advisorJevTimeoutMs: 1.5 }, /advisorJevTimeoutMs/u],
   [{ advisorJevDigestMaxChars: -1 }, /advisorJevDigestMaxChars/u],
@@ -88,7 +90,9 @@ const focusJevFilterRow = (selector: any) => {
 describe("Jev shared settings", () => {
   test("default to safe values and validate their types", async () => {
     await withAgentDir({}, () => {
-      loadConfig({ cwd: "/", isProjectTrusted: () => false } as any);
+      loadConfig(
+        asExtensionContext({ cwd: "/", isProjectTrusted: () => false })
+      );
       expect(advisorJevModelRef).toBe("jev-latest");
       expect(advisorJevTimeoutMsRef).toBe(8000);
       expect(advisorJevDigestMaxCharsRef).toBe(4000);
@@ -135,7 +139,9 @@ describe("Jev shared settings", () => {
         advisorJevTurnGateNoulThreshold: 0.85,
       },
       () => {
-        loadConfig({ cwd: "/", isProjectTrusted: () => false } as any);
+        loadConfig(
+          asExtensionContext({ cwd: "/", isProjectTrusted: () => false })
+        );
         expect(advisorJevModelRef).toBe("jev-1.13.0");
         expect(advisorJevTimeoutMsRef).toBe(15_000);
         expect(advisorJevDigestMaxCharsRef).toBe(8000);
@@ -150,8 +156,10 @@ describe("Jev shared settings", () => {
         setAdvisorJevModelRef(undefined);
         setAdvisorJevTimeoutMsRef(30_000);
         setAdvisorJevTransportRef("typesafe");
-        saveConfig({ cwd: "/", isProjectTrusted: () => false } as any);
-        expect(savedConfig(process.env.PI_CODING_AGENT_DIR as string)).toEqual({
+        saveConfig(
+          asExtensionContext({ cwd: "/", isProjectTrusted: () => false })
+        );
+        expect(savedConfig(agentDir())).toEqual({
           advisorJevDigestMaxChars: 8000,
           advisorJevFilterEnabled: true,
           advisorJevFilterNoulMargin: 0.4,
@@ -172,8 +180,10 @@ describe("Jev shared settings", () => {
     await withAgentDir(
       { typesafe_api_key: "tsk-config-key", unrelatedTypo: true },
       () => {
-        loadConfig({ cwd: "/", isProjectTrusted: () => false } as any);
-        const saved = savedConfig(process.env.PI_CODING_AGENT_DIR as string);
+        loadConfig(
+          asExtensionContext({ cwd: "/", isProjectTrusted: () => false })
+        );
+        const saved = savedConfig(agentDir());
         expect(saved.typesafe_api_key).toBe("tsk-config-key");
         expect("typesafe_api_key" in saved).toBe(true);
         // The reserved key never became a config setting.
@@ -216,6 +226,7 @@ describe("Jev shared settings", () => {
     const screenText = plainScreen(selector);
     expect(screenText).not.toContain("Jev consultation filter");
     focusJevFilterRow(selector);
+    // SAFETY: settingsList.submenuComponent is the live submenu the selector installed on open.
     const submenu = (selector as any).settingsList.submenuComponent;
     expect(submenu?.constructor?.name).toBe("JevSetupSubmenu");
     submenu.options.done("On");
@@ -236,6 +247,7 @@ describe("Jev shared settings", () => {
     })();
     expect(presses).toBeGreaterThanOrEqual(0);
     selector.handleInput("\r");
+    // SAFETY: settingsList.submenuComponent is the live submenu the selector installed on open.
     const editor = (selector as any).settingsList.submenuComponent;
     editor.input.setValue("  jev-1.13.0 \n");
     editor.input.onSubmit(editor.input.getValue());

@@ -3,12 +3,13 @@ import { writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import type { runAdvisorGate } from "../extensions/index.ts";
 import { registerCommands } from "../src/commands.ts";
 import { resetConfigCache } from "../src/config.ts";
 import { AdvisorSessionState } from "../src/session-state.ts";
+import type { AdvisorGateOutcome } from "../src/tools.ts";
 import { registerAdvisorTool } from "../src/tools.ts";
 import { withAgentDir } from "./helpers/config-fixture.ts";
+import { asExtensionContext } from "./helpers/extension-context.ts";
 import { mockPi } from "./helpers/mock-pi.ts";
 
 describe("Command configuration errors", () => {
@@ -18,7 +19,7 @@ describe("Command configuration errors", () => {
       resetConfigCache();
       const commands = new Map<string, any>();
       const notifications: { message: string; level: string }[] = [];
-      const context = {
+      const context = asExtensionContext({
         cwd: tmpdir(),
         hasUI: true,
         isProjectTrusted: () => false,
@@ -26,7 +27,7 @@ describe("Command configuration errors", () => {
           notify: (message: string, level: string) =>
             notifications.push({ level, message }),
         },
-      } as any;
+      });
 
       registerCommands(mockPi({ commands }));
       await Promise.all(
@@ -67,21 +68,21 @@ describe("Tool lifecycle configuration errors", () => {
         ),
         new AdvisorSessionState(),
         {
-          runGate: (() => {
+          runGate: async (): Promise<AdvisorGateOutcome> => {
             gateRuns += 1;
             return {
               decision: "proceed",
               markdown: "Decision: proceed\nContinue.",
               model: "provider/advisor",
-              ok: true as const,
+              ok: true,
               thinkingText: "",
-              trigger: "repeated-tool-call" as const,
+              trigger: "repeated-tool-call",
             };
-          }) as unknown as typeof runAdvisorGate,
+          },
         }
       );
       const toolCall = events.get("tool_call");
-      const ctx = {
+      const ctx = asExtensionContext({
         cwd: tmpdir(),
         hasUI: true,
         isProjectTrusted: () => false,
@@ -91,7 +92,7 @@ describe("Tool lifecycle configuration errors", () => {
             notifications.push({ level, message }),
           setStatus: () => {},
         },
-      } as any;
+      });
       const readEvent = {
         input: { path: "src/foo.ts" },
         toolCallId: "read-1",

@@ -1,8 +1,8 @@
 // Row navigation is resolved by label so that adding a settings row cannot
 // silently retarget an existing test's keystrokes.
 
-// biome-ignore lint/suspicious/noControlCharactersInRegex: strips terminal SGR codes
-const SGR_CODE = /\u001B\[[0-9;]*m/gu;
+const ESC = String.fromCodePoint(27);
+const SGR_CODE = new RegExp(`${ESC}\\[[0-9;]*m`, "gu");
 
 export const plainScreen = (selector: any) =>
   selector.render(100).join("\n").replace(SGR_CODE, "");

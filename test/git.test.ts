@@ -45,6 +45,10 @@ const withRepo = (run: (dir: string) => void, commit = true) => {
   }
 };
 
+const failing = () => {
+  throw new Error("git exploded");
+};
+
 describe("Git context collection", () => {
   test("summary never discloses file contents through hunk headers", () => {
     withRepo((dir) => {
@@ -159,9 +163,6 @@ describe("Git context collection", () => {
   });
 
   test("surfaces a collection failure instead of implying a clean tree", () => {
-    const failing = () => {
-      throw new Error("git exploded");
-    };
     const result = collectGitContext(
       tmpdir(),
       "summary",
