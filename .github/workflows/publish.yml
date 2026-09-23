@@ -2,8 +2,18 @@ name: Publish packages
 
 on:
   push:
+    branches:
+      - main
     tags:
       - "*.*.*"
+    paths:
+      - package.json
+      - CHANGELOG.md
+      - LICENSE
+      - README.md
+      - "dist/**"
+      - "extensions/**"
+      - "src/**"
   workflow_dispatch:
 
 permissions:
@@ -17,6 +27,7 @@ concurrency:
 
 jobs:
   publish:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
     name: Test and publish
     runs-on: ubuntu-latest
     steps:
@@ -84,3 +95,86 @@ jobs:
             echo "$output" >&2
             exit 1
           fi
+
+  detect-dev:
+    name: Check development release eligibility
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      publish_dev: ${{ steps.detect.outputs.publish_dev }}
+    steps:
+      - name: Check out main and its history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Skip stable-version updates
+        id: detect
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          previous_version="$(git show "${BEFORE}:package.json" 2>/dev/null | node -e 'let s = ""; process.stdin.on("data", d => s += d).on("end", () => { try { console.log(JSON.parse(s).version) } catch {} })' || true)"
+          current_version="$(node -p "require('./package.json').version")"
+          if [ "$current_version" = "$previous_version" ]; then
+            echo "publish_dev=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish_dev=false" >> "$GITHUB_OUTPUT"
+            echo "Package version changed; the stable release workflow handles this push."
+          fi
+
+  publish-dev:
+    name: Validate and publish npm development preview
+    needs: detect-dev
+    if: needs.detect-dev.outputs.publish_dev == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Check out main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.1
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Verify the development preview
+        run: |
+          bun run typecheck
+          bun run test
+          bun run lint
+          bun run format:check
+          bun run build
+          git diff --exit-code -- dist/index.js
+          test -z "$(git status --porcelain --untracked-files=all -- dist/index.js)"
+          bun run package:check
+          git diff --exit-code -- dist/index.js
+          test -z "$(git status --porcelain --untracked-files=all -- dist/index.js)"
+          bun scripts/audit.mjs
+
+      - name: Set the next development version
+        run: |
+          published_versions="$(npm view pi-advisor-flow versions --json)"
+          package_version="$(node -p "require('./package.json').version")"
+          dev_version="$(printf '%s' "$published_versions" | bun scripts/next-dev-version.ts "$package_version")"
+          npm pkg set "version=$dev_version"
+          echo "Publishing pi-advisor-flow@$dev_version to the npm dev dist-tag."
+          bun run build
+          git diff --exit-code -- dist/index.js
+          test -z "$(git status --porcelain --untracked-files=all -- dist/index.js)"
+          bun run package:check
+          git diff --exit-code -- dist/index.js
+          test -z "$(git status --porcelain --untracked-files=all -- dist/index.js)"
+
+      - name: Publish to npm dev dist-tag
+        run: npm publish --access public --provenance --tag=dev
