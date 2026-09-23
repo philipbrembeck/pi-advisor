@@ -2077,8 +2077,8 @@ var toolResultEntry = (message, toolResultMaxLines, toolResultMaxBytes, policies
     return `[Tool Result for ${toolName}] (excluded by Advisor tool policy)`;
   }
   if (policy === "summary") {
-    const capped2 = capToolResult(source, toolResultMaxLines, toolResultMaxBytes);
-    return `[Tool Result for ${toolName}] (output omitted by Advisor tool policy: summary; status: ${status}; ${capped2.totalLines} lines, ${capped2.totalBytes} bytes; source output was${capped2.truncated ? "" : " not"} truncated)`;
+    const capped = capToolResult(source, toolResultMaxLines, toolResultMaxBytes);
+    return `[Tool Result for ${toolName}] (output omitted by Advisor tool policy: summary; status: ${status}; ${capped.totalLines} lines, ${capped.totalBytes} bytes; source output was${capped.truncated ? "" : " not"} truncated)`;
   }
   const disclosed = redact ? redactSecrets(source) : source;
   const capped = capToolResult(disclosed, toolResultMaxLines, toolResultMaxBytes);
@@ -2118,17 +2118,17 @@ var selectRecentEntries = (entries, maxChars) => {
   }
   const newestTruncated = "[Newest entry truncated]";
   if (entries.length === 1) {
-    const prefix2 = `${newestTruncated}${separator}`;
-    return `${prefix2}${entries[0].slice(0, Math.max(0, maxChars - prefix2.length))}`.slice(0, maxChars);
+    const prefix = `${newestTruncated}${separator}`;
+    return `${prefix}${entries[0].slice(0, Math.max(0, maxChars - prefix.length))}`.slice(0, maxChars);
   }
   const selected = [];
   let selectedLength = 0;
   for (let index = entries.length - 1;index >= 0; index -= 1) {
     const entry = entries[index];
     const candidateCount = selected.length + 1;
-    const omitted2 = entries.length - candidateCount;
+    const omitted = entries.length - candidateCount;
     const candidateLength = selectedLength + entry.length + (selected.length > 0 ? separator.length : 0);
-    if (omissionMarker(omitted2).length + separator.length + candidateLength > maxChars) {
+    if (omissionMarker(omitted).length + separator.length + candidateLength > maxChars) {
       break;
     }
     selected.unshift(entry);
@@ -2863,15 +2863,15 @@ var runAdvisorScout = async (ctx, manifest, parentSignal, onEvent, timeoutMs = S
     return { cancelled: true, ok: false };
   };
   const fallback = (category, message, usage) => {
-    const outcome2 = {
+    const outcome = {
       category,
       message,
       metrics: usage === undefined ? baseMetrics(manifest, startedAt) : { ...baseMetrics(manifest, startedAt), usage },
       model: effectiveExecutorRef(ctx),
       ok: false
     };
-    publish({ outcome: outcome2, type: "fallback" });
-    return outcome2;
+    publish({ outcome, type: "fallback" });
+    return outcome;
   };
   if (parentSignal?.aborted) {
     return cancelled();
@@ -2970,12 +2970,12 @@ var curateAdvisorConversation = async (ctx, legacyConversation, signal, onScout,
 };
 
 // src/tools/prompts.ts
-var advisorMessageText = (conversation, question, changes, draft, preferences, untracked2, tracked2) => {
+var advisorMessageText = (conversation, question, changes, draft, preferences, untracked, tracked) => {
   const safeConversation = escapeRepositoryText(conversation);
   const safeDraft = draft ? escapeRepositoryText(draft) : undefined;
   const safePreferences = preferences ? escapeRepositoryText(preferences) : undefined;
-  const safeUntracked = (untracked2 ?? []).map(escapeRepositoryText);
-  const safeTracked = (tracked2 ?? []).map(escapeRepositoryText);
+  const safeUntracked = (untracked ?? []).map(escapeRepositoryText);
+  const safeTracked = (tracked ?? []).map(escapeRepositoryText);
   const text = `${safeConversation ? `<conversation>
 ${safeConversation}
 </conversation>` : ""}${changes ? `
@@ -3088,16 +3088,16 @@ var assembleConsultationContext = async (options) => {
   const curated = await curateAdvisorConversation(ctx, legacyConversation, options.signal, options.onScout, advisorScoutEnabledRef, runAdvisorScout, options.currentInvocationId, conversationBudget);
   const preferences = await readProjectPreferences(ctx, ATTACHMENT_TEXT_MAX_BYTES, advisorRedactSecretsRef);
   const draftText = options.draft ? redactAndCapText(options.draft, ATTACHMENT_TEXT_MAX_BYTES, advisorRedactSecretsRef) : undefined;
-  const untracked2 = await readUntrackedFiles(ctx.cwd, options.includeUntracked ?? [], advisorUntrackedContentRef, advisorRedactSecretsRef);
-  const tracked2 = await readTrackedFiles(ctx.cwd, options.includeTracked ?? [], advisorTrackedFileContentRef, advisorRedactSecretsRef, Math.max(0, ATTACHMENTS_TOTAL_MAX_BYTES - untracked2.reduce((sum, item) => sum + item.bytes, 0)));
+  const untracked = await readUntrackedFiles(ctx.cwd, options.includeUntracked ?? [], advisorUntrackedContentRef, advisorRedactSecretsRef);
+  const tracked = await readTrackedFiles(ctx.cwd, options.includeTracked ?? [], advisorTrackedFileContentRef, advisorRedactSecretsRef, Math.max(0, ATTACHMENTS_TOTAL_MAX_BYTES - untracked.reduce((sum, item) => sum + item.bytes, 0)));
   return {
     changeText,
     conversation: curated.conversation,
     draftText,
     preferences,
     scout: curated.scout,
-    tracked: tracked2,
-    untracked: untracked2
+    tracked,
+    untracked
   };
 };
 
@@ -3161,11 +3161,11 @@ var parseAutomaticDecision = (text) => {
     if (!subsequent) {
       continue;
     }
-    const repeated2 = namedGroups(subsequent).decision.trim().toLowerCase();
+    const repeated = namedGroups(subsequent).decision.trim().toLowerCase();
     if (openingFence) {
-      pendingFencedDecisions.push(repeated2);
+      pendingFencedDecisions.push(repeated);
     } else {
-      decisions.push(repeated2);
+      decisions.push(repeated);
     }
   }
   if (openingFence) {
@@ -4251,13 +4251,13 @@ Advisor flow ready — Executor: ${activeExecutorRef} (thinking: ${activeExecuto
 };
 
 // src/commands/lifecycle.ts
-var registerCommandLifecycle = (runtime, activateAdvisor2) => {
+var registerCommandLifecycle = (runtime, activateAdvisor) => {
   runtime.pi.on("session_start", async (_event, ctx) => {
     runtime.pendingExecutorModelRef = undefined;
     try {
       loadConfig(ctx);
       if (alwaysOnRef) {
-        await activateAdvisor2("", ctx, false);
+        await activateAdvisor("", ctx, false);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -4652,12 +4652,12 @@ var connectionFailure = (error) => {
     failure: new JevFailureError("network", `Jev connection failed: ${message}`)
   };
 };
-var sleepWithAbort = (signal, ms) => new Promise((resolve2) => {
-  const timer = setTimeout(resolve2, ms);
+var sleepWithAbort = (signal, ms) => new Promise((resolve) => {
+  const timer = setTimeout(resolve, ms);
   timer.unref?.();
   signal.addEventListener("abort", () => {
     clearTimeout(timer);
-    resolve2();
+    resolve();
   }, { once: true });
 });
 
@@ -5644,56 +5644,6 @@ import { getKeybindings } from "@earendil-works/pi-tui";
 import { Key as Key2, matchesKey as matchesKey2, truncateToWidth as truncateToWidth5 } from "@earendil-works/pi-tui";
 
 // node_modules/@typesafe-ai/sdk/dist/index.mjs
-var requestIdFrom = (headers) => headers.get("x-typesafe-request-id") ?? undefined;
-var APIPromise = class APIPromise2 extends Promise {
-  #responsePromise;
-  #parseResponse;
-  #parsed;
-  constructor(responsePromise, parseResponse) {
-    super((resolve2) => resolve2(undefined));
-    this.#responsePromise = responsePromise;
-    this.#parseResponse = parseResponse;
-  }
-  asResponse() {
-    return this.#responsePromise;
-  }
-  async withResponse() {
-    const [data, response] = await Promise.all([this.#parse(), this.#responsePromise]);
-    return {
-      data,
-      response,
-      requestId: requestIdFrom(response.headers)
-    };
-  }
-  map(fn) {
-    return new APIPromise2(this.#responsePromise, () => this.#parse().then(fn));
-  }
-  #parse() {
-    this.#parsed ??= this.#responsePromise.then(this.#parseResponse);
-    return this.#parsed;
-  }
-  then(onfulfilled, onrejected) {
-    return this.#parse().then(onfulfilled, onrejected);
-  }
-  catch(onrejected) {
-    return this.#parse().catch(onrejected);
-  }
-  finally(onfinally) {
-    return this.#parse().finally(onfinally);
-  }
-};
-var ENV = {
-  apiKey: "TYPESAFE_API_KEY",
-  baseURL: "TYPESAFE_BASE_URL",
-  defaultModel: "TYPESAFE_DEFAULT_MODEL",
-  logLevel: "TYPESAFE_LOG_LEVEL"
-};
-var readEnv = (name) => {
-  if (typeof process === "undefined" || !process.env)
-    return;
-  return process.env[name]?.trim() || undefined;
-};
-var fromCodeOrEnv = (fromCode, envVar) => fromCode ?? readEnv(envVar);
 var range2 = (from, to) => Array.from({ length: to - from }, (_, i) => from + i);
 var DEFAULT_RETRY_POLICY = {
   maxRetries: 2,
@@ -5711,239 +5661,11 @@ var DEFAULT_RETRY_POLICY = {
   apiTimeoutError: true
 };
 DEFAULT_RETRY_POLICY.maxRetries;
-var isRetryableStatus = (status, policy = DEFAULT_RETRY_POLICY) => policy.httpStatuses.has(status);
-var parseRetryAfter = (headers, now = Date.now()) => {
-  const ms = Number(headers.get("retry-after-ms"));
-  if (headers.has("retry-after-ms") && Number.isFinite(ms) && ms >= 0)
-    return ms;
-  const raw = headers.get("retry-after");
-  if (raw === null)
-    return;
-  const seconds = Number(raw);
-  if (Number.isFinite(seconds))
-    return seconds >= 0 ? seconds * 1000 : undefined;
-  const date = Date.parse(raw);
-  if (!Number.isNaN(date))
-    return Math.max(0, date - now);
-};
-var retryDelayMs = (attempt, headers, policy = DEFAULT_RETRY_POLICY, random = Math.random) => {
-  if (policy.respectRetryAfter && headers !== undefined) {
-    const retryAfter = parseRetryAfter(headers);
-    if (retryAfter !== undefined && retryAfter <= policy.maxRetryAfterMs)
-      return retryAfter;
-  }
-  const exponential = Math.min(policy.backoffInitialMs * 2 ** attempt, policy.backoffMaxMs);
-  return Math.round(exponential * (1 - random() * policy.backoffJitter));
-};
-var sleep = (ms, signal) => new Promise((resolve2, reject) => {
-  if (signal?.aborted)
-    return reject(signal.reason);
-  const onAbort = () => {
-    clearTimeout(timer);
-    reject(signal?.reason);
-  };
-  const timer = setTimeout(() => {
-    signal?.removeEventListener("abort", onAbort);
-    resolve2();
-  }, ms);
-  signal?.addEventListener("abort", onAbort, { once: true });
-});
-var TypeSafeError = class extends Error {
-  constructor(message, options) {
-    super(message, options);
-    this.name = new.target.name;
-  }
-};
-var isRecord2 = (value) => typeof value === "object" && value !== null;
-var extractMessage = (body) => {
-  if (typeof body === "string")
-    return body || undefined;
-  if (!isRecord2(body))
-    return;
-  const { error, message, detail } = body;
-  if (typeof error === "string")
-    return error;
-  if (isRecord2(error) && typeof error.message === "string")
-    return error.message;
-  if (typeof message === "string")
-    return message;
-  if (typeof detail === "string")
-    return detail;
-  if (isRecord2(detail) && typeof detail.message === "string")
-    return detail.message;
-  if (Array.isArray(detail))
-    return describeValidationErrors(detail);
-};
-var describeValidationErrors = (errors) => {
-  const parts = errors.flatMap((e) => {
-    if (!isRecord2(e) || typeof e.msg !== "string")
-      return [];
-    const loc = Array.isArray(e.loc) ? e.loc.filter((x) => x !== "body").join(".") : "";
-    return [loc ? `${loc}: ${e.msg}` : e.msg];
-  });
-  return parts.length > 0 ? parts.join("; ") : undefined;
-};
-var MAX_RAW_BODY_IN_MESSAGE = 200;
-var APIError = class APIError2 extends TypeSafeError {
-  status;
-  headers;
-  body;
-  requestId;
-  constructor(status, body, headers, message) {
-    super(message ?? APIError2.describe(status, body));
-    this.status = status;
-    this.body = body;
-    this.headers = headers;
-    this.requestId = requestIdFrom(headers);
-  }
-  static describe(status, body) {
-    const detail = extractMessage(body);
-    if (detail)
-      return `${status} ${detail}`;
-    if (body === undefined)
-      return `${status} status code (no body)`;
-    const raw = typeof body === "string" ? body : JSON.stringify(body);
-    return `${status} ${raw.length > MAX_RAW_BODY_IN_MESSAGE ? `${raw.slice(0, MAX_RAW_BODY_IN_MESSAGE)}…` : raw}`;
-  }
-  static fromResponse(status, body, headers) {
-    if (status === 400)
-      return new BadRequestError(status, body, headers);
-    if (status === 401)
-      return new AuthenticationError(status, body, headers);
-    if (status === 403)
-      return new PermissionDeniedError(status, body, headers);
-    if (status === 404)
-      return new NotFoundError(status, body, headers);
-    if (status === 422)
-      return new UnprocessableEntityError(status, body, headers);
-    if (status === 429)
-      return new RateLimitError(status, body, headers);
-    if (status >= 500)
-      return new InternalServerError(status, body, headers);
-    return new APIError2(status, body, headers);
-  }
-};
-var BadRequestError = class extends APIError {
-};
-var AuthenticationError = class extends APIError {
-};
-var PermissionDeniedError = class extends APIError {
-};
-var NotFoundError = class extends APIError {
-};
-var UnprocessableEntityError = class extends APIError {
-};
-var RateLimitError = class extends APIError {
-  retryAfterMs = parseRetryAfter(this.headers);
-};
-var InternalServerError = class extends APIError {
-};
-var APIConnectionError = class extends TypeSafeError {
-  constructor(message = "Connection error.", options) {
-    super(message, options);
-  }
-};
-var APITimeoutError = class extends APIConnectionError {
-  timeoutMs;
-  constructor(timeoutMs, options) {
-    super(`Request timed out after ${timeoutMs}ms.`, options);
-    this.timeoutMs = timeoutMs;
-  }
-};
-var APIUserAbortError = class extends TypeSafeError {
-  constructor(message = "Request was aborted.", options) {
-    super(message, options);
-  }
-};
-var LOG_LEVELS = [
-  "debug",
-  "info",
-  "warn",
-  "error",
-  "off"
-];
-var DEFAULT_LOG_LEVEL = "warn";
-var isLogLevel = (value) => LOG_LEVELS.includes(value);
-var parseLogLevel = (value, source) => {
-  if (isLogLevel(value))
-    return value;
-  throw new TypeSafeError(`Invalid log level "${value}" from ${source}. Expected one of: ${LOG_LEVELS.join(", ")}.`);
-};
-var PREFIX = "[typesafe-sdk]";
-var consoleLogger = {
-  debug: (message, ...args) => console.debug(`${PREFIX} ${message}`, ...args),
-  info: (message, ...args) => console.info(`${PREFIX} ${message}`, ...args),
-  warn: (message, ...args) => console.warn(`${PREFIX} ${message}`, ...args),
-  error: (message, ...args) => console.error(`${PREFIX} ${message}`, ...args)
-};
-var RANK = {
-  debug: 0,
-  info: 1,
-  warn: 2,
-  error: 3,
-  off: 4
-};
-var drop = () => {};
-var withLevel = (sink, level) => {
-  const enabled = (at) => RANK[at] >= RANK[level];
-  return {
-    debug: enabled("debug") ? (message, ...args) => sink.debug(message, ...args) : drop,
-    info: enabled("info") ? (message, ...args) => sink.info(message, ...args) : drop,
-    warn: enabled("warn") ? (message, ...args) => sink.warn(message, ...args) : drop,
-    error: enabled("error") ? (message, ...args) => sink.error(message, ...args) : drop
-  };
-};
-var KEY_HEADERS = /* @__PURE__ */ new Set([
-  "authorization",
-  "proxy-authorization",
-  "x-api-key"
-]);
-var OPAQUE_HEADERS = /* @__PURE__ */ new Set(["cookie", "set-cookie"]);
-var redactKey = (value) => {
-  const [scheme, secret] = value.includes(" ") ? value.split(/\s+/, 2) : [undefined, value];
-  const tail = secret && secret.length > 8 ? secret.slice(-4) : "";
-  return `${scheme ? `${scheme} ` : ""}***${tail}`;
-};
-var redact = (name, value) => {
-  const lower = name.toLowerCase();
-  if (KEY_HEADERS.has(lower))
-    return redactKey(value);
-  if (OPAQUE_HEADERS.has(lower))
-    return "***";
-  return value;
-};
-var redactHeaders = (headers) => Object.fromEntries(Object.entries(headers).map(([name, value]) => [name, redact(name, value)]));
 var noul = (instructions = null, criteria) => ({
   type: "noul",
   instructions,
   criteria
 });
-var validateQuestions = (questions) => {
-  if (Object.keys(questions).length === 0)
-    throw new TypeSafeError("At least one question is required.");
-  for (const [name, question] of Object.entries(questions)) {
-    if (question.type !== "score")
-      continue;
-    if (!Array.isArray(question.criteria))
-      throw new TypeSafeError(`Score question "${name}" has criteria that are not a list; score criteria must be a list of descriptions indexed by score from zero.`);
-    if (question.criteria.length < 2)
-      throw new TypeSafeError(`Score question "${name}" has ${question.criteria.length} criteria; at least two scores are required.`);
-  }
-};
-var Models = class {
-  #transport;
-  constructor(transport) {
-    this.#transport = transport;
-  }
-  list(options = {}) {
-    return this.#transport.request("GET", "/v1/models", options).map(unwrapModels);
-  }
-};
-var unwrapModels = (wire) => {
-  if (Array.isArray(wire?.models))
-    return wire.models;
-  throw new TypeSafeError("Unexpected response shape from GET /v1/models; expected { models: [...] }.");
-};
 var g = globalThis;
 var isBrowser = () => typeof g.window !== "undefined" && typeof g.window.document !== "undefined" && typeof g.navigator !== "undefined";
 var describeRuntime = () => {
@@ -5962,280 +5684,7 @@ var describeRuntime = () => {
     return "browser";
   return "unknown";
 };
-var VERSION = "0.6.0";
-var missingApiKey = () => {
-  throw new TypeSafeError(`No API key was provided. Pass \`apiKey\` to the TypeSafeClient constructor or set the ${ENV.apiKey} environment variable.`);
-};
-var missingFetch = () => {
-  throw new TypeSafeError("No global `fetch` is available in this runtime. Pass a `fetch` implementation to the TypeSafeClient constructor.");
-};
-var refuseBrowser = () => {
-  throw new TypeSafeError("TypeSafeClient is running in a browser, which would expose your API key to anyone using the page. Call the API from a server instead, or pass `dangerouslyAllowBrowser: true` if you understand the risk.");
-};
-var defaultFetch = (input, init) => globalThis.fetch(input, init);
-var assertNonNegativeInteger = (name, value) => {
-  if (!Number.isInteger(value) || value < 0)
-    throw new TypeSafeError(`\`${name}\` must be a non-negative integer, got ${String(value)}.`);
-  return value;
-};
-var assertPositiveMs = (name, value) => {
-  if (!Number.isFinite(value) || value <= 0)
-    throw new TypeSafeError(`\`${name}\` must be a positive number of milliseconds, got ${String(value)}.`);
-  return value;
-};
-var assertNonNegativeMs = (name, value) => {
-  if (!Number.isFinite(value) || value < 0)
-    throw new TypeSafeError(`\`${name}\` must be a non-negative number of milliseconds, got ${String(value)}.`);
-  return value;
-};
-var assertFraction = (name, value) => {
-  if (!Number.isFinite(value) || value < 0 || value > 1)
-    throw new TypeSafeError(`\`${name}\` must be between 0 and 1, got ${String(value)}.`);
-  return value;
-};
-var assertStatusSet = (name, statuses) => {
-  for (const status of statuses)
-    if (!Number.isInteger(status) || status < 100 || status > 999)
-      throw new TypeSafeError(`\`${name}\` must contain HTTP status codes, got ${String(status)}.`);
-  return statuses;
-};
-var resolveRetryPolicy = (base, overrides) => {
-  const o = overrides ?? {};
-  return {
-    maxRetries: o.maxRetries === undefined ? base.maxRetries : assertNonNegativeInteger("retry.maxRetries", o.maxRetries),
-    backoffInitialMs: o.backoffInitialMs === undefined ? base.backoffInitialMs : assertNonNegativeMs("retry.backoffInitialMs", o.backoffInitialMs),
-    backoffMaxMs: o.backoffMaxMs === undefined ? base.backoffMaxMs : assertNonNegativeMs("retry.backoffMaxMs", o.backoffMaxMs),
-    backoffJitter: o.backoffJitter === undefined ? base.backoffJitter : assertFraction("retry.backoffJitter", o.backoffJitter),
-    httpStatuses: new Set(o.httpStatuses === undefined ? base.httpStatuses : assertStatusSet("retry.httpStatuses", o.httpStatuses)),
-    respectRetryAfter: o.respectRetryAfter ?? base.respectRetryAfter,
-    maxRetryAfterMs: o.maxRetryAfterMs === undefined ? base.maxRetryAfterMs : assertNonNegativeMs("retry.maxRetryAfterMs", o.maxRetryAfterMs),
-    apiConnectionError: o.apiConnectionError ?? base.apiConnectionError,
-    apiTimeoutError: o.apiTimeoutError ?? base.apiTimeoutError
-  };
-};
-var isRetryableError = (err, policy) => {
-  if (err instanceof APITimeoutError)
-    return policy.apiTimeoutError;
-  if (err instanceof APIConnectionError)
-    return policy.apiConnectionError;
-  return false;
-};
-var resolveLogLevel = (fromCode) => {
-  if (fromCode !== undefined)
-    return parseLogLevel(fromCode, "the `logLevel` option");
-  const fromEnv = readEnv(ENV.logLevel);
-  if (fromEnv !== undefined)
-    return parseLogLevel(fromEnv, ENV.logLevel);
-  return DEFAULT_LOG_LEVEL;
-};
-var stripTrailingSlashes = (url) => url.replace(/\/+$/, "");
-var mergeHeaders = (...sources) => {
-  const entries = /* @__PURE__ */ new Map;
-  for (const source of sources)
-    for (const [name, value] of Object.entries(source))
-      if (value === undefined)
-        entries.delete(name.toLowerCase());
-      else
-        entries.set(name.toLowerCase(), [name, value]);
-  return Object.fromEntries(entries.values());
-};
-var bufferResponse = async (response, signal) => {
-  const reader = response.clone().body?.getReader();
-  if (!reader)
-    return;
-  const cancel = () => {
-    reader.cancel(signal.reason).catch(() => {});
-    response.body?.cancel(signal.reason).catch(() => {});
-  };
-  signal.addEventListener("abort", cancel, { once: true });
-  try {
-    if (signal.aborted)
-      cancel();
-    signal.throwIfAborted();
-    while (!(await reader.read()).done)
-      signal.throwIfAborted();
-    signal.throwIfAborted();
-  } finally {
-    signal.removeEventListener("abort", cancel);
-    reader.releaseLock();
-  }
-};
 var RUNTIME = describeRuntime();
-var TypeSafeClient = class {
-  #apiKey;
-  baseURL;
-  defaultModel;
-  logLevel;
-  logger;
-  retry;
-  timeout;
-  defaultHeaders;
-  fetch;
-  models;
-  #requestCount = 0;
-  constructor(config = {}) {
-    if (isBrowser() && !config.dangerouslyAllowBrowser)
-      refuseBrowser();
-    this.#apiKey = fromCodeOrEnv(config.apiKey, ENV.apiKey) ?? missingApiKey();
-    this.baseURL = stripTrailingSlashes(fromCodeOrEnv(config.baseURL, ENV.baseURL) ?? "https://api.typesafe.ai");
-    this.defaultModel = fromCodeOrEnv(config.defaultModel, ENV.defaultModel) ?? "jev-latest";
-    this.logLevel = resolveLogLevel(config.logLevel);
-    this.logger = withLevel(config.logger ?? consoleLogger, this.logLevel);
-    this.retry = resolveRetryPolicy(DEFAULT_RETRY_POLICY, config.retry);
-    this.timeout = assertPositiveMs("timeout", config.timeout ?? 1e4);
-    this.defaultHeaders = { ...config.defaultHeaders };
-    if (config.fetch === undefined && typeof globalThis.fetch !== "function")
-      missingFetch();
-    this.fetch = config.fetch ?? defaultFetch;
-    const transport = {
-      request: (method, path, options) => this.#request(method, path, options),
-      defaultModel: this.defaultModel
-    };
-    this.models = new Models(transport);
-  }
-  systemOne(request, options = {}) {
-    validateQuestions(request.questions);
-    const body = {
-      ...request,
-      model: request.model ?? this.defaultModel
-    };
-    return this.#request("POST", "/v1/systemone", {
-      ...options,
-      body
-    });
-  }
-  #request(method, path, options = {}) {
-    const resolved = {
-      method,
-      path,
-      body: options.body,
-      headers: mergeHeaders(this.defaultHeaders, options.headers ?? {}),
-      signal: options.signal,
-      timeout: options.timeout === undefined ? this.timeout : assertPositiveMs("timeout", options.timeout),
-      retry: resolveRetryPolicy(this.retry, options.retry)
-    };
-    const tag = `#${++this.#requestCount} ${method} ${path}`;
-    return new APIPromise(this.fetchWithRetries(tag, resolved), async (res) => {
-      const parsed = await parseBody(res);
-      this.logger.debug(`${tag} <- body`, parsed);
-      return parsed;
-    });
-  }
-  async fetchWithRetries(tag, req) {
-    const url = `${this.baseURL}${req.path}`;
-    const headers = mergeHeaders(req.headers, {
-      Authorization: `Bearer ${this.#apiKey}`,
-      Accept: "application/json",
-      "User-Agent": `typesafe-sdk/${VERSION}`,
-      "X-TypeSafe-SDK": `typesafe-sdk/${VERSION}`,
-      "X-TypeSafe-Runtime": RUNTIME,
-      "Content-Type": req.body === undefined ? undefined : "application/json",
-      "X-TypeSafe-Retry-Count": undefined
-    });
-    const body = req.body === undefined ? undefined : JSON.stringify(req.body);
-    for (let attempt = 0;; attempt++) {
-      const retriesLeft = req.retry.maxRetries - attempt;
-      const attemptHeaders = attempt === 0 ? headers : {
-        ...headers,
-        "X-TypeSafe-Retry-Count": String(attempt)
-      };
-      this.logger.debug(`${tag} -> ${url}`, {
-        headers: redactHeaders(attemptHeaders),
-        body: req.body
-      });
-      const started = Date.now();
-      let res;
-      try {
-        res = await this.attempt(tag, url, {
-          method: req.method,
-          headers: attemptHeaders,
-          body
-        }, req);
-      } catch (err) {
-        if (err instanceof APIUserAbortError || retriesLeft <= 0)
-          throw err;
-        if (!isRetryableError(err, req.retry))
-          throw err;
-        await this.backOff(tag, attempt, retriesLeft, err.message, undefined, req);
-        continue;
-      }
-      const requestId = requestIdFrom(res.headers);
-      this.logger.info(`${tag} <- ${res.status} in ${Date.now() - started}ms${requestId ? ` (request ${requestId})` : ""}`);
-      if (res.ok)
-        return res;
-      const errorBody = await parseBody(res);
-      this.logger.debug(`${tag} <- error body`, errorBody);
-      const error = APIError.fromResponse(res.status, errorBody, res.headers);
-      if (retriesLeft <= 0 || !isRetryableStatus(res.status, req.retry))
-        throw error;
-      await this.backOff(tag, attempt, retriesLeft, `${res.status}`, res.headers, req);
-    }
-  }
-  async attempt(tag, url, init, { signal, timeout }) {
-    const controller = new AbortController;
-    const abortFromCaller = () => controller.abort(signal?.reason);
-    if (signal?.aborted)
-      abortFromCaller();
-    signal?.addEventListener("abort", abortFromCaller, { once: true });
-    let timedOut = false;
-    const timer = setTimeout(() => {
-      timedOut = true;
-      controller.abort();
-    }, timeout);
-    const started = Date.now();
-    const elapsed = () => `${Date.now() - started}ms`;
-    try {
-      const response = await this.fetch(url, {
-        ...init,
-        signal: controller.signal
-      });
-      await bufferResponse(response, controller.signal);
-      return response;
-    } catch (err) {
-      if (signal?.aborted) {
-        this.logger.info(`${tag} aborted by caller after ${elapsed()}`);
-        throw new APIUserAbortError(undefined, { cause: err });
-      }
-      if (timedOut) {
-        this.logger.info(`${tag} timed out after ${elapsed()}`);
-        throw new APITimeoutError(timeout, { cause: err });
-      }
-      this.logger.info(`${tag} connection error after ${elapsed()}`, err);
-      throw new APIConnectionError(err instanceof Error ? `Connection error: ${err.message}` : undefined, { cause: err });
-    } finally {
-      clearTimeout(timer);
-      signal?.removeEventListener("abort", abortFromCaller);
-    }
-  }
-  async backOff(tag, attempt, retriesLeft, reason, headers, { retry, signal }) {
-    const delay = retryDelayMs(attempt, headers, retry);
-    const nth = attempt + 1;
-    const total = attempt + retriesLeft;
-    this.logger.info(`${tag} retrying in ${delay}ms (retry ${nth}/${total}) after ${reason}`);
-    try {
-      await sleep(delay, signal);
-    } catch (err) {
-      this.logger.info(`${tag} aborted by caller while waiting to retry`);
-      throw new APIUserAbortError(undefined, { cause: err });
-    }
-  }
-};
-var parseBody = async (res) => {
-  const text = await res.text();
-  if (text.length === 0)
-    return;
-  if ((res.headers.get("content-type") ?? "").includes("application/json"))
-    try {
-      return JSON.parse(text);
-    } catch {
-      return text;
-    }
-  try {
-    return JSON.parse(text);
-  } catch {
-    return text;
-  }
-};
 
 // src/ui/masked-input.ts
 import { Input as Input2, truncateToWidth as truncateToWidth4 } from "@earendil-works/pi-tui";
@@ -7338,7 +6787,7 @@ import {
   writeFile
 } from "node:fs/promises";
 import { join as join5 } from "node:path";
-import { setTimeout as sleep2 } from "node:timers/promises";
+import { setTimeout as sleep } from "node:timers/promises";
 import { getAgentDir as getAgentDir4 } from "@earendil-works/pi-coding-agent";
 var ADOPTIONS = [
   "followed",
@@ -7426,7 +6875,7 @@ var withOutcomeLock = async (run) => {
         }
         continue;
       }
-      await sleep2(5);
+      await sleep(5);
     }
   }
   throw new Error("Timed out waiting to append an Advisor outcome.");
@@ -8328,8 +7777,8 @@ function registerPiAdvisor(pi) {
   });
 }
 export {
-  runAdvisorGate2 as runAdvisorGate,
-  parseAutomaticDecision2 as parseAutomaticDecision,
+  consultAdvisor2 as consultAdvisor,
   registerPiAdvisor as default,
-  consultAdvisor2 as consultAdvisor
+  parseAutomaticDecision2 as parseAutomaticDecision,
+  runAdvisorGate2 as runAdvisorGate
 };
