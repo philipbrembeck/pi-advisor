@@ -46,6 +46,14 @@ Requires Pi 0.84.1 or later. Pi 0.85.0 is not supported (broken upstream release
 pi install npm:pi-advisor-flow
 ```
 
+For npm consumers who want to test the latest development preview:
+
+```bash
+npm install pi-advisor-flow@dev
+```
+
+Preview builds use the next patch prerelease version (for example, `0.8.1-dev.1` after stable `0.8.0`) and are published only when a file included in the npm package changes. Each preview advances the `dev.N` sequence. Regular installs continue to use the stable `latest` version.
+
 You can also install from GitHub:
 
 ```bash
