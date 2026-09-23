@@ -154,41 +154,97 @@ describe("Advisor Scout", () => {
   });
 
   test("uses the configured Executor model and effort with conversation-only input", async () => {
-    setExecutorRef("provider/executor");
-    setExecutorEffortRef("high");
-    let options: any;
-    const events: string[] = [];
-    const outcome = await runAdvisorScout(
-      asExtensionContext({}),
-      manifest(),
-      undefined,
-      (event) => events.push(event.type),
-      1000,
-      successDependencies(
-        JSON.stringify({
-          selectedIds: ["g_required", "g_failure"],
-          synthesis: "Open decision.",
-        }),
-        (value) => {
-          options = value;
-        }
-      )
-    );
-    expect(outcome.ok).toBe(true);
-    if (!outcome.ok) {
-      return;
+    const previousChildMarker = process.env.PI_SUBAGENT_CHILD;
+    delete process.env.PI_SUBAGENT_CHILD;
+    try {
+      setExecutorRef("provider/executor");
+      setExecutorEffortRef("high");
+      let options: any;
+      const events: string[] = [];
+      const outcome = await runAdvisorScout(
+        asExtensionContext({}),
+        manifest(),
+        undefined,
+        (event) => events.push(event.type),
+        1000,
+        successDependencies(
+          JSON.stringify({
+            selectedIds: ["g_required", "g_failure"],
+            synthesis: "Open decision.",
+          }),
+          (value) => {
+            options = value;
+          }
+        )
+      );
+      expect(outcome.ok).toBe(true);
+      if (!outcome.ok) {
+        return;
+      }
+      expect(outcome.model).toBe("provider/executor");
+      expect(outcome.conversation).toContain("useful failure");
+      expect(outcome.conversation).toContain("non-authoritative inference");
+      expect(outcome.metrics.usage).toEqual({ cost: 0.01 });
+      expect(options.reasoning).toBe("high");
+      expect(options.systemPrompt).toBe(SCOUT_SYSTEM);
+      const input = JSON.stringify(options.messages);
+      expect(input).toContain("current task");
+      expect(input).not.toContain("repository_changes");
+      expect(input).not.toContain("tracked_files");
+      expect(events).toEqual(["call", "success"]);
+    } finally {
+      if (previousChildMarker === undefined) {
+        delete process.env.PI_SUBAGENT_CHILD;
+      } else {
+        process.env.PI_SUBAGENT_CHILD = previousChildMarker;
+      }
     }
-    expect(outcome.model).toBe("provider/executor");
-    expect(outcome.conversation).toContain("useful failure");
-    expect(outcome.conversation).toContain("non-authoritative inference");
-    expect(outcome.metrics.usage).toEqual({ cost: 0.01 });
-    expect(options.reasoning).toBe("high");
-    expect(options.systemPrompt).toBe(SCOUT_SYSTEM);
-    const input = JSON.stringify(options.messages);
-    expect(input).toContain("current task");
-    expect(input).not.toContain("repository_changes");
-    expect(input).not.toContain("tracked_files");
-    expect(events).toEqual(["call", "success"]);
+  });
+
+  test("uses the host-pinned model and effort for marked subagent Scout", async () => {
+    const previousChildMarker = process.env.PI_SUBAGENT_CHILD;
+    process.env.PI_SUBAGENT_CHILD = "1";
+    setExecutorRef("provider/parent-executor");
+    setExecutorEffortRef("low");
+    let options: any;
+    let resolvedModel = "";
+    try {
+      const outcome = await runAdvisorScout(
+        asExtensionContext({
+          model: { id: "host-model", provider: "provider" },
+          thinkingLevel: "high",
+        }),
+        manifest(),
+        undefined,
+        undefined,
+        1000,
+        {
+          ...successDependencies(
+            JSON.stringify({ selectedIds: ["g_required"], synthesis: "" }),
+            (value) => {
+              options = value;
+            }
+          ),
+          resolve: (_ctx, model) => {
+            resolvedModel = model ?? "";
+            return Promise.resolve(resolved);
+          },
+        }
+      );
+      expect(outcome.ok).toBe(true);
+      if (!outcome.ok) {
+        return;
+      }
+      expect(outcome.model).toBe("provider/host-model");
+      expect(resolvedModel).toBe("provider/host-model");
+      expect(options.reasoning).toBe("high");
+    } finally {
+      if (previousChildMarker === undefined) {
+        delete process.env.PI_SUBAGENT_CHILD;
+      } else {
+        process.env.PI_SUBAGENT_CHILD = previousChildMarker;
+      }
+    }
   });
 
   test("classifies missing model and auth failures without substitution", async () => {

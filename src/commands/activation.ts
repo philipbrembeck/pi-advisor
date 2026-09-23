@@ -1,5 +1,10 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
+import {
+  effectiveExecutorEffort,
+  effectiveExecutorRef,
+  isMarkedSubagent,
+} from "../child-session.ts";
 import { parseArgs } from "../config/args.ts";
 import {
   advisorEffortRef,
@@ -51,7 +56,7 @@ const resolveActivationModels = async (
   if (!(advisorAuth.ok && advisorAuth.apiKey)) {
     return { error: `No API key for Advisor ${advisorRef}` };
   }
-  if (!(await runtime.setExecutorModel(executor))) {
+  if (!isMarkedSubagent() && !(await runtime.setExecutorModel(executor))) {
     return { error: `No API key for Executor ${executorRef}` };
   }
   return {};
@@ -116,7 +121,7 @@ export const activateAdvisor = async (
   // an older inactive selection override an explicit activation argument on a
   // later attempt.
   runtime.pendingExecutorModelRef = undefined;
-  if (executorEffortRef) {
+  if (executorEffortRef && !isMarkedSubagent()) {
     // SAFETY: executorEffortRef is operator-configured and trusted to name a ThinkingLevel.
     runtime.pi.setThinkingLevel(executorEffortRef as ThinkingLevel);
   }
@@ -128,9 +133,11 @@ export const activateAdvisor = async (
     ]);
   }
   if (announce) {
+    const activeExecutorRef = effectiveExecutorRef(ctx);
+    const activeExecutorEffort = effectiveExecutorEffort(ctx);
     notify(
       ctx,
-      `${ADVISOR_ACTIVATION_EXPLANATION}\n\nAdvisor flow ready — Executor: ${executorRef} (thinking: ${executorEffortRef || "default"}) · Advisor: ${advisorRef} (thinking: ${advisorEffortRef || "default"})`,
+      `${ADVISOR_ACTIVATION_EXPLANATION}\n\nAdvisor flow ready — Executor: ${activeExecutorRef} (thinking: ${activeExecutorEffort || "default"}) · Advisor: ${advisorRef} (thinking: ${advisorEffortRef || "default"})`,
       "info"
     );
   }

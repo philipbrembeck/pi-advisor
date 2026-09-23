@@ -360,31 +360,149 @@ describe("Advisor activation flow", () => {
   });
 
   test("activates silently for always-on sessions but announces /advisor", async () => {
-    await withAgentDir(
-      {
-        advisor: "provider/advisor",
-        alwaysOn: true,
-        executor: "provider/executor",
-      },
-      async (agentDir) => {
-        const { commands, events, pi, setActiveTools } = activationHarness();
-        registerCommands(pi);
-        const automatic: string[] = [];
-        setActiveTools([]);
-        await events.get("session_start")?.(
-          { reason: "startup" },
-          activationContext(agentDir, automatic)
-        );
-        expect(automatic).toEqual([]);
-        expect(pi.getActiveTools()).toContain("ask_advisor");
+    const previousChildMarker = process.env.PI_SUBAGENT_CHILD;
+    delete process.env.PI_SUBAGENT_CHILD;
+    try {
+      await withAgentDir(
+        {
+          advisor: "provider/advisor",
+          alwaysOn: true,
+          executor: "provider/executor",
+        },
+        async (agentDir) => {
+          const {
+            commands,
+            events,
+            pi,
+            selectedModels,
+            thinkingLevels,
+            setActiveTools,
+          } = activationHarness();
+          registerCommands(pi);
+          const automatic: string[] = [];
+          setActiveTools([]);
+          await events.get("session_start")?.(
+            { reason: "startup" },
+            activationContext(agentDir, automatic)
+          );
+          expect(automatic).toEqual([]);
+          expect(pi.getActiveTools()).toContain("ask_advisor");
+          expect(selectedModels).toEqual([
+            { id: "executor", provider: "provider" },
+          ]);
+          expect(thinkingLevels).toEqual([]);
 
-        const manual: string[] = [];
-        await commands
-          .get("advisor")
-          .handler("", activationContext(agentDir, manual));
-        expect(manual.join("\n")).toContain("Advisor flow ready");
+          const manual: string[] = [];
+          await commands
+            .get("advisor")
+            .handler("", activationContext(agentDir, manual));
+          expect(manual.join("\n")).toContain("Advisor flow ready");
+        }
+      );
+    } finally {
+      if (previousChildMarker === undefined) {
+        delete process.env.PI_SUBAGENT_CHILD;
+      } else {
+        process.env.PI_SUBAGENT_CHILD = previousChildMarker;
       }
-    );
+    }
+  });
+
+  test("preserves the host model for marked subagent sessions", async () => {
+    const previousChildMarker = process.env.PI_SUBAGENT_CHILD;
+    process.env.PI_SUBAGENT_CHILD = "1";
+    try {
+      await withAgentDir(
+        {
+          advisor: "provider/advisor",
+          alwaysOn: true,
+          executor: "provider/executor",
+          executorEffort: "high",
+        },
+        async (agentDir) => {
+          const { events, pi, selectedModels, thinkingLevels, setActiveTools } =
+            activationHarness();
+          registerCommands(pi);
+          setActiveTools([]);
+          await events.get("session_start")?.(
+            { reason: "startup" },
+            activationContext(agentDir)
+          );
+          expect(pi.getActiveTools()).toContain("ask_advisor");
+          expect(selectedModels).toEqual([]);
+          expect(thinkingLevels).toEqual([]);
+        }
+      );
+    } finally {
+      if (previousChildMarker === undefined) {
+        delete process.env.PI_SUBAGENT_CHILD;
+      } else {
+        process.env.PI_SUBAGENT_CHILD = previousChildMarker;
+      }
+    }
+  });
+
+  test("preserves the host model for explicit activation in marked subagents", async () => {
+    const previousChildMarker = process.env.PI_SUBAGENT_CHILD;
+    process.env.PI_SUBAGENT_CHILD = "1";
+    try {
+      await withAgentDir(
+        {
+          advisor: "provider/advisor",
+          executor: "provider/executor",
+          executorEffort: "high",
+        },
+        async (agentDir) => {
+          const { commands, pi, selectedModels, thinkingLevels } =
+            activationHarness();
+          registerCommands(pi);
+          await commands
+            .get("advisor")
+            .handler("", activationContext(agentDir));
+          expect(selectedModels).toEqual([]);
+          expect(thinkingLevels).toEqual([]);
+          expect(pi.getActiveTools()).toContain("ask_advisor");
+        }
+      );
+    } finally {
+      if (previousChildMarker === undefined) {
+        delete process.env.PI_SUBAGENT_CHILD;
+      } else {
+        process.env.PI_SUBAGENT_CHILD = previousChildMarker;
+      }
+    }
+  });
+
+  test("does not persist marked child model selections", async () => {
+    const previousChildMarker = process.env.PI_SUBAGENT_CHILD;
+    process.env.PI_SUBAGENT_CHILD = "1";
+    try {
+      await withAgentDir(
+        {
+          advisor: "provider/advisor",
+          alwaysOn: true,
+          executor: "provider/executor",
+        },
+        async (agentDir) => {
+          const { events, pi } = activationHarness();
+          registerCommands(pi);
+          events.get("model_select")?.(
+            {
+              model: { id: "host-model", provider: "provider" },
+              source: "set",
+            },
+            activationContext(agentDir)
+          );
+          expect(savedConfig(agentDir).executor).toBe("provider/executor");
+        }
+      );
+    } finally {
+      if (previousChildMarker === undefined) {
+        delete process.env.PI_SUBAGENT_CHILD;
+      } else {
+        process.env.PI_SUBAGENT_CHILD = previousChildMarker;
+      }
+    }
   });
 
   test("hides usage details from automatic gate results when disabled", () => {
