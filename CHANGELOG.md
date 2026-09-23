@@ -4,12 +4,6 @@ All notable changes to this project are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
-## Unreleased
-
-### Added
-
-- Published validated npm development previews for package changes on `main` under the `dev` dist-tag; stable installs continue to use `latest`.
-
 ## 0.8.1 - 2026-09-23
 
 ### Fixed
@@ -17,6 +11,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Preserve a native subagent's host-selected model and thinking level when `alwaysOn` or explicit `/advisor` activation runs in a process marked with `PI_SUBAGENT_CHILD=1`.
 - Keep marked child model selections out of the persisted parent Executor configuration.
 - Run Advisor Scout with the marked child's active model and thinking level instead of replacing them with the configured parent Executor.
+
+### Added
+
+- Published validated npm development previews for package changes on `main` under the `dev` dist-tag; stable installs continue to use `latest`.
 
 ## 0.8.0 - 2026-09-22
 
