@@ -272,6 +272,16 @@ var splitRef = (ref) => {
   return i === -1 ? ["openai-codex", ref] : [ref.slice(0, i), ref.slice(i + 1)];
 };
 
+// src/child-session.ts
+var isMarkedSubagent = () => process.env.PI_SUBAGENT_CHILD === "1";
+var effectiveExecutorRef = (ctx) => {
+  if (isMarkedSubagent() && ctx.model) {
+    return `${ctx.model.provider}/${ctx.model.id}`;
+  }
+  return executorRef;
+};
+var effectiveExecutorEffort = (ctx) => isMarkedSubagent() ? ctx.thinkingLevel : executorEffortRef;
+
 // src/content-utils.ts
 var isRecord = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
 var isRecordOf = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -2814,17 +2824,17 @@ var setupAbortWatch = (parentSignal, timeoutMs) => {
     wasTimedOut: () => timedOut
   };
 };
-var streamScoutResponse = async (dependencies, resolved, manifest, parentSignal, timeoutMs, publish) => {
+var streamScoutResponse = async (dependencies, resolved, executorModel, executorEffort, manifest, parentSignal, timeoutMs, publish) => {
   const { abortPromise, controller, teardown, wasTimedOut } = setupAbortWatch(parentSignal, timeoutMs);
   try {
     const collection = dependencies.collect(resolved, {
       messages: [manifestMessage(manifest)],
       onChunk: (thinking, text) => {
         if (!controller.signal.aborted) {
-          publish({ model: executorRef, text, thinking, type: "chunk" });
+          publish({ model: executorModel, text, thinking, type: "chunk" });
         }
       },
-      reasoning: executorEffortRef,
+      reasoning: executorEffort,
       signal: controller.signal,
       systemPrompt: SCOUT_SYSTEM
     });
@@ -2857,7 +2867,7 @@ var runAdvisorScout = async (ctx, manifest, parentSignal, onEvent, timeoutMs = S
       category,
       message,
       metrics: usage === undefined ? baseMetrics(manifest, startedAt) : { ...baseMetrics(manifest, startedAt), usage },
-      model: executorRef,
+      model: effectiveExecutorRef(ctx),
       ok: false
     };
     publish({ outcome, type: "fallback" });
@@ -2866,9 +2876,11 @@ var runAdvisorScout = async (ctx, manifest, parentSignal, onEvent, timeoutMs = S
   if (parentSignal?.aborted) {
     return cancelled();
   }
+  const executorModel = effectiveExecutorRef(ctx);
+  const executorEffort = effectiveExecutorEffort(ctx);
   let resolved;
   try {
-    resolved = await dependencies.resolve(ctx, executorRef, "Scout");
+    resolved = await dependencies.resolve(ctx, executorModel, "Scout");
   } catch (error) {
     if (parentSignal?.aborted) {
       return cancelled();
@@ -2879,8 +2891,8 @@ var runAdvisorScout = async (ctx, manifest, parentSignal, onEvent, timeoutMs = S
   if (parentSignal?.aborted) {
     return cancelled();
   }
-  publish({ model: executorRef, type: "call" });
-  const streamed = await streamScoutResponse(dependencies, resolved, manifest, parentSignal, timeoutMs, publish);
+  publish({ model: executorModel, type: "call" });
+  const streamed = await streamScoutResponse(dependencies, resolved, executorModel, executorEffort, manifest, parentSignal, timeoutMs, publish);
   if (!streamed.ok) {
     if (parentSignal?.aborted) {
       return cancelled();
@@ -2907,7 +2919,7 @@ var runAdvisorScout = async (ctx, manifest, parentSignal, onEvent, timeoutMs = S
       ]).size,
       usage: snapshotAdvisorUsage(streamed.streamed.usage)
     },
-    model: executorRef,
+    model: executorModel,
     ok: true,
     selectedLabels: manifest.groups.filter((group) => group.required || selection.selectedIds.includes(group.id)).map((group) => group.label),
     selection
@@ -4173,7 +4185,7 @@ var resolveActivationModels = async (runtime, ctx) => {
   if (!(advisorAuth.ok && advisorAuth.apiKey)) {
     return { error: `No API key for Advisor ${advisorRef}` };
   }
-  if (!await runtime.setExecutorModel(executor)) {
+  if (!isMarkedSubagent() && !await runtime.setExecutorModel(executor)) {
     return { error: `No API key for Executor ${executorRef}` };
   }
   return {};
@@ -4219,7 +4231,7 @@ var activateAdvisor = async (runtime, args, ctx, announce = true) => {
     saveConfig(ctx, { persistAdvisor: true, persistExecutor: true });
   }
   runtime.pendingExecutorModelRef = undefined;
-  if (executorEffortRef) {
+  if (executorEffortRef && !isMarkedSubagent()) {
     runtime.pi.setThinkingLevel(executorEffortRef);
   }
   if (!runtime.flowEnabled()) {
@@ -4230,9 +4242,11 @@ var activateAdvisor = async (runtime, args, ctx, announce = true) => {
     ]);
   }
   if (announce) {
+    const activeExecutorRef = effectiveExecutorRef(ctx);
+    const activeExecutorEffort = effectiveExecutorEffort(ctx);
     notify(ctx, `${ADVISOR_ACTIVATION_EXPLANATION}
 
-Advisor flow ready — Executor: ${executorRef} (thinking: ${executorEffortRef || "default"}) · Advisor: ${advisorRef} (thinking: ${advisorEffortRef || "default"})`, "info");
+Advisor flow ready — Executor: ${activeExecutorRef} (thinking: ${activeExecutorEffort || "default"}) · Advisor: ${advisorRef} (thinking: ${advisorEffortRef || "default"})`, "info");
   }
 };
 
@@ -4251,7 +4265,7 @@ var registerCommandLifecycle = (runtime, activateAdvisor) => {
     }
   });
   runtime.pi.on("model_select", (event, ctx) => {
-    if (event.source !== "set" || runtime.suppressModelSelectionSync) {
+    if (event.source !== "set" || runtime.suppressModelSelectionSync || isMarkedSubagent()) {
       return;
     }
     const selected = `${event.model.provider}/${event.model.id}`;

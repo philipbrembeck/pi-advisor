@@ -1,4 +1,5 @@
 import { initTheme } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { getKeybindings } from "@earendil-works/pi-tui";
 
 import { registerCommands } from "../../src/commands.ts";
@@ -88,6 +89,8 @@ export const activationHarness = () => {
   const events = new Map<string, (event: any, ctx: any) => any>();
   const renderers = new Map<string, any>();
   const activeTools = ["ask_advisor"];
+  const selectedModels: unknown[] = [];
+  const thinkingLevels: unknown[] = [];
   const pi = mockPi(
     { commands, events, messageRenderers: renderers },
     {
@@ -101,8 +104,15 @@ export const activationHarness = () => {
       setActiveTools(tools: string[]) {
         activeTools.splice(0, activeTools.length, ...tools);
       },
-      setModel: () => Promise.resolve(true),
-      setThinkingLevel: () => undefined,
+      setModel: (model: Parameters<ExtensionAPI["setModel"]>[0]) => {
+        selectedModels.push(model);
+        return Promise.resolve(true);
+      },
+      setThinkingLevel: (
+        level: Parameters<ExtensionAPI["setThinkingLevel"]>[0]
+      ) => {
+        thinkingLevels.push(level);
+      },
     }
   );
   return {
@@ -110,9 +120,11 @@ export const activationHarness = () => {
     events,
     pi,
     renderers,
+    selectedModels,
     setActiveTools: (tools: string[]) => {
       activeTools.splice(0, activeTools.length, ...tools);
     },
+    thinkingLevels,
   };
 };
 

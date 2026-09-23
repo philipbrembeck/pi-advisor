@@ -1,7 +1,10 @@
 import type { Message } from "@earendil-works/pi-ai/compat";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
-import { executorEffortRef, executorRef } from "./config/state.ts";
+import {
+  effectiveExecutorEffort,
+  effectiveExecutorRef,
+} from "./child-session.ts";
 import { isRecord, isString } from "./content-utils.ts";
 import { collectTextStream, resolveConfiguredModel } from "./model-stream.ts";
 import type {
@@ -250,6 +253,8 @@ type ScoutStreamResult =
 const streamScoutResponse = async (
   dependencies: ScoutDependencies,
   resolved: ResolvedConfiguredModel,
+  executorModel: string,
+  executorEffort: string | undefined,
   manifest: ScoutManifest,
   parentSignal: AbortSignal | undefined,
   timeoutMs: number,
@@ -264,10 +269,10 @@ const streamScoutResponse = async (
       messages: [manifestMessage(manifest)],
       onChunk: (thinking, text) => {
         if (!controller.signal.aborted) {
-          publish({ model: executorRef, text, thinking, type: "chunk" });
+          publish({ model: executorModel, text, thinking, type: "chunk" });
         }
       },
-      reasoning: executorEffortRef,
+      reasoning: executorEffort,
       signal: controller.signal,
       systemPrompt: SCOUT_SYSTEM,
     });
@@ -317,7 +322,7 @@ export const runAdvisorScout = async (
         usage === undefined
           ? baseMetrics(manifest, startedAt)
           : { ...baseMetrics(manifest, startedAt), usage },
-      model: executorRef,
+      model: effectiveExecutorRef(ctx),
       ok: false as const,
     };
     publish({ outcome, type: "fallback" });
@@ -328,9 +333,11 @@ export const runAdvisorScout = async (
     return cancelled();
   }
 
+  const executorModel = effectiveExecutorRef(ctx);
+  const executorEffort = effectiveExecutorEffort(ctx);
   let resolved: ResolvedConfiguredModel;
   try {
-    resolved = await dependencies.resolve(ctx, executorRef, "Scout");
+    resolved = await dependencies.resolve(ctx, executorModel, "Scout");
   } catch (error) {
     if (parentSignal?.aborted) {
       return cancelled();
@@ -342,11 +349,13 @@ export const runAdvisorScout = async (
   if (parentSignal?.aborted) {
     return cancelled();
   }
-  publish({ model: executorRef, type: "call" });
+  publish({ model: executorModel, type: "call" });
 
   const streamed = await streamScoutResponse(
     dependencies,
     resolved,
+    executorModel,
+    executorEffort,
     manifest,
     parentSignal,
     timeoutMs,
@@ -390,7 +399,7 @@ export const runAdvisorScout = async (
       ]).size,
       usage: snapshotAdvisorUsage(streamed.streamed.usage),
     },
-    model: executorRef,
+    model: executorModel,
     ok: true as const,
     selectedLabels: manifest.groups
       .filter(

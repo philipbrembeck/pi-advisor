@@ -17,6 +17,7 @@ const expectedFiles = [
   "extensions/index.ts",
   "package.json",
   "src/attachments.ts",
+  "src/child-session.ts",
   "src/commands.ts",
   "src/commands/activation-preparation.ts",
   "src/commands/activation.ts",

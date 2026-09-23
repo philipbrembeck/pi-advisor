@@ -1,5 +1,6 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
+import { isMarkedSubagent } from "../child-session.ts";
 import {
   alwaysOnRef,
   executorRef,
@@ -40,7 +41,11 @@ export const registerCommandLifecycle = (
     // "restore" replays a stored session model and "cycle" changes the active
     // model without an explicit `/model` choice. Neither should redefine the
     // configured Executor.
-    if (event.source !== "set" || runtime.suppressModelSelectionSync) {
+    if (
+      event.source !== "set" ||
+      runtime.suppressModelSelectionSync ||
+      isMarkedSubagent()
+    ) {
       return;
     }
     const selected = `${event.model.provider}/${event.model.id}`;
