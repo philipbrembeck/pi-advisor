@@ -14,6 +14,8 @@ var DEFAULT_ADVISOR_TOOL_RESULT_MAX_BYTES = PI_DEFAULT_MAX_BYTES;
 var DEFAULT_ADVISOR_GIT_CONTEXT_MAX_CHARS = 20000;
 var DEFAULT_JEV_MODEL = "jev-latest";
 var DEFAULT_JEV_TIMEOUT_MS = 8000;
+var DEFAULT_SCOUT_TIMEOUT_MS = 30000;
+var MAX_SCOUT_TIMEOUT_MS = 2147483647;
 var DEFAULT_JEV_DIGEST_MAX_CHARS = 4000;
 var DEFAULT_JEV_PRICE_PER_MTOK = 0.042;
 var DEFAULT_JEV_FILTER_SKIP_CONFIDENCE = 0.85;
@@ -82,6 +84,7 @@ var advisorOutcomeLoggingRef = false;
 var advisorUntrackedContentRef = false;
 var advisorTrackedFileContentRef = false;
 var advisorScoutEnabledRef = false;
+var advisorScoutTimeoutMsRef = DEFAULT_SCOUT_TIMEOUT_MS;
 var showUsageDetailsRef = true;
 var showUsageFooterRef = false;
 var setExecutorRef = (ref) => {
@@ -218,6 +221,9 @@ var setAdvisorTrackedFileContentRef = (enabled) => {
 var setAdvisorScoutEnabledRef = (enabled) => {
   advisorScoutEnabledRef = enabled;
 };
+var setAdvisorScoutTimeoutMsRef = (value) => {
+  advisorScoutTimeoutMsRef = value;
+};
 var setShowUsageDetailsRef = (enabled) => {
   showUsageDetailsRef = enabled;
 };
@@ -256,6 +262,7 @@ var getAdvisorSettings = () => ({
   planGate: advisorPlanGateRef,
   redactSecrets: advisorRedactSecretsRef,
   scoutEnabled: advisorScoutEnabledRef,
+  scoutTimeoutMs: advisorScoutTimeoutMsRef,
   sessionSummary: advisorSessionSummaryRef,
   showUsageDetails: showUsageDetailsRef,
   showUsageFooter: showUsageFooterRef,
@@ -436,6 +443,7 @@ var isValidGateFailureMode = (value) => isString(value) && GATE_FAILURE_MODE_NAM
 var isValidToolResultMaxLines = (value) => nonNegativeSafeInteger(value);
 var isValidToolResultMaxBytes = (value) => nonNegativeSafeInteger(value);
 var isValidJevTimeoutMs = (value) => typeof value === "number" && Number.isSafeInteger(value) && value >= 1;
+var isValidScoutTimeoutMs = (value) => typeof value === "number" && Number.isSafeInteger(value) && value >= 1 && value <= MAX_SCOUT_TIMEOUT_MS;
 var isValidJevDigestMaxChars = (value) => nonNegativeSafeInteger(value);
 var isValidJevPricePerMtok = (value) => typeof value === "number" && Number.isFinite(value) && value > 0;
 var isValidJevSkipConfidence = (value) => typeof value === "number" && Number.isFinite(value) && value >= 0.5 && value <= 1;
@@ -630,6 +638,13 @@ var CONFIG_SCHEMA = {
     current: () => advisorScoutEnabledRef,
     persisted: true,
     type: "boolean"
+  },
+  advisorScoutTimeoutMs: {
+    accepted: `a positive safe integer no greater than ${MAX_SCOUT_TIMEOUT_MS} milliseconds`,
+    current: () => advisorScoutTimeoutMsRef,
+    persisted: true,
+    type: "number",
+    validate: isValidScoutTimeoutMs
   },
   advisorSessionSummary: {
     accepted: "true or false",
@@ -869,6 +884,7 @@ var resetDefaults = () => {
   setAdvisorUntrackedContentRef(false);
   setAdvisorTrackedFileContentRef(false);
   setAdvisorScoutEnabledRef(false);
+  setAdvisorScoutTimeoutMsRef(DEFAULT_SCOUT_TIMEOUT_MS);
   setShowUsageDetailsRef(true);
   setShowUsageFooterRef(false);
 };
@@ -901,6 +917,7 @@ var applyConfig = (config) => {
   applyOptionalConfig(config, "advisorModelWhitelist", setAdvisorModelWhitelistRef);
   applyOptionalConfig(config, "advisorSessionSummary", setAdvisorSessionSummaryRef);
   applyOptionalConfig(config, "advisorScoutEnabled", setAdvisorScoutEnabledRef);
+  applyOptionalConfig(config, "advisorScoutTimeoutMs", setAdvisorScoutTimeoutMsRef);
   applyOptionalConfig(config, "showUsageDetails", setShowUsageDetailsRef);
   applyOptionalConfig(config, "showUsageFooter", setShowUsageFooterRef);
   applyOptionalConfig(config, "simpleMode", setSimpleModeRef);
@@ -2701,7 +2718,6 @@ var formatAdvisorUsageStatus = (totals) => {
 };
 
 // src/scout.ts
-var SCOUT_TIMEOUT_MS = 30000;
 var SCOUT_SYSTEM = [
   "You are Scout, a context curator serving a separate engineering Advisor.",
   "Select only conversation groups materially relevant to the current request, unresolved decisions, attempted work, diagnostics, and validation.",
@@ -2853,7 +2869,7 @@ var streamScoutResponse = async (dependencies, resolved, executorModel, executor
     teardown();
   }
 };
-var runAdvisorScout = async (ctx, manifest, parentSignal, onEvent, timeoutMs = SCOUT_TIMEOUT_MS, dependencies = defaultDependencies) => {
+var runAdvisorScout = async (ctx, manifest, parentSignal, onEvent, timeoutMs = advisorScoutTimeoutMsRef, dependencies = defaultDependencies) => {
   const startedAt = Date.now();
   const publish = (event) => {
     onEvent?.(event);
@@ -3500,7 +3516,6 @@ var scoutDetailsFromEvent = (event, previous) => {
     latencyMs: outcome.metrics.latencyMs,
     model: outcome.model,
     omittedBeforeScout: outcome.metrics.omittedBeforeScout,
-    selectedCount: 0,
     status: "fallback",
     usage: snapshotAdvisorUsage(outcome.metrics.usage)
   };
@@ -3572,7 +3587,16 @@ var scoutTitle = (scout, frame) => {
   }
   return "◆ SCOUT · FALLBACK";
 };
-var scoutSummaryLine = (scout) => `  ${scout.model}${scout.selectedCount === undefined ? "" : ` · ${scout.selectedCount} kept / ${Math.max(0, (scout.availableCount ?? 0) - scout.selectedCount)} omitted`}${scout.latencyMs === undefined ? "" : ` · ${(scout.latencyMs / 1000).toFixed(1)}s`}`;
+var scoutSelectionSummary = (scout) => {
+  if (scout.status === "fallback") {
+    return " · original conversation retained";
+  }
+  if (scout.status !== "curated" || scout.selectedCount === undefined) {
+    return "";
+  }
+  return ` · ${scout.selectedCount} kept / ${Math.max(0, (scout.availableCount ?? 0) - scout.selectedCount)} omitted`;
+};
+var scoutSummaryLine = (scout) => `  ${scout.model}${scoutSelectionSummary(scout)}${scout.latencyMs === undefined ? "" : ` · ${(scout.latencyMs / 1000).toFixed(1)}s`}`;
 var scoutExpandedLines = (scout, expanded, theme) => {
   const lines = [];
   if (expanded && scout.selectedLabels?.length) {
@@ -6055,6 +6079,16 @@ var toggle = (id, label, description, value, defaultValue) => ({
   label,
   values: TOGGLE_VALUES
 });
+var scoutTimeoutItem = (settings) => {
+  const timeoutMs = settings.scoutTimeoutMs ?? DEFAULT_SCOUT_TIMEOUT_MS;
+  return {
+    currentValue: String(timeoutMs),
+    description: "Maximum time for Scout's response stream; model and auth resolution happen before this timeout starts.",
+    id: "scoutTimeoutMs",
+    label: "Scout timeout ms",
+    values: numericValues(timeoutMs, [5000, 1e4, 15000, 30000, 45000, 60000, 90000, 120000])
+  };
+};
 var jevItems = (settings, theme, tui) => [
   {
     currentValue: settingValue(settings.jevFilterEnabled, false),
@@ -6212,7 +6246,7 @@ var createSettingsItems = ({
     id: "effort",
     label: "Advisor reasoning",
     values: withCurrentValue(currentEffort(settings.effort), effortLevels)
-  }, modelWhitelist, toggle("scoutEnabled", "Experimental Advisor Scout", "Enable the experimental Scout before Advisor calls.", settings.scoutEnabled, false), toggle("showUsageDetails", "Show usage and cost details", "Show token usage and cost details in Advisor responses.", settings.showUsageDetails, true), toggle("showUsageFooter", "Show usage in footer", "Show the current Advisor usage summary in the footer.", settings.showUsageFooter, false), toggle("planGate", "Plan gate", "Ask the Advisor to review implementation plans.", settings.planGate, true), toggle("failureGate", "Failure gate", "Ask the Advisor to review repeated failures.", settings.failureGate, true), toggle("completionGate", "Completion gate", "Ask the Advisor to review work before declaring success.", settings.completionGate, true), toggle("collapseResponses", "Collapse long responses", "Collapse long Advisor responses in the transcript.", settings.collapseResponses, false), {
+  }, modelWhitelist, toggle("scoutEnabled", "Experimental Advisor Scout", "Enable the experimental Scout before Advisor calls.", settings.scoutEnabled, false), scoutTimeoutItem(settings), toggle("showUsageDetails", "Show usage and cost details", "Show token usage and cost details in Advisor responses.", settings.showUsageDetails, true), toggle("showUsageFooter", "Show usage in footer", "Show the current Advisor usage summary in the footer.", settings.showUsageFooter, false), toggle("planGate", "Plan gate", "Ask the Advisor to review implementation plans.", settings.planGate, true), toggle("failureGate", "Failure gate", "Ask the Advisor to review repeated failures.", settings.failureGate, true), toggle("completionGate", "Completion gate", "Ask the Advisor to review work before declaring success.", settings.completionGate, true), toggle("collapseResponses", "Collapse long responses", "Collapse long Advisor responses in the transcript.", settings.collapseResponses, false), {
     currentValue: settings.customRule || "None",
     description: "Add a rule that triggers Advisor involvement.",
     id: "customRule",
@@ -6510,6 +6544,10 @@ var applyJevMutation = (settings, id, value) => {
       settings.jevTimeoutMs = Number(value);
       return true;
     }
+    case "scoutTimeoutMs": {
+      settings.scoutTimeoutMs = Number(value);
+      return true;
+    }
     case "jevDigestMaxChars": {
       settings.jevDigestMaxChars = Number(value);
       return true;
@@ -6667,6 +6705,7 @@ var applySessionSettings = (settings) => {
   setAdvisorModelWhitelistRef(settings.modelWhitelist ?? []);
   setAdvisorSessionSummaryRef(settings.sessionSummary ?? false);
   setAdvisorScoutEnabledRef(settings.scoutEnabled ?? false);
+  setAdvisorScoutTimeoutMsRef(settings.scoutTimeoutMs ?? DEFAULT_SCOUT_TIMEOUT_MS);
   setShowUsageDetailsRef(settings.showUsageDetails ?? true);
   setShowUsageFooterRef(settings.showUsageFooter ?? false);
   setSimpleModeRef(settings.simpleMode ?? false);

@@ -32,6 +32,7 @@ import {
   advisorRedactSecretsRef,
   advisorRef,
   advisorScoutEnabledRef,
+  advisorScoutTimeoutMsRef,
   advisorSessionSummaryRef,
   advisorToolPoliciesRef,
   advisorToolResultMaxBytesRef,
@@ -56,6 +57,7 @@ import {
   GATE_FAILURE_MODES,
   JEV_TRANSPORTS,
   MAX_CONTEXT_MAX_CHARS,
+  MAX_SCOUT_TIMEOUT_MS,
 } from "./types.ts";
 
 /** An empty ref means no model has been selected yet. */
@@ -115,6 +117,12 @@ export const isValidToolResultMaxBytes = (value: unknown): value is number =>
 
 export const isValidJevTimeoutMs = (value: unknown): value is number =>
   typeof value === "number" && Number.isSafeInteger(value) && value >= 1;
+
+const isValidScoutTimeoutMs = (value: unknown): value is number =>
+  typeof value === "number" &&
+  Number.isSafeInteger(value) &&
+  value >= 1 &&
+  value <= MAX_SCOUT_TIMEOUT_MS;
 
 export const isValidJevDigestMaxChars = (value: unknown): value is number =>
   nonNegativeSafeInteger(value);
@@ -343,6 +351,13 @@ export const CONFIG_SCHEMA = {
     current: () => advisorScoutEnabledRef,
     persisted: true,
     type: "boolean",
+  },
+  advisorScoutTimeoutMs: {
+    accepted: `a positive safe integer no greater than ${MAX_SCOUT_TIMEOUT_MS} milliseconds`,
+    current: () => advisorScoutTimeoutMsRef,
+    persisted: true,
+    type: "number",
+    validate: isValidScoutTimeoutMs,
   },
   advisorSessionSummary: {
     accepted: "true or false",

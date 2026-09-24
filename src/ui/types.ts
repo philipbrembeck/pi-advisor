@@ -98,6 +98,7 @@ export interface AdvisorSettings {
   planGate: boolean;
   redactSecrets?: boolean;
   scoutEnabled?: boolean;
+  scoutTimeoutMs?: number;
   sessionSummary?: boolean;
   showUsageDetails?: boolean;
   showUsageFooter?: boolean;

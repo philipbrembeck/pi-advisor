@@ -53,7 +53,6 @@ export const scoutDetailsFromEvent = (
         latencyMs: outcome.metrics.latencyMs,
         model: outcome.model,
         omittedBeforeScout: outcome.metrics.omittedBeforeScout,
-        selectedCount: 0,
         status: "fallback",
         usage: snapshotAdvisorUsage(outcome.metrics.usage),
       };
@@ -144,12 +143,18 @@ const scoutTitle = (scout: ScoutToolDetails, frame: string) => {
   return "◆ SCOUT · FALLBACK";
 };
 
+const scoutSelectionSummary = (scout: ScoutToolDetails) => {
+  if (scout.status === "fallback") {
+    return " · original conversation retained";
+  }
+  if (scout.status !== "curated" || scout.selectedCount === undefined) {
+    return "";
+  }
+  return ` · ${scout.selectedCount} kept / ${Math.max(0, (scout.availableCount ?? 0) - scout.selectedCount)} omitted`;
+};
+
 const scoutSummaryLine = (scout: ScoutToolDetails) =>
-  `  ${scout.model}${
-    scout.selectedCount === undefined
-      ? ""
-      : ` · ${scout.selectedCount} kept / ${Math.max(0, (scout.availableCount ?? 0) - scout.selectedCount)} omitted`
-  }${scout.latencyMs === undefined ? "" : ` · ${(scout.latencyMs / 1000).toFixed(1)}s`}`;
+  `  ${scout.model}${scoutSelectionSummary(scout)}${scout.latencyMs === undefined ? "" : ` · ${(scout.latencyMs / 1000).toFixed(1)}s`}`;
 
 const scoutExpandedLines = (
   scout: ScoutToolDetails,

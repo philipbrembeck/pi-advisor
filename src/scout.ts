@@ -5,6 +5,7 @@ import {
   effectiveExecutorEffort,
   effectiveExecutorRef,
 } from "./child-session.ts";
+import { advisorScoutTimeoutMsRef } from "./config/state.ts";
 import { isRecord, isString } from "./content-utils.ts";
 import { collectTextStream, resolveConfiguredModel } from "./model-stream.ts";
 import type {
@@ -20,8 +21,6 @@ import {
 import type { ScoutManifest } from "./scout-types.ts";
 import { snapshotAdvisorUsage } from "./usage.ts";
 import type { AdvisorUsageSnapshot } from "./usage.ts";
-
-const SCOUT_TIMEOUT_MS = 30_000;
 
 export const SCOUT_SYSTEM = [
   "You are Scout, a context curator serving a separate engineering Advisor.",
@@ -299,7 +298,7 @@ export const runAdvisorScout = async (
   manifest: ScoutManifest,
   parentSignal?: AbortSignal,
   onEvent?: (event: ScoutLifecycleEvent) => void,
-  timeoutMs = SCOUT_TIMEOUT_MS,
+  timeoutMs = advisorScoutTimeoutMsRef,
   dependencies: ScoutDependencies = defaultDependencies
 ): Promise<ScoutOutcome> => {
   const startedAt = Date.now();

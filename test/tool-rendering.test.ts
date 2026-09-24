@@ -191,7 +191,7 @@ describe("Advisor tool rendering", () => {
       .get("advisor-scout-result")(
         {
           data: {
-            availableCount: 4,
+            availableCount: 55,
             fallbackReason: "timeout: Scout timed out",
             model: "provider/executor",
             omittedBeforeScout: 2,
@@ -206,6 +206,8 @@ describe("Advisor tool rendering", () => {
       .render(120)
       .join("\n");
     expect(fallback).toContain("SCOUT · FALLBACK");
+    expect(fallback).toContain("original conversation retained");
+    expect(fallback).not.toContain("0 kept / 55 omitted");
     expect(fallback).toContain("timeout: Scout timed out");
     expect(fallback).toContain("Usage: ↑80 · ↓10 · cr:2 · $0.0030");
     expect(fallback).toContain("2 group(s) omitted before Scout");

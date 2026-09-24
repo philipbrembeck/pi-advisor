@@ -4,6 +4,16 @@ All notable changes to this project are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
+## Unreleased
+
+### Added
+
+- Added a configurable Advisor Scout response-stream timeout in `/advisor-settings` and `advisor.json`, defaulting to 30 seconds. Model and auth resolution remain outside the timeout window.
+
+### Fixed
+
+- Scout timeout fallbacks now report that the original conversation was retained instead of showing a misleading zero-kept/all-omitted selection count.
+
 ## 0.8.1 - 2026-09-23
 
 ### Fixed

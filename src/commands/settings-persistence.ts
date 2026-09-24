@@ -31,6 +31,7 @@ import {
   setAdvisorPlanGateRef,
   setAdvisorRedactSecretsRef,
   setAdvisorScoutEnabledRef,
+  setAdvisorScoutTimeoutMsRef,
   setAdvisorSessionSummaryRef,
   setAdvisorToolPoliciesRef,
   setAdvisorToolResultMaxBytesRef,
@@ -55,6 +56,7 @@ import {
   DEFAULT_JEV_TRANSPORT,
   DEFAULT_JEV_TURN_GATE_EVERY_TURNS,
   DEFAULT_JEV_TURN_GATE_NOUL_THRESHOLD,
+  DEFAULT_SCOUT_TIMEOUT_MS,
 } from "../config/types.ts";
 import type { AdvisorSettings } from "../ui/types.ts";
 
@@ -75,6 +77,9 @@ const applySessionSettings = (settings: AdvisorSettings) => {
   setAdvisorModelWhitelistRef(settings.modelWhitelist ?? []);
   setAdvisorSessionSummaryRef(settings.sessionSummary ?? false);
   setAdvisorScoutEnabledRef(settings.scoutEnabled ?? false);
+  setAdvisorScoutTimeoutMsRef(
+    settings.scoutTimeoutMs ?? DEFAULT_SCOUT_TIMEOUT_MS
+  );
   setShowUsageDetailsRef(settings.showUsageDetails ?? true);
   setShowUsageFooterRef(settings.showUsageFooter ?? false);
   setSimpleModeRef(settings.simpleMode ?? false);

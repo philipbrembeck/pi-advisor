@@ -29,6 +29,7 @@ import {
   setAdvisorRedactSecretsRef,
   setAdvisorRef,
   setAdvisorScoutEnabledRef,
+  setAdvisorScoutTimeoutMsRef,
   setAdvisorSessionSummaryRef,
   setAdvisorToolPoliciesRef,
   setAdvisorToolResultMaxBytesRef,
@@ -60,6 +61,7 @@ import {
   DEFAULT_JEV_TRANSPORT,
   DEFAULT_JEV_TURN_GATE_EVERY_TURNS,
   DEFAULT_JEV_TURN_GATE_NOUL_THRESHOLD,
+  DEFAULT_SCOUT_TIMEOUT_MS,
 } from "./types.ts";
 
 export const resetDefaults = () => {
@@ -105,6 +107,7 @@ export const resetDefaults = () => {
   setAdvisorUntrackedContentRef(false);
   setAdvisorTrackedFileContentRef(false);
   setAdvisorScoutEnabledRef(false);
+  setAdvisorScoutTimeoutMsRef(DEFAULT_SCOUT_TIMEOUT_MS);
   setShowUsageDetailsRef(true);
   setShowUsageFooterRef(false);
 };
@@ -179,6 +182,11 @@ export const applyConfig = (config: AdvisorConfig) => {
     setAdvisorSessionSummaryRef
   );
   applyOptionalConfig(config, "advisorScoutEnabled", setAdvisorScoutEnabledRef);
+  applyOptionalConfig(
+    config,
+    "advisorScoutTimeoutMs",
+    setAdvisorScoutTimeoutMsRef
+  );
   applyOptionalConfig(config, "showUsageDetails", setShowUsageDetailsRef);
   applyOptionalConfig(config, "showUsageFooter", setShowUsageFooterRef);
   applyOptionalConfig(config, "simpleMode", setSimpleModeRef);

@@ -12,14 +12,17 @@ import registerExtension, {
 } from "../extensions/index.ts";
 import {
   setAdvisorRedactSecretsRef,
+  setAdvisorScoutEnabledRef,
   setAdvisorToolPoliciesRef,
 } from "../src/config.ts";
+import { setAdvisorScoutTimeoutMsRef } from "../src/config/state.ts";
+import { DEFAULT_SCOUT_TIMEOUT_MS } from "../src/config/types.ts";
 import { advisorRequestConversation } from "../src/tools.ts";
 import { withAgentDir } from "./helpers/config-fixture.ts";
 import { asExtensionContext } from "./helpers/extension-context.ts";
 import { mockPi } from "./helpers/mock-pi.ts";
 
-const fauxContext = (agentDir: string, faux: any) =>
+const fauxContext = (agentDir: string, faux: any, entries: object[] = []) =>
   asExtensionContext({
     cwd: agentDir,
     isProjectTrusted: () => false,
@@ -27,7 +30,10 @@ const fauxContext = (agentDir: string, faux: any) =>
       find: () => faux.models[0],
       getApiKeyAndHeaders: () => Promise.resolve({ apiKey: "key", ok: true }),
     },
-    sessionManager: { getBranch: () => [] },
+    sessionManager: {
+      buildContextEntries: () => entries,
+      getBranch: () => entries,
+    },
   });
 
 describe("Advisor consultation request construction", () => {
@@ -146,6 +152,99 @@ describe("Advisor consultation request construction", () => {
     expect(captured).toHaveLength(1);
     expect(captured[0]).not.toContain("hunter2");
     expect(captured[0]).toContain("[REDACTED SECRET]");
+  });
+
+  test("completes the Advisor call with legacy context after a real Scout timeout", async () => {
+    const faux = registerFauxProvider({
+      api: "pi-advisor-scout-timeout-test",
+      models: [{ id: "advisor", input: ["text"] }],
+      provider: "pi-advisor-scout-timeout-test",
+    });
+    try {
+      await withAgentDir(
+        {
+          advisor: "pi-advisor-scout-timeout-test/advisor",
+          advisorGitContext: "off",
+          advisorScoutEnabled: true,
+          advisorScoutTimeoutMs: 20,
+          executor: "pi-advisor-scout-timeout-test/advisor",
+        },
+        async (agentDir) => {
+          const entries = [
+            {
+              id: "user-entry",
+              message: {
+                content: "Original context should remain available.",
+                role: "user",
+              },
+              parentId: null,
+              timestamp: "2026-01-01T00:00:00Z",
+              type: "message",
+            },
+          ];
+          let advisorRequest = "";
+          faux.setResponses([
+            (_context, options) =>
+              new Promise((resolve, reject) => {
+                const signal = options?.signal;
+                if (!signal) {
+                  reject(new Error("Scout response must be abortable"));
+                  return;
+                }
+                const complete = () =>
+                  resolve(
+                    fauxAssistantMessage('{"selectedIds":[],"synthesis":""}')
+                  );
+                if (signal.aborted) {
+                  complete();
+                } else {
+                  signal.addEventListener("abort", complete, { once: true });
+                }
+              }),
+            (context) => {
+              advisorRequest = JSON.stringify(context.messages);
+              return fauxAssistantMessage(
+                "Advisor completed after Scout timeout."
+              );
+            },
+          ]);
+          const scoutFallbacks: string[] = [];
+          const result = await consultAdvisor(
+            fauxContext(agentDir, faux, entries),
+            "Continue with the original conversation.",
+            undefined,
+            undefined,
+            "executor-requested",
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            (event) => {
+              if (event.type === "fallback") {
+                scoutFallbacks.push(event.outcome.message);
+              }
+            }
+          );
+          expect(result.markdown).toBe(
+            "Advisor completed after Scout timeout."
+          );
+          expect(result.scout).toMatchObject({
+            category: "timeout",
+            message: "Scout timed out after 20 ms.",
+            ok: false,
+          });
+          expect(scoutFallbacks).toEqual(["Scout timed out after 20 ms."]);
+          expect(advisorRequest).toContain(
+            "User: Original context should remain available."
+          );
+          expect(faux.state.callCount).toBe(2);
+        }
+      );
+    } finally {
+      faux.unregister();
+      setAdvisorScoutEnabledRef(false);
+      setAdvisorScoutTimeoutMsRef(DEFAULT_SCOUT_TIMEOUT_MS);
+    }
   });
 
   test("injects only the enabled invocation rules into the active prompt", async () => {

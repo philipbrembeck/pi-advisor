@@ -36,7 +36,7 @@ describe("Scout Advisor-context integration", () => {
     expect(calls).toBe(0);
   });
 
-  test("ordinary Scout failure uses the immutable exact legacy conversation", async () => {
+  test("timed-out Scout uses the immutable exact legacy conversation", async () => {
     const legacy = "legacy bytes <&> stay exact";
     const result = await curateAdvisorConversation(
       ctx,
@@ -45,8 +45,8 @@ describe("Scout Advisor-context integration", () => {
       undefined,
       true,
       async () => ({
-        category: "provider-error",
-        message: "down",
+        category: "timeout",
+        message: "Scout timed out after 15 ms.",
         metrics: {
           availableCount: 1,
           inputBytes: 10,
@@ -60,7 +60,8 @@ describe("Scout Advisor-context integration", () => {
     );
     expect(result.conversation).toBe(legacy);
     expect(result.scout).toMatchObject({
-      category: "provider-error",
+      category: "timeout",
+      message: "Scout timed out after 15 ms.",
       ok: false,
     });
   });

@@ -14,6 +14,7 @@ import {
   DEFAULT_JEV_TRANSPORT,
   DEFAULT_JEV_TURN_GATE_EVERY_TURNS,
   DEFAULT_JEV_TURN_GATE_NOUL_THRESHOLD,
+  DEFAULT_SCOUT_TIMEOUT_MS,
 } from "./types.ts";
 import type {
   AdvisorToolPolicies,
@@ -68,6 +69,7 @@ export let advisorOutcomeLoggingRef = false;
 export let advisorUntrackedContentRef = false;
 export let advisorTrackedFileContentRef = false;
 export let advisorScoutEnabledRef = false;
+export let advisorScoutTimeoutMsRef = DEFAULT_SCOUT_TIMEOUT_MS;
 export let showUsageDetailsRef = true;
 export let showUsageFooterRef = false;
 
@@ -213,6 +215,9 @@ export const setAdvisorTrackedFileContentRef = (enabled: boolean) => {
 export const setAdvisorScoutEnabledRef = (enabled: boolean) => {
   advisorScoutEnabledRef = enabled;
 };
+export const setAdvisorScoutTimeoutMsRef = (value: number) => {
+  advisorScoutTimeoutMsRef = value;
+};
 export const setShowUsageDetailsRef = (enabled: boolean) => {
   showUsageDetailsRef = enabled;
 };
@@ -256,6 +261,7 @@ export const getAdvisorSettings = () => ({
   planGate: advisorPlanGateRef,
   redactSecrets: advisorRedactSecretsRef,
   scoutEnabled: advisorScoutEnabledRef,
+  scoutTimeoutMs: advisorScoutTimeoutMsRef,
   sessionSummary: advisorSessionSummaryRef,
   showUsageDetails: showUsageDetailsRef,
   showUsageFooter: showUsageFooterRef,

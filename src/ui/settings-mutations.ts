@@ -161,6 +161,10 @@ const applyJevMutation = (
       settings.jevTimeoutMs = Number(value);
       return true;
     }
+    case "scoutTimeoutMs": {
+      settings.scoutTimeoutMs = Number(value);
+      return true;
+    }
     case "jevDigestMaxChars": {
       settings.jevDigestMaxChars = Number(value);
       return true;

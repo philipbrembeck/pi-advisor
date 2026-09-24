@@ -3,6 +3,10 @@
 import { describe, expect, test } from "bun:test";
 
 import { setExecutorEffortRef, setExecutorRef } from "../src/config.ts";
+import {
+  advisorScoutTimeoutMsRef,
+  setAdvisorScoutTimeoutMsRef,
+} from "../src/config/state.ts";
 import type {
   CollectTextStreamOptions,
   ResolvedConfiguredModel,
@@ -15,7 +19,7 @@ import {
   runAdvisorScout,
   SCOUT_SYSTEM,
 } from "../src/scout.ts";
-import { ScoutStatusManager } from "../src/tools.ts";
+import { scoutDetailsFromEvent, ScoutStatusManager } from "../src/tools.ts";
 import { asExtensionContext } from "./helpers/extension-context.ts";
 
 const manifest = (): ScoutManifest => ({
@@ -356,36 +360,77 @@ describe("Advisor Scout", () => {
     expect(outcome.selection.selectedIds).toEqual(["g_required", "g_failure"]);
   });
 
-  test("times out as fallback and propagates its abort signal", async () => {
+  test("uses the configured response-stream timeout and propagates its abort signal", async () => {
+    const previousTimeout = advisorScoutTimeoutMsRef;
+    setAdvisorScoutTimeoutMsRef(5);
     let childSignal: AbortSignal | undefined;
-    const outcome = await runAdvisorScout(
-      asExtensionContext({}),
-      manifest(),
-      undefined,
-      undefined,
-      5,
-      {
-        collect: async (
-          _resolved: ResolvedConfiguredModel,
-          options: CollectTextStreamOptions
-        ) => {
-          const { signal } = options;
-          if (!signal) {
-            throw new Error("scout must pass an abort signal");
-          }
-          childSignal = signal;
-          await new Promise((_resolve, reject) =>
-            signal.addEventListener("abort", () => reject(signal.reason), {
-              once: true,
-            })
-          );
-          throw new Error("unreachable");
-        },
-        resolve: async () => resolved,
-      }
-    );
-    expect(childSignal?.aborted).toBe(true);
-    expect(outcome).toMatchObject({ category: "timeout", ok: false });
+    try {
+      const outcome = await runAdvisorScout(
+        asExtensionContext({}),
+        manifest(),
+        undefined,
+        undefined,
+        undefined,
+        {
+          collect: async (
+            _resolved: ResolvedConfiguredModel,
+            options: CollectTextStreamOptions
+          ) => {
+            const { signal } = options;
+            if (!signal) {
+              throw new Error("scout must pass an abort signal");
+            }
+            childSignal = signal;
+            await new Promise((_resolve, reject) =>
+              signal.addEventListener("abort", () => reject(signal.reason), {
+                once: true,
+              })
+            );
+            throw new Error("unreachable");
+          },
+          resolve: async () => resolved,
+        }
+      );
+      expect(childSignal?.aborted).toBe(true);
+      expect(outcome).toMatchObject({
+        category: "timeout",
+        message: "Scout timed out after 5 ms.",
+        ok: false,
+      });
+    } finally {
+      setAdvisorScoutTimeoutMsRef(previousTimeout);
+    }
+  });
+
+  test("starts the timeout after model and auth resolution", async () => {
+    const previousTimeout = advisorScoutTimeoutMsRef;
+    setAdvisorScoutTimeoutMsRef(5);
+    try {
+      const outcome = await runAdvisorScout(
+        asExtensionContext({}),
+        manifest(),
+        undefined,
+        undefined,
+        undefined,
+        {
+          collect: async () => ({
+            text: JSON.stringify({
+              selectedIds: ["g_required"],
+              synthesis: "",
+            }),
+            thinking: "",
+            usage: {},
+          }),
+          resolve: async () => {
+            await new Promise((resolve) => setTimeout(resolve, 25));
+            return resolved;
+          },
+        }
+      );
+      expect(outcome.ok).toBe(true);
+    } finally {
+      setAdvisorScoutTimeoutMsRef(previousTimeout);
+    }
   });
 
   test("parent abort cancels and never reports fallback", async () => {
@@ -462,6 +507,27 @@ const statusContext = (statuses: (string | undefined)[]) =>
   });
 
 describe("Scout status ownership", () => {
+  test("does not turn fallback metrics into a zero-kept selection summary", () => {
+    const details = scoutDetailsFromEvent({
+      outcome: {
+        category: "timeout",
+        message: "Scout timed out after 30000 ms.",
+        metrics: {
+          availableCount: 55,
+          inputBytes: 1000,
+          latencyMs: 30_000,
+          omittedBeforeScout: 2,
+          selectedCount: 0,
+        },
+        model: "provider/executor",
+        ok: false,
+      },
+      type: "fallback",
+    });
+    expect(details.status).toBe("fallback");
+    expect(details).not.toHaveProperty("selectedCount");
+  });
+
   test("keeps a newer active status when an older invocation releases", () => {
     const statuses: (string | undefined)[] = [];
     const manager = new ScoutStatusManager();

@@ -23,6 +23,8 @@ export const DEFAULT_JEV_MODEL = "jev-latest";
 // Provisional: the latency benchmark was dropped from scope; revisit if live
 // measurements suggest a different bound.
 export const DEFAULT_JEV_TIMEOUT_MS = 8000;
+export const DEFAULT_SCOUT_TIMEOUT_MS = 30_000;
+export const MAX_SCOUT_TIMEOUT_MS = 2_147_483_647;
 export const DEFAULT_JEV_DIGEST_MAX_CHARS = 4000;
 export const DEFAULT_JEV_PRICE_PER_MTOK = 0.042;
 export const DEFAULT_JEV_FILTER_SKIP_CONFIDENCE = 0.85;
@@ -86,6 +88,7 @@ export interface AdvisorConfig {
   advisorPlanGate?: boolean;
   advisorRedactSecrets?: boolean;
   advisorScoutEnabled?: boolean;
+  advisorScoutTimeoutMs?: number;
   advisorSessionSummary?: boolean;
   advisorToolPolicies?: AdvisorToolPolicies;
   advisorToolResultMaxBytes?: number;

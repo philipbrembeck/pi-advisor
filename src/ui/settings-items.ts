@@ -12,6 +12,7 @@ import {
   DEFAULT_JEV_TIMEOUT_MS,
   DEFAULT_JEV_TRANSPORT,
   DEFAULT_JEV_TURN_GATE_NOUL_THRESHOLD,
+  DEFAULT_SCOUT_TIMEOUT_MS,
 } from "../config/types.ts";
 import { isValidAdvisorToolPolicies } from "../config/validation.ts";
 import { JevSetupSubmenu } from "./jev-setup-submenu.ts";
@@ -55,6 +56,21 @@ const toggle = (
   label,
   values: TOGGLE_VALUES,
 });
+
+const scoutTimeoutItem = (settings: AdvisorSettings): SettingItem => {
+  const timeoutMs = settings.scoutTimeoutMs ?? DEFAULT_SCOUT_TIMEOUT_MS;
+  return {
+    currentValue: String(timeoutMs),
+    description:
+      "Maximum time for Scout's response stream; model and auth resolution happen before this timeout starts.",
+    id: "scoutTimeoutMs",
+    label: "Scout timeout ms",
+    values: numericValues(
+      timeoutMs,
+      [5000, 10_000, 15_000, 30_000, 45_000, 60_000, 90_000, 120_000]
+    ),
+  };
+};
 
 const jevItems = (
   settings: AdvisorSettings,
@@ -288,6 +304,7 @@ export const createSettingsItems = ({
       settings.scoutEnabled,
       false
     ),
+    scoutTimeoutItem(settings),
     toggle(
       "showUsageDetails",
       "Show usage and cost details",
