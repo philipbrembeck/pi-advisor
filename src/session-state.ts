@@ -177,6 +177,7 @@ export class AdvisorSessionState {
   #ledger = freshAdviceLedger();
   #usage = freshUsage();
   #consumedCalls = 0;
+  #callReservations = new Set<string>();
   readonly #jev = new AdvisorJevLedgerState();
   #sessionTurnOrdinal = 0;
   #turnsSinceConsultation = 0;
@@ -187,6 +188,7 @@ export class AdvisorSessionState {
     this.#ledger = freshAdviceLedger();
     this.#usage = freshUsage();
     this.#consumedCalls = 0;
+    this.#callReservations.clear();
     this.#jev.reset();
     this.#sessionTurnOrdinal = 0;
     this.#turnsSinceConsultation = 0;
@@ -227,16 +229,40 @@ export class AdvisorSessionState {
     return true;
   }
 
-  canConsult(limit: number | undefined) {
-    return limit === undefined || this.#consumedCalls < limit;
+  canConsult(limit: number | undefined, reservationId?: string) {
+    const reservations =
+      this.#callReservations.size -
+      Number(
+        reservationId !== undefined && this.#callReservations.has(reservationId)
+      );
+    return limit === undefined || this.#consumedCalls + reservations < limit;
   }
-  consumeCall() {
+  reserveCall(id: string, limit: number | undefined) {
+    if (this.#callReservations.has(id)) {
+      return true;
+    }
+    if (!this.canConsult(limit)) {
+      return false;
+    }
+    this.#callReservations.add(id);
+    return true;
+  }
+  releaseCall(id: string) {
+    this.#callReservations.delete(id);
+  }
+  clearCallReservations() {
+    this.#callReservations.clear();
+  }
+  consumeCall(reservationId?: string) {
+    if (reservationId !== undefined) {
+      this.#callReservations.delete(reservationId);
+    }
     this.#consumedCalls += 1;
   }
   remainingCalls(limit: number | undefined) {
     return limit === undefined
       ? undefined
-      : Math.max(0, limit - this.#consumedCalls);
+      : Math.max(0, limit - this.#consumedCalls - this.#callReservations.size);
   }
   get consumedCalls() {
     return this.#consumedCalls;

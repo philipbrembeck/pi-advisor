@@ -10,13 +10,16 @@ import {
 
 export class HerdrAdvisorBlock {
   #blocked = false;
+  private readonly emitBlocked: (active: boolean, label: string) => void;
   private readonly report: Report;
   private readonly enabled: () => boolean;
 
   constructor(
     report: Report = sendToHerdr,
-    enabled: () => boolean = () => true
+    enabled: () => boolean = () => true,
+    emitBlocked: (active: boolean, label: string) => void = safeEmitBlocked
   ) {
+    this.emitBlocked = emitBlocked;
     this.report = report;
     this.enabled = enabled;
   }
@@ -29,7 +32,7 @@ export class HerdrAdvisorBlock {
     const wasBlocked: boolean = this.#blocked;
     if (!wasBlocked) {
       // The listener refcounts, so only the false → true edge may emit.
-      safeEmitBlocked(true, label);
+      this.safeEmitBlocked(true, label);
     }
     this.#blocked = true;
     this.safeReport({ blocked: label });
@@ -43,7 +46,7 @@ export class HerdrAdvisorBlock {
     }
     // Clearing previously reported state is a de-escalation and must still be
     // delivered if integration was disabled after the block was reported.
-    safeEmitBlocked(false);
+    this.safeEmitBlocked(false, "Advisor blocked");
     try {
       this.report({
         id: `${BLOCK_SOURCE}:${nextSequence()}`,
@@ -59,6 +62,15 @@ export class HerdrAdvisorBlock {
       });
     } catch {
       /* Herdr is optional. */
+    }
+  }
+
+  private safeEmitBlocked(active: boolean, label: string): boolean {
+    try {
+      this.emitBlocked(active, label);
+      return true;
+    } catch {
+      return false;
     }
   }
 

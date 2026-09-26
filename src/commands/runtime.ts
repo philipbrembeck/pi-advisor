@@ -4,7 +4,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 
 import { getAdvisorSettings } from "../config/state.ts";
-import { notifyHerdrAdvisorFailure } from "../herdr.ts";
+import { herdrAdvisorActivity, notifyHerdrAdvisorFailure } from "../herdr.ts";
 import type { AdvisorSessionState } from "../session-state.ts";
 import { consultAdvisor } from "../tools/consultation.ts";
 import { ScoutStatusManager } from "../tools/scout-status.ts";
@@ -40,6 +40,7 @@ const requestManualRender = (ctx: ExtensionContext) => {
 
 class CommandRuntime implements CommandRuntimeContract {
   readonly advisorSessionState: AdvisorSessionState;
+  readonly herdrActivity: NonNullable<CommandDependencies["herdrActivity"]>;
   readonly manualConsultations = new Map<AbortController, symbol>();
   readonly manualProgress = new Map<string, ManualAdvisorProgressState>();
   readonly manualProgressTimers = new Map<
@@ -59,6 +60,7 @@ class CommandRuntime implements CommandRuntimeContract {
     this.pi = pi;
     this.advisorSessionState =
       dependencies.sessionState ?? defaultAdvisorSessionState;
+    this.herdrActivity = dependencies.herdrActivity ?? herdrAdvisorActivity;
     this.scoutStatus =
       dependencies.statusManager ?? new ScoutStatusManager(false);
     this.requestAdvisor =

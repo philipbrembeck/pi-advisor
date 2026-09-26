@@ -1454,10 +1454,12 @@ import net from "node:net";
 var REDACTION_MARKER = "[REDACTED SECRET]";
 var PEM_BEGIN_PATTERN = /-----BEGIN(?: [A-Z0-9]+)? PRIVATE KEY-----/giu;
 var PEM_END_PATTERN = /-----END(?: [A-Z0-9]+)? PRIVATE KEY-----/iu;
+var CREDENTIAL_NAME = String.raw`(?:api[_-]?key|token|secret|password|passwd)`;
+var SECRET_ASSIGNMENT_PATTERN = new RegExp(String.raw`(?:(?:"(?:[a-z0-9]+[_-])*?${CREDENTIAL_NAME}"|'(?:[a-z0-9]+[_-])*?${CREDENTIAL_NAME}')|(?:\b|_)${CREDENTIAL_NAME})\s*[:=]\s*(?:"(?:\\.|[^"])*(?:"|$)|'(?:\\.|[^'])*(?:'|$)|[^\s"'&,;)}\]]+)`, "giu");
 var SECRET_PATTERNS = [
   /-----BEGIN(?: [A-Z0-9]+)? PRIVATE KEY-----[\s\S]*?-----END(?: [A-Z0-9]+)? PRIVATE KEY-----/giu,
   /\bBearer\s+[A-Za-z0-9._~+/=-]{8,}/giu,
-  /\b(?:api[_-]?key|token|secret|password|passwd)\s*[:=]\s*(?:"[^"]*"|'[^']*'|[^\s"'&,;)}\]]+)/giu,
+  SECRET_ASSIGNMENT_PATTERN,
   /(?<scheme>[a-z][a-z0-9+.-]*:\/\/)[^\s/@:]+:[^\s/@]+@/giu,
   /\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/gu,
   /\b(?:aws_secret_access_key|aws_session_token)\s*[:=]\s*[^\s"'&,;)}\]]+/giu
@@ -1495,9 +1497,6 @@ var nextSequence = () => {
   return sequence;
 };
 var emitBlocked;
-var setHerdrBlockedEmitter = (emitter) => {
-  emitBlocked = emitter;
-};
 var safeEmitBlocked = (active, label = "Advisor blocked") => {
   try {
     emitBlocked?.(active, label);
@@ -1538,9 +1537,11 @@ var createHerdrNotificationRequest = (title, body) => ({
 // src/herdr-block.ts
 class HerdrAdvisorBlock {
   #blocked = false;
+  emitBlocked;
   report;
   enabled;
-  constructor(report = sendToHerdr, enabled = () => true) {
+  constructor(report = sendToHerdr, enabled = () => true, emitBlocked = safeEmitBlocked) {
+    this.emitBlocked = emitBlocked;
     this.report = report;
     this.enabled = enabled;
   }
@@ -1551,7 +1552,7 @@ class HerdrAdvisorBlock {
     const label = cleanNotification(reason, 200);
     const wasBlocked = this.#blocked;
     if (!wasBlocked) {
-      safeEmitBlocked(true, label);
+      this.safeEmitBlocked(true, label);
     }
     this.#blocked = true;
     this.safeReport({ blocked: label });
@@ -1562,7 +1563,7 @@ class HerdrAdvisorBlock {
     if (!wasBlocked) {
       return;
     }
-    safeEmitBlocked(false);
+    this.safeEmitBlocked(false, "Advisor blocked");
     try {
       this.report({
         id: `${BLOCK_SOURCE}:${nextSequence()}`,
@@ -1577,6 +1578,14 @@ class HerdrAdvisorBlock {
         }
       });
     } catch {}
+  }
+  safeEmitBlocked(active, label) {
+    try {
+      this.emitBlocked(active, label);
+      return true;
+    } catch {
+      return false;
+    }
   }
   safeReport(labels) {
     try {
@@ -1612,6 +1621,8 @@ var metadataRequest = (clear) => ({
 
 class HerdrAdvisorActivity {
   #activeConsultations = 0;
+  #activeByOwner = new Map;
+  #defaultOwner = Symbol("default Herdr Advisor activity");
   report;
   enabled;
   constructor(report = sendToHerdr, enabled = () => true) {
@@ -1619,29 +1630,67 @@ class HerdrAdvisorActivity {
     this.enabled = enabled;
   }
   start() {
+    return this.startFor(this.#defaultOwner);
+  }
+  finish() {
+    this.finishFor(this.#defaultOwner);
+  }
+  clear() {
+    this.clearFor(this.#defaultOwner);
+  }
+  createScope() {
+    const owner = Symbol("Herdr Advisor runtime");
+    return {
+      clear: () => this.clearFor(owner),
+      start: () => this.startFor(owner)
+    };
+  }
+  startFor(owner) {
+    const lease = Symbol("Herdr activity lease");
     if (!this.enabled()) {
-      return;
+      return () => this.finishLease(owner, lease);
     }
+    let leases = this.#activeByOwner.get(owner);
+    if (!leases) {
+      leases = new Set;
+      this.#activeByOwner.set(owner, leases);
+    }
+    leases.add(lease);
     this.#activeConsultations += 1;
     if (this.#activeConsultations === 1) {
       this.safeReport(false);
     }
+    return () => this.finishLease(owner, lease);
   }
-  finish() {
-    if (this.#activeConsultations === 0) {
+  finishFor(owner) {
+    const lease = this.#activeByOwner.get(owner)?.values().next().value;
+    if (lease) {
+      this.finishLease(owner, lease);
+    }
+  }
+  finishLease(owner, lease) {
+    const leases = this.#activeByOwner.get(owner);
+    if (!leases?.delete(lease)) {
       return;
+    }
+    if (leases.size === 0) {
+      this.#activeByOwner.delete(owner);
     }
     this.#activeConsultations -= 1;
     if (this.#activeConsultations === 0) {
       this.safeReport(true);
     }
   }
-  clear() {
-    if (this.#activeConsultations === 0) {
+  clearFor(owner) {
+    const leases = this.#activeByOwner.get(owner);
+    if (!leases?.size) {
       return;
     }
-    this.#activeConsultations = 0;
-    this.safeReport(true);
+    this.#activeByOwner.delete(owner);
+    this.#activeConsultations -= leases.size;
+    if (this.#activeConsultations === 0) {
+      this.safeReport(true);
+    }
   }
   safeReport(clear) {
     try {
@@ -3859,6 +3908,7 @@ class AdvisorSessionState {
   #ledger = freshAdviceLedger();
   #usage = freshUsage();
   #consumedCalls = 0;
+  #callReservations = new Set;
   #jev = new AdvisorJevLedgerState;
   #sessionTurnOrdinal = 0;
   #turnsSinceConsultation = 0;
@@ -3868,6 +3918,7 @@ class AdvisorSessionState {
     this.#ledger = freshAdviceLedger();
     this.#usage = freshUsage();
     this.#consumedCalls = 0;
+    this.#callReservations.clear();
     this.#jev.reset();
     this.#sessionTurnOrdinal = 0;
     this.#turnsSinceConsultation = 0;
@@ -3901,14 +3952,34 @@ class AdvisorSessionState {
     this.#repetition.interventions += 1;
     return true;
   }
-  canConsult(limit) {
-    return limit === undefined || this.#consumedCalls < limit;
+  canConsult(limit, reservationId) {
+    const reservations = this.#callReservations.size - Number(reservationId !== undefined && this.#callReservations.has(reservationId));
+    return limit === undefined || this.#consumedCalls + reservations < limit;
   }
-  consumeCall() {
+  reserveCall(id, limit) {
+    if (this.#callReservations.has(id)) {
+      return true;
+    }
+    if (!this.canConsult(limit)) {
+      return false;
+    }
+    this.#callReservations.add(id);
+    return true;
+  }
+  releaseCall(id) {
+    this.#callReservations.delete(id);
+  }
+  clearCallReservations() {
+    this.#callReservations.clear();
+  }
+  consumeCall(reservationId) {
+    if (reservationId !== undefined) {
+      this.#callReservations.delete(reservationId);
+    }
     this.#consumedCalls += 1;
   }
   remainingCalls(limit) {
-    return limit === undefined ? undefined : Math.max(0, limit - this.#consumedCalls);
+    return limit === undefined ? undefined : Math.max(0, limit - this.#consumedCalls - this.#callReservations.size);
   }
   get consumedCalls() {
     return this.#consumedCalls;
@@ -4104,6 +4175,7 @@ var requestManualRender = (ctx) => {
 
 class CommandRuntime {
   advisorSessionState;
+  herdrActivity;
   manualConsultations = new Map;
   manualProgress = new Map;
   manualProgressTimers = new Map;
@@ -4118,6 +4190,7 @@ class CommandRuntime {
   constructor(pi, dependencies = {}) {
     this.pi = pi;
     this.advisorSessionState = dependencies.sessionState ?? advisorSessionState;
+    this.herdrActivity = dependencies.herdrActivity ?? herdrAdvisorActivity;
     this.scoutStatus = dependencies.statusManager ?? new ScoutStatusManager(false);
     this.requestAdvisor = dependencies.consult ?? ((ctx, question, signal, onChunk, onScout, gitContext) => consultAdvisor(ctx, question, signal, onChunk, "manual", gitContext, undefined, undefined, undefined, onScout));
   }
@@ -4325,7 +4398,7 @@ var registerCommandLifecycle = (runtime, activateAdvisor) => {
     runtime.manualConsultations.clear();
     runtime.manualProgressTimers.clear();
     runtime.manualProgress.clear();
-    herdrAdvisorActivity.clear();
+    runtime.herdrActivity.clear();
   });
 };
 
@@ -4676,14 +4749,19 @@ var connectionFailure = (error) => {
     failure: new JevFailureError("network", `Jev connection failed: ${message}`)
   };
 };
-var sleepWithAbort = (signal, ms) => new Promise((resolve) => {
-  const timer = setTimeout(resolve, ms);
-  timer.unref?.();
-  signal.addEventListener("abort", () => {
-    clearTimeout(timer);
-    resolve();
-  }, { once: true });
-});
+var sleepWithAbort = (signal, ms) => {
+  if (signal.aborted) {
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, ms);
+    timer.unref?.();
+    signal.addEventListener("abort", () => {
+      clearTimeout(timer);
+      resolve();
+    }, { once: true });
+  });
+};
 
 class JevClient {
   #apiKey;
@@ -4729,7 +4807,7 @@ class JevClient {
       let outcome = {};
       for (let attempt = 1;; attempt += 1) {
         outcome = await this.#attempt(body, deadline.signal);
-        if (!outcome.retryable || attempt >= MAX_ATTEMPTS) {
+        if (!outcome.retryable || attempt >= MAX_ATTEMPTS || deadline.signal.aborted) {
           break;
         }
         await sleepWithAbort(deadline.signal, RETRY_BACKOFF_MS);
@@ -4759,11 +4837,11 @@ class JevClient {
     if (deadlineHit && outcome.failure?.category !== "auth") {
       throw new JevFailureError("timeout", `Jev call exceeded its ${this.#timeoutMs} ms wall-time budget.`);
     }
-    if (outcome.failure) {
-      throw outcome.failure;
-    }
     if (signal?.aborted) {
       throw new Error("Jev call aborted by the caller.");
+    }
+    if (outcome.failure) {
+      throw outcome.failure;
     }
     throw new JevFailureError("error", "Jev call failed.");
   }
@@ -5227,11 +5305,12 @@ var screenWithJev = async (ctx, session, options, deps, normalizedQuestion) => {
     session.recordJevFilterAllowed();
     return allow();
   } catch (error) {
+    if (options.signal?.aborted) {
+      throw error;
+    }
     session.recordJevFilterFailure();
     if (error instanceof JevFailureError) {
       notifyOutageOnce(ctx, error.category, error.message);
-    } else if (options.signal?.aborted) {
-      throw error;
     } else {
       notifyOutageOnce(ctx, "error", error instanceof Error ? error.message : String(error));
     }
@@ -5266,7 +5345,6 @@ var screeningSkipText = (outcome) => outcome.kind === "repeat" && outcome.reatta
 
 // src/commands/manual-consultation.ts
 var startManualConsultation = async (runtime, ctx, question, controller, scoutStatusToken, progress, gitContext) => {
-  herdrAdvisorActivity.start();
   progress.phase = "preparing";
   runtime.requestManualRender(ctx);
   if (ctx.hasUI) {
@@ -5279,6 +5357,7 @@ var startManualConsultation = async (runtime, ctx, question, controller, scoutSt
     }, 80);
     runtime.manualProgressTimers.set(controller, timer);
   }
+  const finishHerdrActivity = runtime.herdrActivity.start();
   let scoutDetails;
   try {
     const { adviceId, markdown, usage } = await runtime.requestAdvisor(ctx, question, controller.signal, (thinking, text) => {
@@ -5362,6 +5441,7 @@ ${markdown}`,
     notify(ctx, `Advisor consultation failed: ${message}`, "error");
     notifyHerdrAdvisorFailure("Advisor consultation failed", message);
   } finally {
+    finishHerdrActivity();
     if (controller.signal.aborted) {
       progress.phase = "cancelled";
     }
@@ -5373,7 +5453,6 @@ ${markdown}`,
     runtime.requestManualRender(ctx);
     runtime.scoutStatus.release(ctx, scoutStatusToken);
     runtime.manualConsultations.delete(controller);
-    herdrAdvisorActivity.finish();
   }
 };
 
@@ -5886,7 +5965,7 @@ class JevSetupSubmenu {
   }
   actions() {
     if (!this.credentials) {
-      return ["enter-key", "done"];
+      return this.options.currentValue === "On" ? ["enter-key", "disable", "done"] : ["enter-key", "done"];
     }
     const enabled = this.options.currentValue === "On";
     const actions = [enabled ? "verify-again" : "verify-enable"];
@@ -5942,8 +6021,12 @@ class JevSetupSubmenu {
       return;
     }
     const result = await clear();
-    this.credentials = undefined;
     this.notice = result.message;
+    if (!result.ok) {
+      this.options.tui.requestRender();
+      return;
+    }
+    this.credentials = undefined;
     this.options.done("Off");
   }
   async verifyAndEnable() {
@@ -6970,7 +7053,7 @@ var gateDecisionEffect = (decision, failureMode) => {
   }
   return decision === "blocked" ? gateFailureEffectForMode(failureMode) : "tool-blocked";
 };
-var failureEffect = (category, message, ctx, session, failureMode) => {
+var failureEffect = (category, message, ctx, session, failureMode, herdrBlock = herdrAdvisorBlock) => {
   const reason = `Advisor gate ${category}: ${message}`;
   notifyLocalFailure(ctx, message, failureMode === "block-session");
   notifyHerdrAdvisorFailure("Advisor gate failure", reason);
@@ -6981,13 +7064,13 @@ var failureEffect = (category, message, ctx, session, failureMode) => {
     return { block: true, effect: "tool-blocked", reason };
   }
   session.block(reason);
-  herdrAdvisorBlock.set(reason);
+  herdrBlock.set(reason);
   if (advisorBlockOnBlockedRef) {
     ctx.abort();
   }
   return { block: true, effect: "session-blocked", reason };
 };
-var blockedDecisionEffect = (reason, ctx, session, failureMode) => {
+var blockedDecisionEffect = (reason, ctx, session, failureMode, herdrBlock = herdrAdvisorBlock) => {
   if (failureMode === "warn-and-continue") {
     if (ctx.hasUI) {
       ctx.ui.notify("Advisor gate returned blocked; continuing by configuration.", "warning");
@@ -6998,7 +7081,7 @@ var blockedDecisionEffect = (reason, ctx, session, failureMode) => {
     return { block: true, effect: "tool-blocked", reason };
   }
   session.block(reason);
-  herdrAdvisorBlock.set(reason);
+  herdrBlock.set(reason);
   if (advisorBlockOnBlockedRef) {
     ctx.abort();
   }
@@ -7008,7 +7091,7 @@ var reserveAdvisorCall = (event, ctx, session, reservedCalls) => {
   if (event.toolName !== "ask_advisor" || isSimpleMode()) {
     return;
   }
-  if (!session.canConsult(getAdvisorMaxCallsPerSession())) {
+  if (!session.reserveCall(event.toolCallId, getAdvisorMaxCallsPerSession())) {
     const message = "Advisor call budget exhausted for this session.";
     if (ctx.hasUI) {
       ctx.ui.notify(message, "warning");
@@ -7031,15 +7114,22 @@ var turnGateQuestion = {
 };
 var outageNotifier2 = createOutageNotifier((category, message) => `Advisor Jev turn gate failed (${category}); continuing without a proactive consultation. ${message}`);
 var notifyFailureOnce = outageNotifier2.notify;
+var shouldRunTurnGate = (registration, ctx, session) => {
+  const interval = advisorJevTurnGateEveryTurnsRef;
+  return interval > 0 && session.turnsSinceConsultation > 0 && session.turnsSinceConsultation % interval === 0 && !isSimpleMode() && !session.blocked && registration.activeTools().includes("ask_advisor") && advisorModelIsAllowed(ctx) && session.canConsult(getAdvisorMaxCallsPerSession());
+};
+var consumeTurnGateBudget = (session, shouldConsult) => {
+  if (!shouldConsult || !session.canConsult(getAdvisorMaxCallsPerSession())) {
+    return false;
+  }
+  session.consumeCall();
+  return true;
+};
 var resetJevTurnGateNotification = outageNotifier2.reset;
 var handleJevTurnEnd = async (registration, ctx) => {
   const { session } = registration;
   session.recordCompletedTurn();
-  const interval = advisorJevTurnGateEveryTurnsRef;
-  if (interval <= 0 || session.turnsSinceConsultation <= 0 || session.turnsSinceConsultation % interval !== 0) {
-    return;
-  }
-  if (isSimpleMode() || session.blocked || !registration.activeTools().includes("ask_advisor") || !advisorModelIsAllowed(ctx) || !session.canConsult(getAdvisorMaxCallsPerSession())) {
+  if (!shouldRunTurnGate(registration, ctx, session)) {
     return;
   }
   const consult = registration.deps?.consult ?? registration.consult;
@@ -7057,21 +7147,21 @@ var handleJevTurnEnd = async (registration, ctx) => {
     });
     session.recordJevGateCheck(result.usage);
     const shouldConsult = composeTurnGateVerdict(result.answers, advisorJevTurnGateNoulThresholdRef);
-    if (!shouldConsult) {
+    if (!consumeTurnGateBudget(session, shouldConsult)) {
       return;
     }
-    session.consumeCall();
-    herdrAdvisorActivity.start();
-    registration.send({
-      content: "Proactive Advisor turn review",
-      customType: "advisor-turn-gate-call",
-      details: {
-        question: `Turn gate: ${session.turnsSinceConsultation} turns without a consultation`,
-        turn: session.sessionTurnOrdinal
-      },
-      display: true
-    });
+    const herdrActivity = registration.herdrActivity ?? herdrAdvisorActivity;
+    const finishHerdrActivity = herdrActivity.start();
     try {
+      registration.send({
+        content: "Proactive Advisor turn review",
+        customType: "advisor-turn-gate-call",
+        details: {
+          question: `Turn gate: ${session.turnsSinceConsultation} turns without a consultation`,
+          turn: session.sessionTurnOrdinal
+        },
+        display: true
+      });
       const consulted = await consult(ctx, undefined, ctx.signal, undefined, "turn-gate");
       session.recordJevGateConsultation();
       session.resetTurnsSinceConsultation();
@@ -7095,7 +7185,7 @@ var handleJevTurnEnd = async (registration, ctx) => {
         display: true
       });
     } finally {
-      herdrAdvisorActivity.finish();
+      finishHerdrActivity();
     }
   } catch (error) {
     session.recordJevGateFailure();
@@ -7254,6 +7344,7 @@ var claimTrackedHandoff = (session, includeTrackedFiles) => {
 };
 var registerAskAdvisorTool = ({
   consult: requestAdvisor,
+  herdrActivity,
   pi,
   reservedCalls,
   screen,
@@ -7262,128 +7353,159 @@ var registerAskAdvisorTool = ({
   pi.registerTool({
     description: "Consult the on-demand Advisor model for strategic guidance. Call with an empty object for a contextual review; attach an optional draft for concrete plan or completion review. If the Advisor explicitly names a missing file, you may make a sequential follow-up call with includeTrackedFiles when enabled and relevant.",
     async execute(_id, params, signal, onUpdate, ctx) {
-      reservedCalls.delete(_id);
-      assertAdvisorModelAccess(ctx);
-      if (!(isSimpleMode() || session.canConsult(getAdvisorMaxCallsPerSession()))) {
+      try {
+        assertAdvisorModelAccess(ctx);
+      } catch (error) {
+        session.releaseCall(_id);
+        reservedCalls.delete(_id);
+        throw error;
+      }
+      const simpleMode = isSimpleMode();
+      if (!simpleMode && !session.reserveCall(_id, getAdvisorMaxCallsPerSession())) {
         throw new Error("Advisor call budget exhausted for this session.");
       }
-      const normalizedQuestion = normalizeScreeningQuestion(resolveAdvisorRequest(params.question));
-      const screening = await screen(ctx, session, {
-        draft: params.draft,
-        force: params.force,
-        question: resolveAdvisorRequest(params.question),
-        signal
-      });
-      if (screening.decision === "skip") {
-        const skipText = screeningSkipText(screening);
-        return {
-          content: [{ text: skipText, type: "text" }],
-          details: {
-            jev: {
-              kind: screening.kind,
-              reason: screening.reason,
-              skipped: true
-            },
-            text: skipText
+      if (simpleMode) {
+        session.releaseCall(_id);
+        reservedCalls.delete(_id);
+      } else {
+        reservedCalls.add(_id);
+      }
+      let normalizedQuestion;
+      try {
+        if (!simpleMode && !session.canConsult(getAdvisorMaxCallsPerSession(), _id)) {
+          throw new Error("Advisor call budget exhausted for this session.");
+        }
+        normalizedQuestion = normalizeScreeningQuestion(resolveAdvisorRequest(params.question));
+        const screening = await screen(ctx, session, {
+          draft: params.draft,
+          force: params.force,
+          question: resolveAdvisorRequest(params.question),
+          signal
+        });
+        if (screening.decision === "skip") {
+          const skipText = screeningSkipText(screening);
+          session.releaseCall(_id);
+          reservedCalls.delete(_id);
+          return {
+            content: [{ text: skipText, type: "text" }],
+            details: {
+              jev: {
+                kind: screening.kind,
+                reason: screening.reason,
+                skipped: true
+              },
+              text: skipText
+            }
+          };
+        }
+        if (!simpleMode && !session.canConsult(getAdvisorMaxCallsPerSession(), _id)) {
+          throw new Error("Advisor call budget exhausted for this session.");
+        }
+        claimTrackedHandoff(session, params.includeTrackedFiles);
+        if (!simpleMode) {
+          session.consumeCall(_id);
+          reservedCalls.delete(_id);
+          session.resetTurnsSinceConsultation();
+        }
+      } catch (error) {
+        session.releaseCall(_id);
+        reservedCalls.delete(_id);
+        throw error;
+      }
+      const runConsultation = async () => {
+        let scoutDetails;
+        const coalescedUpdate = createCoalescedUpdate((update) => onUpdate?.(update), ADVISOR_STREAM_UPDATE_INTERVAL_MS);
+        const flushUpdate = () => {
+          const result = coalescedUpdate.flush();
+          if (result.failed) {
+            throw result.error;
           }
         };
-      }
-      claimTrackedHandoff(session, params.includeTrackedFiles);
-      if (!isSimpleMode()) {
-        session.consumeCall();
-        session.resetTurnsSinceConsultation();
-      }
-      herdrAdvisorActivity.start();
-      let scoutDetails;
-      const coalescedUpdate = createCoalescedUpdate((update) => onUpdate?.(update), ADVISOR_STREAM_UPDATE_INTERVAL_MS);
-      const flushUpdate = () => {
-        const result = coalescedUpdate.flush();
-        if (result.failed) {
-          throw result.error;
-        }
-      };
-      try {
-        const result = await requestAdvisor(ctx, resolveAdvisorRequest(params.question), signal, (t, tx) => coalescedUpdate.update({
-          content: [{ text: tx, type: "text" }],
-          details: {
-            advisor: advisorRef,
-            question: resolveAdvisorRequest(params.question),
-            scout: scoutDetails,
-            text: tx,
-            thinking: t
-          }
-        }), "executor-requested", params.gitContext === "none" ? "off" : params.gitContext, params.draft, params.includeUntracked, params.includeTrackedFiles, (event) => {
-          scoutDetails = scoutDetailsFromEvent(event, scoutDetails);
-          coalescedUpdate.update({
-            content: [{ text: scoutDetails.text ?? "", type: "text" }],
+        const finishHerdrActivity = herdrActivity.start();
+        try {
+          const result = await requestAdvisor(ctx, resolveAdvisorRequest(params.question), signal, (t, tx) => coalescedUpdate.update({
+            content: [{ text: tx, type: "text" }],
             details: {
               advisor: advisorRef,
               question: resolveAdvisorRequest(params.question),
-              scout: scoutDetails
+              scout: scoutDetails,
+              text: tx,
+              thinking: t
             }
+          }), "executor-requested", params.gitContext === "none" ? "off" : params.gitContext, params.draft, params.includeUntracked, params.includeTrackedFiles, (event) => {
+            scoutDetails = scoutDetailsFromEvent(event, scoutDetails);
+            coalescedUpdate.update({
+              content: [{ text: scoutDetails.text ?? "", type: "text" }],
+              details: {
+                advisor: advisorRef,
+                question: resolveAdvisorRequest(params.question),
+                scout: scoutDetails
+              }
+            });
+          }, _id);
+          flushUpdate();
+          session.issueAdvice(result.adviceId, result.markdown, result.trigger, Boolean(result.draftBytes), normalizedQuestion);
+          session.recordInvocation({
+            cost: advisorUsageCost(result.usage),
+            executionEffect: "continued",
+            kind: "markdown",
+            model: result.model,
+            trigger: "executor-requested",
+            usage: result.usage
           });
-        }, _id);
-        flushUpdate();
-        session.issueAdvice(result.adviceId, result.markdown, result.trigger, Boolean(result.draftBytes), normalizedQuestion);
-        session.recordInvocation({
-          cost: advisorUsageCost(result.usage),
-          executionEffect: "continued",
-          kind: "markdown",
-          model: result.model,
-          trigger: "executor-requested",
-          usage: result.usage
-        });
-        const usage = snapshotAdvisorUsage(result.usage);
-        const piUsage = advisorUsageForPi(result.usage);
-        updateAdvisorUsageStatus(ctx, session);
-        const details = {
-          adviceId: result.adviceId,
-          advisor: result.model,
-          draftBytes: result.draftBytes,
-          preferenceBytes: result.preferenceBytes,
-          question: resolveAdvisorRequest(params.question),
-          scout: scoutDetails,
-          text: result.markdown,
-          thinking: result.thinkingText,
-          trackedBytes: result.trackedBytes,
-          untrackedBytes: result.untrackedBytes
-        };
-        if (usage) {
-          details.usage = usage;
-        }
-        const response = {
-          content: [
-            {
-              text: `Advisor (${result.model})
+          const usage = snapshotAdvisorUsage(result.usage);
+          const piUsage = advisorUsageForPi(result.usage);
+          updateAdvisorUsageStatus(ctx, session);
+          const details = {
+            adviceId: result.adviceId,
+            advisor: result.model,
+            draftBytes: result.draftBytes,
+            preferenceBytes: result.preferenceBytes,
+            question: resolveAdvisorRequest(params.question),
+            scout: scoutDetails,
+            text: result.markdown,
+            thinking: result.thinkingText,
+            trackedBytes: result.trackedBytes,
+            untrackedBytes: result.untrackedBytes
+          };
+          if (usage) {
+            details.usage = usage;
+          }
+          const response = {
+            content: [
+              {
+                text: `Advisor (${result.model})
 
 ${result.markdown}`,
-              type: "text"
-            }
-          ],
-          details
-        };
-        if (piUsage) {
-          response.usage = piUsage;
+                type: "text"
+              }
+            ],
+            details
+          };
+          if (piUsage) {
+            response.usage = piUsage;
+          }
+          return response;
+        } catch (error) {
+          coalescedUpdate.flush();
+          const message = error instanceof Error ? error.message : String(error);
+          session.recordInvocation({
+            executionEffect: "continued",
+            failure: "provider-error",
+            kind: "markdown",
+            model: advisorRef,
+            trigger: "executor-requested"
+          });
+          updateAdvisorUsageStatus(ctx, session);
+          notifyLocalFailure(ctx, message);
+          notifyHerdrAdvisorFailure("Advisor consultation failed", message);
+          throw error;
+        } finally {
+          finishHerdrActivity();
+          coalescedUpdate.cancel();
         }
-        return response;
-      } catch (error) {
-        coalescedUpdate.flush();
-        const message = error instanceof Error ? error.message : String(error);
-        session.recordInvocation({
-          executionEffect: "continued",
-          failure: "provider-error",
-          kind: "markdown",
-          model: advisorRef,
-          trigger: "executor-requested"
-        });
-        updateAdvisorUsageStatus(ctx, session);
-        notifyLocalFailure(ctx, message);
-        notifyHerdrAdvisorFailure("Advisor consultation failed", message);
-        throw error;
-      } finally {
-        coalescedUpdate.cancel();
-        herdrAdvisorActivity.finish();
-      }
+      };
+      return runConsultation();
     },
     label: "Ask Advisor",
     name: "ask_advisor",
@@ -7461,7 +7583,7 @@ var sendAutomaticGateResult = (pi, result) => {
     display: true
   }, { deliverAs: "steer" });
 };
-var applyGateDecision = (pi, ctx, session, result, reason, failureMode) => {
+var applyGateDecision = (pi, ctx, session, result, reason, failureMode, herdrBlock) => {
   if (!result.ok) {
     session.recordInvocation({
       executionEffect: gateFailureEffectForMode(failureMode),
@@ -7472,7 +7594,7 @@ var applyGateDecision = (pi, ctx, session, result, reason, failureMode) => {
       usage: result.usage
     });
     updateAdvisorUsageStatus(ctx, session);
-    const failure = failureEffect(result.category, result.message, ctx, session, failureMode);
+    const failure = failureEffect(result.category, result.message, ctx, session, failureMode, herdrBlock);
     sendAutomaticGateFailure(pi, `**Advisor gate failure (${result.category}):** ${result.message}`, snapshotAdvisorUsage(result.usage));
     return failure.block ? { block: true, reason: `${reason}
 ${failure.reason}` } : undefined;
@@ -7494,24 +7616,24 @@ ${failure.reason}` } : undefined;
   }
   const gateReason = `Advisor loop review: ${result.markdown}`;
   if (result.decision === "blocked") {
-    const effect = blockedDecisionEffect(gateReason, ctx, session, failureMode);
+    const effect = blockedDecisionEffect(gateReason, ctx, session, failureMode, herdrBlock);
     return effect.block ? { block: true, reason: effect.reason } : undefined;
   }
   return { block: true, reason: gateReason };
 };
-var handleAutomaticGate = async (pi, event, ctx, session, runGate, scoutStatus) => {
+var handleAutomaticGate = async (pi, event, ctx, session, runGate, scoutStatus, herdrActivity = herdrAdvisorActivity, herdrBlock = herdrAdvisorBlock) => {
   if (isSimpleMode() || event.toolName === "ask_advisor" || !advisorModelIsAllowed(ctx) || !advisorAutoLoopGateRef || !session.recordToolCall(event.toolName, event.input, advisorLoopThresholdRef)) {
     return;
   }
   const reason = `Advisor loop gate: normalized signature for ${event.toolName} repeated ${advisorLoopThresholdRef} times without a materially different tool action.`;
   const failureMode = advisorFailureModeRef;
   if (!session.canConsult(getAdvisorMaxCallsPerSession())) {
-    const failure = failureEffect("budget-exhausted", "Advisor gate call budget is exhausted.", ctx, session, failureMode);
+    const failure = failureEffect("budget-exhausted", "Advisor gate call budget is exhausted.", ctx, session, failureMode, herdrBlock);
     return failure.block ? { block: true, reason: failure.reason } : undefined;
   }
   session.consumeCall();
   session.resetTurnsSinceConsultation();
-  herdrAdvisorActivity.start();
+  const finishHerdrActivity = herdrActivity.start();
   let scoutDetails;
   const scoutStatusToken = Symbol("automatic-gate-scout");
   scoutStatus.register(scoutStatusToken);
@@ -7522,10 +7644,10 @@ var handleAutomaticGate = async (pi, event, ctx, session, runGate, scoutStatus) 
       gateCallSent = true;
     }
   };
-  if (!advisorScoutEnabledRef) {
-    ensureGateCall();
-  }
   try {
+    if (!advisorScoutEnabledRef) {
+      ensureGateCall();
+    }
     const result = await runGate(ctx, `${reason} Review the repeated actions and recommend the smallest safe next step.`, "repeated-tool-call", ctx.signal, undefined, (scoutEvent) => {
       scoutStatus.update(ctx, scoutStatusToken, scoutEvent);
       scoutDetails = appendScoutLifecycleEntry(pi, scoutEvent, scoutDetails);
@@ -7534,10 +7656,10 @@ var handleAutomaticGate = async (pi, event, ctx, session, runGate, scoutStatus) 
       }
     }, event.toolCallId);
     ensureGateCall();
-    return applyGateDecision(pi, ctx, session, result, reason, failureMode);
+    return applyGateDecision(pi, ctx, session, result, reason, failureMode, herdrBlock);
   } finally {
+    finishHerdrActivity();
     scoutStatus.release(ctx, scoutStatusToken);
-    herdrAdvisorActivity.finish();
   }
 };
 
@@ -7553,6 +7675,8 @@ var modelAccessBlock = (toolName, ctx) => {
   };
 };
 var registerToolLifecycle = ({
+  herdrActivity,
+  herdrBlock,
   pi,
   reservedCalls,
   runGate,
@@ -7579,7 +7703,7 @@ var registerToolLifecycle = ({
   pi.on("session_start", (_event, ctx) => {
     session.resetTask();
     reservedCalls.clear();
-    herdrAdvisorBlock.clear();
+    herdrBlock.clear();
     if (ctx?.hasUI) {
       ctx.ui.setStatus("advisor-usage", undefined);
     }
@@ -7627,10 +7751,11 @@ ${guidelines.map((rule) => `- ${rule}`).join(`
     if (event.toolName === "ask_advisor") {
       return reservation;
     }
-    return handleAutomaticGate(pi, event, ctx, session, runGate, scoutStatus);
+    return handleAutomaticGate(pi, event, ctx, session, runGate, scoutStatus, herdrActivity, herdrBlock);
   });
   pi.on("agent_settled", (_event, ctx) => {
     reservedCalls.clear();
+    session.clearCallReservations();
     if (isSimpleMode() || session.blocked || !advisorSessionSummaryRef) {
       return;
     }
@@ -7641,8 +7766,9 @@ ${guidelines.map((rule) => `- ${rule}`).join(`
   });
   pi.on("session_shutdown", (_event, ctx) => {
     reservedCalls.clear();
+    session.clearCallReservations();
     scoutStatus.clear(ctx);
-    herdrAdvisorBlock.clear();
+    herdrBlock.clear();
     if (ctx?.hasUI) {
       ctx.ui.setStatus("advisor-usage", undefined);
     }
@@ -7776,6 +7902,8 @@ var registerAdvisorTool = (pi, session = advisorSessionState, dependencies = {})
   const registration = {
     appendOutcome: dependencies.appendOutcome ?? appendOutcome,
     consult: dependencies.consult ?? consultAdvisor,
+    herdrActivity: dependencies.herdrActivity ?? herdrAdvisorActivity,
+    herdrBlock: dependencies.herdrBlock ?? herdrAdvisorBlock,
     pi,
     reservedCalls: new Set,
     runGate: dependencies.runGate ?? runAdvisorGate,
@@ -7790,6 +7918,7 @@ var registerAdvisorTool = (pi, session = advisorSessionState, dependencies = {})
   const turnGate = {
     activeTools: () => pi.getActiveTools(),
     consult: registration.consult,
+    herdrActivity: registration.herdrActivity,
     send: (message) => pi.sendMessage(message, { deliverAs: "steer" }),
     session
   };
@@ -7806,11 +7935,17 @@ var runAdvisorGate2 = (...args) => runAdvisorGate(...args);
 function registerPiAdvisor(pi) {
   const sessionState = new AdvisorSessionState;
   const scoutStatus = new ScoutStatusManager;
-  setHerdrBlockedEmitter((active, label) => pi.events.emit("herdr:blocked", { active, label }));
+  const herdrActivity = herdrAdvisorActivity.createScope();
+  const herdrBlock = new HerdrAdvisorBlock(undefined, () => getAdvisorSettings().herdrIntegration, (active, label) => {
+    pi.events.emit("herdr:blocked", { active, label });
+  });
   registerAdvisorTool(pi, sessionState, {
+    herdrActivity,
+    herdrBlock,
     statusManager: scoutStatus
   });
   registerCommands(pi, {
+    herdrActivity,
     sessionState,
     statusManager: scoutStatus
   });

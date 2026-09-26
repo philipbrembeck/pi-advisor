@@ -11,6 +11,14 @@ import { withAgentDir } from "./helpers/config-fixture.ts";
 import { asExtensionContext } from "./helpers/extension-context.ts";
 import { mockPi } from "./helpers/mock-pi.ts";
 
+const deferred = () => {
+  let resolvePromise: (() => void) | undefined;
+  const promise = new Promise<void>((resolve) => {
+    resolvePromise = resolve;
+  });
+  return { promise, resolve: () => resolvePromise?.() };
+};
+
 describe("Advisor loop-gate budget behavior", () => {
   test("renders automatic-gate Scout fallback before the unaffected Advisor gate", async () => {
     await withAgentDir(
@@ -345,5 +353,215 @@ describe("Advisor loop-gate budget behavior", () => {
       { cwd: tmpdir(), hasUI: false, isProjectTrusted: () => false }
     );
     expect(advisorSessionState.consumedCalls).toBe(0);
+  });
+
+  test("releases budget reservations when Jev skips a consultation", async () => {
+    await withAgentDir({ advisorMaxCallsPerSession: 1 }, async (agentDir) => {
+      const tools = new Map<string, any>();
+      const session = new AdvisorSessionState();
+      let screens = 0;
+      let consultations = 0;
+      registerAdvisorTool(
+        mockPi(
+          { tools },
+          { registerTool: (tool: any) => tools.set(tool.name, tool) }
+        ),
+        session,
+        {
+          consult: async () => {
+            consultations += 1;
+            return {
+              adviceId: "advice",
+              markdown: "Done.",
+              model: "provider/advisor",
+              thinkingText: "",
+              trigger: "executor-requested" as const,
+            };
+          },
+          screen: async () => {
+            screens += 1;
+            return screens === 1
+              ? {
+                  decision: "skip" as const,
+                  kind: "screened" as const,
+                  reason: "low stakes",
+                }
+              : { decision: "allow" as const };
+          },
+        }
+      );
+      const { execute } = tools.get("ask_advisor");
+      const ctx = asExtensionContext({
+        cwd: agentDir,
+        hasUI: false,
+        isProjectTrusted: () => false,
+      });
+      const { signal } = new AbortController();
+
+      const skipped = await execute("first", {}, signal, undefined, ctx);
+      const allowed = await execute("second", {}, signal, undefined, ctx);
+
+      expect(skipped.details.jev.skipped).toBe(true);
+      expect(allowed.details.adviceId).toBe("advice");
+      expect(screens).toBe(2);
+      expect(consultations).toBe(1);
+      expect(session.consumedCalls).toBe(1);
+    });
+  });
+
+  test("releases budget reservations when Jev screening fails", async () => {
+    await withAgentDir({ advisorMaxCallsPerSession: 1 }, async (agentDir) => {
+      const tools = new Map<string, any>();
+      const session = new AdvisorSessionState();
+      registerAdvisorTool(
+        mockPi(
+          { tools },
+          { registerTool: (tool: any) => tools.set(tool.name, tool) }
+        ),
+        session,
+        { screen: () => Promise.reject(new Error("screen cancelled")) }
+      );
+      const { execute } = tools.get("ask_advisor");
+      const ctx = asExtensionContext({
+        cwd: agentDir,
+        hasUI: false,
+        isProjectTrusted: () => false,
+      });
+
+      await expect(
+        execute("call", {}, new AbortController().signal, undefined, ctx)
+      ).rejects.toThrow("screen cancelled");
+      expect(session.consumedCalls).toBe(0);
+      expect(session.canConsult(1)).toBe(true);
+    });
+  });
+
+  test("releases a preflight reservation when execution loses model access", async () => {
+    await withAgentDir(
+      {
+        advisorMaxCallsPerSession: 1,
+        advisorModelWhitelist: ["provider/allowed"],
+      },
+      async (agentDir) => {
+        const events = new Map<string, any>();
+        const tools = new Map<string, any>();
+        const session = new AdvisorSessionState();
+        registerAdvisorTool(
+          mockPi(
+            { activeTools: ["ask_advisor"], events, tools },
+            { registerTool: (tool: any) => tools.set(tool.name, tool) }
+          ),
+          session
+        );
+        const ctx = asExtensionContext({
+          cwd: agentDir,
+          hasUI: false,
+          isProjectTrusted: () => false,
+          model: { id: "allowed", provider: "provider" },
+        });
+        const toolCall = events.get("tool_call");
+        const firstPermission = await toolCall(
+          { input: {}, toolCallId: "first", toolName: "ask_advisor" },
+          ctx
+        );
+        const deniedCtx = asExtensionContext({
+          cwd: agentDir,
+          hasUI: false,
+          isProjectTrusted: () => false,
+          model: { id: "other", provider: "provider" },
+        });
+
+        await expect(
+          tools
+            .get("ask_advisor")
+            .execute(
+              "first",
+              {},
+              new AbortController().signal,
+              undefined,
+              deniedCtx
+            )
+        ).rejects.toThrow("provider/other");
+        const secondPermission = await toolCall(
+          { input: {}, toolCallId: "second", toolName: "ask_advisor" },
+          ctx
+        );
+
+        expect(firstPermission).toEqual({});
+        expect(secondPermission).toEqual({});
+      }
+    );
+  });
+
+  test("counts pending consultations against the session budget", async () => {
+    await withAgentDir({ advisorMaxCallsPerSession: 1 }, async (agentDir) => {
+      const events = new Map<string, any>();
+      const tools = new Map<string, any>();
+      const session = new AdvisorSessionState();
+      let screens = 0;
+      let consultations = 0;
+      const screeningBarrier = deferred();
+      const screeningStarted = deferred();
+      registerAdvisorTool(
+        mockPi(
+          { activeTools: ["ask_advisor"], events, tools },
+          { registerTool: (tool: any) => tools.set(tool.name, tool) }
+        ),
+        session,
+        {
+          consult: async () => {
+            consultations += 1;
+            return {
+              adviceId: "advice",
+              markdown: "Done.",
+              model: "provider/advisor",
+              thinkingText: "",
+              trigger: "executor-requested" as const,
+            };
+          },
+          screen: async () => {
+            screens += 1;
+            screeningStarted.resolve();
+            await screeningBarrier.promise;
+            return { decision: "allow" };
+          },
+        }
+      );
+      const ctx = asExtensionContext({
+        cwd: agentDir,
+        hasUI: false,
+        isProjectTrusted: () => false,
+      });
+      const toolCall = events.get("tool_call");
+      const firstPermission = await toolCall(
+        { input: {}, toolCallId: "first", toolName: "ask_advisor" },
+        ctx
+      );
+      const firstExecution = tools
+        .get("ask_advisor")
+        .execute("first", {}, new AbortController().signal, undefined, ctx);
+      await screeningStarted.promise;
+      const secondPermission = await toolCall(
+        { input: {}, toolCallId: "second", toolName: "ask_advisor" },
+        ctx
+      );
+      let secondExecution: Promise<unknown> | undefined;
+      if (!secondPermission?.block) {
+        secondExecution = tools
+          .get("ask_advisor")
+          .execute("second", {}, new AbortController().signal, undefined, ctx);
+      }
+      screeningBarrier.resolve();
+      await firstExecution;
+      if (secondExecution) {
+        await secondExecution;
+      }
+
+      expect(firstPermission).toEqual({});
+      expect(secondPermission).toMatchObject({ block: true });
+      expect(screens).toBe(1);
+      expect(consultations).toBe(1);
+      expect(session.consumedCalls).toBe(1);
+    });
   });
 });

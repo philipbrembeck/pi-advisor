@@ -4,7 +4,6 @@ import {
   isSimpleMode,
 } from "../config/state.ts";
 import { loadConfig } from "../config/storage.ts";
-import { herdrAdvisorBlock } from "../herdr.ts";
 import { reserveAdvisorCall } from "./gate-policy.ts";
 import { handleAutomaticGate } from "./loop-gate.ts";
 import { advisorModelAccess } from "./model-access.ts";
@@ -26,6 +25,8 @@ const modelAccessBlock = (
 };
 
 export const registerToolLifecycle = ({
+  herdrActivity,
+  herdrBlock,
   pi,
   reservedCalls,
   runGate,
@@ -61,7 +62,7 @@ export const registerToolLifecycle = ({
   pi.on("session_start", (_event, ctx) => {
     session.resetTask();
     reservedCalls.clear();
-    herdrAdvisorBlock.clear();
+    herdrBlock.clear();
     if (ctx?.hasUI) {
       ctx.ui.setStatus("advisor-usage", undefined);
     }
@@ -114,13 +115,23 @@ export const registerToolLifecycle = ({
     if (event.toolName === "ask_advisor") {
       return reservation;
     }
-    return handleAutomaticGate(pi, event, ctx, session, runGate, scoutStatus);
+    return handleAutomaticGate(
+      pi,
+      event,
+      ctx,
+      session,
+      runGate,
+      scoutStatus,
+      herdrActivity,
+      herdrBlock
+    );
   });
 
   pi.on("agent_settled", (_event, ctx) => {
     // Any reservation still present never reached execute (for example because
     // another handler blocked it or the turn was aborted).
     reservedCalls.clear();
+    session.clearCallReservations();
     if (isSimpleMode() || session.blocked || !advisorSessionSummaryRef) {
       return;
     }
@@ -132,8 +143,9 @@ export const registerToolLifecycle = ({
 
   pi.on("session_shutdown", (_event, ctx) => {
     reservedCalls.clear();
+    session.clearCallReservations();
     scoutStatus.clear(ctx);
-    herdrAdvisorBlock.clear();
+    herdrBlock.clear();
     if (ctx?.hasUI) {
       ctx.ui.setStatus("advisor-usage", undefined);
     }

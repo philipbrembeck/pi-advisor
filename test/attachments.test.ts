@@ -132,4 +132,52 @@ describe("Advisor file attachments", () => {
       rmSync(cwd, { force: true, recursive: true });
     }
   });
+
+  test("redacts quoted secrets cut off by the file cap", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "pi-advisor-untracked-"));
+    git(cwd, ["init"]);
+    const secret = "quoted-secret-marker";
+    writeFileSync(
+      join(cwd, "secret.txt"),
+      `password="${secret.repeat(ADVISOR_FILE_MAX_BYTES)}"`
+    );
+    try {
+      const [attachment] = await readUntrackedFiles(
+        cwd,
+        ["secret.txt"],
+        true,
+        true
+      );
+      expect(attachment?.text).toContain("[REDACTED SECRET]");
+      expect(attachment?.text).not.toContain(secret);
+      expect(attachment?.bytes).toBeLessThanOrEqual(ADVISOR_FILE_MAX_BYTES);
+    } finally {
+      rmSync(cwd, { force: true, recursive: true });
+    }
+  });
+
+  test("redacts a capped quoted secret ending with a backslash", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "pi-advisor-untracked-"));
+    git(cwd, ["init"]);
+    const prefix = 'password="';
+    const secret = "trailing-backslash-secret";
+    const text = `${prefix}${secret}${"x".repeat(
+      ADVISOR_FILE_MAX_BYTES - prefix.length - secret.length
+    )}\\`;
+    expect(text.length).toBe(ADVISOR_FILE_MAX_BYTES + 1);
+    writeFileSync(join(cwd, "secret.txt"), text);
+    try {
+      const [attachment] = await readUntrackedFiles(
+        cwd,
+        ["secret.txt"],
+        true,
+        true
+      );
+      expect(attachment?.text).toContain("[REDACTED SECRET]");
+      expect(attachment?.text).not.toContain(secret);
+      expect(attachment?.bytes).toBeLessThanOrEqual(ADVISOR_FILE_MAX_BYTES);
+    } finally {
+      rmSync(cwd, { force: true, recursive: true });
+    }
+  });
 });

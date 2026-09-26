@@ -8,7 +8,6 @@ import {
   setExecutorRef,
 } from "../config/state.ts";
 import { loadConfig, saveConfig } from "../config/storage.ts";
-import { herdrAdvisorActivity } from "../herdr.ts";
 import { notify } from "./runtime.ts";
 import type { CommandRuntime } from "./types.ts";
 
@@ -84,6 +83,6 @@ export const registerCommandLifecycle = (
     runtime.manualConsultations.clear();
     runtime.manualProgressTimers.clear();
     runtime.manualProgress.clear();
-    herdrAdvisorActivity.clear();
+    runtime.herdrActivity.clear();
   });
 };

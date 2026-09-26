@@ -1,5 +1,6 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
+import type { HerdrAdvisorActivityScope, HerdrAdvisorBlock } from "../herdr.ts";
 import type { appendOutcome } from "../outcomes.ts";
 import type { ScoutOutcome } from "../scout.ts";
 import type {
@@ -112,6 +113,8 @@ export interface AdvisorToolContext {
 export interface ToolRegistrationContext {
   appendOutcome: typeof appendOutcome;
   consult: typeof consultAdvisor;
+  herdrActivity: HerdrAdvisorActivityScope;
+  herdrBlock: HerdrAdvisorBlock;
   pi: ExtensionAPI;
   reservedCalls: Set<string>;
   runGate: typeof runAdvisorGate;
@@ -123,6 +126,8 @@ export interface ToolRegistrationContext {
 export interface ToolRegistrationDependencies {
   appendOutcome?: typeof appendOutcome;
   consult?: typeof consultAdvisor;
+  herdrActivity?: HerdrAdvisorActivityScope;
+  herdrBlock?: HerdrAdvisorBlock;
   runGate?: typeof runAdvisorGate;
   screen?: typeof screenConsultation;
   statusManager?: ScoutStatusManager;

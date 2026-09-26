@@ -8,6 +8,7 @@ import registerExtension, {
   runAdvisorGate,
 } from "../extensions/index.ts";
 import { registerCommands } from "../src/commands.ts";
+import { HerdrAdvisorActivity } from "../src/herdr.ts";
 import { AdvisorSessionState } from "../src/session-state.ts";
 import {
   advisorSessionState,
@@ -142,6 +143,37 @@ describe("Extension Registration", () => {
         options: { deliverAs: "steer", triggerTurn: true },
       },
     ]);
+  });
+
+  test("shutdown releases only the Herdr activity owned by its runtime", () => {
+    const reports: any[] = [];
+    const activity = new HerdrAdvisorActivity((request) =>
+      reports.push(request)
+    );
+    const runtimeAActivity = activity.createScope();
+    const runtimeBActivity = activity.createScope();
+    const runtimeAEvents = new Map<string, any>();
+    const runtimeBEvents = new Map<string, any>();
+    registerCommands(mockPi({ events: runtimeAEvents }), {
+      herdrActivity: runtimeAActivity,
+    });
+    registerCommands(mockPi({ events: runtimeBEvents }), {
+      herdrActivity: runtimeBActivity,
+    });
+    const finishA = runtimeAActivity.start();
+    const finishB1 = runtimeBActivity.start();
+    const finishB2 = runtimeBActivity.start();
+
+    runtimeBEvents.get("session_shutdown")(
+      undefined,
+      asExtensionContext({ cwd: "/", hasUI: false })
+    );
+    expect(reports).toHaveLength(1);
+    finishA();
+    expect(reports).toHaveLength(2);
+    finishB1();
+    finishB2();
+    expect(reports).toHaveLength(2);
   });
 
   test("shows manual Advisor progress and forwards response chunks", async () => {

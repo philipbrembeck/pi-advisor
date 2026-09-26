@@ -246,6 +246,28 @@ describe("JevSetupSubmenu", () => {
     expect(cleared).toBe(1);
   });
 
+  test("keeps disable-and-clear open when deleting the stored key fails", async () => {
+    const { renders, results, setup } = openSetup({
+      currentValue: "On",
+      deps: {
+        clearStoredKey: () =>
+          Promise.resolve({ message: "clear denied", ok: false }),
+        resolveTransport: () =>
+          Promise.resolve(credentials("typesafe", "bun-secrets")),
+      },
+    });
+    await settle();
+    setup.handleInput("\u001B[B");
+    setup.handleInput("\u001B[B");
+    setup.handleInput("\r");
+    await settle();
+
+    expect(results).toEqual([]);
+    expect(screen(setup)).toContain("clear denied");
+    expect(screen(setup)).toContain("Disable and clear stored key");
+    expect(renders).toContain("render");
+  });
+
   test("migrates a plaintext advisor.json key into Bun.secrets on enable", async () => {
     const written: string[] = [];
     let removedPlaintext = false;
@@ -281,5 +303,14 @@ describe("JevSetupSubmenu", () => {
     const text = screen(setup);
     expect(text).toContain("No Jev credentials found");
     expect(text).toContain("OpenRouter login");
+  });
+
+  test("allows disabling an enabled filter when credentials are unavailable", async () => {
+    const { results, setup } = openSetup({ currentValue: "On" });
+    await settle();
+    expect(screen(setup)).toContain("Disable");
+    setup.handleInput("\u001B[B");
+    setup.handleInput("\r");
+    expect(results).toEqual(["Off"]);
   });
 });

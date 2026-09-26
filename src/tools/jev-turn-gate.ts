@@ -11,6 +11,7 @@ import {
   isSimpleMode,
 } from "../config/state.ts";
 import { herdrAdvisorActivity } from "../herdr.ts";
+import type { HerdrAdvisorActivityScope } from "../herdr.ts";
 import { JevFailure, jevClientFromCredentials } from "../jev/client.ts";
 import { composeTurnGateVerdict } from "../jev/questions.ts";
 import { buildJevState } from "../jev/state.ts";
@@ -55,6 +56,7 @@ export interface JevTurnGateRegistration {
   activeTools: () => string[];
   consult: typeof consultAdvisor;
   deps?: JevTurnGateDeps;
+  herdrActivity?: HerdrAdvisorActivityScope;
   send: (message: {
     content: string;
     customType: string;
@@ -71,6 +73,35 @@ const outageNotifier = createOutageNotifier(
 
 const notifyFailureOnce = outageNotifier.notify;
 
+const shouldRunTurnGate = (
+  registration: JevTurnGateRegistration,
+  ctx: ExtensionContext,
+  session: AdvisorSessionState
+) => {
+  const interval = advisorJevTurnGateEveryTurnsRef;
+  return (
+    interval > 0 &&
+    session.turnsSinceConsultation > 0 &&
+    session.turnsSinceConsultation % interval === 0 &&
+    !isSimpleMode() &&
+    !session.blocked &&
+    registration.activeTools().includes("ask_advisor") &&
+    advisorModelIsAllowed(ctx) &&
+    session.canConsult(getAdvisorMaxCallsPerSession())
+  );
+};
+
+const consumeTurnGateBudget = (
+  session: AdvisorSessionState,
+  shouldConsult: boolean
+) => {
+  if (!shouldConsult || !session.canConsult(getAdvisorMaxCallsPerSession())) {
+    return false;
+  }
+  session.consumeCall();
+  return true;
+};
+
 /** Test-only: re-arms the once-per-outage notification. */
 export const resetJevTurnGateNotification = outageNotifier.reset;
 
@@ -86,21 +117,7 @@ export const handleJevTurnEnd = async (
 ): Promise<void> => {
   const { session } = registration;
   session.recordCompletedTurn();
-  const interval = advisorJevTurnGateEveryTurnsRef;
-  if (
-    interval <= 0 ||
-    session.turnsSinceConsultation <= 0 ||
-    session.turnsSinceConsultation % interval !== 0
-  ) {
-    return;
-  }
-  if (
-    isSimpleMode() ||
-    session.blocked ||
-    !registration.activeTools().includes("ask_advisor") ||
-    !advisorModelIsAllowed(ctx) ||
-    !session.canConsult(getAdvisorMaxCallsPerSession())
-  ) {
+  if (!shouldRunTurnGate(registration, ctx, session)) {
     return;
   }
 
@@ -128,22 +145,21 @@ export const handleJevTurnEnd = async (
       result.answers,
       advisorJevTurnGateNoulThresholdRef
     );
-    if (!shouldConsult) {
+    if (!consumeTurnGateBudget(session, shouldConsult)) {
       return;
     }
-
-    session.consumeCall();
-    herdrAdvisorActivity.start();
-    registration.send({
-      content: "Proactive Advisor turn review",
-      customType: "advisor-turn-gate-call",
-      details: {
-        question: `Turn gate: ${session.turnsSinceConsultation} turns without a consultation`,
-        turn: session.sessionTurnOrdinal,
-      },
-      display: true,
-    });
+    const herdrActivity = registration.herdrActivity ?? herdrAdvisorActivity;
+    const finishHerdrActivity = herdrActivity.start();
     try {
+      registration.send({
+        content: "Proactive Advisor turn review",
+        customType: "advisor-turn-gate-call",
+        details: {
+          question: `Turn gate: ${session.turnsSinceConsultation} turns without a consultation`,
+          turn: session.sessionTurnOrdinal,
+        },
+        display: true,
+      });
       const consulted = await consult(
         ctx,
         undefined,
@@ -173,7 +189,7 @@ export const handleJevTurnEnd = async (
         display: true,
       });
     } finally {
-      herdrAdvisorActivity.finish();
+      finishHerdrActivity();
     }
   } catch (error) {
     session.recordJevGateFailure();

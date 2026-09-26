@@ -11,6 +11,7 @@ import {
   isSimpleMode,
 } from "../config/state.ts";
 import type { GateFailureMode } from "../config/types.ts";
+import type { HerdrAdvisorBlock } from "../herdr-block.ts";
 import { herdrAdvisorBlock, notifyHerdrAdvisorFailure } from "../herdr.ts";
 import type { AdvisorSessionState } from "../session-state.ts";
 import type { AdvisorGateResult, GateFailureCategory } from "./types.ts";
@@ -66,7 +67,8 @@ export const failureEffect = (
   message: string,
   ctx: ExtensionContext,
   session: AdvisorSessionState,
-  failureMode: GateFailureMode
+  failureMode: GateFailureMode,
+  herdrBlock: HerdrAdvisorBlock = herdrAdvisorBlock
 ) => {
   const reason = `Advisor gate ${category}: ${message}`;
   notifyLocalFailure(ctx, message, failureMode === "block-session");
@@ -78,7 +80,7 @@ export const failureEffect = (
     return { block: true, effect: "tool-blocked" as const, reason };
   }
   session.block(reason);
-  herdrAdvisorBlock.set(reason);
+  herdrBlock.set(reason);
   if (advisorBlockOnBlockedRef) {
     ctx.abort();
   }
@@ -89,7 +91,8 @@ export const blockedDecisionEffect = (
   reason: string,
   ctx: ExtensionContext,
   session: AdvisorSessionState,
-  failureMode: GateFailureMode
+  failureMode: GateFailureMode,
+  herdrBlock: HerdrAdvisorBlock = herdrAdvisorBlock
 ) => {
   if (failureMode === "warn-and-continue") {
     if (ctx.hasUI) {
@@ -104,7 +107,7 @@ export const blockedDecisionEffect = (
     return { block: true, effect: "tool-blocked" as const, reason };
   }
   session.block(reason);
-  herdrAdvisorBlock.set(reason);
+  herdrBlock.set(reason);
   if (advisorBlockOnBlockedRef) {
     ctx.abort();
   }
@@ -120,7 +123,7 @@ export const reserveAdvisorCall = (
   if (event.toolName !== "ask_advisor" || isSimpleMode()) {
     return;
   }
-  if (!session.canConsult(getAdvisorMaxCallsPerSession())) {
+  if (!session.reserveCall(event.toolCallId, getAdvisorMaxCallsPerSession())) {
     const message = "Advisor call budget exhausted for this session.";
     if (ctx.hasUI) {
       ctx.ui.notify(message, "warning");

@@ -3,7 +3,7 @@ import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { advisorRef } from "../config/state.ts";
 import { isString } from "../content-utils.ts";
 import type { GitContextLevel } from "../git.ts";
-import { herdrAdvisorActivity, notifyHerdrAdvisorFailure } from "../herdr.ts";
+import { notifyHerdrAdvisorFailure } from "../herdr.ts";
 import { normalizeScreeningQuestion } from "../tools/jev-filter.ts";
 import { appendScoutLifecycleEntry } from "../tools/scout-status.ts";
 import type { ScoutToolDetails } from "../tools/types.ts";
@@ -28,7 +28,6 @@ export const startManualConsultation = async (
   progress: ManualAdvisorProgressState,
   gitContext?: GitContextLevel
 ) => {
-  herdrAdvisorActivity.start();
   progress.phase = "preparing";
   runtime.requestManualRender(ctx);
   if (ctx.hasUI) {
@@ -44,6 +43,7 @@ export const startManualConsultation = async (
     }, 80);
     runtime.manualProgressTimers.set(controller, timer);
   }
+  const finishHerdrActivity = runtime.herdrActivity.start();
   let scoutDetails: ScoutToolDetails | undefined;
   try {
     const { adviceId, markdown, usage } = await runtime.requestAdvisor(
@@ -152,6 +152,7 @@ export const startManualConsultation = async (
     notify(ctx, `Advisor consultation failed: ${message}`, "error");
     notifyHerdrAdvisorFailure("Advisor consultation failed", message);
   } finally {
+    finishHerdrActivity();
     if (controller.signal.aborted) {
       progress.phase = "cancelled";
     }
@@ -163,6 +164,5 @@ export const startManualConsultation = async (
     runtime.requestManualRender(ctx);
     runtime.scoutStatus.release(ctx, scoutStatusToken);
     runtime.manualConsultations.delete(controller);
-    herdrAdvisorActivity.finish();
   }
 };

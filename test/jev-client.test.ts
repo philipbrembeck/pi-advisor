@@ -239,6 +239,26 @@ describe("JevClient.ask", () => {
     ).rejects.toThrow("Jev call aborted by the caller.");
   });
 
+  test("caller cancellation takes precedence when fetch resolves with 429", async () => {
+    const controller = new AbortController();
+    let resolveResponse: ((response: Response) => void) | undefined;
+    let calls = 0;
+    const startedAt = performance.now();
+    const pending = client(() => {
+      calls += 1;
+      return new Promise<Response>((resolve) => {
+        resolveResponse = resolve;
+      });
+    }).ask(state, { proceed: noul("Proceed?") }, controller.signal);
+
+    controller.abort();
+    resolveResponse?.(jsonResponse({ error: "slow down" }, 429));
+
+    await expect(pending).rejects.toThrow("Jev call aborted by the caller.");
+    expect(calls).toBe(1);
+    expect(performance.now() - startedAt).toBeLessThan(200);
+  });
+
   test("treats missing usage as zero tokens rather than failing", async () => {
     const result = await client(async () =>
       jsonResponse({

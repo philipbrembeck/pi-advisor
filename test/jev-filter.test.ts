@@ -209,6 +209,30 @@ describe("screenConsultation", () => {
     expect(summaryLine(session)).toContain("2 failures");
   });
 
+  test("caller cancellation during a 429 propagates instead of failing open", async () => {
+    const notifications: string[] = [];
+    const controller = new AbortController();
+    const session = new AdvisorSessionState();
+    const mock = systemOneMock([{ body: { error: "slow down" }, status: 429 }]);
+    const pending = screenConsultation(
+      ctxWith({ notifications }),
+      session,
+      { signal: controller.signal },
+      {
+        fetch: (input: string, init?: RequestInit) => {
+          controller.abort();
+          return mock.fetch(input, init);
+        },
+        resolveTransport: () => Promise.resolve(credentials),
+      }
+    );
+
+    await expect(pending).rejects.toThrow("Jev call aborted by the caller.");
+    expect(mock.captured).toHaveLength(1);
+    expect(notifications).toHaveLength(0);
+    expect(summaryLine(session)).not.toContain("failures");
+  });
+
   test("a 401 allows with a single auth notification and no key material", async () => {
     const notifications: string[] = [];
     const session = new AdvisorSessionState();

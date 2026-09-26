@@ -22,6 +22,17 @@ import { branchFromLines, systemOneMock } from "./helpers/jev-mock.ts";
 
 const credentials = { apiKey: "tsk-test", transport: "typesafe" as const };
 
+const deferred = <Value>() => {
+  let resolvePromise: ((value: Value) => void) | undefined;
+  const promise = new Promise<Value>((resolve) => {
+    resolvePromise = resolve;
+  });
+  return {
+    promise,
+    resolve: (value: Value) => resolvePromise?.(value),
+  };
+};
+
 const noulResponse = (noul: number) => ({
   answers: { should_consult: { noul, type: "noul" } },
   usage: { input_tokens: 800, output_tokens: 0 },
@@ -160,6 +171,26 @@ describe("handleJevTurnEnd", () => {
     expect(h.consultCount()).toBe(0);
     expect(notifications).toHaveLength(1);
     expect(notifications[0]).toContain("(auth)");
+  });
+
+  test("rechecks the budget after Jev returns before consuming a call", async () => {
+    setAdvisorMaxCallsPerSessionRef(1);
+    const response = deferred<Response>();
+    const started = deferred<undefined>();
+    const h = harness(() => {
+      started.resolve(undefined);
+      return response.promise;
+    });
+    await turn(h);
+    const pendingCheck = turn(h);
+    await started.promise;
+    expect(h.session.reserveCall("pending-ask", 1)).toBe(true);
+    response.resolve(Response.json(noulResponse(0.9)));
+    await pendingCheck;
+
+    expect(h.consultCount()).toBe(0);
+    expect(h.session.consumedCalls).toBe(0);
+    h.session.releaseCall("pending-ask");
   });
 
   test("budget exhaustion skips the check silently", async () => {

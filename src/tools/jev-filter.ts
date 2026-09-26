@@ -140,11 +140,12 @@ const screenWithJev = async (
     session.recordJevFilterAllowed();
     return allow();
   } catch (error) {
+    if (options.signal?.aborted) {
+      throw error;
+    }
     session.recordJevFilterFailure();
     if (error instanceof JevFailure) {
       notifyOutageOnce(ctx, error.category, error.message);
-    } else if (options.signal?.aborted) {
-      throw error;
     } else {
       notifyOutageOnce(
         ctx,

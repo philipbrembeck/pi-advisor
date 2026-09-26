@@ -214,7 +214,9 @@ export class JevSetupSubmenu implements Component, Focusable {
 
   private actions(): SetupAction[] {
     if (!this.credentials) {
-      return ["enter-key", "done"];
+      return this.options.currentValue === "On"
+        ? ["enter-key", "disable", "done"]
+        : ["enter-key", "done"];
     }
     const enabled = this.options.currentValue === "On";
     const actions: SetupAction[] = [enabled ? "verify-again" : "verify-enable"];
@@ -277,8 +279,12 @@ export class JevSetupSubmenu implements Component, Focusable {
       return;
     }
     const result = await clear();
-    this.credentials = undefined;
     this.notice = result.message;
+    if (!result.ok) {
+      this.options.tui.requestRender();
+      return;
+    }
+    this.credentials = undefined;
     this.options.done("Off");
   }
 

@@ -15,7 +15,8 @@ import {
   isSimpleMode,
 } from "../config/state.ts";
 import type { GateFailureMode } from "../config/types.ts";
-import { herdrAdvisorActivity } from "../herdr.ts";
+import { herdrAdvisorActivity, herdrAdvisorBlock } from "../herdr.ts";
+import type { HerdrAdvisorActivityScope, HerdrAdvisorBlock } from "../herdr.ts";
 import type { AdvisorSessionState, GateDecision } from "../session-state.ts";
 import { advisorUsageCost, snapshotAdvisorUsage } from "../usage.ts";
 import type { AdvisorUsageSnapshot } from "../usage.ts";
@@ -106,7 +107,8 @@ const applyGateDecision = (
   session: AdvisorSessionState,
   result: Awaited<ReturnType<typeof runAdvisorGate>>,
   reason: string,
-  failureMode: GateFailureMode
+  failureMode: GateFailureMode,
+  herdrBlock: HerdrAdvisorBlock
 ): ToolCallEventResult | undefined => {
   if (!result.ok) {
     session.recordInvocation({
@@ -123,7 +125,8 @@ const applyGateDecision = (
       result.message,
       ctx,
       session,
-      failureMode
+      failureMode,
+      herdrBlock
     );
     sendAutomaticGateFailure(
       pi,
@@ -151,7 +154,13 @@ const applyGateDecision = (
   }
   const gateReason = `Advisor loop review: ${result.markdown}`;
   if (result.decision === "blocked") {
-    const effect = blockedDecisionEffect(gateReason, ctx, session, failureMode);
+    const effect = blockedDecisionEffect(
+      gateReason,
+      ctx,
+      session,
+      failureMode,
+      herdrBlock
+    );
     return effect.block ? { block: true, reason: effect.reason } : undefined;
   }
   return { block: true, reason: gateReason };
@@ -163,7 +172,9 @@ export const handleAutomaticGate = async (
   ctx: ExtensionContext,
   session: AdvisorSessionState,
   runGate: typeof runAdvisorGate,
-  scoutStatus: ScoutStatusManager
+  scoutStatus: ScoutStatusManager,
+  herdrActivity: HerdrAdvisorActivityScope = herdrAdvisorActivity,
+  herdrBlock: HerdrAdvisorBlock = herdrAdvisorBlock
 ): Promise<ToolCallEventResult | undefined> => {
   if (
     isSimpleMode() ||
@@ -186,13 +197,14 @@ export const handleAutomaticGate = async (
       "Advisor gate call budget is exhausted.",
       ctx,
       session,
-      failureMode
+      failureMode,
+      herdrBlock
     );
     return failure.block ? { block: true, reason: failure.reason } : undefined;
   }
   session.consumeCall();
   session.resetTurnsSinceConsultation();
-  herdrAdvisorActivity.start();
+  const finishHerdrActivity = herdrActivity.start();
   let scoutDetails: ScoutToolDetails | undefined;
   const scoutStatusToken = Symbol("automatic-gate-scout");
   scoutStatus.register(scoutStatusToken);
@@ -203,10 +215,10 @@ export const handleAutomaticGate = async (
       gateCallSent = true;
     }
   };
-  if (!advisorScoutEnabledRef) {
-    ensureGateCall();
-  }
   try {
+    if (!advisorScoutEnabledRef) {
+      ensureGateCall();
+    }
     const result = await runGate(
       ctx,
       `${reason} Review the repeated actions and recommend the smallest safe next step.`,
@@ -223,9 +235,17 @@ export const handleAutomaticGate = async (
       event.toolCallId
     );
     ensureGateCall();
-    return applyGateDecision(pi, ctx, session, result, reason, failureMode);
+    return applyGateDecision(
+      pi,
+      ctx,
+      session,
+      result,
+      reason,
+      failureMode,
+      herdrBlock
+    );
   } finally {
+    finishHerdrActivity();
     scoutStatus.release(ctx, scoutStatusToken);
-    herdrAdvisorActivity.finish();
   }
 };

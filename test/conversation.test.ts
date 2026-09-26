@@ -122,6 +122,7 @@ describe("Conversation Module", () => {
 
   test("redacts secrets from messages, tool arguments, and full results", () => {
     const secret = "AKIAABCDEFGHIJKLMNOP";
+    const password = 'prefix"secret-suffix';
     const ctx = asExtensionContext({
       sessionManager: {
         getBranch: () => [
@@ -133,7 +134,7 @@ describe("Conversation Module", () => {
             message: {
               content: [
                 {
-                  arguments: { token: secret },
+                  arguments: { password, token: secret },
                   name: "bash",
                   type: "toolCall",
                 },
@@ -162,9 +163,21 @@ describe("Conversation Module", () => {
       true
     );
     expect(result).not.toContain(secret);
+    expect(result).not.toContain(password);
+    expect(result).not.toContain("secret-suffix");
     expect(result).toContain("[REDACTED SECRET]");
     expect(redactSecrets("password=hunter2")).not.toContain("hunter2");
+    expect(redactSecrets('{"password":"hunter2"}')).toBe("{[REDACTED SECRET]}");
     expect(redactSecrets('password="hunter2"')).toBe("[REDACTED SECRET]");
+    expect(
+      redactSecrets("OPENAI_API_KEY=sk-proj-sensitive-value")
+    ).not.toContain("sk-proj-sensitive-value");
+    expect(
+      redactSecrets('{"OPENAI_API_KEY":"sk-proj-sensitive-value"}')
+    ).not.toContain("sk-proj-sensitive-value");
+    expect(redactSecrets("The password field is optional.")).toBe(
+      "The password field is optional."
+    );
   });
 
   test("redacts every documented secret pattern without retaining the match", () => {

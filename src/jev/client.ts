@@ -97,9 +97,12 @@ const connectionFailure = <E>(error: E) => {
   };
 };
 
-const sleepWithAbort = (signal: AbortSignal, ms: number): Promise<void> =>
+const sleepWithAbort = (signal: AbortSignal, ms: number): Promise<void> => {
+  if (signal.aborted) {
+    return Promise.resolve();
+  }
   // oxlint-disable-next-line promise/avoid-new -- unref-ed abortable retry timer cannot be expressed with async/await.
-  new Promise((resolve) => {
+  return new Promise((resolve) => {
     const timer = setTimeout(resolve, ms);
     timer.unref?.();
     signal.addEventListener(
@@ -111,6 +114,7 @@ const sleepWithAbort = (signal: AbortSignal, ms: number): Promise<void> =>
       { once: true }
     );
   });
+};
 
 /** One systemone client for both transports with a total wall deadline so
  * retries can never stall a tool call; errors are classified and redacted on
@@ -167,7 +171,11 @@ export class JevClient {
       for (let attempt = 1; ; attempt += 1) {
         // The retry loop is bounded to one backoff by the deadline controller.
         outcome = await this.#attempt(body, deadline.signal);
-        if (!outcome.retryable || attempt >= MAX_ATTEMPTS) {
+        if (
+          !outcome.retryable ||
+          attempt >= MAX_ATTEMPTS ||
+          deadline.signal.aborted
+        ) {
           break;
         }
         await sleepWithAbort(deadline.signal, RETRY_BACKOFF_MS);
@@ -212,11 +220,11 @@ export class JevClient {
         `Jev call exceeded its ${this.#timeoutMs} ms wall-time budget.`
       );
     }
-    if (outcome.failure) {
-      throw outcome.failure;
-    }
     if (signal?.aborted) {
       throw new Error("Jev call aborted by the caller.");
+    }
+    if (outcome.failure) {
+      throw outcome.failure;
     }
     throw new JevFailureError("error", "Jev call failed.");
   }

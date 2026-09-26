@@ -1,7 +1,8 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 import { registerCommands } from "../src/commands/registration.ts";
-import { setHerdrBlockedEmitter } from "../src/herdr.ts";
+import { getAdvisorSettings } from "../src/config/state.ts";
+import { HerdrAdvisorBlock, herdrAdvisorActivity } from "../src/herdr.ts";
 import { AdvisorSessionState } from "../src/session-state.ts";
 import {
   consultAdvisor as consultAdvisorImplementation,
@@ -34,13 +35,21 @@ export const runAdvisorGate = (
 export default function registerPiAdvisor(pi: ExtensionAPI) {
   const sessionState = new AdvisorSessionState();
   const scoutStatus = new ScoutStatusManager();
-  setHerdrBlockedEmitter((active, label) =>
-    pi.events.emit("herdr:blocked", { active, label })
+  const herdrActivity = herdrAdvisorActivity.createScope();
+  const herdrBlock = new HerdrAdvisorBlock(
+    undefined,
+    () => getAdvisorSettings().herdrIntegration,
+    (active, label) => {
+      pi.events.emit("herdr:blocked", { active, label });
+    }
   );
   registerAdvisorTool(pi, sessionState, {
+    herdrActivity,
+    herdrBlock,
     statusManager: scoutStatus,
   });
   registerCommands(pi, {
+    herdrActivity,
     sessionState,
     statusManager: scoutStatus,
   });

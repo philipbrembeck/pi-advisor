@@ -4,6 +4,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 
 import type { GitContextLevel } from "../git.ts";
+import type { HerdrAdvisorActivityScope } from "../herdr.ts";
 import type { ScoutLifecycleEvent } from "../scout.ts";
 import type { AdvisorSessionState } from "../session-state.ts";
 import type { ScoutStatusManager } from "../tools/scout-status.ts";
@@ -43,12 +44,14 @@ export interface ManualAdvisorProgressState {
 
 export interface CommandDependencies {
   consult?: ManualConsult;
+  herdrActivity?: HerdrAdvisorActivityScope;
   sessionState?: AdvisorSessionState;
   statusManager?: ScoutStatusManager;
 }
 
 export interface CommandRuntime {
   readonly advisorSessionState: AdvisorSessionState;
+  readonly herdrActivity: HerdrAdvisorActivityScope;
   flowEnabled: () => boolean;
   readonly manualConsultations: Map<AbortController, symbol>;
   readonly manualProgress: Map<string, ManualAdvisorProgressState>;
