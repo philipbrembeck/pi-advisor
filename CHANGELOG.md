@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## Unreleased
 
+### Changed
+
+- Updated dev-dependencies: `@types/node`, `knip`, and `lint-staged`.
+
 ### Fixed
 
 - Redact credentials in JSON tool arguments, service-prefixed keys, and quoted secrets truncated at attachment limits.
