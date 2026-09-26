@@ -4,6 +4,15 @@ All notable changes to this project are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
+## Unreleased
+
+### Fixed
+
+- Redact credentials in JSON tool arguments, service-prefixed keys, and quoted secrets truncated at attachment limits.
+- Enforce the session call budget across concurrent consultations and propagate caller cancellation through Jev retries.
+- Keep Jev filter disabling available without credentials and show key-clear failures without reporting success.
+- Scope Herdr block events to their runtime and preserve aggregate activity while consultations overlap across runtimes.
+
 ## 0.8.2 - 2026-09-24
 
 ### Added
