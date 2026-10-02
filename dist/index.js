@@ -9025,7 +9025,9 @@ var registerToolLifecycle = ({
       ctx.ui.setStatus("advisor-usage", undefined);
     }
   });
-  pi.on("before_agent_start", (_event, ctx) => {
+  pi.on("before_agent_start", (event, ctx) => {
+    const { sections } = event.systemPromptOptions;
+    delete sections.advisor_invocation_settings;
     if (!pi.getActiveTools().includes("ask_advisor")) {
       return;
     }
@@ -9039,13 +9041,11 @@ var registerToolLifecycle = ({
       guidelines.push(`Advisor calls remaining this session: ${budget}.
 Reserve calls for material decisions, repeated failures, or final review.`);
     }
-    return guidelines.length > 0 ? {
-      systemPrompt: `${ctx.getSystemPrompt()}
-
-Advisor invocation settings:
+    if (guidelines.length > 0) {
+      sections.advisor_invocation_settings = `Advisor invocation settings:
 ${guidelines.map((rule) => `- ${rule}`).join(`
-`)}`
-    } : undefined;
+`)}`;
+    }
   });
   pi.on("input", () => {
     session.clearFollowUps();

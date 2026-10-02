@@ -71,7 +71,9 @@ export const registerToolLifecycle = ({
     }
   });
 
-  pi.on("before_agent_start", (_event, ctx) => {
+  pi.on("before_agent_start", (event, ctx) => {
+    const { sections } = event.systemPromptOptions;
+    delete sections.advisor_invocation_settings;
     if (!pi.getActiveTools().includes("ask_advisor")) {
       return;
     }
@@ -88,11 +90,9 @@ export const registerToolLifecycle = ({
         `Advisor calls remaining this session: ${budget}.\nReserve calls for material decisions, repeated failures, or final review.`
       );
     }
-    return guidelines.length > 0
-      ? {
-          systemPrompt: `${ctx.getSystemPrompt()}\n\nAdvisor invocation settings:\n${guidelines.map((rule) => `- ${rule}`).join("\n")}`,
-        }
-      : undefined;
+    if (guidelines.length > 0) {
+      sections.advisor_invocation_settings = `Advisor invocation settings:\n${guidelines.map((rule) => `- ${rule}`).join("\n")}`;
+    }
   });
 
   pi.on("input", () => {

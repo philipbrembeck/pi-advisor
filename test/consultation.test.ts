@@ -7,6 +7,7 @@ import {
   fauxAssistantMessage,
   registerFauxProvider,
 } from "@earendil-works/pi-ai/compat";
+import type { BeforeAgentStartEvent } from "@earendil-works/pi-coding-agent";
 
 import registerExtension, {
   consultAdvisor,
@@ -23,6 +24,8 @@ import { advisorRequestConversation } from "../src/tools.ts";
 import { withAgentDir } from "./helpers/config-fixture.ts";
 import { asExtensionContext } from "./helpers/extension-context.ts";
 import { mockPi } from "./helpers/mock-pi.ts";
+
+type PromptSections = BeforeAgentStartEvent["systemPromptOptions"]["sections"];
 
 const fauxContext = (
   cwd: string,
@@ -359,23 +362,56 @@ describe("Advisor consultation request construction", () => {
             }
           )
         );
+        const sections: PromptSections = {
+          mcp_servers: "<mcp_servers>servers</mcp_servers>",
+        };
         const result = beforeAgentStart(
-          {},
+          { systemPromptOptions: { sections } },
           {
             cwd: tmpdir(),
             getSystemPrompt: () => "Base prompt",
             isProjectTrusted: () => false,
           }
         );
-        expect(result.systemPrompt).toContain(
+        const prompt = sections.advisor_invocation_settings;
+        expect(result).toBeUndefined();
+        expect(sections.mcp_servers).toBe("<mcp_servers>servers</mcp_servers>");
+        expect(prompt).toStartWith("Advisor invocation settings:");
+        expect(prompt).toContain(
           "two consecutive materially equivalent failed attempts"
         );
-        expect(result.systemPrompt).toContain(
-          "a deployment changes production data"
-        );
-        expect(result.systemPrompt).not.toContain("consequential plan");
-        expect(result.systemPrompt).not.toContain("Before declaring success");
+        expect(prompt).toContain("a deployment changes production data");
+        expect(prompt).not.toContain("consequential plan");
+        expect(prompt).not.toContain("Before declaring success");
       }
     );
+  });
+
+  test("removes the invocation rules when ask_advisor is inactive", async () => {
+    await withAgentDir({ advisorFailureGate: true }, () => {
+      let beforeAgentStart: any;
+      registerExtension(
+        mockPi(
+          { activeTools: [] },
+          {
+            on(event: string, handler: any) {
+              if (event === "before_agent_start") {
+                beforeAgentStart = handler;
+              }
+            },
+            registerTool: () => {},
+          }
+        )
+      );
+      const sections: PromptSections = {
+        advisor_invocation_settings: "stale",
+        mcp_servers: "servers",
+      };
+      beforeAgentStart(
+        { systemPromptOptions: { sections } },
+        { cwd: tmpdir(), isProjectTrusted: () => false }
+      );
+      expect(sections).toEqual({ mcp_servers: "servers" });
+    });
   });
 });
