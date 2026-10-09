@@ -9,7 +9,9 @@ import {
   advisorJevFilterEnabledRef,
   advisorJevTransportRef,
   getAdvisorSettings,
+  setAdvisorJevBaseUrlRef,
   setAdvisorJevFilterEnabledRef,
+  setAdvisorJevKeyProviderRef,
   setAdvisorJevTransportRef,
   setAdvisorOutcomeLoggingRef,
 } from "../src/config/state.ts";
@@ -55,8 +57,8 @@ const setupCommands = async (dir: string) => {
   return { notices, selector };
 };
 
-describe("Jev setup settings transaction", () => {
-  test("persists provider and enabled state together while preserving consent and unknown fields", async () => {
+describe("Jev settings persistence", () => {
+  test("persists the provider and the filter independently while preserving consent and unknown fields", async () => {
     await withAgentDir(
       {
         advisorJevFilterEnabled: false,
@@ -66,12 +68,22 @@ describe("Jev setup settings transaction", () => {
       },
       async (dir) => {
         const { notices, selector } = await setupCommands(dir);
-        // SAFETY: applyJevSetup is the selector's typed transaction boundary exercised by the setup submenu.
-        const saved = (selector as any).applyJevSetup({
-          enabled: true,
+        // SAFETY: applyJevProvider is the selector's typed persistence boundary exercised by the provider submenu.
+        const providerSaved = (selector as any).applyJevProvider({
           transport: "openai-decisions",
         });
-        expect(saved).toBe(true);
+        expect(providerSaved).toBe(true);
+        expect(savedConfig(dir)).toMatchObject({
+          advisorJevTransport: "openai-decisions",
+          advisorOutcomeLogging: true,
+          futureSetting: "keep",
+        });
+        // The provider choice alone must not switch screening on.
+        expect(advisorJevFilterEnabledRef).toBe(false);
+
+        // SAFETY: applyJevFilter is the selector's typed persistence boundary exercised by the filter submenu.
+        const filterSaved = (selector as any).applyJevFilter({ enabled: true });
+        expect(filterSaved).toBe(true);
         expect(savedConfig(dir)).toMatchObject({
           advisorJevFilterEnabled: true,
           advisorJevTransport: "openai-decisions",
@@ -90,6 +102,34 @@ describe("Jev setup settings transaction", () => {
     );
   });
 
+  test("persists a custom endpoint with its Base URL and reused Pi login", async () => {
+    await withAgentDir(
+      {
+        advisorJevFilterEnabled: false,
+        advisorJevTransport: "auto",
+      },
+      async (dir) => {
+        const { selector } = await setupCommands(dir);
+        // SAFETY: applyJevProvider is the selector's typed persistence boundary exercised by the provider submenu.
+        const saved = (selector as any).applyJevProvider({
+          baseUrl: "https://api.codiv.ai",
+          keyProvider: "openrouter",
+          transport: "typesafe-compatible",
+        });
+        expect(saved).toBe(true);
+        expect(savedConfig(dir)).toMatchObject({
+          advisorJevBaseUrl: "https://api.codiv.ai",
+          advisorJevKeyProvider: "openrouter",
+          advisorJevTransport: "typesafe-compatible",
+        });
+        selector.dispose();
+        setAdvisorJevBaseUrlRef(undefined);
+        setAdvisorJevKeyProviderRef(undefined);
+        setAdvisorJevTransportRef("auto");
+      }
+    );
+  });
+
   test("rolls back runtime and selector-local values when the config write fails", async () => {
     await withAgentDir(
       {
@@ -101,19 +141,17 @@ describe("Jev setup settings transaction", () => {
         rmSync(join(dir, "advisor.json"));
         mkdirSync(join(dir, "advisor.json"));
 
-        // SAFETY: applyJevSetup is the selector's typed transaction boundary exercised by the setup submenu.
-        const saved = (selector as any).applyJevSetup({
-          enabled: true,
+        // SAFETY: applyJevProvider is the selector's typed persistence boundary exercised by the provider submenu.
+        const saved = (selector as any).applyJevProvider({
           transport: "openai-decisions",
         });
         expect(saved).toBe(false);
-        expect(advisorJevFilterEnabledRef).toBe(false);
         expect(advisorJevTransportRef).toBe("auto");
         expect(getAdvisorSettings()).toMatchObject({
           jevFilterEnabled: false,
           jevTransport: "auto",
         });
-        // SAFETY: the selector keeps its pre-transaction local state on save failure.
+        // SAFETY: the selector keeps its pre-save local state on save failure.
         expect((selector as any).settings).toMatchObject({
           jevFilterEnabled: false,
           jevTransport: "auto",

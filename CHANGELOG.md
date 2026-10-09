@@ -6,8 +6,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## Unreleased
 
+### Added
+
+- Added a **Jev provider** row in `/advisor-settings` that owns the screening and turn-gate provider, including a new System One–compatible option for pointing pi-advisor at any deployment that speaks TypeSafe's System One contract — your own gateway, a third-party compatible host, or a decision model running on `localhost`. Set `advisorJevBaseUrl` to the endpoint root (`/v1/systemone` is appended) and supply its key either from `JEV_API_KEY`, the guided secure store, or an existing Pi provider login via `advisorJevKeyProvider`. The provider is live-verified before it is saved.
+
 ### Changed
 
+- Jev/Decisions provider selection moved out of the consultation-filter row into its own row, so the provider can be configured and verified without enabling screening. The filter row now only switches the filter on and off, and it refuses to enable while no provider resolves. `AdvisorSettingsSelectorOptions` gained `onJevFilter` and `onJevProvider` for the two rows; the combined `onJevSetup` is deprecated and is still called when neither is supplied.
 - Updated Pi development dependencies to 1.1.0 and refreshed transitive dependency versions.
 
 ## 0.12.0 - 2026-10-07

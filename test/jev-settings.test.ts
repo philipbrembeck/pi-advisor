@@ -4,16 +4,20 @@ import { initTheme } from "@earendil-works/pi-coding-agent";
 
 import { loadConfig } from "../src/config.ts";
 import {
+  advisorJevBaseUrlRef,
   advisorJevDigestMaxCharsRef,
   advisorJevFilterNoulMarginRef,
   advisorJevFilterOverrideWindowRef,
   advisorJevFilterSkipConfidenceRef,
+  advisorJevKeyProviderRef,
   advisorJevModelRef,
   advisorJevPricePerMtokRef,
   advisorJevTimeoutMsRef,
   advisorJevTransportRef,
   advisorJevTurnGateEveryTurnsRef,
   advisorJevTurnGateNoulThresholdRef,
+  setAdvisorJevBaseUrlRef,
+  setAdvisorJevKeyProviderRef,
   setAdvisorJevModelRef,
   setAdvisorJevTimeoutMsRef,
   setAdvisorJevTransportRef,
@@ -23,6 +27,8 @@ import { validateConfig } from "../src/config/validation.ts";
 import { AdvisorSettingsSelector } from "../src/ui.ts";
 import type {
   AdvisorSettings,
+  JevFilterSelection,
+  JevProviderSelection,
   JevSetupDeps,
   JevSetupSelection,
 } from "../src/ui/types.ts";
@@ -42,6 +48,14 @@ const openSelector = (
   initial: any = {},
   options: {
     jevSetupDeps?: JevSetupDeps;
+    onJevFilter?: (
+      selection: JevFilterSelection,
+      settings: AdvisorSettings
+    ) => boolean;
+    onJevProvider?: (
+      selection: JevProviderSelection,
+      settings: AdvisorSettings
+    ) => boolean;
     onJevSetup?: (
       selection: JevSetupSelection,
       settings: AdvisorSettings
@@ -63,6 +77,8 @@ const openSelector = (
     jevSetupDeps: options.jevSetupDeps,
     onCancel: () => {},
     onChange: (value: any) => saved.push(value),
+    onJevFilter: options.onJevFilter,
+    onJevProvider: options.onJevProvider,
     onJevSetup: options.onJevSetup,
     presets: [
       { description: "none", label: "0", value: 0 },
@@ -80,6 +96,11 @@ const INVALID_SETTINGS: [Record<string, JsonValue>, RegExp][] = [
   [{ advisorJevDigestMaxChars: -1 }, /advisorJevDigestMaxChars/u],
   [{ advisorJevPricePerMtok: 0 }, /advisorJevPricePerMtok/u],
   [{ advisorJevTransport: "vercel" }, /advisorJevTransport/u],
+  [{ advisorJevBaseUrl: "http://jev.example.com" }, /advisorJevBaseUrl/u],
+  [{ advisorJevBaseUrl: "not a url" }, /advisorJevBaseUrl/u],
+  [{ advisorJevBaseUrl: 42 }, /advisorJevBaseUrl/u],
+  [{ advisorJevKeyProvider: "two words" }, /advisorJevKeyProvider/u],
+  [{ advisorJevKeyProvider: 42 }, /advisorJevKeyProvider/u],
   [{ advisorJevFilterSkipConfidence: 0.4 }, /advisorJevFilterSkipConfidence/u],
   [{ advisorJevFilterSkipConfidence: 1.1 }, /advisorJevFilterSkipConfidence/u],
   [{ advisorJevFilterNoulMargin: -0.1 }, /advisorJevFilterNoulMargin/u],
@@ -103,6 +124,26 @@ const focusJevFilterRow = (selector: any) => {
   throw new Error("Jev/Decisions consultation filter row not reachable");
 };
 
+const focusJevProviderRow = (selector: any) => {
+  for (let presses = 0; presses < 60; presses += 1) {
+    if (plainScreen(selector).includes("→ Jev provider")) {
+      selector.handleInput("\r");
+      return;
+    }
+    selector.handleInput("\u001B[B");
+  }
+  throw new Error("Jev provider row not reachable");
+};
+
+const verifiedDeps = (): JevSetupDeps => ({
+  resolveTransport: (transport) =>
+    Promise.resolve({
+      apiKey: "verified-key",
+      transport: transport ?? "typesafe",
+    }),
+  verify: () => Promise.resolve({ ok: true }),
+});
+
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe("Jev shared settings", () => {
@@ -121,6 +162,8 @@ describe("Jev shared settings", () => {
       expect(advisorJevFilterOverrideWindowRef).toBe(10);
       expect(advisorJevTurnGateEveryTurnsRef).toBe(0);
       expect(advisorJevTurnGateNoulThresholdRef).toBe(0.8);
+      expect(advisorJevBaseUrlRef).toBeUndefined();
+      expect(advisorJevKeyProviderRef).toBeUndefined();
       expect(validateConfig({ advisorJevModel: "jev-1.13.0" })).toBe(true);
       expect(validateConfig({ advisorJevTimeoutMs: 5000 })).toBe(true);
       expect(validateConfig({ advisorJevDigestMaxChars: 0 })).toBe(true);
@@ -138,10 +181,78 @@ describe("Jev shared settings", () => {
       expect(validateConfig({ advisorJevTurnGateNoulThreshold: 0.9 })).toBe(
         true
       );
+      expect(
+        validateConfig({ advisorJevTransport: "typesafe-compatible" })
+      ).toBe(true);
+      expect(
+        validateConfig({ advisorJevBaseUrl: "https://api.codiv.ai/v1" })
+      ).toBe(true);
+      expect(
+        validateConfig({ advisorJevBaseUrl: "http://localhost:11435" })
+      ).toBe(true);
+      expect(validateConfig({ advisorJevBaseUrl: "" })).toBe(true);
+      expect(validateConfig({ advisorJevKeyProvider: "openrouter" })).toBe(
+        true
+      );
+      expect(validateConfig({ advisorJevKeyProvider: "" })).toBe(true);
       for (const [invalid, pattern] of INVALID_SETTINGS) {
         expect(() => validateConfig(invalid)).toThrow(pattern);
       }
     });
+  });
+
+  test("loads and persists a System One–compatible endpoint", async () => {
+    await withAgentDir(
+      {
+        advisorJevBaseUrl: "https://api.codiv.ai/v1",
+        advisorJevKeyProvider: "openrouter",
+        advisorJevTransport: "typesafe-compatible",
+      },
+      () => {
+        const ctx = asExtensionContext({
+          cwd: "/",
+          isProjectTrusted: () => false,
+        });
+        loadConfig(ctx);
+        expect(advisorJevBaseUrlRef).toBe("https://api.codiv.ai/v1");
+        expect(advisorJevKeyProviderRef).toBe("openrouter");
+        expect(advisorJevTransportRef).toBe("typesafe-compatible");
+        setAdvisorJevBaseUrlRef("https://api.codiv.ai");
+        setAdvisorJevKeyProviderRef("vercel");
+        saveConfig(ctx);
+        expect(savedConfig(agentDir())).toMatchObject({
+          advisorJevBaseUrl: "https://api.codiv.ai",
+          advisorJevKeyProvider: "vercel",
+          advisorJevTransport: "typesafe-compatible",
+        });
+      }
+    );
+  });
+
+  test("clearing the endpoint provider removes both fields without disturbing the rest", async () => {
+    await withAgentDir(
+      {
+        advisorJevBaseUrl: "https://api.codiv.ai",
+        advisorJevKeyProvider: "openrouter",
+        advisorJevModel: "jev-1.13.0",
+        advisorJevTransport: "typesafe-compatible",
+      },
+      () => {
+        const ctx = asExtensionContext({
+          cwd: "/",
+          isProjectTrusted: () => false,
+        });
+        loadConfig(ctx);
+        setAdvisorJevBaseUrlRef(undefined);
+        setAdvisorJevKeyProviderRef(undefined);
+        saveConfig(ctx);
+        const saved = savedConfig(agentDir());
+        expect(saved.advisorJevBaseUrl).toBeUndefined();
+        expect(saved.advisorJevKeyProvider).toBeUndefined();
+        expect(saved.advisorJevModel).toBe("jev-1.13.0");
+        expect(saved.advisorJevTransport).toBe("typesafe-compatible");
+      }
+    );
   });
 
   test("loads and persists the OpenAI Decisions transport", async () => {
@@ -256,23 +367,63 @@ describe("Jev shared settings", () => {
     selector.dispose();
   });
 
-  test("the Jev setup selection sends both fields and commits local state only on save", async () => {
-    const selections: JevSetupSelection[] = [];
+  test("the Jev provider row saves a verified provider and commits local state", async () => {
+    const selections: JevProviderSelection[] = [];
     const candidates: AdvisorSettings[] = [];
     const { selector } = openSelector(
       { jevFilterEnabled: false, jevTransport: "auto" },
       {
-        jevSetupDeps: {
-          resolveTransport: (transport) =>
-            Promise.resolve({
-              apiKey: "verified-key",
-              transport: transport ?? "typesafe",
-            }),
-          verify: () => Promise.resolve({ ok: true }),
-        },
-        onJevSetup: (selection, settings) => {
+        jevSetupDeps: verifiedDeps(),
+        onJevProvider: (selection, settings) => {
           selections.push(selection);
           candidates.push(settings);
+          return true;
+        },
+      }
+    );
+    focusJevProviderRow(selector);
+    await settle();
+    // SAFETY: the setup component is the submenu installed for the focused provider row.
+    const submenu = (selector as any).settingsList.submenuComponent;
+    submenu.handleInput("\r");
+    await settle();
+
+    expect(selections).toEqual([{ transport: "typesafe" }]);
+    expect(candidates[0]).toMatchObject({ jevTransport: "typesafe" });
+    // SAFETY: the selector's local settings are asserted through its runtime shape.
+    expect((selector as any).settings).toMatchObject({
+      jevTransport: "typesafe",
+    });
+    selector.dispose();
+  });
+
+  test("a failed provider save leaves the previous transport untouched", async () => {
+    const { selector } = openSelector(
+      { jevFilterEnabled: false, jevTransport: "auto" },
+      { jevSetupDeps: verifiedDeps(), onJevProvider: () => false }
+    );
+    focusJevProviderRow(selector);
+    await settle();
+    // SAFETY: the setup component is the submenu installed for the focused provider row.
+    const submenu = (selector as any).settingsList.submenuComponent;
+    submenu.handleInput("\r");
+    await settle();
+    expect(plainScreen(selector)).toContain(
+      "Provider verified, but settings could not be saved."
+    );
+    // SAFETY: the selector's local settings remain unchanged after a rejected save.
+    expect((selector as any).settings).toMatchObject({ jevTransport: "auto" });
+    selector.dispose();
+  });
+
+  test("the Jev filter row enables independently of the provider rows", async () => {
+    const selections: JevFilterSelection[] = [];
+    const { selector } = openSelector(
+      { jevFilterEnabled: false, jevTransport: "typesafe" },
+      {
+        jevSetupDeps: verifiedDeps(),
+        onJevFilter: (selection) => {
+          selections.push(selection);
           return true;
         },
       }
@@ -281,67 +432,83 @@ describe("Jev shared settings", () => {
     await settle();
     // SAFETY: the setup component is the submenu installed for the focused filter row.
     const submenu = (selector as any).settingsList.submenuComponent;
-    submenu.handleInput("\u001B[B");
-    submenu.handleInput("\u001B[B");
+    expect(submenu?.constructor?.name).toBe("JevFilterSubmenu");
     submenu.handleInput("\r");
     await settle();
-
-    expect(selections).toEqual([
-      { enabled: true, transport: "openai-decisions" },
-    ]);
-    expect(candidates[0]).toMatchObject({
+    expect(selections).toEqual([{ enabled: true }]);
+    // SAFETY: the selector's local settings are asserted through its runtime shape.
+    expect((selector as any).settings).toMatchObject({
       jevFilterEnabled: true,
-      jevTransport: "openai-decisions",
     });
-    expect(plainScreen(selector)).toMatch(
-      /Jev\/Decisions consultation filter\s+On/u
-    );
     selector.dispose();
+  });
 
-    const failed = openSelector(
+  test("the Jev filter row refuses to enable without a resolvable provider", async () => {
+    const selections: JevFilterSelection[] = [];
+    const { selector } = openSelector(
       { jevFilterEnabled: false, jevTransport: "auto" },
       {
         jevSetupDeps: {
-          resolveTransport: (transport) =>
-            Promise.resolve({
-              apiKey: "verified-key",
-              transport: transport ?? "typesafe",
-            }),
+          resolveTransport: () => Promise.resolve(undefined),
           verify: () => Promise.resolve({ ok: true }),
         },
-        onJevSetup: () => false,
+        onJevFilter: (selection) => {
+          selections.push(selection);
+          return true;
+        },
       }
     );
-    focusJevFilterRow(failed.selector);
+    focusJevFilterRow(selector);
     await settle();
     // SAFETY: the setup component is the submenu installed for the focused filter row.
-    const failedSubmenu = (failed.selector as any).settingsList
-      .submenuComponent;
-    failedSubmenu.handleInput("\u001B[B");
-    failedSubmenu.handleInput("\u001B[B");
-    failedSubmenu.handleInput("\r");
+    const submenu = (selector as any).settingsList.submenuComponent;
+    submenu.handleInput("\r");
     await settle();
-    expect(plainScreen(failed.selector)).toContain(
-      "Provider verified, but settings could not be saved."
-    );
-    // SAFETY: the selector's local settings remain unchanged after the callback reports failure.
-    expect((failed.selector as any).settings).toMatchObject({
-      jevFilterEnabled: false,
-      jevTransport: "auto",
-    });
-    failed.selector.dispose();
+    expect(selections).toEqual([]);
+    expect(plainScreen(selector)).toContain("No Jev provider resolves");
+    selector.dispose();
   });
 
-  test("the Jev/Decisions consultation filter row opens the guided setup submenu", () => {
-    const { saved, selector } = openSelector();
-    const screenText = plainScreen(selector);
-    expect(screenText).not.toContain("Jev/Decisions consultation filter");
+  test("a failed filter save surfaces a notice and keeps the filter off", async () => {
+    const { selector } = openSelector(
+      { jevFilterEnabled: false, jevTransport: "typesafe" },
+      { jevSetupDeps: verifiedDeps(), onJevFilter: () => false }
+    );
     focusJevFilterRow(selector);
-    // SAFETY: settingsList.submenuComponent is the live submenu the selector installed on open.
+    await settle();
+    // SAFETY: the setup component is the submenu installed for the focused filter row.
     const submenu = (selector as any).settingsList.submenuComponent;
-    expect(submenu?.constructor?.name).toBe("JevSetupSubmenu");
-    submenu.options.done("On");
-    expect(saved.at(-1)).toMatchObject({ jevFilterEnabled: true });
+    submenu.handleInput("\r");
+    await settle();
+    expect(plainScreen(selector)).toContain(
+      "The filter state could not be saved."
+    );
+    // SAFETY: the selector's local settings remain unchanged after a rejected save.
+    expect((selector as any).settings).toMatchObject({
+      jevFilterEnabled: false,
+    });
+    selector.dispose();
+  });
+
+  test("the deprecated onJevSetup callback still receives the provider row", async () => {
+    const selections: JevSetupSelection[] = [];
+    const { selector } = openSelector(
+      { jevFilterEnabled: false, jevTransport: "auto" },
+      {
+        jevSetupDeps: verifiedDeps(),
+        onJevSetup: (selection) => {
+          selections.push(selection);
+          return true;
+        },
+      }
+    );
+    focusJevProviderRow(selector);
+    await settle();
+    // SAFETY: the setup component is the submenu installed for the focused provider row.
+    const submenu = (selector as any).settingsList.submenuComponent;
+    submenu.handleInput("\r");
+    await settle();
+    expect(selections).toEqual([{ enabled: false, transport: "typesafe" }]);
     selector.dispose();
   });
 

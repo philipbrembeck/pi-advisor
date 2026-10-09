@@ -4,7 +4,11 @@ import type { KeybindingsManager, TUI } from "@earendil-works/pi-tui";
 import type { GateFailureMode, JevTransport } from "../config/types.ts";
 import type { GitContextLevel } from "../git.ts";
 import type { JevKeyStoreResult } from "../jev/key-store.ts";
-import type { JevCredentials, JevTransportKind } from "../jev/transport.ts";
+import type {
+  JevCredentials,
+  JevEndpointTarget,
+  JevTransportKind,
+} from "../jev/transport.ts";
 
 export interface RenderRequester {
   requestRender: () => void;
@@ -87,15 +91,17 @@ export interface AdvisorSettings {
   gitContext?: GitContextLevel;
   gitContextMaxChars?: number;
   herdrIntegration?: boolean;
+  jevBaseUrl?: string;
   jevDigestMaxChars?: number;
   jevFilterEnabled?: boolean;
   jevFilterNoulMargin?: number;
   jevFilterOverrideWindow?: number;
   jevFilterSkipConfidence?: number;
+  jevKeyProvider?: string;
   jevModel?: string;
   jevPricePerMtok?: number;
   jevTimeoutMs?: number;
-  jevTransport?: "auto" | "typesafe" | "openrouter" | "openai-decisions";
+  jevTransport?: JevTransport;
   jevTurnGateEveryTurns?: number;
   jevTurnGateNoulThreshold?: number;
   loopThreshold?: number;
@@ -117,8 +123,19 @@ export interface AdvisorSettings {
   untrackedContent?: boolean;
 }
 
+/** @deprecated Split into JevFilterSelection and JevProviderSelection, which save separately. */
 export interface JevSetupSelection {
   enabled: boolean;
+  transport: JevTransport;
+}
+
+export interface JevFilterSelection {
+  enabled: boolean;
+}
+
+export interface JevProviderSelection {
+  baseUrl?: string;
+  keyProvider?: string;
   transport: JevTransport;
 }
 
@@ -130,6 +147,9 @@ export interface JevSetupResult {
 export interface JevSetupDeps {
   clearStoredKey?: (transport: JevTransportKind) => Promise<JevKeyStoreResult>;
   removePlaintextKey?: () => JevKeyStoreResult;
+  resolveEndpoint?: (
+    target: JevEndpointTarget
+  ) => Promise<JevCredentials | undefined>;
   resolveTransport?: (
     transport?: JevTransportKind
   ) => Promise<JevCredentials | undefined>;
@@ -151,6 +171,15 @@ export interface AdvisorSettingsSelectorOptions {
   onSave?: (settings: AdvisorSettings) => void;
   presets: ContextPreset[];
   jevSetupDeps?: JevSetupDeps;
+  onJevFilter?: (
+    selection: JevFilterSelection,
+    settings: AdvisorSettings
+  ) => boolean;
+  onJevProvider?: (
+    selection: JevProviderSelection,
+    settings: AdvisorSettings
+  ) => boolean;
+  /** @deprecated Use onJevFilter and onJevProvider; each is saved independently. */
   onJevSetup?: (
     selection: JevSetupSelection,
     settings: AdvisorSettings

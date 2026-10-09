@@ -1,10 +1,16 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { setAdvisorJevTransportRef } from "../src/config/state.ts";
+import {
+  setAdvisorJevBaseUrlRef,
+  setAdvisorJevKeyProviderRef,
+  setAdvisorJevTransportRef,
+} from "../src/config/state.ts";
 import { resolveJevTransport } from "../src/jev/transport.ts";
 
 afterEach(() => {
   setAdvisorJevTransportRef("auto");
+  setAdvisorJevBaseUrlRef(undefined);
+  setAdvisorJevKeyProviderRef(undefined);
 });
 
 const noKey = () => Promise.resolve({});
@@ -14,6 +20,107 @@ const typesafeKey = () =>
 const providerKeys =
   (keys: Record<string, string>) => async (provider: string) =>
     keys[provider];
+
+const endpointDeps = (key: string | undefined) => ({
+  resolveEndpointKey: () =>
+    Promise.resolve(key ? { key, source: "jev-env" as const } : {}),
+});
+
+describe("typesafe-compatible endpoint", () => {
+  test("resolves the dedicated endpoint key against the normalized Base URL", async () => {
+    setAdvisorJevTransportRef("typesafe-compatible");
+    setAdvisorJevBaseUrlRef("https://gw.corp/llm/jev/v1");
+    const credentials = await resolveJevTransport(
+      undefined,
+      endpointDeps("jv_live_key")
+    );
+    expect(credentials).toEqual({
+      apiKey: "jv_live_key",
+      baseUrl: "https://gw.corp/llm/jev",
+      source: "jev-env",
+      transport: "typesafe-compatible",
+    });
+  });
+
+  test("prefers a named Pi provider login over the dedicated key store", async () => {
+    setAdvisorJevTransportRef("typesafe-compatible");
+    setAdvisorJevBaseUrlRef("https://api.codiv.ai");
+    setAdvisorJevKeyProviderRef("vercel");
+    const lookups: string[] = [];
+    const credentials = await resolveJevTransport(undefined, {
+      getProviderKey: async (provider) => {
+        lookups.push(provider);
+        return "pi-stored-key";
+      },
+      resolveEndpointKey: async () => {
+        lookups.push("endpoint-store");
+        return { key: "jv_live_key", source: "jev-env" };
+      },
+    });
+    expect(credentials).toEqual({
+      apiKey: "pi-stored-key",
+      baseUrl: "https://api.codiv.ai",
+      source: "provider-credential",
+      transport: "typesafe-compatible",
+    });
+    expect(lookups).toEqual(["vercel"]);
+  });
+
+  test("a declared Pi provider login never falls back to the stored endpoint key", async () => {
+    setAdvisorJevTransportRef("typesafe-compatible");
+    setAdvisorJevBaseUrlRef("https://api.codiv.ai");
+    setAdvisorJevKeyProviderRef("vercel");
+    const credentials = await resolveJevTransport(undefined, {
+      getProviderKey: async () => undefined,
+      resolveEndpointKey: async () => ({
+        key: "stale-key",
+        source: "jev-env",
+      }),
+    });
+    expect(credentials).toBeUndefined();
+  });
+
+  test("resolves nothing without a configured Base URL", async () => {
+    setAdvisorJevTransportRef("typesafe-compatible");
+    setAdvisorJevBaseUrlRef(undefined);
+    const credentials = await resolveJevTransport(
+      undefined,
+      endpointDeps("jv_live_key")
+    );
+    expect(credentials).toBeUndefined();
+  });
+
+  test("resolves nothing when the configured Base URL is unusable", async () => {
+    setAdvisorJevTransportRef("typesafe-compatible");
+    setAdvisorJevBaseUrlRef("http://jev.example.com");
+    const credentials = await resolveJevTransport(
+      undefined,
+      endpointDeps("jv_live_key")
+    );
+    expect(credentials).toBeUndefined();
+  });
+
+  test("resolves nothing when no endpoint key is available", async () => {
+    setAdvisorJevTransportRef("typesafe-compatible");
+    setAdvisorJevBaseUrlRef("https://api.codiv.ai");
+    const credentials = await resolveJevTransport(
+      undefined,
+      endpointDeps(undefined)
+    );
+    expect(credentials).toBeUndefined();
+  });
+
+  test("auto never selects the endpoint even when it is fully configured", async () => {
+    setAdvisorJevTransportRef("auto");
+    setAdvisorJevBaseUrlRef("https://api.codiv.ai");
+    const credentials = await resolveJevTransport(undefined, {
+      getProviderKey: async () => undefined,
+      resolveEndpointKey: () => Promise.reject(new Error("must not be read")),
+      resolveTypesafe: noKey,
+    });
+    expect(credentials).toBeUndefined();
+  });
+});
 
 describe("resolveJevTransport", () => {
   test("auto prefers a dedicated TypeSafe key over the OpenRouter login", async () => {

@@ -1,3 +1,5 @@
+import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+
 import {
   alwaysOnRef,
   getAdvisorSettings,
@@ -8,8 +10,10 @@ import { saveConfig } from "../config/storage.ts";
 import {
   resolveJevTransport,
   resolveJevTransportFor,
+  resolveTypesafeCompatibleCredentials,
 } from "../jev/transport.ts";
 import { AdvisorSettingsSelector } from "../ui/settings-selector.ts";
+import type { AdvisorSettings } from "../ui/types.ts";
 import { loadCommandConfig } from "./activation-preparation.ts";
 import {
   CONTEXT_PRESETS,
@@ -19,6 +23,31 @@ import {
 import { notify } from "./runtime.ts";
 import { saveAdvisorSettings } from "./settings-persistence.ts";
 import type { CommandRuntime } from "./types.ts";
+
+const persistJevSettings = (
+  ctx: ExtensionContext,
+  settings: AdvisorSettings,
+  runtime: CommandRuntime
+): boolean => {
+  try {
+    saveAdvisorSettings(ctx, settings, { skipOutcomeLogging: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    ctx.ui.notify(`Could not save Advisor settings: ${message}`, "error");
+    return false;
+  }
+  try {
+    runtime.updateSameModelNotice(ctx);
+    runtime.updateAdvisorUsageStatus(ctx);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    ctx.ui.notify(
+      `Advisor settings were saved, but the status refresh failed: ${message}`,
+      "warning"
+    );
+  }
+  return true;
+};
 
 export const registerSettingsCommands = (runtime: CommandRuntime) => {
   runtime.pi.registerCommand("advisor-settings", {
@@ -35,6 +64,8 @@ export const registerSettingsCommands = (runtime: CommandRuntime) => {
             effortLevels: EFFORT_LEVELS,
             initial,
             jevSetupDeps: {
+              resolveEndpoint: (options) =>
+                resolveTypesafeCompatibleCredentials(options, ctx),
               resolveTransport: (transport) =>
                 transport
                   ? resolveJevTransportFor(transport, ctx)
@@ -57,39 +88,10 @@ export const registerSettingsCommands = (runtime: CommandRuntime) => {
                 );
               }
             },
-            onJevSetup: (selection, settings) => {
-              try {
-                saveAdvisorSettings(
-                  ctx,
-                  {
-                    ...settings,
-                    jevFilterEnabled: selection.enabled,
-                    jevTransport: selection.transport,
-                  },
-                  { skipOutcomeLogging: true }
-                );
-              } catch (error) {
-                const message =
-                  error instanceof Error ? error.message : String(error);
-                ctx.ui.notify(
-                  `Could not save Advisor settings: ${message}`,
-                  "error"
-                );
-                return false;
-              }
-              try {
-                runtime.updateSameModelNotice(ctx);
-                runtime.updateAdvisorUsageStatus(ctx);
-              } catch (error) {
-                const message =
-                  error instanceof Error ? error.message : String(error);
-                ctx.ui.notify(
-                  `Advisor settings were saved, but the status refresh failed: ${message}`,
-                  "warning"
-                );
-              }
-              return true;
-            },
+            onJevFilter: (_selection, settings) =>
+              persistJevSettings(ctx, settings, runtime),
+            onJevProvider: (_selection, settings) =>
+              persistJevSettings(ctx, settings, runtime),
             presets: CONTEXT_PRESETS,
             theme,
             tui,

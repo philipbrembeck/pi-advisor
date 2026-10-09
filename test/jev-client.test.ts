@@ -94,6 +94,66 @@ describe("JevClient.ask", () => {
     expect(JSON.parse(String(captured?.init?.body)).model).toBe("jev-test");
   });
 
+  test("posts a custom endpoint to its Base URL with the unmodified model", async () => {
+    let capturedUrl = "";
+    let capturedBody = "";
+    const endpointFetch: Fetch = async (url, init) => {
+      capturedUrl = String(url);
+      capturedBody = String(init?.body);
+      return jsonResponse(validBody);
+    };
+    const endpointClient = new JevClient({
+      apiKey: API_KEY,
+      baseUrl: "https://gw.corp/llm/jev",
+      fetch: endpointFetch,
+      model: "jev-latest",
+      timeoutMs: 5000,
+      transport: "typesafe-compatible",
+    });
+    const result = await endpointClient.ask(state, {
+      proceed: noul("Proceed?"),
+    });
+    expect(capturedUrl).toBe("https://gw.corp/llm/jev/v1/systemone");
+    expect(JSON.parse(capturedBody)).toEqual({
+      model: "jev-latest",
+      questions: { proceed: expect.anything() },
+      state,
+    });
+    expect(result.usage).toEqual({
+      cost: 0.00021,
+      inputTokens: 5000,
+      outputTokens: 0,
+    });
+  });
+
+  test("names the endpoint provider when a request fails", async () => {
+    const failure = await expectJevFailure(
+      new JevClient({
+        apiKey: API_KEY,
+        baseUrl: "https://api.codiv.ai",
+        fetch: async () => jsonResponse({ error: "nope" }, 500),
+        model: "jev-latest",
+        timeoutMs: 5000,
+        transport: "typesafe-compatible",
+      }).ask(state, { proceed: noul("Proceed?") })
+    );
+    expect(failure.message).toContain("endpoint");
+    expect(failure.message).not.toContain("TypeSafe");
+  });
+
+  test("refuses to call a custom endpoint that has no Base URL", () => {
+    expect(
+      () =>
+        new JevClient({
+          apiKey: API_KEY,
+          fetch: async () => jsonResponse(validBody),
+          model: "jev-latest",
+          timeoutMs: 5000,
+          transport: "typesafe-compatible",
+        })
+    ).toThrow(JevFailure);
+  });
+
   test("prefixes OpenRouter models without a namespace", async () => {
     let capturedBody = "";
     const openRouterFetch: Fetch = async (_url, init) => {

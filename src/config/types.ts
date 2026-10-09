@@ -36,13 +36,15 @@ export type JevTransport =
   | "auto"
   | "typesafe"
   | "openrouter"
-  | "openai-decisions";
+  | "openai-decisions"
+  | "typesafe-compatible";
 export const DEFAULT_JEV_TRANSPORT: JevTransport = "auto";
 export const JEV_TRANSPORTS: JevTransport[] = [
   "auto",
   "typesafe",
   "openrouter",
   "openai-decisions",
+  "typesafe-compatible",
 ];
 
 export type AdvisorToolPolicy = "full" | "summary" | "exclude";
@@ -78,11 +80,13 @@ export interface AdvisorConfig {
   advisorGitContext?: GitContextLevel;
   advisorGitContextMaxChars?: number;
   advisorHerdrIntegration?: boolean;
+  advisorJevBaseUrl?: string;
   advisorJevDigestMaxChars?: number;
   advisorJevFilterEnabled?: boolean;
   advisorJevFilterNoulMargin?: number;
   advisorJevFilterOverrideWindow?: number;
   advisorJevFilterSkipConfidence?: number;
+  advisorJevKeyProvider?: string;
   advisorJevModel?: string;
   advisorJevPricePerMtok?: number;
   advisorJevTimeoutMs?: number;

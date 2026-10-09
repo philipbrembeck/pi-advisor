@@ -315,7 +315,7 @@ describe("Advisor argument persistence", () => {
 describe("Config schema consistency", () => {
   test("every AdvisorConfig key has exactly one schema entry", () => {
     // Compile-time coverage (satisfies Record<keyof AdvisorConfig, ...>)
-    // guarantees no missing or extra keys; this pins the exact 47-key set.
+    // guarantees no missing or extra keys; this pins the exact 49-key set.
     const schemaKeys = Object.keys(CONFIG_SCHEMA).toSorted();
     expect(schemaKeys).toEqual([
       "advisor",
@@ -332,11 +332,13 @@ describe("Config schema consistency", () => {
       "advisorGitContext",
       "advisorGitContextMaxChars",
       "advisorHerdrIntegration",
+      "advisorJevBaseUrl",
       "advisorJevDigestMaxChars",
       "advisorJevFilterEnabled",
       "advisorJevFilterNoulMargin",
       "advisorJevFilterOverrideWindow",
       "advisorJevFilterSkipConfidence",
+      "advisorJevKeyProvider",
       "advisorJevModel",
       "advisorJevPricePerMtok",
       "advisorJevTimeoutMs",
@@ -385,11 +387,13 @@ describe("Config schema consistency", () => {
       "advisorGitContext",
       "advisorGitContextMaxChars",
       "advisorHerdrIntegration",
+      "advisorJevBaseUrl",
       "advisorJevDigestMaxChars",
       "advisorJevFilterEnabled",
       "advisorJevFilterNoulMargin",
       "advisorJevFilterOverrideWindow",
       "advisorJevFilterSkipConfidence",
+      "advisorJevKeyProvider",
       "advisorJevModel",
       "advisorJevPricePerMtok",
       "advisorJevTimeoutMs",
@@ -418,7 +422,7 @@ describe("Config schema consistency", () => {
       "showUsageFooter",
       "simpleMode",
     ]);
-    expect(SAVED_CONFIG_KEYS).toHaveLength(46);
+    expect(SAVED_CONFIG_KEYS).toHaveLength(48);
     expect(CONFIG_SCHEMA.advisorOutcomeLogging.persisted).toBe(false);
   });
 });

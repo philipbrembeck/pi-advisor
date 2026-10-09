@@ -8,6 +8,7 @@ import {
 import { isNumber, isRecord, isRecordOf, isString } from "../content-utils.ts";
 import type { JsonValue, RecordValue } from "../content-utils.ts";
 import { redactSecrets } from "../redaction.ts";
+import { jevSystemOneEndpoint } from "./base-url.ts";
 import {
   buildDecisionsRequest,
   OPENAI_DECISIONS_ENDPOINT,
@@ -39,6 +40,7 @@ export interface JevAskResult {
 
 export interface JevClientOptions {
   apiKey: string;
+  baseUrl?: string;
   fetch?: Fetch;
   model: string;
   pricePerMtok?: number;
@@ -46,7 +48,10 @@ export interface JevClientOptions {
   transport: JevTransportKind;
 }
 
-const ENDPOINTS: Record<JevTransportKind, string> = {
+const FIXED_ENDPOINTS: Record<
+  Exclude<JevTransportKind, "typesafe-compatible">,
+  string
+> = {
   "openai-decisions": OPENAI_DECISIONS_ENDPOINT,
   openrouter: "https://openrouter.ai/api/alpha/decisions",
   typesafe: "https://api.typesafe.ai/v1/systemone",
@@ -159,6 +164,7 @@ export class JevClient {
 
   constructor({
     apiKey,
+    baseUrl,
     fetch,
     model,
     pricePerMtok,
@@ -166,7 +172,17 @@ export class JevClient {
     transport,
   }: JevClientOptions) {
     this.#apiKey = apiKey;
-    this.#endpoint = ENDPOINTS[transport];
+    if (transport === "typesafe-compatible") {
+      if (!baseUrl) {
+        throw new JevFailureError(
+          "malformed",
+          "The System One–compatible endpoint has no Base URL."
+        );
+      }
+      this.#endpoint = jevSystemOneEndpoint(baseUrl);
+    } else {
+      this.#endpoint = FIXED_ENDPOINTS[transport];
+    }
     // SAFETY: the bound global fetch satisfies the SDK Fetch signature; binding keeps the receiver correct.
     this.#fetch = fetch ?? (globalThis.fetch.bind(globalThis) as Fetch);
     if (transport === "openai-decisions") {
@@ -324,9 +340,10 @@ export class JevClient {
     if (this.#transport === "openrouter") {
       return "OpenRouter";
     }
-    return this.#transport === "openai-decisions"
-      ? "OpenAI Decisions"
-      : "TypeSafe";
+    if (this.#transport === "openai-decisions") {
+      return "OpenAI Decisions";
+    }
+    return this.#transport === "typesafe" ? "TypeSafe" : "endpoint";
   }
 
   async #parseSuccess(
@@ -405,6 +422,7 @@ export const jevClientFromCredentials = (
 ): JevClient =>
   new JevClient({
     apiKey: credentials.apiKey,
+    baseUrl: credentials.baseUrl,
     fetch,
     model: advisorJevModelRef,
     timeoutMs: advisorJevTimeoutMsRef,

@@ -15,7 +15,9 @@ import {
   DEFAULT_SCOUT_TIMEOUT_MS,
 } from "../config/types.ts";
 import { isValidAdvisorToolPolicies } from "../config/validation.ts";
-import { JevSetupSubmenu } from "./jev-setup-submenu.ts";
+import { JevFilterSubmenu } from "./jev-filter-submenu.ts";
+import { JevProviderSubmenu } from "./jev-provider-submenu.ts";
+import { providerName } from "./jev-setup-support.ts";
 import { SearchableModelMultiSelector } from "./model-multi-selector.ts";
 import { SearchableModelSelector } from "./model-selector.ts";
 import {
@@ -33,8 +35,9 @@ import { FALLBACK_ADVISOR_MODEL_DISABLED } from "./types.ts";
 import type {
   AdvisorSettings,
   ContextPreset,
+  JevFilterSelection,
+  JevProviderSelection,
   JevSetupDeps,
-  JevSetupSelection,
   RenderRequester,
 } from "./types.ts";
 
@@ -46,7 +49,8 @@ export interface SettingsItemsOptions {
   settings: AdvisorSettings;
   afterJevSetup?: () => void;
   jevSetupDeps?: JevSetupDeps;
-  onJevSetup?: (selection: JevSetupSelection) => boolean;
+  onJevFilter?: (selection: JevFilterSelection) => boolean;
+  onJevProvider?: (selection: JevProviderSelection) => boolean;
   theme: Theme;
   tui: RenderRequester;
 }
@@ -80,27 +84,61 @@ const scoutTimeoutItem = (settings: AdvisorSettings): SettingItem => {
   };
 };
 
+const jevProviderLabel = (settings: AdvisorSettings): string => {
+  const transport = settings.jevTransport ?? DEFAULT_JEV_TRANSPORT;
+  if (transport === "auto") {
+    return "Auto (TypeSafe → OpenRouter)";
+  }
+  if (transport === "typesafe-compatible") {
+    const baseUrl = settings.jevBaseUrl ?? "no Base URL";
+    return settings.jevKeyProvider
+      ? `System One–compatible (${baseUrl}; Pi login "${settings.jevKeyProvider}")`
+      : `System One–compatible (${baseUrl})`;
+  }
+  return providerName(transport);
+};
+
 const jevItems = (
   settings: AdvisorSettings,
   theme: Theme,
   tui: RenderRequester,
   jevSetupDeps?: JevSetupDeps,
-  onJevSetup?: (selection: JevSetupSelection) => boolean,
+  onJevFilter?: (selection: JevFilterSelection) => boolean,
+  onJevProvider?: (selection: JevProviderSelection) => boolean,
   afterJevSetup?: () => void
 ): SettingItem[] => [
   {
-    currentValue: settingValue(settings.jevFilterEnabled, false),
+    currentValue: jevProviderLabel(settings),
     description:
-      "Screen low-stakes ask_advisor consultations with Jev/Decisions; guided setup verifies credentials.",
-    id: "jevFilter",
-    label: "Jev/Decisions consultation filter",
+      "Provider used for screening and the turn gate. Credentials are live-verified before a provider is saved.",
+    id: "jevProvider",
+    label: "Jev provider",
     submenu: (currentValue, done) =>
-      new JevSetupSubmenu({
+      new JevProviderSubmenu({
         afterSelection: afterJevSetup,
+        currentBaseUrl: settings.jevBaseUrl,
+        currentKeyProvider: settings.jevKeyProvider,
         currentTransport: settings.jevTransport ?? DEFAULT_JEV_TRANSPORT,
         currentValue,
         done,
-        onSelection: onJevSetup,
+        onSelection: onJevProvider,
+        setupDeps: jevSetupDeps,
+        theme,
+        tui,
+      }),
+  },
+  {
+    currentValue: settingValue(settings.jevFilterEnabled, false),
+    description:
+      "Screen low-stakes ask_advisor consultations with the selected Jev provider.",
+    id: "jevFilter",
+    label: "Jev/Decisions consultation filter",
+    submenu: (currentValue, done) =>
+      new JevFilterSubmenu({
+        currentTransport: settings.jevTransport ?? DEFAULT_JEV_TRANSPORT,
+        currentValue,
+        done,
+        onSelection: onJevFilter,
         setupDeps: jevSetupDeps,
         theme,
         tui,
@@ -297,7 +335,8 @@ export const createSettingsItems = ({
   settings,
   afterJevSetup,
   jevSetupDeps,
-  onJevSetup,
+  onJevFilter,
+  onJevProvider,
   theme,
   tui,
 }: SettingsItemsOptions): SettingItem[] => {
@@ -599,7 +638,15 @@ export const createSettingsItems = ({
       settings.outcomeLogging,
       false
     ),
-    ...jevItems(settings, theme, tui, jevSetupDeps, onJevSetup, afterJevSetup)
+    ...jevItems(
+      settings,
+      theme,
+      tui,
+      jevSetupDeps,
+      onJevFilter,
+      onJevProvider,
+      afterJevSetup
+    )
   );
   return items;
 };

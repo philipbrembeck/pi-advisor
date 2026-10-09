@@ -21,9 +21,6 @@ const CONFIG_KEYS = new Set<string>(configKeys);
 const keysOfType = (type: ConfigKeySchema["type"]): readonly ConfigKey[] =>
   configKeys.filter((key) => SCHEMA_BY_KEY[key].type === type);
 
-const BOOLEAN_CONFIG_KEYS = keysOfType("boolean");
-const STRING_CONFIG_KEYS = keysOfType("string");
-
 type ConfigRecord = Record<string, JsonValue>;
 
 const invalidConfigValue = (
@@ -39,70 +36,26 @@ const invalidConfigValue = (
 export const unknownConfigKeys = (config: AdvisorConfig) =>
   Object.keys(config).filter((key) => !CONFIG_KEYS.has(key));
 
-const validateStringValues = (config: ConfigRecord, path: string) => {
-  for (const key of STRING_CONFIG_KEYS) {
-    if (config[key] !== undefined && !isString(config[key])) {
-      invalidConfigValue(path, key, SCHEMA_BY_KEY[key].accepted);
+const validateValues = (
+  config: ConfigRecord,
+  path: string,
+  type: ConfigKeySchema["type"]
+) => {
+  for (const key of keysOfType(type)) {
+    const value = config[key];
+    if (value === undefined) {
+      continue;
     }
-  }
-};
-
-const validateBooleanValues = (config: ConfigRecord, path: string) => {
-  for (const key of BOOLEAN_CONFIG_KEYS) {
-    if (config[key] !== undefined && !isBoolean(config[key])) {
-      invalidConfigValue(path, key, SCHEMA_BY_KEY[key].accepted);
+    const schema = SCHEMA_BY_KEY[key];
+    if (type === "string" || type === "boolean") {
+      const matchesType =
+        type === "string" ? isString(value) : isBoolean(value);
+      if (!matchesType) {
+        invalidConfigValue(path, key, schema.accepted);
+      }
     }
-  }
-};
-
-const validateNumericValues = (config: ConfigRecord, path: string) => {
-  for (const key of keysOfType("number")) {
-    const isValid = SCHEMA_BY_KEY[key].validate;
-    if (
-      config[key] !== undefined &&
-      isValid !== undefined &&
-      !isValid(config[key])
-    ) {
-      invalidConfigValue(path, key, SCHEMA_BY_KEY[key].accepted);
-    }
-  }
-};
-
-const validateArrayValues = (config: ConfigRecord, path: string) => {
-  for (const key of keysOfType("array")) {
-    const isValid = SCHEMA_BY_KEY[key].validate;
-    if (
-      config[key] !== undefined &&
-      isValid !== undefined &&
-      !isValid(config[key])
-    ) {
-      invalidConfigValue(path, key, SCHEMA_BY_KEY[key].accepted);
-    }
-  }
-};
-
-const validateEnumValues = (config: ConfigRecord, path: string) => {
-  for (const key of keysOfType("enum")) {
-    const isValid = SCHEMA_BY_KEY[key].validate;
-    if (
-      config[key] !== undefined &&
-      isValid !== undefined &&
-      !isValid(config[key])
-    ) {
-      invalidConfigValue(path, key, SCHEMA_BY_KEY[key].accepted);
-    }
-  }
-};
-
-const validateObjectValues = (config: ConfigRecord, path: string) => {
-  for (const key of keysOfType("object")) {
-    const isValid = SCHEMA_BY_KEY[key].validate;
-    if (
-      config[key] !== undefined &&
-      isValid !== undefined &&
-      !isValid(config[key])
-    ) {
-      invalidConfigValue(path, key, SCHEMA_BY_KEY[key].accepted);
+    if (schema.validate && !schema.validate(value)) {
+      invalidConfigValue(path, key, schema.accepted);
     }
   }
 };
@@ -116,11 +69,11 @@ export const validateConfig = (
       `Invalid advisor configuration at ${path}: expected a JSON object.`
     );
   }
-  validateStringValues(value, path);
-  validateBooleanValues(value, path);
-  validateNumericValues(value, path);
-  validateObjectValues(value, path);
-  validateArrayValues(value, path);
-  validateEnumValues(value, path);
+  validateValues(value, path, "string");
+  validateValues(value, path, "boolean");
+  validateValues(value, path, "number");
+  validateValues(value, path, "object");
+  validateValues(value, path, "array");
+  validateValues(value, path, "enum");
   return true;
 };

@@ -2,6 +2,7 @@ import { getSettingsListTheme } from "@earendil-works/pi-coding-agent";
 import { SettingsList, truncateToWidth } from "@earendil-works/pi-tui";
 import type { Component, Focusable } from "@earendil-works/pi-tui";
 
+import { DEFAULT_JEV_TRANSPORT } from "../config/types.ts";
 import {
   rainbowGradient,
   SIMPLE_MODE_GRADIENT_INTERVAL_MS,
@@ -17,7 +18,8 @@ import type {
   AdvisorSettings,
   AdvisorSettingsSelectorOptions,
   ContextPreset,
-  JevSetupSelection,
+  JevFilterSelection,
+  JevProviderSelection,
 } from "./types.ts";
 
 export class AdvisorSettingsSelector implements Component, Focusable {
@@ -121,7 +123,8 @@ export class AdvisorSettingsSelector implements Component, Focusable {
       fallbackModel,
       jevSetupDeps: this.options.jevSetupDeps,
       modelWhitelist,
-      onJevSetup: (selection) => this.applyJevSetup(selection),
+      onJevFilter: (selection) => this.applyJevFilter(selection),
+      onJevProvider: (selection) => this.applyJevProvider(selection),
       presets: this.presets,
       settings: this.settings,
       theme: this.options.theme,
@@ -142,17 +145,19 @@ export class AdvisorSettingsSelector implements Component, Focusable {
     return adapter;
   }
 
-  private applyJevSetup(selection: JevSetupSelection): boolean {
+  private applyJevSelection(
+    patch: Partial<AdvisorSettings>,
+    handler?: (settings: AdvisorSettings) => boolean
+  ): boolean {
     const updated: AdvisorSettings = {
       ...this.settings,
-      jevFilterEnabled: selection.enabled,
-      jevTransport: selection.transport,
+      ...patch,
       showUsageDetails: this.settings.showUsageDetails ?? true,
       toolPolicies: { ...this.settings.toolPolicies },
     };
     try {
-      const result = this.options.onJevSetup
-        ? this.options.onJevSetup(selection, updated)
+      const result = handler
+        ? handler(updated)
         : (this.options.onChange ?? this.options.onSave)?.(updated);
       if (result === false) {
         return false;
@@ -162,6 +167,59 @@ export class AdvisorSettingsSelector implements Component, Focusable {
     }
     Object.assign(this.settings, updated);
     return true;
+  }
+
+  private applyJevFilter(selection: JevFilterSelection): boolean {
+    const patch = { jevFilterEnabled: selection.enabled };
+    const handler = this.options.onJevFilter;
+    if (handler) {
+      return this.applyJevSelection(patch, (settings) =>
+        handler(selection, settings)
+      );
+    }
+    const legacy = this.options.onJevSetup;
+    if (legacy) {
+      return this.applyJevSelection(patch, (settings) =>
+        legacy(
+          {
+            enabled: selection.enabled,
+            transport: settings.jevTransport ?? DEFAULT_JEV_TRANSPORT,
+          },
+          settings
+        )
+      );
+    }
+    return this.applyJevSelection(patch);
+  }
+
+  private applyJevProvider(selection: JevProviderSelection): boolean {
+    const custom = selection.transport === "typesafe-compatible";
+    const patch = {
+      jevBaseUrl: custom ? selection.baseUrl : this.settings.jevBaseUrl,
+      jevKeyProvider: custom
+        ? selection.keyProvider
+        : this.settings.jevKeyProvider,
+      jevTransport: selection.transport,
+    };
+    const handler = this.options.onJevProvider;
+    if (handler) {
+      return this.applyJevSelection(patch, (settings) =>
+        handler(selection, settings)
+      );
+    }
+    const legacy = this.options.onJevSetup;
+    if (legacy) {
+      return this.applyJevSelection(patch, (settings) =>
+        legacy(
+          {
+            enabled: settings.jevFilterEnabled ?? false,
+            transport: selection.transport,
+          },
+          settings
+        )
+      );
+    }
+    return this.applyJevSelection(patch);
   }
 
   private startSimpleModeGradient(): void {

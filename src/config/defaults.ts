@@ -13,10 +13,12 @@ import {
   setAdvisorGitContextRef,
   setAdvisorHerdrIntegrationRef,
   setAdvisorJevDigestMaxCharsRef,
+  setAdvisorJevBaseUrlRef,
   setAdvisorJevFilterEnabledRef,
   setAdvisorJevFilterNoulMarginRef,
   setAdvisorJevFilterOverrideWindowRef,
   setAdvisorJevFilterSkipConfidenceRef,
+  setAdvisorJevKeyProviderRef,
   setAdvisorJevModelRef,
   setAdvisorJevPricePerMtokRef,
   setAdvisorJevTimeoutMsRef,
@@ -93,6 +95,8 @@ export const resetDefaults = () => {
   setAdvisorFailureModeRef("block-session");
   setAdvisorHerdrIntegrationRef(true);
   setAdvisorJevModelRef(DEFAULT_JEV_MODEL);
+  setAdvisorJevBaseUrlRef(undefined);
+  setAdvisorJevKeyProviderRef(undefined);
   setAdvisorJevFilterEnabledRef(false);
   setAdvisorJevFilterSkipConfidenceRef(DEFAULT_JEV_FILTER_SKIP_CONFIDENCE);
   setAdvisorJevFilterNoulMarginRef(DEFAULT_JEV_FILTER_NOUL_MARGIN);
@@ -238,6 +242,12 @@ export const applyConfig = (config: AdvisorConfig) => {
     setAdvisorJevFilterOverrideWindowRef
   );
   applyNonEmptyStringConfig(config.advisorJevModel, setAdvisorJevModelRef);
+  applyOptionalConfig(config, "advisorJevBaseUrl", setAdvisorJevBaseUrlRef);
+  applyOptionalConfig(
+    config,
+    "advisorJevKeyProvider",
+    setAdvisorJevKeyProviderRef
+  );
   applyOptionalConfig(config, "advisorJevTimeoutMs", setAdvisorJevTimeoutMsRef);
   applyOptionalConfig(
     config,

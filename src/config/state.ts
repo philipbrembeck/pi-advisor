@@ -58,6 +58,8 @@ export let advisorJevModelRef = DEFAULT_JEV_MODEL;
 export let advisorJevTimeoutMsRef = DEFAULT_JEV_TIMEOUT_MS;
 export let advisorJevDigestMaxCharsRef = DEFAULT_JEV_DIGEST_MAX_CHARS;
 export let advisorJevPricePerMtokRef = DEFAULT_JEV_PRICE_PER_MTOK;
+export let advisorJevBaseUrlRef: string | undefined;
+export let advisorJevKeyProviderRef: string | undefined;
 export let advisorJevTransportRef: JevTransport = DEFAULT_JEV_TRANSPORT;
 export let advisorJevTurnGateEveryTurnsRef = DEFAULT_JEV_TURN_GATE_EVERY_TURNS;
 export let advisorJevTurnGateNoulThresholdRef =
@@ -188,6 +190,12 @@ export const setAdvisorJevDigestMaxCharsRef = (value: number) => {
 export const setAdvisorJevPricePerMtokRef = (value: number) => {
   advisorJevPricePerMtokRef = value;
 };
+export const setAdvisorJevBaseUrlRef = (value: string | undefined) => {
+  advisorJevBaseUrlRef = value?.trim() || undefined;
+};
+export const setAdvisorJevKeyProviderRef = (value: string | undefined) => {
+  advisorJevKeyProviderRef = value?.trim() || undefined;
+};
 export const setAdvisorJevTransportRef = (value: JevTransport) => {
   advisorJevTransportRef = value;
 };
@@ -258,11 +266,13 @@ export const getAdvisorSettings = () => ({
   gitContext: advisorGitContextRef,
   gitContextMaxChars: advisorGitContextMaxCharsRef,
   herdrIntegration: advisorHerdrIntegrationRef,
+  jevBaseUrl: advisorJevBaseUrlRef,
   jevDigestMaxChars: advisorJevDigestMaxCharsRef,
   jevFilterEnabled: advisorJevFilterEnabledRef,
   jevFilterNoulMargin: advisorJevFilterNoulMarginRef,
   jevFilterOverrideWindow: advisorJevFilterOverrideWindowRef,
   jevFilterSkipConfidence: advisorJevFilterSkipConfidenceRef,
+  jevKeyProvider: advisorJevKeyProviderRef,
   jevModel: advisorJevModelRef,
   jevPricePerMtok: advisorJevPricePerMtokRef,
   jevTimeoutMs: advisorJevTimeoutMsRef,

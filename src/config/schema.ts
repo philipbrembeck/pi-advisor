@@ -1,6 +1,7 @@
 import { isString } from "../content-utils.ts";
 import type { JsonValue } from "../content-utils.ts";
 import { GIT_CONTEXT_LEVELS, isValidGitContextLevel } from "../git.ts";
+import { normalizeJevBaseUrl } from "../jev/base-url.ts";
 import {
   advisorAgentsMdContextRef,
   advisorAutoLoopGateRef,
@@ -16,11 +17,13 @@ import {
   advisorGitContextMaxCharsRef,
   advisorGitContextRef,
   advisorHerdrIntegrationRef,
+  advisorJevBaseUrlRef,
   advisorJevDigestMaxCharsRef,
   advisorJevFilterEnabledRef,
   advisorJevFilterNoulMarginRef,
   advisorJevFilterOverrideWindowRef,
   advisorJevFilterSkipConfidenceRef,
+  advisorJevKeyProviderRef,
   advisorJevModelRef,
   advisorJevPricePerMtokRef,
   advisorJevTimeoutMsRef,
@@ -150,6 +153,14 @@ const JEV_TRANSPORT_NAMES = new Set<string>(JEV_TRANSPORTS);
 export const isValidJevTransport = (value: unknown): value is JevTransport =>
   isString(value) && JEV_TRANSPORT_NAMES.has(value);
 
+/** An empty value clears the endpoint; anything else must be a usable Base URL. */
+export const isValidJevBaseUrl = (value: unknown): value is string =>
+  isString(value) &&
+  (value.trim() === "" || normalizeJevBaseUrl(value).baseUrl !== undefined);
+
+export const isValidJevKeyProvider = (value: unknown): value is string =>
+  isString(value) && (value.trim() === "" || !/\s/u.test(value.trim()));
+
 /** One declarative entry per AdvisorConfig key: JSON type, persistence, and
  * the live runtime value behind it. Validation and storage derive from this
  * table; adding a setting means adding exactly one entry here. */
@@ -162,7 +173,7 @@ export interface ConfigKeySchema {
   persisted: boolean;
   /** JSON value type used for the base type check. */
   type: "string" | "boolean" | "number" | "enum" | "object" | "array";
-  /** Type beyond the JSON type, for enum and object keys. */
+  /** Type beyond the JSON type; honoured for every schema type, not only enum and object. */
   validate?: (value: unknown) => value is JsonValue;
 }
 
@@ -253,6 +264,14 @@ export const CONFIG_SCHEMA = {
     persisted: true,
     type: "boolean",
   },
+  advisorJevBaseUrl: {
+    accepted:
+      "a System One–compatible Base URL over https, or over http on a loopback host",
+    current: () => advisorJevBaseUrlRef,
+    persisted: true,
+    type: "string",
+    validate: isValidJevBaseUrl,
+  },
   advisorJevDigestMaxChars: {
     accepted: "a non-negative safe integer",
     current: () => advisorJevDigestMaxCharsRef,
@@ -286,6 +305,13 @@ export const CONFIG_SCHEMA = {
     persisted: true,
     type: "number",
     validate: isValidJevSkipConfidence,
+  },
+  advisorJevKeyProvider: {
+    accepted: "a Pi provider id whose stored login supplies the endpoint key",
+    current: () => advisorJevKeyProviderRef,
+    persisted: true,
+    type: "string",
+    validate: isValidJevKeyProvider,
   },
   advisorJevModel: {
     accepted: "a non-empty string",

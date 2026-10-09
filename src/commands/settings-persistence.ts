@@ -18,10 +18,12 @@ import {
   setAdvisorGitContextRef,
   setAdvisorHerdrIntegrationRef,
   setAdvisorJevDigestMaxCharsRef,
+  setAdvisorJevBaseUrlRef,
   setAdvisorJevFilterEnabledRef,
   setAdvisorJevFilterNoulMarginRef,
   setAdvisorJevFilterOverrideWindowRef,
   setAdvisorJevFilterSkipConfidenceRef,
+  setAdvisorJevKeyProviderRef,
   setAdvisorJevModelRef,
   setAdvisorJevPricePerMtokRef,
   setAdvisorJevTimeoutMsRef,
@@ -96,6 +98,8 @@ const applySessionSettings = (settings: AdvisorSettings) => {
 
 const applyJevSettings = (settings: AdvisorSettings) => {
   setAdvisorJevFilterEnabledRef(settings.jevFilterEnabled ?? false);
+  setAdvisorJevBaseUrlRef(settings.jevBaseUrl);
+  setAdvisorJevKeyProviderRef(settings.jevKeyProvider);
   setAdvisorJevFilterSkipConfidenceRef(
     settings.jevFilterSkipConfidence ?? DEFAULT_JEV_FILTER_SKIP_CONFIDENCE
   );

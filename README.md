@@ -30,7 +30,7 @@ Keep implementation on a fast model and borrow frontier reasoning only when deci
 - **Optional persistent activation, Simple mode, session summaries, and Herdr integration.**
 - **Compact searchable `/advisor-settings`** that matches Pi's settings list and saves changes immediately.
 - **Experimental Advisor Scout** that uses the configured Executor model to curate conversation evidence before every Advisor call.
-- **Optional Jev/Decisions consultation filter and proactive turn gate**: typed screening can skip low-stakes, self-answerable consultations or proactively pull in the Advisor. Choose TypeSafe, an existing OpenRouter login, or OpenAI Decisions (`gpt-6-luna`; `advisorJevTransport: "openai-decisions"`) in guided setup. The default `auto` order remains TypeSafe → OpenRouter; OpenAI Decisions requires an OpenAI Platform API key, not ChatGPT subscription OAuth. Guided setup stores entered keys securely. Both features are off by default.
+- **Optional Jev/Decisions consultation filter and proactive turn gate**: typed screening can skip low-stakes, self-answerable consultations or proactively pull in the Advisor. The **Jev provider** row in `/advisor-settings` chooses TypeSafe, an existing OpenRouter login, OpenAI Decisions (`gpt-6-luna`; `advisorJevTransport: "openai-decisions"`), or any System One–compatible endpoint of your own (`advisorJevBaseUrl`) — a corporate gateway, a compatible third-party host, or a decision model on `localhost`. Every provider is live-verified before it is saved, and `auto` never picks the custom endpoint; OpenAI Decisions requires an OpenAI Platform API key, not ChatGPT subscription OAuth. Guided setup stores entered keys securely. Both features are off by default.
 
 ## How it works
 
@@ -124,7 +124,7 @@ Draft text is explicit disclosure: it does **not** inherit the policies of the t
 
 Advisor responses show provider-reported input, output, cache, and cost details when available. Successful `ask_advisor` calls also carry normalized usage into Pi's built-in `/cost` totals. Manual consultations and automatic gates keep their own session-local accounting instead, so nothing is double-counted. Missing or partial provider usage is shown as unavailable rather than fabricated as zero. `/advisor-settings` controls both the per-response details and the optional cumulative footer independently. Configure `advisorFallbackModel` or choose **Fallback Advisor model** in the model/settings pickers to retry one failed primary request; the final response is labelled with the model that answered, and both failures are shown together.
 
-Jev/Decisions token usage stays in local session summaries. TypeSafe/OpenRouter costs use the configurable estimate; OpenAI Decisions token counts are recorded with cost shown as unavailable until endpoint-specific billing is confirmed.
+Jev/Decisions token usage stays in local session summaries. TypeSafe/OpenRouter/System One–compatible costs use the configurable estimate; OpenAI Decisions token counts are recorded with cost shown as unavailable until endpoint-specific billing is confirmed.
 
 A follow-up reuses only the original post-redaction payload in memory. It expires after five minutes, is cleared by a new user turn or three subsequent non-Advisor tool results, and allows at most three chained follow-ups. Use a fresh consultation when it expires or when you need new repository context or attachments.
 
