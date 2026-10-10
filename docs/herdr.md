@@ -6,8 +6,8 @@ pi-advisor can report Advisor activity, blocked-state labels, and Advisor failur
 
 This document was verified against:
 
-- Herdr **0.8.0**, socket protocol **19**, schema version **1**, using the generated schema bundled with the `v0.8.0` source release.
-- Herdr **0.7.5**, socket protocol **17**, schema version **1**, using the schema bundled with the installed binary. The `pane.report_metadata` and `notification.show` request definitions used by pi-advisor are identical in 0.7.5 and 0.8.0.
+- Herdr **0.9.3**, socket protocol **22**, schema version **1**, using the schema exported by the installed binary. Representative activity, block, clear, and notification requests produced by pi-advisor validate against that schema.
+- Herdr **0.8.0**, socket protocol **19**, schema version **1**, and Herdr **0.7.5**, socket protocol **17**, schema version **1**, as older compatibility baselines.
 - Herdr's stable [Socket API](https://herdr.dev/docs/socket-api/), [CLI reference](https://herdr.dev/docs/cli-reference/), and [Agent automation](https://herdr.dev/docs/agent-automation/) documentation.
 
 The installed binary is the authority for a particular machine. Before changing request fields, inspect its schema:
@@ -39,7 +39,7 @@ Herdr's documented general socket-resolution order is an explicit CLI session, `
 
 ## Requests sent by pi-advisor
 
-The exact TypeScript request types and transport live in [`src/herdr.ts`](../src/herdr.ts).
+The exact TypeScript request types live in [`src/herdr-shared.ts`](../src/herdr-shared.ts); activity and notification behavior live in [`src/herdr.ts`](../src/herdr.ts).
 
 ### Advisor activity
 
@@ -105,7 +105,7 @@ Advisor failures can send:
 }
 ```
 
-Herdr 0.7.5 and 0.8.0 require a visible title after normalization. They permit `sound` values `none`, `done`, or `request`; notification delivery may still report `disabled`, `rate_limited`, `no_foreground_client`, or `busy`. pi-advisor caps titles at 80 characters and bodies at 240 characters, matching Herdr's documented normalization limits.
+Herdr 0.9.3 requires a visible title after normalization. It permits `sound` values `none`, `done`, or `request`; notification delivery may still report `disabled`, `rate_limited`, `no_foreground_client`, or `busy`. pi-advisor caps titles at 80 characters and bodies at 240 characters, matching Herdr's documented normalization limits. pi-advisor sends notifications best-effort and does not expose the delivery result to Advisor safety logic.
 
 ## Metadata ownership and ordering
 
@@ -117,14 +117,21 @@ Herdr 0.7.5 and 0.8.0 require a visible title after normalization. They permit `
 
 Keep activity and block reports on their existing distinct sources. Combining them would let one cleanup operation erase the other's label.
 
+## Available Herdr features not used here
+
+Herdr 0.9.3 also supports pane titles, displayed agent names, state-label keys for `idle`, `working`, `blocked`, `done`, and `unknown`, named sidebar tokens, token TTLs, and explicit title/display-name clearing. pi-advisor intentionally uses only the display-only `working: "seeking advice"` label and bounded `blocked` label. Titles and tokens add no needed signal today and could expose more consultation context than the privacy boundary allows.
+
+Herdr also supports semantic lifecycle and session reports through `pane.report_agent`, `pane.report_agent_session`, `resume_argv`, and `pane.release_agent`. Those remain owned by Herdr's `herdr:pi` integration; pi-advisor must not become a competing lifecycle authority.
+
 ## Failure behavior and privacy
 
 Herdr is best-effort in pi-advisor:
 
-- socket requests are destroyed after 500 ms;
-- the connection closes after the first response;
-- socket, emitter, and reporting errors are swallowed;
-- there are no retries; and
+- requests use a 500 ms first attempt and a 1500 ms retry window;
+- metadata reports are serialized per source and pending replacements are coalesced;
+- notifications are not retried after any payload write, avoiding duplicate toasts;
+- pending notifications are capped at 16 while Herdr is unavailable;
+- socket, emitter, and reporting errors are swallowed; and
 - Herdr transport failures never weaken or strengthen Advisor safety policy.
 
 Activity reports contain fixed labels only. Block labels and notification text pass through pi-advisor's local secret redaction before they leave the process. Session summaries and Advisor conversation context are never sent to Herdr.
@@ -153,4 +160,5 @@ Before changing the integration:
 - [Herdr stable CLI reference](https://herdr.dev/docs/cli-reference/)
 - [Herdr stable Agent automation guide](https://herdr.dev/docs/agent-automation/)
 - [Herdr repository](https://github.com/herdrdev/herdr)
-- [`src/herdr.ts`](../src/herdr.ts) — pi-advisor's request and transport implementation
+- [`src/herdr-shared.ts`](../src/herdr-shared.ts) — pi-advisor's request types, ordering, and transport implementation
+- [`src/herdr.ts`](../src/herdr.ts) — pi-advisor's activity and notification behavior

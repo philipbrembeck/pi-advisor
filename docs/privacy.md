@@ -97,6 +97,6 @@ The optional Session Advisor Summary defaults to off. When enabled, it is local 
 
 It distinguishes regular Markdown advice from gate decisions and records the trigger, model, usage and cost when available, failures, budget, and execution effect.
 
-[Herdr](https://github.com/ogulcancelik/herdr) integration is enabled by default. It reports Advisor activity and a bounded, redacted blocked-state summary through Herdr's metadata paths. Disable it with `advisorHerdrIntegration`. Previously reported state is still cleared when integration is disabled.
+[Herdr](https://github.com/herdrdev/herdr) integration is enabled by default. It reports Advisor activity and a bounded, redacted blocked-state summary through Herdr's metadata paths. Disable it with `advisorHerdrIntegration`. Previously reported state is still cleared when integration is disabled.
 
 See [Configuration](configuration.md) for all settings and defaults.

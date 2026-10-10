@@ -73,6 +73,142 @@ export const cleanNotification = (value: string, max: number) =>
     .trim()
     .slice(0, max);
 
+interface HerdrAttempt {
+  responded: boolean;
+  wrote: boolean;
+}
+
+interface QueuedReport {
+  endpoint: string;
+  request: HerdrRequest;
+}
+
+interface ReportQueue {
+  active: boolean;
+  reports: QueuedReport[];
+}
+
+const FIRST_ATTEMPT_TIMEOUT_MS = 500;
+const RETRY_ATTEMPT_TIMEOUT_MS = 1500;
+const MAX_PENDING_NOTIFICATIONS = 16;
+const reportQueues = new Map<string, ReportQueue>();
+
+const isMetadataRequest = (request: HerdrRequest) =>
+  request.method === "pane.report_metadata";
+
+const reportQueueKey = (request: HerdrRequest) =>
+  isMetadataRequest(request) ? request.params.source : NOTIFICATION_SOURCE;
+
+const sendRequestAttempt = (
+  endpoint: string,
+  request: HerdrRequest,
+  timeoutMs: number
+): Promise<HerdrAttempt> => {
+  const deferred = Promise.withResolvers<HerdrAttempt>();
+  let settled = false;
+  let wrote = false;
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  let socket: net.Socket | undefined;
+
+  const finish = (responded: boolean) => {
+    if (settled) {
+      return;
+    }
+    settled = true;
+    if (timeout) {
+      clearTimeout(timeout);
+    }
+    socket?.destroy();
+    deferred.resolve({ responded, wrote });
+  };
+
+  try {
+    socket = net.createConnection(endpoint);
+    socket.once("connect", () => {
+      wrote = true;
+      try {
+        socket?.write(`${JSON.stringify(request)}\n`);
+      } catch {
+        finish(false);
+      }
+    });
+    socket.once("data", () => finish(true));
+    socket.once("end", () => finish(false));
+    socket.once("error", () => finish(false));
+    socket.once("close", () => finish(false));
+    timeout = setTimeout(() => finish(false), timeoutMs);
+    timeout.unref?.();
+  } catch {
+    finish(false);
+  }
+  return deferred.promise;
+};
+
+const sendQueuedReport = async ({ endpoint, request }: QueuedReport) => {
+  const first = await sendRequestAttempt(
+    endpoint,
+    request,
+    FIRST_ATTEMPT_TIMEOUT_MS
+  );
+  if (first.responded) {
+    return;
+  }
+  if (!isMetadataRequest(request) && first.wrote) {
+    return;
+  }
+  await sendRequestAttempt(endpoint, request, RETRY_ATTEMPT_TIMEOUT_MS);
+};
+
+const drainReportQueue = async (key: string, queue: ReportQueue) => {
+  if (queue.active) {
+    return;
+  }
+  queue.active = true;
+  try {
+    while (queue.reports.length > 0) {
+      const report = queue.reports.shift();
+      if (report) {
+        try {
+          await sendQueuedReport(report);
+        } catch {
+          continue;
+        }
+      }
+    }
+  } finally {
+    queue.active = false;
+    if (queue.reports.length === 0) {
+      reportQueues.delete(key);
+    } else {
+      void drainReportQueue(key, queue);
+    }
+  }
+};
+
+const enqueueReport = (report: QueuedReport) => {
+  const key = reportQueueKey(report.request);
+  let queue = reportQueues.get(key);
+  if (!queue) {
+    queue = { active: false, reports: [] };
+    reportQueues.set(key, queue);
+  }
+  if (isMetadataRequest(report.request)) {
+    if (queue.active) {
+      queue.reports = [report];
+    } else {
+      queue.reports.push(report);
+    }
+  } else {
+    if (queue.reports.length >= MAX_PENDING_NOTIFICATIONS) {
+      return;
+    }
+    queue.reports.push(report);
+  }
+  if (!queue.active) {
+    void drainReportQueue(key, queue);
+  }
+};
+
 export const sendToHerdr: Report = (request) => {
   if (process.env.HERDR_ENV !== "1") {
     return;
@@ -84,13 +220,7 @@ export const sendToHerdr: Report = (request) => {
   }
   const endpoint =
     process.platform === "win32" ? `\\\\.\\pipe\\${socketPath}` : socketPath;
-  const socket = net.createConnection(endpoint);
-  const timeout = setTimeout(() => socket.destroy(), 500);
-  timeout.unref?.();
-  socket.once("connect", () => socket.write(`${JSON.stringify(request)}\n`));
-  socket.once("data", () => socket.destroy());
-  socket.once("error", () => socket.destroy());
-  socket.once("close", () => clearTimeout(timeout));
+  enqueueReport({ endpoint, request });
 };
 
 export const createHerdrNotificationRequest = (

@@ -1687,6 +1687,109 @@ var safeEmitBlocked = (active, label = "Advisor blocked") => {
 };
 var isControlCharacter = (character) => character <= "\x1F" || character === "";
 var cleanNotification = (value, max) => [...redactSecrets(value)].map((character) => isControlCharacter(character) ? " " : character).join("").replaceAll(/\s+/gu, " ").trim().slice(0, max);
+var FIRST_ATTEMPT_TIMEOUT_MS = 500;
+var RETRY_ATTEMPT_TIMEOUT_MS = 1500;
+var MAX_PENDING_NOTIFICATIONS = 16;
+var reportQueues = new Map;
+var isMetadataRequest = (request) => request.method === "pane.report_metadata";
+var reportQueueKey = (request) => isMetadataRequest(request) ? request.params.source : NOTIFICATION_SOURCE;
+var sendRequestAttempt = (endpoint, request, timeoutMs) => {
+  const deferred = Promise.withResolvers();
+  let settled = false;
+  let wrote = false;
+  let timeout;
+  let socket;
+  const finish = (responded) => {
+    if (settled) {
+      return;
+    }
+    settled = true;
+    if (timeout) {
+      clearTimeout(timeout);
+    }
+    socket?.destroy();
+    deferred.resolve({ responded, wrote });
+  };
+  try {
+    socket = net.createConnection(endpoint);
+    socket.once("connect", () => {
+      wrote = true;
+      try {
+        socket?.write(`${JSON.stringify(request)}
+`);
+      } catch {
+        finish(false);
+      }
+    });
+    socket.once("data", () => finish(true));
+    socket.once("end", () => finish(false));
+    socket.once("error", () => finish(false));
+    socket.once("close", () => finish(false));
+    timeout = setTimeout(() => finish(false), timeoutMs);
+    timeout.unref?.();
+  } catch {
+    finish(false);
+  }
+  return deferred.promise;
+};
+var sendQueuedReport = async ({ endpoint, request }) => {
+  const first = await sendRequestAttempt(endpoint, request, FIRST_ATTEMPT_TIMEOUT_MS);
+  if (first.responded) {
+    return;
+  }
+  if (!isMetadataRequest(request) && first.wrote) {
+    return;
+  }
+  await sendRequestAttempt(endpoint, request, RETRY_ATTEMPT_TIMEOUT_MS);
+};
+var drainReportQueue = async (key, queue) => {
+  if (queue.active) {
+    return;
+  }
+  queue.active = true;
+  try {
+    while (queue.reports.length > 0) {
+      const report = queue.reports.shift();
+      if (report) {
+        try {
+          await sendQueuedReport(report);
+        } catch {
+          continue;
+        }
+      }
+    }
+  } finally {
+    queue.active = false;
+    if (queue.reports.length === 0) {
+      reportQueues.delete(key);
+    } else {
+      drainReportQueue(key, queue);
+    }
+  }
+};
+var enqueueReport = (report) => {
+  const key = reportQueueKey(report.request);
+  let queue = reportQueues.get(key);
+  if (!queue) {
+    queue = { active: false, reports: [] };
+    reportQueues.set(key, queue);
+  }
+  if (isMetadataRequest(report.request)) {
+    if (queue.active) {
+      queue.reports = [report];
+    } else {
+      queue.reports.push(report);
+    }
+  } else {
+    if (queue.reports.length >= MAX_PENDING_NOTIFICATIONS) {
+      return;
+    }
+    queue.reports.push(report);
+  }
+  if (!queue.active) {
+    drainReportQueue(key, queue);
+  }
+};
 var sendToHerdr = (request) => {
   if (process.env.HERDR_ENV !== "1") {
     return;
@@ -1697,14 +1800,7 @@ var sendToHerdr = (request) => {
     return;
   }
   const endpoint = process.platform === "win32" ? `\\\\.\\pipe\\${socketPath}` : socketPath;
-  const socket = net.createConnection(endpoint);
-  const timeout = setTimeout(() => socket.destroy(), 500);
-  timeout.unref?.();
-  socket.once("connect", () => socket.write(`${JSON.stringify(request)}
-`));
-  socket.once("data", () => socket.destroy());
-  socket.once("error", () => socket.destroy());
-  socket.once("close", () => clearTimeout(timeout));
+  enqueueReport({ endpoint, request });
 };
 var createHerdrNotificationRequest = (title, body) => ({
   id: `${NOTIFICATION_SOURCE}:${nextSequence()}`,

@@ -12,6 +12,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- Improved Herdr display reliability by serializing Advisor metadata reports per source, retrying metadata after failed delivery, and avoiding duplicate notification retries after payloads are written.
 - Jev/Decisions provider selection moved out of the consultation-filter row into its own row, so the provider can be configured and verified without enabling screening. The filter row now only switches the filter on and off, and it refuses to enable while no provider resolves. `AdvisorSettingsSelectorOptions` gained `onJevFilter` and `onJevProvider` for the two rows; the combined `onJevSetup` is deprecated and is still called when neither is supplied.
 - Updated Pi development dependencies to 1.1.0 and refreshed transitive dependency versions.
 - Updated `@types/node` to 26.6.5, `bun-types` to 1.4.3, Knip to 6.41.0, and pinned CI to Bun 1.4.3. Switched the typecheck script from `tsc` to `bun check` and added a contributor install guard requiring Bun 1.4.3 or newer.
