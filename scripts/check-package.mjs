@@ -16,6 +16,7 @@ const expectedFiles = [
   "dist/index.js",
   "extensions/index.ts",
   "package.json",
+  "scripts/check-bun-version.mjs",
   "src/attachments.ts",
   "src/child-session.ts",
   "src/commands.ts",
@@ -129,6 +130,10 @@ const expectedFiles = [
 const benchmarkFiles = actualFiles.filter(
   (path) => path === "bench" || path.startsWith("bench/")
 );
+if (actualFiles.includes("bun.lock")) {
+  throw new Error("Repository-only bun.lock leaked into the package.");
+}
+
 if (benchmarkFiles.length > 0) {
   throw new Error(
     `Repository-only benchmark files leaked into the package:\n${benchmarkFiles.join("\n")}`
