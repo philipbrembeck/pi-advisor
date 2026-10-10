@@ -6,6 +6,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## Unreleased
 
+## 0.13.0 - 2026-10-10
+
 ### Added
 
 - Added a **Jev provider** row in `/advisor-settings` that owns the screening and turn-gate provider, including a new System One–compatible option for pointing pi-advisor at any deployment that speaks TypeSafe's System One contract — your own gateway, a third-party compatible host, or a decision model running on `localhost`. Set `advisorJevBaseUrl` to the endpoint root (`/v1/systemone` is appended) and supply its key either from `JEV_API_KEY`, the guided secure store, or an existing Pi provider login via `advisorJevKeyProvider`. The provider is live-verified before it is saved.

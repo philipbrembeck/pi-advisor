@@ -1,6 +1,6 @@
 {
   "name": "pi-advisor-flow",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "description": "Advanced Executor/Advisor flow for Pi, fully configurable and extendable.",
   "keywords": [
     "advisor",
@@ -31,6 +31,7 @@
   "main": "dist/index.js",
   "types": "extensions/index.ts",
   "scripts": {
+    "audit": "bun scripts/audit.mjs",
     "bench:decisions": "bun bench/src/cli.ts decisions",
     "bench:evaluate": "bun bench/src/cli.ts evaluate",
     "bench:replay": "bun bench/src/cli.ts replay",
