@@ -9,6 +9,8 @@ bun install
 bun run build
 ```
 
+Use Bun 1.4.3 or newer; `bun run typecheck` uses the `bun check` command.
+
 Pi loads `dist/index.js`, which bundles internal modules so settings controls and persistence share the same runtime state. Run `bun run build` once after checkout, then reload Pi. The pre-commit hook rebuilds and stages the bundle after linting source changes; `prepack` also rebuilds it for npm packaging.
 
 A rebuilt bundle is not always picked up by `/reload` in a running process: the in-process module cache can keep serving the previous `dist/index.js`. After rebuilding, verify the change is live (for example, check new tool-result fields) or fully restart Pi and continue the session with `pi -c`.

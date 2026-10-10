@@ -47,7 +47,7 @@
     "test": "bun test && bun run test:node-loader",
     "test:bench": "bun --config=./bunfig.bench.toml test ./bench/test/",
     "test:node-loader": "node --test test/default-resource-loader.node.mjs",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "bun check",
     "format:check": "oxfmt --check"
   },
   "devDependencies": {
@@ -55,11 +55,11 @@
     "@earendil-works/pi-coding-agent": "1.1.0",
     "@earendil-works/pi-tui": "1.1.0",
     "@oxlint/plugins": "1.87.0",
-    "@types/node": "^26.6.4",
+    "@types/node": "^26.6.5",
     "@typesafe-ai/sdk": "^0.6.0",
-    "bun-types": "1.4.2",
+    "bun-types": "1.4.3",
     "husky": "^9.1.7",
-    "knip": "6.40.0",
+    "knip": "6.41.0",
     "lint-staged": "^17.6.0",
     "oxfmt": "0.72.0",
     "oxlint": "1.87.0",

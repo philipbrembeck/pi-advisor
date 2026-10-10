@@ -7,5 +7,6 @@
     "test/**/*.{ts,mjs}",
     "scripts/**/*.mjs"
   ],
+  "ignoreBinaries": ["check"],
   "ignore": ["dist/**", "node_modules/**"]
 }
