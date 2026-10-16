@@ -159,6 +159,33 @@ describe("Advisor config persistence", () => {
     expect(readSavedConfig()).not.toHaveProperty("jevClassifierApiKey");
   });
 
+  test("warns once when a legacy filter is enabled without a classifier", () => {
+    writeFileSync(
+      configPath(),
+      JSON.stringify({ advisorJevFilterEnabled: true })
+    );
+
+    const notifications: { kind: string; message: string }[] = [];
+
+    // SAFETY: mock context exercises only the hasUI-aware loadConfig notify path.
+    const uiContext = {
+      hasUI: true,
+      ui: {
+        notify: (message: string, kind: string) =>
+          notifications.push({ kind, message }),
+      },
+    } as any;
+
+    loadConfig(uiContext);
+    loadConfig(uiContext);
+
+    expect(notifications).toHaveLength(1);
+    expect(notifications[0]?.kind).toBe("warning");
+    expect(notifications[0]?.message).toContain(
+      "no Jev classifier is selected"
+    );
+  });
+
   test("Jev setup skips a separate outcome-consent write and preserves the stored field", () => {
     writeFileSync(
       configPath(),

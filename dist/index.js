@@ -1128,9 +1128,11 @@ var readConfig = (path) => {
 };
 var configCache = new Map;
 var warnedUnknownConfigIdentities = new Set;
+var warnedFilterWithoutClassifierIdentities = new Set;
 var resetConfigCache = () => {
   configCache.clear();
   warnedUnknownConfigIdentities.clear();
+  warnedFilterWithoutClassifierIdentities.clear();
 };
 var configIdentity = (path) => {
   try {
@@ -1157,8 +1159,12 @@ var loadConfig = (_ctx) => {
   setPersistedModelRefs(configuredModelRef(globalConfig?.advisor), configuredModelRef(globalConfig?.executor));
   if (globalConfig) {
     applyConfig(globalConfig);
-    const unknownKeys = unknownConfigKeys(globalConfig).filter((key) => !RESERVED_ADVISOR_JSON_KEYS.has(key));
     const warningIdentity = `${global}:${configIdentity(global)}`;
+    if (advisorJevFilterEnabledRef && !advisorJevClassifierRef && _ctx.hasUI && !warnedFilterWithoutClassifierIdentities.has(warningIdentity)) {
+      warnedFilterWithoutClassifierIdentities.add(warningIdentity);
+      _ctx.ui.notify("The Jev consultation filter is enabled but no Jev classifier is selected; consultations are not screened until you pick one in /advisor-settings.", "warning");
+    }
+    const unknownKeys = unknownConfigKeys(globalConfig).filter((key) => !RESERVED_ADVISOR_JSON_KEYS.has(key));
     if (unknownKeys.length > 0 && _ctx.hasUI && !warnedUnknownConfigIdentities.has(warningIdentity)) {
       _ctx.ui.notify(`Advisor configuration at ${global} contains unrecognized key(s) ${unknownKeys.map((key) => JSON.stringify(key)).join(", ")}. They were preserved but ignored; check for typos or upgrade pi-advisor.`, "warning");
       warnedUnknownConfigIdentities.add(warningIdentity);
@@ -6053,7 +6059,7 @@ var readJevClassifierKey = async (deps = {}) => {
         return { key, source: "bun-secrets" };
       }
     } catch {
-      return {};
+      return { failed: true };
     }
   }
   const key = (deps.readFile ?? defaultReadFile)();
@@ -6094,6 +6100,9 @@ var writeJevClassifierKey = async (key, deps = {}) => {
   }
 };
 var restoreJevClassifierKey = async (previous, deps = {}) => {
+  if (previous.failed) {
+    return false;
+  }
   if (previous.key) {
     const result = await writeJevClassifierKey(previous.key, deps);
     return result.ok;
@@ -7452,8 +7461,8 @@ class JevClassifierSubmenu {
         model,
         ref: `${model.provider}/${model.id}`
       }));
-      const storedKey = await (this.options.resolveStoredKey ?? consumeJevClassifierKey)();
-      if (storedKey) {
+      const stored = await (this.options.resolveStoredKey ?? readJevClassifierKey)();
+      if (stored.key) {
         this.choices.push({
           action: "use-key",
           label: "Jev API Key (use stored key)",
@@ -7489,9 +7498,9 @@ class JevClassifierSubmenu {
   }
   async choose(choice) {
     if (choice.action === "use-key") {
-      const key = await (this.options.resolveStoredKey ?? consumeJevClassifierKey)();
-      if (key) {
-        await this.verifyStoredKey(key);
+      const stored = await (this.options.resolveStoredKey ?? readJevClassifierKey)();
+      if (stored.key) {
+        await this.verifyStoredKey(stored.key);
       } else {
         this.openKeyEntry();
       }
@@ -7547,10 +7556,16 @@ class JevClassifierSubmenu {
       this.options.tui.requestRender();
       return;
     }
+    const previous = await (this.options.resolveStoredKey ?? readJevClassifierKey)();
+    if (previous.failed) {
+      this.mode = "list";
+      this.notice = "Could not read the stored Jev API Key state; nothing was changed. Try again later.";
+      this.options.tui.requestRender();
+      return;
+    }
     this.mode = "verifying";
     this.notice = "Verifying Jev API Key…";
     this.options.tui.requestRender();
-    const previous = await (this.options.resolveStoredKey ?? consumeJevClassifierKey)();
     try {
       await this.verify(model, candidate);
       const stored = await (this.options.persistKey ?? writeJevClassifierKey)(candidate);
@@ -7586,12 +7601,11 @@ class JevClassifierSubmenu {
       placeholder: "TypeSafe Jev API key"
     });
   }
-  restorePreviousKey(key) {
+  restorePreviousKey(previous) {
     if (this.options.restoreKey) {
-      return this.options.restoreKey(key);
+      return this.options.restoreKey(previous);
     }
-    const snapshot = key ? { key } : {};
-    return restoreJevClassifierKey(snapshot);
+    return restoreJevClassifierKey(previous);
   }
   async verifyStoredKey(key) {
     const model = this.options.modelRegistry?.findOfType("classifier", "typesafe", "jev-latest");
@@ -7660,7 +7674,7 @@ class JevFilterSubmenu {
     this.options = options;
     this.modelRegistry = options.modelRegistry;
     this.resolveClassifierKey = options.resolveClassifierKey;
-    this.enabled = options.currentValue === "On";
+    this.enabled = options.currentValue.startsWith("On");
     this.refresh();
   }
   get focused() {
@@ -7711,8 +7725,11 @@ class JevFilterSubmenu {
     const selected = this.options.currentClassifier;
     try {
       if (selected === JEV_API_KEY_CLASSIFIER) {
-        this.classifierAvailable = Boolean(await (this.resolveClassifierKey ?? consumeJevClassifierKey)());
-        if (!this.classifierAvailable) {
+        const stored = await (this.resolveClassifierKey ?? readJevClassifierKey)();
+        this.classifierAvailable = Boolean(stored.key);
+        if (stored.failed) {
+          this.notice = "Could not read the stored Jev API Key state; try again later.";
+        } else if (!this.classifierAvailable) {
           this.notice = "No Jev API Key is stored. Choose Jev API Key in Jev classifier settings.";
         }
       } else {
@@ -7837,6 +7854,12 @@ var scoutTimeoutItem = (settings) => {
     values: numericValues(timeoutMs, [5000, 1e4, 15000, 30000, 45000, 60000, 90000, 120000])
   };
 };
+var jevFilterRowValue = (settings) => {
+  if (!settings.jevFilterEnabled) {
+    return "Off";
+  }
+  return settings.jevClassifier ? "On" : "On (unavailable: no classifier)";
+};
 var jevItems = (settings, theme, tui, jevClassifierRegistry, jevKeyDeps, onJevFilter, onJevProvider) => [
   {
     currentValue: settings.jevClassifier ?? "Choose classifier",
@@ -7857,7 +7880,7 @@ var jevItems = (settings, theme, tui, jevClassifierRegistry, jevKeyDeps, onJevFi
     })
   },
   {
-    currentValue: settingValue(settings.jevFilterEnabled, false),
+    currentValue: jevFilterRowValue(settings),
     description: "Screen low-stakes ask_advisor consultations with the selected Jev provider.",
     id: "jevFilter",
     label: "Jev/Decisions consultation filter",
@@ -8652,8 +8675,8 @@ var registerSettingsCommands = (runtime) => {
         jevSetupDeps: {
           modelRegistry: ctx.modelRegistry,
           persistClassifierKey: writeJevClassifierKey,
-          resolveClassifierKey: consumeJevClassifierKey,
-          restoreClassifierKey: (key) => restoreJevClassifierKey(key ? { key } : {})
+          resolveClassifierKey: readJevClassifierKey,
+          restoreClassifierKey: restoreJevClassifierKey
         },
         keybindings,
         modelRefs: getConfiguredModelRefs(ctx),

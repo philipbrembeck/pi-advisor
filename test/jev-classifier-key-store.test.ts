@@ -8,6 +8,7 @@ import {
   writeJevClassifierKey,
 } from "../src/jev/classifier-key-store.ts";
 import type { JevClassifierSecrets } from "../src/jev/classifier-key-store.ts";
+import { JevClassifierKeyStoreHarness } from "./helpers/jev-classifier-key-store.ts";
 
 describe("isolated Jev classifier key store", () => {
   test("uses a new secure-store namespace only", async () => {
@@ -69,5 +70,39 @@ describe("isolated Jev classifier key store", () => {
     ).toMatchObject({ ok: false });
     expect(writes).toEqual([]);
     expect(await restoreJevClassifierKey({}, { secrets: null })).toBe(true);
+  });
+
+  test("a failed secure-store read reports an unknown state without file fallback", async () => {
+    const fileReads: string[] = [];
+
+    const secrets: JevClassifierSecrets = {
+      delete: async () => true,
+      get: async () => {
+        throw new Error("keychain locked");
+      },
+      set: async () => {},
+    };
+
+    const result = await readJevClassifierKey({
+      readFile: () => {
+        fileReads.push("read");
+
+        return "file-key";
+      },
+      secrets,
+    });
+
+    expect(result).toEqual({ failed: true });
+    expect(fileReads).toEqual([]);
+  });
+
+  test("restore refuses to mutate the store when the previous state is unknown", async () => {
+    const harness = new JevClassifierKeyStoreHarness("old-key");
+
+    expect(await restoreJevClassifierKey({ failed: true }, harness.deps)).toBe(
+      false
+    );
+    expect(harness.calls).toEqual([]);
+    expect(harness.value).toBe("old-key");
   });
 });

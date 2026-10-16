@@ -9,7 +9,7 @@ import {
 } from "../config/state.ts";
 import { loadConfig, saveConfig } from "../config/storage.ts";
 import {
-  consumeJevClassifierKey,
+  readJevClassifierKey,
   restoreJevClassifierKey,
   writeJevClassifierKey,
 } from "../jev/classifier-key-store.ts";
@@ -72,9 +72,8 @@ export const registerSettingsCommands = (runtime: CommandRuntime) => {
             jevSetupDeps: {
               modelRegistry: ctx.modelRegistry,
               persistClassifierKey: writeJevClassifierKey,
-              resolveClassifierKey: consumeJevClassifierKey,
-              restoreClassifierKey: (key) =>
-                restoreJevClassifierKey(key ? { key } : {}),
+              resolveClassifierKey: readJevClassifierKey,
+              restoreClassifierKey: restoreJevClassifierKey,
             },
             keybindings,
             modelRefs: getConfiguredModelRefs(ctx),

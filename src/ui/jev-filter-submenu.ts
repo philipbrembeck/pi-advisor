@@ -4,7 +4,8 @@ import { Key, matchesKey, truncateToWidth } from "@earendil-works/pi-tui";
 import type { Component, Focusable } from "@earendil-works/pi-tui";
 
 import { JEV_API_KEY_CLASSIFIER } from "../config/types.ts";
-import { consumeJevClassifierKey } from "../jev/classifier-key-store.ts";
+import { readJevClassifierKey } from "../jev/classifier-key-store.ts";
+import type { JevClassifierKeySnapshot } from "../jev/classifier-key-store.ts";
 import { parseJevClassifierRef } from "../jev/classifier.ts";
 import type {
   JevClassifierRegistryAccess,
@@ -18,7 +19,7 @@ export interface JevFilterSubmenuOptions {
   done: (selectedValue?: string) => void;
   onSelection?: (selection: JevFilterSelection) => boolean;
   modelRegistry?: JevClassifierRegistryAccess;
-  resolveClassifierKey?: () => Promise<string | undefined>;
+  resolveClassifierKey?: () => Promise<JevClassifierKeySnapshot>;
   theme: Theme;
   tui: RenderRequester;
 }
@@ -45,7 +46,7 @@ export class JevFilterSubmenu implements Component, Focusable {
   private classifierAvailable = false;
   private readonly modelRegistry: JevClassifierRegistryAccess | undefined;
   private readonly resolveClassifierKey:
-    | (() => Promise<string | undefined>)
+    | (() => Promise<JevClassifierKeySnapshot>)
     | undefined;
   private _focused = true;
 
@@ -53,7 +54,7 @@ export class JevFilterSubmenu implements Component, Focusable {
     this.options = options;
     this.modelRegistry = options.modelRegistry;
     this.resolveClassifierKey = options.resolveClassifierKey;
-    this.enabled = options.currentValue === "On";
+    this.enabled = options.currentValue.startsWith("On");
     void this.refresh();
   }
 
@@ -129,11 +130,16 @@ export class JevFilterSubmenu implements Component, Focusable {
 
     try {
       if (selected === JEV_API_KEY_CLASSIFIER) {
-        this.classifierAvailable = Boolean(
-          await (this.resolveClassifierKey ?? consumeJevClassifierKey)()
-        );
+        const stored = await (
+          this.resolveClassifierKey ?? readJevClassifierKey
+        )();
 
-        if (!this.classifierAvailable) {
+        this.classifierAvailable = Boolean(stored.key);
+
+        if (stored.failed) {
+          this.notice =
+            "Could not read the stored Jev API Key state; try again later.";
+        } else if (!this.classifierAvailable) {
           this.notice =
             "No Jev API Key is stored. Choose Jev API Key in Jev classifier settings.";
         }

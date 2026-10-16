@@ -13,7 +13,12 @@ import {
   SAVED_CONFIG_KEYS,
 } from "./schema.ts";
 import type { PersistedConfigKey } from "./schema.ts";
-import { setAdvisorOutcomeLoggingRef, setPersistedModelRefs } from "./state.ts";
+import {
+  advisorJevClassifierRef,
+  advisorJevFilterEnabledRef,
+  setAdvisorOutcomeLoggingRef,
+  setPersistedModelRefs,
+} from "./state.ts";
 import type { AdvisorConfig } from "./types.ts";
 import { unknownConfigKeys, validateConfig } from "./validation.ts";
 
@@ -146,11 +151,13 @@ const configCache = new Map<
 >();
 
 const warnedUnknownConfigIdentities = new Set<string>();
+const warnedFilterWithoutClassifierIdentities = new Set<string>();
 
 /** Drops the parsed-configuration cache; the next load re-reads from disk. */
 export const resetConfigCache = () => {
   configCache.clear();
   warnedUnknownConfigIdentities.clear();
+  warnedFilterWithoutClassifierIdentities.clear();
 };
 
 /**
@@ -198,11 +205,24 @@ export const loadConfig = (_ctx: ExtensionContext) => {
   if (globalConfig) {
     applyConfig(globalConfig);
 
+    const warningIdentity = `${global}:${configIdentity(global)}`;
+
+    if (
+      advisorJevFilterEnabledRef &&
+      !advisorJevClassifierRef &&
+      _ctx.hasUI &&
+      !warnedFilterWithoutClassifierIdentities.has(warningIdentity)
+    ) {
+      warnedFilterWithoutClassifierIdentities.add(warningIdentity);
+      _ctx.ui.notify(
+        "The Jev consultation filter is enabled but no Jev classifier is selected; consultations are not screened until you pick one in /advisor-settings.",
+        "warning"
+      );
+    }
+
     const unknownKeys = unknownConfigKeys(globalConfig).filter(
       (key) => !RESERVED_ADVISOR_JSON_KEYS.has(key)
     );
-
-    const warningIdentity = `${global}:${configIdentity(global)}`;
 
     if (
       unknownKeys.length > 0 &&

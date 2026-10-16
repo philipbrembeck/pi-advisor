@@ -26,6 +26,8 @@ export interface JevClassifierKeyStoreDeps {
 }
 
 export interface JevClassifierKeySnapshot {
+  /** The secure store could not be read; key presence is unknown. */
+  failed?: boolean;
   key?: string;
   source?: "bun-secrets" | "file";
 }
@@ -87,7 +89,7 @@ export const readJevClassifierKey = async (
         return { key, source: "bun-secrets" };
       }
     } catch {
-      return {};
+      return { failed: true };
     }
   }
 
@@ -144,6 +146,10 @@ export const restoreJevClassifierKey = async (
   previous: JevClassifierKeySnapshot,
   deps: JevClassifierKeyStoreDeps = {}
 ): Promise<boolean> => {
+  if (previous.failed) {
+    return false;
+  }
+
   if (previous.key) {
     const result = await writeJevClassifierKey(previous.key, deps);
 

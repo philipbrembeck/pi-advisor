@@ -12,6 +12,7 @@ import {
   DEFAULT_SCOUT_TIMEOUT_MS,
 } from "../config/types.ts";
 import { isValidAdvisorToolPolicies } from "../config/validation.ts";
+import type { JevClassifierKeySnapshot } from "../jev/classifier-key-store.ts";
 import { JevClassifierSubmenu } from "./jev-classifier-submenu.ts";
 import { JevFilterSubmenu } from "./jev-filter-submenu.ts";
 import { SearchableModelMultiSelector } from "./model-multi-selector.ts";
@@ -45,11 +46,13 @@ export interface SettingsItemsOptions {
   settings: AdvisorSettings;
   jevClassifierRegistry?: JevClassifierRegistryAccess;
   jevKeyDeps?: {
-    resolveClassifierKey?: () => Promise<string | undefined>;
+    resolveClassifierKey?: () => Promise<JevClassifierKeySnapshot>;
     persistClassifierKey?: (
       key: string
     ) => Promise<{ ok: boolean; message: string }>;
-    restoreClassifierKey?: (key: string | undefined) => Promise<boolean>;
+    restoreClassifierKey?: (
+      previous: JevClassifierKeySnapshot
+    ) => Promise<boolean>;
   };
   onJevFilter?: (selection: JevFilterSelection) => boolean;
   onJevProvider?: (selection: JevProviderSelection) => boolean;
@@ -87,6 +90,14 @@ const scoutTimeoutItem = (settings: AdvisorSettings): SettingItem => {
   };
 };
 
+const jevFilterRowValue = (settings: AdvisorSettings) => {
+  if (!settings.jevFilterEnabled) {
+    return "Off";
+  }
+
+  return settings.jevClassifier ? "On" : "On (unavailable: no classifier)";
+};
+
 const jevItems = (
   settings: AdvisorSettings,
   theme: Theme,
@@ -117,7 +128,7 @@ const jevItems = (
       }),
   },
   {
-    currentValue: settingValue(settings.jevFilterEnabled, false),
+    currentValue: jevFilterRowValue(settings),
     description:
       "Screen low-stakes ask_advisor consultations with the selected Jev provider.",
     id: "jevFilter",

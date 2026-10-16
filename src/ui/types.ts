@@ -10,6 +10,7 @@ import type { KeybindingsManager, TUI } from "@earendil-works/pi-tui";
 
 import type { GateFailureMode, JevTransport } from "../config/types.ts";
 import type { GitContextLevel } from "../git.ts";
+import type { JevClassifierKeySnapshot } from "../jev/classifier-key-store.ts";
 import type { JevKeyStoreResult } from "../jev/key-store.ts";
 import type {
   JevCredentials,
@@ -175,11 +176,13 @@ export interface JevClassifierRegistryAccess {
 
 export interface JevSetupDeps {
   modelRegistry?: JevClassifierRegistryAccess;
-  resolveClassifierKey?: () => Promise<string | undefined>;
+  resolveClassifierKey?: () => Promise<JevClassifierKeySnapshot>;
   persistClassifierKey?: (
     key: string
   ) => Promise<{ ok: boolean; message: string }>;
-  restoreClassifierKey?: (previous: string | undefined) => Promise<boolean>;
+  restoreClassifierKey?: (
+    previous: JevClassifierKeySnapshot
+  ) => Promise<boolean>;
   clearStoredKey?: (transport: JevTransportKind) => Promise<JevKeyStoreResult>;
   removePlaintextKey?: () => JevKeyStoreResult;
   resolveEndpoint?: (

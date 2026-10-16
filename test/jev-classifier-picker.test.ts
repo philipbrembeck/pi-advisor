@@ -9,6 +9,7 @@ import type {
 } from "@earendil-works/pi-ai";
 import { getKeybindings } from "@earendil-works/pi-tui";
 
+import type { JevClassifierKeySnapshot } from "../src/jev/classifier-key-store.ts";
 import { JevClassifierSubmenu } from "../src/ui/jev-classifier-submenu.ts";
 import type { JevClassifierRegistryAccess } from "../src/ui/types.ts";
 import { plainThemeMock } from "./helpers/theme.ts";
@@ -68,8 +69,8 @@ const makePicker = (
     currentValue?: string;
     done?: (value?: string) => void;
     persistKey?: (key: string) => Promise<{ message: string; ok: boolean }>;
-    resolveStoredKey?: () => Promise<string | undefined>;
-    restoreKey?: (key: string | undefined) => Promise<boolean>;
+    resolveStoredKey?: () => Promise<JevClassifierKeySnapshot>;
+    restoreKey?: (previous: JevClassifierKeySnapshot) => Promise<boolean>;
   } = {}
 ) =>
   new JevClassifierSubmenu({
@@ -170,7 +171,7 @@ describe("Jev classifier picker", () => {
 
           return { message: "stored", ok: true };
         },
-        resolveStoredKey: async () => undefined,
+        resolveStoredKey: async () => ({}),
       }
     );
 
@@ -220,7 +221,7 @@ describe("Jev classifier picker", () => {
 
           return { message: "stored", ok: true };
         },
-        resolveStoredKey: async () => undefined,
+        resolveStoredKey: async () => ({}),
       }
     );
 
@@ -263,9 +264,9 @@ describe("Jev classifier picker", () => {
 
           return { message: "stored", ok: true };
         },
-        resolveStoredKey: async () => "old-secret",
-        restoreKey: async (key) => {
-          mutations.push(key);
+        resolveStoredKey: async () => ({ key: "old-secret" }),
+        restoreKey: async (previous) => {
+          mutations.push(previous.key);
 
           return true;
         },
@@ -289,6 +290,45 @@ describe("Jev classifier picker", () => {
     expect(mutations).toEqual(["new-secret", "old-secret"]);
     expect(picker.render(100).join("\n")).toContain(
       "existing key was restored"
+    );
+  });
+
+  test("refuses to replace the key when the stored state cannot be read", async () => {
+    let persisted: string | undefined;
+    let restored: JevClassifierKeySnapshot | undefined;
+
+    const picker = makePicker(registry(), () => true, {
+      persistKey: async (key) => {
+        persisted = key;
+
+        return { message: "stored", ok: true };
+      },
+      resolveStoredKey: async () => ({ failed: true }),
+      restoreKey: async (previous) => {
+        restored = previous;
+
+        return true;
+      },
+    });
+
+    await picker.whenLoaded();
+    picker.render(100);
+    picker.handleInput("\u001B[B");
+    picker.handleInput("\r");
+    await Promise.resolve();
+    await Promise.resolve();
+
+    for (const character of "candidate-secret") {
+      picker.handleInput(character);
+    }
+
+    picker.handleInput("\r");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(persisted).toBeUndefined();
+    expect(restored).toBeUndefined();
+    expect(picker.render(100).join("\n")).toContain(
+      "Could not read the stored Jev API Key state"
     );
   });
 });

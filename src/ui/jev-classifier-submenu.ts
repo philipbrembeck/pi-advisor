@@ -9,12 +9,13 @@ import type {
 
 import { JEV_API_KEY_CLASSIFIER } from "../config/types.ts";
 import {
-  consumeJevClassifierKey,
   disableJevClassifierKeyForRuntime,
   enableJevClassifierKeyForRuntime,
+  readJevClassifierKey,
   restoreJevClassifierKey,
   writeJevClassifierKey,
 } from "../jev/classifier-key-store.ts";
+import type { JevClassifierKeySnapshot } from "../jev/classifier-key-store.ts";
 import { classifyWithJev } from "../jev/classifier.ts";
 import { nativeScreeningQuestions } from "../jev/questions.ts";
 import { MaskedInput } from "./masked-input.ts";
@@ -30,9 +31,9 @@ interface Options {
   keybindings: KeybindingsManager;
   modelRegistry?: JevClassifierRegistryAccess;
   onSelection?: (selection: JevProviderSelection) => boolean;
-  resolveStoredKey?: () => Promise<string | undefined>;
+  resolveStoredKey?: () => Promise<JevClassifierKeySnapshot>;
   persistKey?: (key: string) => Promise<{ ok: boolean; message: string }>;
-  restoreKey?: (previous: string | undefined) => Promise<boolean>;
+  restoreKey?: (previous: JevClassifierKeySnapshot) => Promise<boolean>;
   theme: Theme;
   tui: RenderRequester;
 }
@@ -173,11 +174,11 @@ export class JevClassifierSubmenu implements Component, Focusable {
         ref: `${model.provider}/${model.id}`,
       }));
 
-      const storedKey = await (
-        this.options.resolveStoredKey ?? consumeJevClassifierKey
+      const stored = await (
+        this.options.resolveStoredKey ?? readJevClassifierKey
       )();
 
-      if (storedKey) {
+      if (stored.key) {
         this.choices.push(
           {
             action: "use-key",
@@ -228,12 +229,12 @@ export class JevClassifierSubmenu implements Component, Focusable {
 
   private async choose(choice: Choice) {
     if (choice.action === "use-key") {
-      const key = await (
-        this.options.resolveStoredKey ?? consumeJevClassifierKey
+      const stored = await (
+        this.options.resolveStoredKey ?? readJevClassifierKey
       )();
 
-      if (key) {
-        await this.verifyStoredKey(key);
+      if (stored.key) {
+        await this.verifyStoredKey(stored.key);
       } else {
         this.openKeyEntry();
       }
@@ -318,13 +319,22 @@ export class JevClassifierSubmenu implements Component, Focusable {
       return;
     }
 
+    const previous = await (
+      this.options.resolveStoredKey ?? readJevClassifierKey
+    )();
+
+    if (previous.failed) {
+      this.mode = "list";
+      this.notice =
+        "Could not read the stored Jev API Key state; nothing was changed. Try again later.";
+      this.options.tui.requestRender();
+
+      return;
+    }
+
     this.mode = "verifying";
     this.notice = "Verifying Jev API Key…";
     this.options.tui.requestRender();
-
-    const previous = await (
-      this.options.resolveStoredKey ?? consumeJevClassifierKey
-    )();
 
     try {
       await this.verify(model, candidate);
@@ -378,14 +388,14 @@ export class JevClassifierSubmenu implements Component, Focusable {
     });
   }
 
-  private restorePreviousKey(key: string | undefined): Promise<boolean> {
+  private restorePreviousKey(
+    previous: JevClassifierKeySnapshot
+  ): Promise<boolean> {
     if (this.options.restoreKey) {
-      return this.options.restoreKey(key);
+      return this.options.restoreKey(previous);
     }
 
-    const snapshot = key ? { key } : {};
-
-    return restoreJevClassifierKey(snapshot);
+    return restoreJevClassifierKey(previous);
   }
 
   private async verifyStoredKey(key: string) {
