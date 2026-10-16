@@ -176,6 +176,7 @@ describe("Advisor config persistence", () => {
       },
     } as any;
 
+    loadConfig(context);
     loadConfig(uiContext);
     loadConfig(uiContext);
 
