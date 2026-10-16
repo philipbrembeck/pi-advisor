@@ -192,7 +192,7 @@ describe("Jev session state", () => {
     expect(summary).toContain("Jev/Decisions cost: ↑20k tokens · $0.0010");
   });
 
-  test("keeps mixed-provider filter cost unavailable while retaining known estimates", () => {
+  test("keeps filter cost unavailable when usage lacks catalog rates", () => {
     const state = new AdvisorSessionState();
     state.recordJevFilterAllowed();
     state.recordJevFilterUsage({
@@ -203,12 +203,12 @@ describe("Jev session state", () => {
     state.recordJevFilterUsage({ inputTokens: 200, outputTokens: 0 });
     const summary = state.summary(undefined) ?? "";
     expect(summary).toContain(
-      "cost unavailable (known-provider estimates $0.0001; Decisions billing unconfirmed)"
+      "Jev/Decisions cost: ↑300 tokens · cost unavailable (known catalog-priced usage $0.0001)"
     );
     expect(summary).not.toContain("Jev/Decisions cost: ↑300 tokens · $0.0001");
   });
 
-  test("keeps mixed-provider turn-gate cost unavailable", () => {
+  test("keeps turn-gate cost unavailable when usage lacks catalog rates", () => {
     const state = new AdvisorSessionState();
     state.recordJevGateCheck({
       cost: 0.0004,
@@ -218,7 +218,7 @@ describe("Jev session state", () => {
     state.recordJevGateCheck({ inputTokens: 200, outputTokens: 0 });
     const summary = state.summary(undefined) ?? "";
     expect(summary).toContain(
-      "Jev/Decisions ↑300 · cost unavailable (known-provider estimates $0.0004; Decisions billing unconfirmed)"
+      "Jev/Decisions ↑300 · cost unavailable (known catalog-priced usage $0.0004)"
     );
   });
 

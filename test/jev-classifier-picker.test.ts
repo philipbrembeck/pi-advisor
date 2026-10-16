@@ -199,6 +199,52 @@ describe("Jev classifier picker", () => {
     expect(selected).toBe("jev-api-key");
   });
 
+  test("does not display or store a candidate key echoed by a classifier error", async () => {
+    const candidate = "candidate-secret";
+
+    let stored = false;
+    let selected = false;
+
+    const picker = makePicker(
+      registry(async () => {
+        throw new Error(`request failed with ${candidate}`);
+      }),
+      () => {
+        selected = true;
+
+        return true;
+      },
+      {
+        persistKey: async () => {
+          stored = true;
+
+          return { message: "stored", ok: true };
+        },
+        resolveStoredKey: async () => undefined,
+      }
+    );
+
+    await picker.whenLoaded();
+    picker.render(100);
+    picker.handleInput("\u001B[B");
+    picker.handleInput("\r");
+    await Promise.resolve();
+    await Promise.resolve();
+
+    for (const character of candidate) {
+      picker.handleInput(character);
+    }
+
+    picker.handleInput("\r");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const rendered = picker.render(100).join("\n");
+    expect(rendered).not.toContain(candidate);
+    expect(rendered).toContain("Jev classifier request failed.");
+    expect(stored).toBe(false);
+    expect(selected).toBe(false);
+  });
+
   test("restores previous key when selection persistence fails", async () => {
     const mutations: (string | undefined)[] = [];
 
