@@ -8,11 +8,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
-- Added a searchable Pi classifier picker for Jev screening and turn-gate checks, plus a masked Jev API Key option stored in an isolated secure namespace.
+- Added a dedicated masked Jev API Key option with isolated secure storage. Keys entered through this option are never migrated from legacy Jev stores or Pi provider credentials.
 
 ### Changed
 
-- Jev input costs now use Pi catalog rates; JEV output tokens remain free. Screening usage is included once in `ask_advisor` tool-result totals, while lifecycle-triggered classifier usage remains local-only.
+- Jev screening and turn-gate now use Pi's native classifier registry instead of pi-advisor's duplicate Jev inference clients. Existing screening policy is unchanged; provider authentication stays Pi-managed, and screening classifier input cost uses the selected model's Pi catalog rates.
+- Screening classifier usage is included once with Advisor usage in `ask_advisor` tool totals. Manual and turn-gate classifier usage remains in the local Jev summary.
 
 - The Executor now follows the model and thinking level of the current Pi session by default. `/advisor` no longer asks for or switches to an Executor model, and `/model` selections are not saved as the Executor. Pick an explicit Executor in `/advisor-models`, via `executor=` on `/advisor`, or in `advisor.json` to pin one; choose **Current session model** in `/advisor-models` to return to following the session.
 
