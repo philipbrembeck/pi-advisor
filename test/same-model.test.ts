@@ -243,29 +243,17 @@ describe("same-model Advisor suppression", () => {
         const same = modelContext(agentDir, "advisor");
         loadConfig(same);
         const session = new AdvisorSessionState();
-        let checks = 0;
 
         const registration: JevTurnGateRegistration = {
           activeTools: () => ["ask_advisor"],
           consult: async () => {
             throw new Error("The Advisor must not run");
           },
-          deps: {
-            resolveTransport: () => {
-              checks += 1;
-
-              return Promise.resolve({
-                apiKey: "test",
-                transport: "typesafe" as const,
-              });
-            },
-          },
           send: () => {},
           session,
         };
 
         await handleJevTurnEnd(registration, same);
-        expect(checks).toBe(0);
         expect(session.consumedCalls).toBe(0);
       }
     );

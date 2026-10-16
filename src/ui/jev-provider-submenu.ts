@@ -26,7 +26,22 @@ import type { JevProviderSelection, JevSetupDeps } from "./types.ts";
 // Justified exception to the ~300-line guidance: one cohesive modal state machine.
 export class JevProviderSubmenu implements Component, Focusable {
   private readonly options: JevProviderSubmenuOptions;
-  private readonly deps: Required<JevSetupDeps>;
+  private readonly deps: Required<
+    Omit<
+      JevSetupDeps,
+      | "modelRegistry"
+      | "resolveClassifierKey"
+      | "persistClassifierKey"
+      | "restoreClassifierKey"
+    >
+  > &
+    Pick<
+      JevSetupDeps,
+      | "modelRegistry"
+      | "resolveClassifierKey"
+      | "persistClassifierKey"
+      | "restoreClassifierKey"
+    >;
   private maskedInput: MaskedInput;
   private readonly textInput = new Input();
   private credentials: JevCredentials | undefined;

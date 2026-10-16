@@ -2,7 +2,6 @@ import { getSettingsListTheme } from "@earendil-works/pi-coding-agent";
 import { SettingsList, truncateToWidth } from "@earendil-works/pi-tui";
 import type { Component, Focusable } from "@earendil-works/pi-tui";
 
-import { DEFAULT_JEV_TRANSPORT } from "../config/types.ts";
 import {
   rainbowGradient,
   SIMPLE_MODE_GRADIENT_INTERVAL_MS,
@@ -123,13 +122,14 @@ export class AdvisorSettingsSelector implements Component, Focusable {
     );
 
     const items = createSettingsItems({
-      afterJevSetup: () => {
-        this.settingsList = this.createSettingsList("jevFilter");
-        this.options.tui.requestRender();
-      },
       effortLevels: this.options.effortLevels,
       fallbackModel,
-      jevSetupDeps: this.options.jevSetupDeps,
+      jevClassifierRegistry: this.options.jevSetupDeps?.modelRegistry,
+      jevKeyDeps: {
+        persistClassifierKey: this.options.jevSetupDeps?.persistClassifierKey,
+        resolveClassifierKey: this.options.jevSetupDeps?.resolveClassifierKey,
+        restoreClassifierKey: this.options.jevSetupDeps?.restoreClassifierKey,
+      },
       modelWhitelist,
       onJevFilter: (selection) => this.applyJevFilter(selection),
       onJevProvider: (selection) => this.applyJevProvider(selection),
@@ -202,7 +202,7 @@ export class AdvisorSettingsSelector implements Component, Focusable {
         legacy(
           {
             enabled: selection.enabled,
-            transport: settings.jevTransport ?? DEFAULT_JEV_TRANSPORT,
+            transport: settings.jevTransport ?? "auto",
           },
           settings
         )
@@ -213,15 +213,19 @@ export class AdvisorSettingsSelector implements Component, Focusable {
   }
 
   private applyJevProvider(selection: JevProviderSelection): boolean {
-    const custom = selection.transport === "typesafe-compatible";
+    let patch: Partial<AdvisorSettings>;
 
-    const patch = {
-      jevBaseUrl: custom ? selection.baseUrl : this.settings.jevBaseUrl,
-      jevKeyProvider: custom
-        ? selection.keyProvider
-        : this.settings.jevKeyProvider,
-      jevTransport: selection.transport,
-    };
+    if (selection.classifier) {
+      patch = { jevClassifier: selection.classifier };
+    } else if (selection.transport) {
+      patch = {
+        jevBaseUrl: selection.baseUrl,
+        jevKeyProvider: selection.keyProvider,
+        jevTransport: selection.transport,
+      };
+    } else {
+      patch = {};
+    }
 
     const handler = this.options.onJevProvider;
 
@@ -233,7 +237,7 @@ export class AdvisorSettingsSelector implements Component, Focusable {
 
     const legacy = this.options.onJevSetup;
 
-    if (legacy) {
+    if (legacy && selection.transport) {
       return this.applyJevSelection(patch, (settings) =>
         legacy(
           {

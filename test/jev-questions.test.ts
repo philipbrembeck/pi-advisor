@@ -189,6 +189,33 @@ describe("composeScreeningVerdict", () => {
     }
   });
 
+  test("rejects probabilities outside the normalized range", () => {
+    expect(
+      composeScreeningVerdict(
+        {
+          self_answerable: { noul: 1.1 },
+          stakes: { probabilities: { negligible: 0.95 } },
+        },
+        criteria
+      )
+    ).toEqual({ skip: false });
+    expect(
+      composeScreeningVerdict(
+        {
+          self_answerable: { noul: 0.9 },
+          stakes: { probabilities: { negligible: -0.1 } },
+        },
+        criteria
+      )
+    ).toEqual({ skip: false });
+    expect(
+      composeTurnGateVerdict({ should_consult: { noul: 1.01 } }, 0.8)
+    ).toBe(false);
+    expect(
+      composeTurnGateVerdict({ should_consult: { noul: -0.01 } }, 0.8)
+    ).toBe(false);
+  });
+
   test("the noul margin rule requires clearance over a coin flip", () => {
     const at = marginAnswer;
     expect(at(0.849)).toEqual({ skip: false });

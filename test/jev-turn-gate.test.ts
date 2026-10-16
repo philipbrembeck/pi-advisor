@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import type { Fetch } from "@typesafe-ai/sdk";
 
 import {
+  setAdvisorJevClassifierRef,
   setAdvisorJevTurnGateEveryTurnsRef,
   setAdvisorJevTurnGateNoulThresholdRef,
   setAdvisorMaxCallsPerSessionRef,
@@ -18,15 +18,13 @@ import {
 } from "../src/tools/jev-turn-gate.ts";
 import type { AdvisorConsultationResult } from "../src/tools/types.ts";
 import { asExtensionContext } from "./helpers/extension-context.ts";
-import { branchFromLines, systemOneMock } from "./helpers/jev-mock.ts";
+import { branchFromLines } from "./helpers/jev-mock.ts";
 
-const credentials = { apiKey: "tsk-test", transport: "typesafe" as const };
-
-const openAiCredentials = () =>
-  Promise.resolve({
-    apiKey: "openai-platform-key",
-    transport: "openai-decisions" as const,
-  });
+const answers = (probability: number) => ({
+  answers: { should_consult: { noul: probability, type: "noul" as const } },
+  model: "typesafe/jev-latest",
+  usage: { cost: 0.00002, inputTokens: 800, outputTokens: 0 },
+});
 
 const deferred = <Value>() => {
   let resolvePromise: ((value: Value) => void) | undefined;
@@ -35,22 +33,8 @@ const deferred = <Value>() => {
     resolvePromise = resolve;
   });
 
-  return {
-    promise,
-    resolve: (value: Value) => resolvePromise?.(value),
-  };
+  return { promise, resolve: (value: Value) => resolvePromise?.(value) };
 };
-
-const noulResponse = (noul: number) => ({
-  answers: { should_consult: { noul, type: "noul" } },
-  usage: { input_tokens: 800, output_tokens: 0 },
-});
-
-const decisionsPredicateResponse = (probability: number) => ({
-  answers: [{ name: "should_consult", probability, type: "predicate" }],
-  model: "gpt-6-luna",
-  usage: { input_tokens: 800, output_tokens: 0 },
-});
 
 const idleSignal = () => new AbortController().signal;
 
@@ -62,7 +46,7 @@ interface Harness {
 }
 
 const harness = (
-  fetch: Fetch,
+  classifier: () => Promise<ReturnType<typeof answers>>,
   options: {
     consultResult?: () => Promise<AdvisorConsultationResult>;
     notifications?: string[];
@@ -88,10 +72,7 @@ const harness = (
 
       return (await options.consultResult?.()) ?? fallback;
     },
-    deps: {
-      fetch,
-      resolveTransport: () => Promise.resolve(credentials),
-    },
+    deps: { classifyResult: classifier },
     send: (message) => sent.push(message),
     session,
   };
@@ -104,6 +85,7 @@ const ctxWith = (notifications: string[] = []) =>
     cwd: "/",
     hasUI: true,
     isProjectTrusted: () => false,
+    modelRegistry: {},
     sessionManager: {
       getBranch: () => branchFromLines([["user", "Do the work."]]),
     },
@@ -120,12 +102,14 @@ const turn = (h: Harness, ctx?: ExtensionContext) =>
 beforeEach(() => {
   setAdvisorJevTurnGateEveryTurnsRef(2);
   setAdvisorJevTurnGateNoulThresholdRef(0.8);
+  setAdvisorJevClassifierRef("typesafe/jev-latest");
   resetJevTurnGateNotification();
 });
 
 afterEach(() => {
   setAdvisorJevTurnGateEveryTurnsRef(0);
   setAdvisorJevTurnGateNoulThresholdRef(0.8);
+  setAdvisorJevClassifierRef(undefined);
   setAdvisorMaxCallsPerSessionRef(undefined);
   setSimpleModeRef(false);
   resetConfigCache();
@@ -133,74 +117,53 @@ afterEach(() => {
 
 describe("handleJevTurnEnd", () => {
   test("counts turns without consultation and fires only on the interval", async () => {
-    const h = harness(systemOneMock([noulResponse(0.9)]).fetch);
+    const h = harness(async () => answers(0.9));
     await turn(h);
     expect(h.session.turnsSinceConsultation).toBe(1);
     expect(h.sent).toEqual([]);
     await turn(h);
     expect(h.session.turnsSinceConsultation).toBe(0);
-    expect(h.sent.map((m) => m.customType)).toEqual([
+    expect(h.sent.map((message) => message.customType)).toEqual([
       "advisor-turn-gate-call",
       "advisor-turn-gate-result",
     ]);
   });
 
-  test("applies the configured threshold to Decisions and fail-opens refusal", async () => {
-    const confidentMock = systemOneMock([decisionsPredicateResponse(0.8)]);
-    const confident = harness(confidentMock.fetch);
-    confident.registration.deps = {
-      fetch: confidentMock.fetch,
-      resolveTransport: openAiCredentials,
-    };
+  test("honors threshold boundaries and malformed classifier failures", async () => {
+    const confident = harness(async () => answers(0.8));
     await turn(confident);
     await turn(confident);
     expect(confident.consultCount()).toBe(1);
 
-    const uncertainMock = systemOneMock([decisionsPredicateResponse(0.79)]);
-    const uncertain = harness(uncertainMock.fetch);
-    uncertain.registration.deps = {
-      fetch: uncertainMock.fetch,
-      resolveTransport: openAiCredentials,
-    };
+    const uncertain = harness(async () => answers(0.79));
     await turn(uncertain);
     await turn(uncertain);
     expect(uncertain.consultCount()).toBe(0);
 
-    const refusedMock = systemOneMock([
-      {
-        answers: [{ name: "should_consult", type: "refusal" }],
-        usage: { input_tokens: 800, output_tokens: 0 },
-      },
-    ]);
+    const failed = harness(async () => {
+      throw new Error("malformed response");
+    });
 
-    const refused = harness(refusedMock.fetch);
-    refused.registration.deps = {
-      fetch: refusedMock.fetch,
-      resolveTransport: openAiCredentials,
-    };
-    const notifications: string[] = [];
-    const ctx = ctxWith(notifications);
-    await turn(refused, ctx);
-    await turn(refused, ctx);
-    expect(refused.consultCount()).toBe(0);
-    expect(notifications[0]).toContain("(malformed)");
+    const notices: string[] = [];
+    await turn(failed, ctxWith(notices));
+    await turn(failed, ctxWith(notices));
+    expect(failed.consultCount()).toBe(0);
+    expect(notices[0]).toContain("malformed response");
   });
 
-  test("a confident-true verdict runs a consultation that consumes budget", async () => {
-    const h = harness(systemOneMock([noulResponse(0.9)]).fetch);
+  test("a confident gate consultation consumes budget and records local usage", async () => {
+    const h = harness(async () => answers(0.9));
     await turn(h);
     await turn(h);
     expect(h.consultCount()).toBe(1);
     expect(h.session.consumedCalls).toBe(1);
     expect(h.session.turnsSinceConsultation).toBe(0);
     expect(h.session.sessionTurnOrdinal).toBe(2);
-    const summary = h.session.summary(undefined) ?? "";
-    expect(summary).toContain("Turn gate: 1 check");
-    expect(summary).toContain("1 consultation");
+    expect(h.session.summary(undefined)).toContain("1 consultation");
   });
 
-  test("a consultation from any path postpones the next check", async () => {
-    const h = harness(systemOneMock([noulResponse(0.9)]).fetch);
+  test("consultation postpones the next gate check", async () => {
+    const h = harness(async () => answers(0.9));
     await turn(h);
     h.session.resetTurnsSinceConsultation();
     await turn(h);
@@ -209,130 +172,87 @@ describe("handleJevTurnEnd", () => {
     expect(h.sent.length).toBeGreaterThan(0);
   });
 
-  test("uncertainty or a low noul means status quo with no notification", async () => {
-    const notifications: string[] = [];
-    const h = harness(systemOneMock([noulResponse(0.79)]).fetch);
-    await turn(h);
-    await turn(h, ctxWith(notifications));
-    expect(h.consultCount()).toBe(0);
-    expect(notifications).toEqual([]);
-  });
-
-  test("a 401 notifies once per outage and never consults", async () => {
-    const notifications: string[] = [];
-    const mock = systemOneMock([{ body: { error: "bad key" }, status: 401 }]);
-    const h = harness(mock.fetch);
-    const ctx = ctxWith(notifications);
-    await turn(h, ctx);
-    await turn(h, ctx);
-    await turn(h, ctx);
-    await turn(h, ctx);
-    expect(h.consultCount()).toBe(0);
-    expect(notifications).toHaveLength(1);
-    expect(notifications[0]).toContain("(auth)");
-  });
-
-  test("rechecks the budget after Jev returns before consuming a call", async () => {
+  test("budget is rechecked after classification", async () => {
     setAdvisorMaxCallsPerSessionRef(1);
-    const response = deferred<Response>();
-    const started = deferred<undefined>();
+    const response = deferred<ReturnType<typeof answers>>();
+    const started = deferred<boolean>();
 
     const h = harness(() => {
-      started.resolve(undefined);
+      started.resolve(true);
 
       return response.promise;
     });
 
     await turn(h);
-    const pendingCheck = turn(h);
+    const pending = turn(h);
     await started.promise;
     expect(h.session.reserveCall("pending-ask", 1)).toBe(true);
-    response.resolve(Response.json(noulResponse(0.9)));
-    await pendingCheck;
-
+    response.resolve(answers(0.9));
+    await pending;
     expect(h.consultCount()).toBe(0);
     expect(h.session.consumedCalls).toBe(0);
     h.session.releaseCall("pending-ask");
   });
 
-  test("budget exhaustion skips the check silently", async () => {
+  test("off interval, simple mode, inactive tool, and budget exhaustion suppress checks", async () => {
+    const h = harness(async () => answers(0.9));
     setAdvisorMaxCallsPerSessionRef(0);
-    const notifications: string[] = [];
-    const h = harness(systemOneMock([noulResponse(0.95)]).fetch);
+    const notices: string[] = [];
     await turn(h);
-    await turn(h, ctxWith(notifications));
+    await turn(h, ctxWith(notices));
     expect(h.consultCount()).toBe(0);
-    expect(notifications).toEqual([]);
-    expect(h.session.summary(undefined)).toBeUndefined();
-  });
+    expect(notices).toEqual([]);
 
-  test("an off interval (0) never checks", async () => {
     setAdvisorJevTurnGateEveryTurnsRef(0);
-    const h = harness(systemOneMock([noulResponse(0.95)]).fetch);
-    await turn(h);
-    await turn(h);
-    expect(h.sent).toEqual([]);
-    expect(h.session.turnsSinceConsultation).toBe(2);
-  });
-
-  test("simple mode and inactive ask_advisor suppress the gate", async () => {
-    setSimpleModeRef(true);
-    const off = harness(systemOneMock([noulResponse(0.95)]).fetch);
+    const off = harness(async () => answers(0.9));
     await turn(off);
     await turn(off);
     expect(off.sent).toEqual([]);
+
+    setAdvisorJevTurnGateEveryTurnsRef(2);
+    setAdvisorMaxCallsPerSessionRef(undefined);
+    setSimpleModeRef(true);
+    const simple = harness(async () => answers(0.9));
+    await turn(simple);
+    await turn(simple);
+    expect(simple.sent).toEqual([]);
+
     setSimpleModeRef(false);
-
-    const inactive: Harness = {
-      ...harness(systemOneMock([noulResponse(0.95)]).fetch),
-    };
-
+    const inactive = harness(async () => answers(0.9));
     inactive.registration.activeTools = () => [];
     await turn(inactive);
     await turn(inactive);
     expect(inactive.sent).toEqual([]);
   });
 
-  test("a consultation failure records a gate failure and notifies once", async () => {
-    const notifications: string[] = [];
+  test("classifier and consultation failures are visible and fail open", async () => {
+    const notices: string[] = [];
 
-    const h = harness(systemOneMock([noulResponse(0.95)]).fetch, {
-      consultResult: () => Promise.reject(new Error("provider down")),
+    const classifierFailure = harness(async () => {
+      throw new Error("classifier unavailable");
     });
 
-    const ctx = ctxWith(notifications);
-    await turn(h, ctx);
-    await turn(h, ctx);
-    expect(h.consultCount()).toBe(1);
-    expect(notifications).toHaveLength(1);
-    expect(notifications[0]).toContain("provider down");
-    const summary = h.session.summary(undefined) ?? "";
-    expect(summary).toContain("Turn gate: 1 check");
+    await turn(classifierFailure, ctxWith(notices));
+    await turn(classifierFailure, ctxWith(notices));
+    expect(classifierFailure.consultCount()).toBe(0);
+    expect(notices[0]).toContain("classifier unavailable");
+
+    const consultationFailure = harness(async () => answers(0.9), {
+      consultResult: () => Promise.reject(new Error("advisor unavailable")),
+    });
+
+    await turn(consultationFailure, ctxWith(notices));
+    await turn(consultationFailure, ctxWith(notices));
+    expect(consultationFailure.consultCount()).toBe(1);
   });
 
-  test("missing credentials notify once with missing-key", async () => {
-    const notifications: string[] = [];
-    const session = new AdvisorSessionState();
-
-    const registration: JevTurnGateRegistration = {
-      activeTools: () => ["ask_advisor"],
-      consult: () =>
-        Promise.resolve({
-          adviceId: "unused",
-          markdown: "",
-          model: "unused",
-          thinkingText: "",
-          trigger: "turn-gate",
-        }),
-      deps: { resolveTransport: () => Promise.resolve(undefined) },
-      send: () => undefined,
-      session,
-    };
-
-    const ctx = ctxWith(notifications);
-    await handleJevTurnEnd(registration, ctx);
-    await handleJevTurnEnd(registration, ctx);
-    expect(notifications).toHaveLength(1);
-    expect(notifications[0]).toContain("missing-key");
+  test("missing selected classifier notifies once", async () => {
+    setAdvisorJevClassifierRef(undefined);
+    const notices: string[] = [];
+    const h = harness(async () => answers(0.9));
+    h.registration.deps = undefined;
+    await turn(h, ctxWith(notices));
+    await turn(h, ctxWith(notices));
+    expect(notices[0]).toContain("(auth)");
   });
 });

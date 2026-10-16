@@ -1,22 +1,24 @@
+import type { ClassifierModel } from "@earendil-works/pi-ai";
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { Key, matchesKey, truncateToWidth } from "@earendil-works/pi-tui";
 import type { Component, Focusable } from "@earendil-works/pi-tui";
 
-import type { JevTransport } from "../config/types.ts";
-import type { JevCredentials } from "../jev/transport.ts";
-import { defaultSetupDeps, fireAndForget } from "./jev-setup-support.ts";
+import { JEV_API_KEY_CLASSIFIER } from "../config/types.ts";
+import { consumeJevClassifierKey } from "../jev/classifier-key-store.ts";
+import { parseJevClassifierRef } from "../jev/classifier.ts";
 import type {
+  JevClassifierRegistryAccess,
   JevFilterSelection,
-  JevSetupDeps,
   RenderRequester,
 } from "./types.ts";
 
 export interface JevFilterSubmenuOptions {
-  currentTransport: JevTransport;
+  currentClassifier?: string;
   currentValue: string;
   done: (selectedValue?: string) => void;
   onSelection?: (selection: JevFilterSelection) => boolean;
-  setupDeps?: JevSetupDeps;
+  modelRegistry?: JevClassifierRegistryAccess;
+  resolveClassifierKey?: () => Promise<string | undefined>;
   theme: Theme;
   tui: RenderRequester;
 }
@@ -26,7 +28,7 @@ type FilterAction = "disable" | "done" | "enable";
 const actionsFor = (enabled: boolean): FilterAction[] =>
   enabled ? ["disable", "done"] : ["enable", "done"];
 
-const labelFor = (action: FilterAction): string => {
+const labelFor = (action: FilterAction) => {
   if (action === "enable") {
     return "Enable the filter";
   }
@@ -34,32 +36,33 @@ const labelFor = (action: FilterAction): string => {
   return action === "disable" ? "Disable the filter" : "Done";
 };
 
-/** Owns only the on/off decision plus its credential gate. */
 export class JevFilterSubmenu implements Component, Focusable {
   private readonly options: JevFilterSubmenuOptions;
-  private readonly deps: Required<JevSetupDeps>;
-  private credentials: JevCredentials | undefined;
   private mode: "menu" | "resolving" = "resolving";
   private notice: string | undefined;
   private selectedIndex = 0;
   private enabled: boolean;
+  private classifierAvailable = false;
+  private readonly modelRegistry: JevClassifierRegistryAccess | undefined;
+  private readonly resolveClassifierKey:
+    | (() => Promise<string | undefined>)
+    | undefined;
   private _focused = true;
 
-  constructor(options: JevFilterSubmenuOptions, deps: JevSetupDeps = {}) {
+  constructor(options: JevFilterSubmenuOptions) {
     this.options = options;
+    this.modelRegistry = options.modelRegistry;
+    this.resolveClassifierKey = options.resolveClassifierKey;
     this.enabled = options.currentValue === "On";
-    this.deps = { ...defaultSetupDeps, ...options.setupDeps, ...deps };
-    void fireAndForget(this.refresh(), this.reportBackgroundError);
+    void this.refresh();
   }
 
-  get focused(): boolean {
+  get focused() {
     return this._focused;
   }
-
   set focused(value: boolean) {
     this._focused = value;
   }
-
   // oxlint-disable-next-line class-methods-use-this no-empty-function
   invalidate(): void {}
 
@@ -67,14 +70,14 @@ export class JevFilterSubmenu implements Component, Focusable {
     const { theme } = this.options;
 
     const lines = [
-      theme.fg("accent", theme.bold("  Jev/Decisions consultation filter")),
+      theme.fg("accent", theme.bold("  Jev classifier consultation filter")),
       "",
       `  Filter: ${this.enabled ? "On" : "Off"}`,
-      `  Provider: ${this.options.currentTransport}`,
+      `  Classifier: ${this.options.currentClassifier ?? "not selected"}`,
     ];
 
     if (this.mode === "resolving") {
-      lines.push("", "  Checking the selected provider credentials…");
+      lines.push("", "  Checking selected classifier availability…");
     } else if (this.notice) {
       lines.push("", theme.fg("warning", `  ${this.notice}`));
     }
@@ -83,8 +86,9 @@ export class JevFilterSubmenu implements Component, Focusable {
       lines.push("");
 
       for (const [index, action] of actionsFor(this.enabled).entries()) {
-        const prefix = index === this.selectedIndex ? "→ " : "  ";
-        lines.push(`${prefix}${labelFor(action)}`);
+        lines.push(
+          `${index === this.selectedIndex ? "→ " : "  "}${labelFor(action)}`
+        );
       }
     }
 
@@ -120,33 +124,48 @@ export class JevFilterSubmenu implements Component, Focusable {
     this.options.tui.requestRender();
   }
 
-  private async refresh(): Promise<void> {
-    const transport = this.options.currentTransport;
+  private async refresh() {
+    const selected = this.options.currentClassifier;
 
     try {
-      this.credentials = await this.deps.resolveTransport(
-        transport === "auto" ? undefined : transport
-      );
-    } catch (error) {
-      this.credentials = undefined;
-      this.notice = `Credential lookup failed: ${error instanceof Error ? error.message : String(error)}`;
-    }
+      if (selected === JEV_API_KEY_CLASSIFIER) {
+        this.classifierAvailable = Boolean(
+          await (this.resolveClassifierKey ?? consumeJevClassifierKey)()
+        );
 
-    if (!this.credentials && !this.notice) {
-      this.notice = `No Jev provider resolves for "${transport}". Open Jev provider to configure one.`;
+        if (!this.classifierAvailable) {
+          this.notice =
+            "No Jev API Key is stored. Choose Jev API Key in Jev classifier settings.";
+        }
+      } else {
+        const parsed = selected ? parseJevClassifierRef(selected) : undefined;
+        const registry = this.modelRegistry;
+
+        if (parsed && registry) {
+          const available = await registry.getAvailableOfType(
+            "classifier",
+            parsed.provider
+          );
+
+          this.classifierAvailable = available.some(
+            (model: ClassifierModel<string>) => model.id === parsed.modelId
+          );
+        }
+
+        if (!this.classifierAvailable) {
+          this.notice =
+            "Select an available authenticated classifier in Jev classifier settings first.";
+        }
+      }
+    } catch (error) {
+      this.notice = `Classifier lookup failed: ${error instanceof Error ? error.message : "Pi error"}`;
     }
 
     this.mode = "menu";
     this.options.tui.requestRender();
   }
 
-  private reportBackgroundError = (message: string): void => {
-    this.mode = "menu";
-    this.notice = `Setup failed: ${message}`;
-    this.options.tui.requestRender();
-  };
-
-  private activate(action: FilterAction): void {
+  private activate(action: FilterAction) {
     if (action === "done") {
       this.options.done();
 
@@ -155,16 +174,13 @@ export class JevFilterSubmenu implements Component, Focusable {
 
     const enabled = action === "enable";
 
-    if (enabled && !this.credentials) {
-      // refresh() already explains why nothing resolved.
+    if (enabled && !this.classifierAvailable) {
       this.options.tui.requestRender();
 
       return;
     }
 
-    const saved = this.commit({ enabled });
-
-    if (!saved) {
+    if (this.options.onSelection?.({ enabled }) === false) {
       this.notice = "The filter state could not be saved.";
       this.options.tui.requestRender();
 
@@ -174,13 +190,5 @@ export class JevFilterSubmenu implements Component, Focusable {
     this.enabled = enabled;
     this.notice = undefined;
     this.options.done(enabled ? "On" : "Off");
-  }
-
-  private commit(selection: JevFilterSelection): boolean {
-    if (!this.options.onSelection) {
-      return true;
-    }
-
-    return this.options.onSelection(selection);
   }
 }

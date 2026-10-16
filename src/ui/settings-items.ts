@@ -7,17 +7,13 @@ import {
   DEFAULT_JEV_FILTER_NOUL_MARGIN,
   DEFAULT_JEV_FILTER_OVERRIDE_WINDOW,
   DEFAULT_JEV_FILTER_SKIP_CONFIDENCE,
-  DEFAULT_JEV_MODEL,
-  DEFAULT_JEV_PRICE_PER_MTOK,
   DEFAULT_JEV_TIMEOUT_MS,
-  DEFAULT_JEV_TRANSPORT,
   DEFAULT_JEV_TURN_GATE_NOUL_THRESHOLD,
   DEFAULT_SCOUT_TIMEOUT_MS,
 } from "../config/types.ts";
 import { isValidAdvisorToolPolicies } from "../config/validation.ts";
+import { JevClassifierSubmenu } from "./jev-classifier-submenu.ts";
 import { JevFilterSubmenu } from "./jev-filter-submenu.ts";
-import { JevProviderSubmenu } from "./jev-provider-submenu.ts";
-import { providerName } from "./jev-setup-support.ts";
 import { SearchableModelMultiSelector } from "./model-multi-selector.ts";
 import { SearchableModelSelector } from "./model-selector.ts";
 import {
@@ -35,9 +31,9 @@ import { FALLBACK_ADVISOR_MODEL_DISABLED } from "./types.ts";
 import type {
   AdvisorSettings,
   ContextPreset,
+  JevClassifierRegistryAccess,
   JevFilterSelection,
   JevProviderSelection,
-  JevSetupDeps,
   RenderRequester,
 } from "./types.ts";
 
@@ -47,8 +43,14 @@ export interface SettingsItemsOptions {
   modelWhitelist: SettingItem;
   presets: ContextPreset[];
   settings: AdvisorSettings;
-  afterJevSetup?: () => void;
-  jevSetupDeps?: JevSetupDeps;
+  jevClassifierRegistry?: JevClassifierRegistryAccess;
+  jevKeyDeps?: {
+    resolveClassifierKey?: () => Promise<string | undefined>;
+    persistClassifierKey?: (
+      key: string
+    ) => Promise<{ ok: boolean; message: string }>;
+    restoreClassifierKey?: (key: string | undefined) => Promise<boolean>;
+  };
   onJevFilter?: (selection: JevFilterSelection) => boolean;
   onJevProvider?: (selection: JevProviderSelection) => boolean;
   theme: Theme;
@@ -85,49 +87,31 @@ const scoutTimeoutItem = (settings: AdvisorSettings): SettingItem => {
   };
 };
 
-const jevProviderLabel = (settings: AdvisorSettings): string => {
-  const transport = settings.jevTransport ?? DEFAULT_JEV_TRANSPORT;
-
-  if (transport === "auto") {
-    return "Auto (TypeSafe → OpenRouter)";
-  }
-
-  if (transport === "typesafe-compatible") {
-    const baseUrl = settings.jevBaseUrl ?? "no Base URL";
-
-    return settings.jevKeyProvider
-      ? `System One–compatible (${baseUrl}; Pi login "${settings.jevKeyProvider}")`
-      : `System One–compatible (${baseUrl})`;
-  }
-
-  return providerName(transport);
-};
-
 const jevItems = (
   settings: AdvisorSettings,
   theme: Theme,
   tui: RenderRequester,
-  jevSetupDeps?: JevSetupDeps,
+  jevClassifierRegistry?: JevClassifierRegistryAccess,
+  jevKeyDeps?: SettingsItemsOptions["jevKeyDeps"],
   onJevFilter?: (selection: JevFilterSelection) => boolean,
-  onJevProvider?: (selection: JevProviderSelection) => boolean,
-  afterJevSetup?: () => void
+  onJevProvider?: (selection: JevProviderSelection) => boolean
 ): SettingItem[] => [
   {
-    currentValue: jevProviderLabel(settings),
+    currentValue: settings.jevClassifier ?? "Choose classifier",
     description:
-      "Provider used for screening and the turn gate. Credentials are live-verified before a provider is saved.",
+      "Select a Pi-authenticated classifier or explicitly configure the separate Jev API Key option.",
     id: "jevProvider",
-    label: "Jev provider",
+    label: "Jev classifier",
     submenu: (currentValue, done) =>
-      new JevProviderSubmenu({
-        afterSelection: afterJevSetup,
-        currentBaseUrl: settings.jevBaseUrl,
-        currentKeyProvider: settings.jevKeyProvider,
-        currentTransport: settings.jevTransport ?? DEFAULT_JEV_TRANSPORT,
+      new JevClassifierSubmenu({
         currentValue,
         done,
+        keybindings: getKeybindings(),
+        modelRegistry: jevClassifierRegistry,
         onSelection: onJevProvider,
-        setupDeps: jevSetupDeps,
+        persistKey: jevKeyDeps?.persistClassifierKey,
+        resolveStoredKey: jevKeyDeps?.resolveClassifierKey,
+        restoreKey: jevKeyDeps?.restoreClassifierKey,
         theme,
         tui,
       }),
@@ -140,11 +124,12 @@ const jevItems = (
     label: "Jev/Decisions consultation filter",
     submenu: (currentValue, done) =>
       new JevFilterSubmenu({
-        currentTransport: settings.jevTransport ?? DEFAULT_JEV_TRANSPORT,
+        currentClassifier: settings.jevClassifier,
         currentValue,
         done,
+        modelRegistry: jevClassifierRegistry,
         onSelection: onJevFilter,
-        setupDeps: jevSetupDeps,
+        resolveClassifierKey: jevKeyDeps?.resolveClassifierKey,
         theme,
         tui,
       }),
@@ -187,23 +172,6 @@ const jevItems = (
     ).map((value) => `${value} turns`),
   },
   {
-    currentValue: settings.jevModel ?? DEFAULT_JEV_MODEL,
-    description: "TypeSafe Jev model used for screening and turn-gate checks.",
-    id: "jevModel",
-    label: "Jev model",
-    submenu: (_currentValue, done) =>
-      new TextSettingSubmenu({
-        description:
-          "Enter a TypeSafe model name (for example jev-latest or jev-1.13.0).",
-        initial: settings.jevModel ?? DEFAULT_JEV_MODEL,
-        onCancel: done,
-        onSubmit: (value) => ({ value: value.trim() || DEFAULT_JEV_MODEL }),
-        theme,
-        title: "Jev model",
-        tui,
-      }),
-  },
-  {
     currentValue: String(settings.jevTimeoutMs ?? DEFAULT_JEV_TIMEOUT_MS),
     description: "Total wall-time budget for one Jev call, including retries.",
     id: "jevTimeoutMs",
@@ -225,19 +193,7 @@ const jevItems = (
       [0, 1000, 2000, 4000, 8000, 15_000]
     ),
   },
-  {
-    currentValue: String(
-      settings.jevPricePerMtok ?? DEFAULT_JEV_PRICE_PER_MTOK
-    ),
-    description:
-      "TypeSafe/OpenRouter estimated input price per million tokens; ignored for OpenAI Decisions, whose cost is unavailable.",
-    id: "jevPricePerMtok",
-    label: "Jev price/Mtok",
-    values: numericValues(
-      settings.jevPricePerMtok ?? DEFAULT_JEV_PRICE_PER_MTOK,
-      [0.01, 0.02, 0.042, 0.05, 0.1]
-    ),
-  },
+
   {
     currentValue:
       settings.jevTurnGateEveryTurns === 0 ||
@@ -338,8 +294,8 @@ export const createSettingsItems = ({
   modelWhitelist,
   presets,
   settings,
-  afterJevSetup,
-  jevSetupDeps,
+  jevClassifierRegistry,
+  jevKeyDeps,
   onJevFilter,
   onJevProvider,
   theme,
@@ -660,10 +616,10 @@ export const createSettingsItems = ({
       settings,
       theme,
       tui,
-      jevSetupDeps,
+      jevClassifierRegistry,
+      jevKeyDeps,
       onJevFilter,
-      onJevProvider,
-      afterJevSetup
+      onJevProvider
     )
   );
 

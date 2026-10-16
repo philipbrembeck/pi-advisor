@@ -60,6 +60,8 @@ export let advisorJevFilterOverrideWindowRef =
   DEFAULT_JEV_FILTER_OVERRIDE_WINDOW;
 
 export let advisorJevModelRef = DEFAULT_JEV_MODEL;
+export let advisorJevClassifierRef: string | undefined;
+export let advisorJevClassifierModeRef: "pi" | "api-key" = "pi";
 export let advisorJevTimeoutMsRef = DEFAULT_JEV_TIMEOUT_MS;
 export let advisorJevDigestMaxCharsRef = DEFAULT_JEV_DIGEST_MAX_CHARS;
 export let advisorJevPricePerMtokRef = DEFAULT_JEV_PRICE_PER_MTOK;
@@ -207,6 +209,12 @@ export const setAdvisorHerdrIntegrationRef = (enabled: boolean) => {
   advisorHerdrIntegrationRef = enabled;
 };
 
+export const setAdvisorJevClassifierRef = (ref: string | undefined) => {
+  advisorJevClassifierRef = ref?.trim() || undefined;
+  advisorJevClassifierModeRef =
+    advisorJevClassifierRef === "jev-api-key" ? "api-key" : "pi";
+};
+
 export const setAdvisorJevFilterEnabledRef = (enabled: boolean) => {
   advisorJevFilterEnabledRef = enabled;
 };
@@ -334,6 +342,7 @@ export const getAdvisorSettings = () => ({
   gitContextMaxChars: advisorGitContextMaxCharsRef,
   herdrIntegration: advisorHerdrIntegrationRef,
   jevBaseUrl: advisorJevBaseUrlRef,
+  jevClassifier: advisorJevClassifierRef,
   jevDigestMaxChars: advisorJevDigestMaxCharsRef,
   jevFilterEnabled: advisorJevFilterEnabledRef,
   jevFilterNoulMargin: advisorJevFilterNoulMarginRef,

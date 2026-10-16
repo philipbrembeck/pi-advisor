@@ -97,8 +97,8 @@ const formatJevTokens = (usage: AdvisorJevUsageTotals) =>
 const jevCostText = (usage: AdvisorJevUsageTotals) => {
   if (usage.unavailableCostCalls > 0) {
     return usage.knownCostCalls > 0
-      ? `cost unavailable (known-provider estimates $${usage.cost.toFixed(4)}; Decisions billing unconfirmed)`
-      : "cost unavailable (Decisions billing unconfirmed)";
+      ? `cost unavailable (known catalog-priced usage $${usage.cost.toFixed(4)})`
+      : "cost unavailable (classifier usage was not reported)";
   }
 
   return `$${usage.cost.toFixed(4)}`;
@@ -241,7 +241,7 @@ export class AdvisorJevLedgerState {
         const cost =
           usage.unavailableCostCalls > 0
             ? jevCostText(usage)
-            : `$${usage.cost.toFixed(4)} (input only; output free)`;
+            : `$${usage.cost.toFixed(4)} (catalog-priced input/cache; output free)`;
 
         lines.push(
           `Jev/Decisions cost: ${formatJevTokens(usage)} tokens · ${cost}`

@@ -1,4 +1,3 @@
-import { DEFAULT_JEV_MODEL } from "../config/types.ts";
 import { FALLBACK_ADVISOR_MODEL_DISABLED } from "./types.ts";
 import type { AdvisorSettings, ContextPreset } from "./types.ts";
 
@@ -231,12 +230,6 @@ const applyJevMutation = (
       return true;
     }
 
-    case "jevModel": {
-      settings.jevModel = value.trim() || DEFAULT_JEV_MODEL;
-
-      return true;
-    }
-
     case "jevTimeoutMs": {
       settings.jevTimeoutMs = Number(value);
 
@@ -251,12 +244,6 @@ const applyJevMutation = (
 
     case "jevDigestMaxChars": {
       settings.jevDigestMaxChars = Number(value);
-
-      return true;
-    }
-
-    case "jevPricePerMtok": {
-      settings.jevPricePerMtok = Number(value);
 
       return true;
     }

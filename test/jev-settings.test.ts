@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import type { ClassifierModel } from "@earendil-works/pi-ai";
 import { initTheme } from "@earendil-works/pi-coding-agent";
 
 import { loadConfig } from "../src/config.ts";
@@ -131,7 +132,7 @@ const focusJevFilterRow = (selector: any) => {
 
 const focusJevProviderRow = (selector: any) => {
   for (let presses = 0; presses < 60; presses += 1) {
-    if (plainScreen(selector).includes("→ Jev provider")) {
+    if (plainScreen(selector).includes("→ Jev classifier")) {
       selector.handleInput("\r");
 
       return;
@@ -140,7 +141,7 @@ const focusJevProviderRow = (selector: any) => {
     selector.handleInput("\u001B[B");
   }
 
-  throw new Error("Jev provider row not reachable");
+  throw new Error("Jev classifier row not reachable");
 };
 
 const verifiedDeps = (): JevSetupDeps => ({
@@ -153,6 +154,43 @@ const verifiedDeps = (): JevSetupDeps => ({
 });
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+const classifierModel = {
+  api: "typesafe-classifier",
+  baseUrl: "https://classifier.example.test",
+  contextWindow: 10,
+  cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+  id: "jev-latest",
+  input: ["text"],
+  name: "Jev Latest",
+  provider: "typesafe",
+  type: "classifier",
+} satisfies ClassifierModel<"typesafe-classifier">;
+
+const modelRegistry = {
+  classify: async () => ({
+    answers: {
+      self_answerable: { probability: 0.9, type: "bool" },
+      stakes: {
+        choice: "negligible",
+        confidence: 0.9,
+        probabilities: { high: 0, moderate: 0.1, negligible: 0.9 },
+        type: "choice",
+      },
+    },
+    api: "typesafe-classifier",
+    model: "jev-latest",
+    provider: "typesafe",
+    stopReason: "stop",
+    timestamp: 0,
+  }),
+  findOfType: (_type: "classifier", provider: string, id: string) =>
+    provider === "typesafe" && id === "jev-latest"
+      ? classifierModel
+      : undefined,
+  getAvailableOfType: async () => [classifierModel],
+  getProviderDisplayName: () => "TypeSafe",
+};
 
 describe("Jev shared settings", () => {
   test("default to safe values and validate their types", async () => {
@@ -364,8 +402,6 @@ describe("Jev shared settings", () => {
     expect(saved.at(-1)).toMatchObject({ jevTimeoutMs: 15_000 });
     changeSetting(selector, "Jev digest chars");
     expect(saved.at(-1)).toMatchObject({ jevDigestMaxChars: 8000 });
-    changeSetting(selector, "Jev price/Mtok");
-    expect(saved.at(-1)).toMatchObject({ jevPricePerMtok: 0.05 });
     changeSetting(selector, "Jev skip confidence");
     expect(saved.at(-1)).toMatchObject({ jevFilterSkipConfidence: 0.9 });
     changeSetting(selector, "Jev Noul margin");
@@ -380,14 +416,25 @@ describe("Jev shared settings", () => {
     selector.dispose();
   });
 
-  test("the Jev provider row saves a verified provider and commits local state", async () => {
+  test("the Jev classifier row selects a verified native model and commits local state", async () => {
     const selections: JevProviderSelection[] = [];
     const candidates: AdvisorSettings[] = [];
 
     const { selector } = openSelector(
-      { jevFilterEnabled: false, jevTransport: "auto" },
       {
-        jevSetupDeps: verifiedDeps(),
+        jevClassifier: "typesafe/jev-latest",
+        jevFilterEnabled: false,
+        jevTransport: "auto",
+      },
+      {
+        jevSetupDeps: {
+          ...verifiedDeps(),
+          // SAFETY: fixture supplies the models and auth used in picker coverage.
+          modelRegistry: {
+            ...modelRegistry,
+            getAvailableOfType: async () => [classifierModel],
+          } as never,
+        },
         onJevProvider: (selection, settings) => {
           selections.push(selection);
           candidates.push(settings);
@@ -399,34 +446,56 @@ describe("Jev shared settings", () => {
 
     focusJevProviderRow(selector);
     await settle();
-    // SAFETY: the setup component is the submenu installed for the focused provider row.
+    // SAFETY: focusing this row installs its classifier submenu in the settings-list slot.
     const submenu = (selector as any).settingsList.submenuComponent;
+    await submenu.whenLoaded();
+    submenu.render(80);
     submenu.handleInput("\r");
     await settle();
 
-    expect(selections).toEqual([{ transport: "typesafe" }]);
-    expect(candidates[0]).toMatchObject({ jevTransport: "typesafe" });
+    expect(selections).toEqual([
+      { classifier: "typesafe/jev-latest", transport: "auto" },
+    ]);
+    expect(candidates[0]).toMatchObject({
+      jevClassifier: "typesafe/jev-latest",
+    });
     // SAFETY: the selector's local settings are asserted through its runtime shape.
     expect((selector as any).settings).toMatchObject({
-      jevTransport: "typesafe",
+      jevClassifier: "typesafe/jev-latest",
     });
     selector.dispose();
   });
 
-  test("a failed provider save leaves the previous transport untouched", async () => {
+  test("a failed classifier save keeps the previous classifier selection untouched", async () => {
     const { selector } = openSelector(
-      { jevFilterEnabled: false, jevTransport: "auto" },
-      { jevSetupDeps: verifiedDeps(), onJevProvider: () => false }
+      {
+        jevClassifier: "typesafe/jev-latest",
+        jevFilterEnabled: false,
+        jevTransport: "auto",
+      },
+      {
+        jevSetupDeps: {
+          ...verifiedDeps(),
+          // SAFETY: fixture supplies the models and auth used in picker coverage.
+          modelRegistry: {
+            ...modelRegistry,
+            getAvailableOfType: async () => [classifierModel],
+          } as never,
+        },
+        onJevProvider: () => false,
+      }
     );
 
     focusJevProviderRow(selector);
     await settle();
-    // SAFETY: the setup component is the submenu installed for the focused provider row.
+    // SAFETY: focusJevProviderRow installs the provider/classifier submenu on the active SettingsList.
     const submenu = (selector as any).settingsList.submenuComponent;
+    await submenu.whenLoaded();
+    submenu.render(80);
     submenu.handleInput("\r");
     await settle();
     expect(plainScreen(selector)).toContain(
-      "Provider verified, but settings could not be saved."
+      "Verified, but settings could not be saved."
     );
     // SAFETY: the selector's local settings remain unchanged after a rejected save.
     expect((selector as any).settings).toMatchObject({ jevTransport: "auto" });
@@ -437,9 +506,20 @@ describe("Jev shared settings", () => {
     const selections: JevFilterSelection[] = [];
 
     const { selector } = openSelector(
-      { jevFilterEnabled: false, jevTransport: "typesafe" },
       {
-        jevSetupDeps: verifiedDeps(),
+        jevClassifier: "typesafe/jev-latest",
+        jevFilterEnabled: false,
+        jevTransport: "typesafe",
+      },
+      {
+        jevSetupDeps: {
+          ...verifiedDeps(),
+          // SAFETY: fixture supplies the models and auth used by the filter gate.
+          modelRegistry: {
+            ...modelRegistry,
+            getAvailableOfType: async () => [classifierModel],
+          } as never,
+        },
         onJevFilter: (selection) => {
           selections.push(selection);
 
@@ -470,8 +550,11 @@ describe("Jev shared settings", () => {
       { jevFilterEnabled: false, jevTransport: "auto" },
       {
         jevSetupDeps: {
-          resolveTransport: () => Promise.resolve(undefined),
-          verify: () => Promise.resolve({ ok: true }),
+          // SAFETY: fixture has no available classifier models to test the unavailable case.
+          modelRegistry: {
+            ...modelRegistry,
+            getAvailableOfType: async () => [],
+          } as never,
         },
         onJevFilter: (selection) => {
           selections.push(selection);
@@ -488,14 +571,30 @@ describe("Jev shared settings", () => {
     submenu.handleInput("\r");
     await settle();
     expect(selections).toEqual([]);
-    expect(plainScreen(selector)).toContain("No Jev provider resolves");
+    expect(plainScreen(selector)).toContain(
+      "Select an available authenticated classifier"
+    );
     selector.dispose();
   });
 
   test("a failed filter save surfaces a notice and keeps the filter off", async () => {
     const { selector } = openSelector(
-      { jevFilterEnabled: false, jevTransport: "typesafe" },
-      { jevSetupDeps: verifiedDeps(), onJevFilter: () => false }
+      {
+        jevClassifier: "typesafe/jev-latest",
+        jevFilterEnabled: false,
+        jevTransport: "typesafe",
+      },
+      {
+        jevSetupDeps: {
+          ...verifiedDeps(),
+          // SAFETY: fixture supplies the models and auth used in the filter gate.
+          modelRegistry: {
+            ...modelRegistry,
+            getAvailableOfType: async () => [classifierModel],
+          } as never,
+        },
+        onJevFilter: () => false,
+      }
     );
 
     focusJevFilterRow(selector);
@@ -514,13 +613,24 @@ describe("Jev shared settings", () => {
     selector.dispose();
   });
 
-  test("the deprecated onJevSetup callback still receives the provider row", async () => {
+  test("the deprecated onJevSetup callback receives the native classifier row", async () => {
     const selections: JevSetupSelection[] = [];
 
     const { selector } = openSelector(
-      { jevFilterEnabled: false, jevTransport: "auto" },
       {
-        jevSetupDeps: verifiedDeps(),
+        jevClassifier: "typesafe/jev-latest",
+        jevFilterEnabled: false,
+        jevTransport: "auto",
+      },
+      {
+        jevSetupDeps: {
+          ...verifiedDeps(),
+          // SAFETY: fixture supplies the models and auth used in picker coverage.
+          modelRegistry: {
+            ...modelRegistry,
+            getAvailableOfType: async () => [classifierModel],
+          } as never,
+        },
         onJevSetup: (selection) => {
           selections.push(selection);
 
@@ -533,34 +643,19 @@ describe("Jev shared settings", () => {
     await settle();
     // SAFETY: the setup component is the submenu installed for the focused provider row.
     const submenu = (selector as any).settingsList.submenuComponent;
+    await submenu.whenLoaded();
+    submenu.render(80);
     submenu.handleInput("\r");
     await settle();
-    expect(selections).toEqual([{ enabled: false, transport: "typesafe" }]);
+    expect(selections).toEqual([{ enabled: false, transport: "auto" }]);
     selector.dispose();
   });
 
-  test("the Jev model submenu applies a trimmed custom model", () => {
+  test("the legacy Jev model remains persisted but is no longer an active setting", () => {
     const { saved, selector } = openSelector();
 
-    const presses = (() => {
-      for (let i = 0; i < 60; i += 1) {
-        if (plainScreen(selector).includes("→ Jev model")) {
-          return i;
-        }
-
-        selector.handleInput("\u001B[B");
-      }
-
-      throw new Error("Jev model row not reachable");
-    })();
-
-    expect(presses).toBeGreaterThanOrEqual(0);
-    selector.handleInput("\r");
-    // SAFETY: settingsList.submenuComponent is the live submenu the selector installed on open.
-    const editor = (selector as any).settingsList.submenuComponent;
-    editor.input.setValue("  jev-1.13.0 \n");
-    editor.input.onSubmit(editor.input.getValue());
-    expect(saved.at(-1)).toMatchObject({ jevModel: "jev-1.13.0" });
+    expect(plainScreen(selector)).not.toContain("Jev model");
+    expect(saved).toEqual([]);
     selector.dispose();
   });
 });

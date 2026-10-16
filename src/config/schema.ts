@@ -18,6 +18,7 @@ import {
   advisorGitContextRef,
   advisorHerdrIntegrationRef,
   advisorJevBaseUrlRef,
+  advisorJevClassifierRef,
   advisorJevDigestMaxCharsRef,
   advisorJevFilterEnabledRef,
   advisorJevFilterNoulMarginRef,
@@ -273,6 +274,15 @@ export const CONFIG_SCHEMA = {
     persisted: true,
     type: "string",
     validate: isValidJevBaseUrl,
+  },
+  advisorJevClassifier: {
+    accepted: "a concrete provider/model classifier reference or jev-api-key",
+    current: () => advisorJevClassifierRef,
+    persisted: true,
+    type: "string",
+    validate: (value: unknown): value is JsonValue =>
+      isString(value) &&
+      (value === "jev-api-key" || /^[^/]+\/.+$/u.test(value.trim())),
   },
   advisorJevDigestMaxChars: {
     accepted: "a non-negative safe integer",

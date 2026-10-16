@@ -1,3 +1,4 @@
+import type { Usage } from "@earendil-works/pi-ai";
 import type {
   AgentToolResult,
   ExtensionContext,
@@ -21,6 +22,7 @@ import {
 import {
   advisorUsageCost,
   advisorUsageForPi,
+  combineAdvisorAndClassifierUsage,
   snapshotAdvisorUsage,
 } from "../usage.ts";
 import { advisorOutputSchema } from "./advisor-output.ts";
@@ -181,6 +183,7 @@ export const registerAskAdvisorTool = ({
         throw error;
       }
 
+      let classifierUsage: Usage | undefined;
       const simpleMode = isSimpleMode();
 
       if (
@@ -220,6 +223,8 @@ export const registerAskAdvisorTool = ({
           signal,
         });
 
+        classifierUsage = screening.usage;
+
         if (screening.decision === "skip") {
           const skipText = screeningSkipText(screening);
           session.releaseCall(_id);
@@ -234,11 +239,17 @@ export const registerAskAdvisorTool = ({
             text: skipText,
           };
 
-          return {
+          const skipResult: AgentToolResult<AdvisorToolDetails> = {
             content: [{ text: skipText, type: "text" }],
             details: skipped,
             structuredContent: skipped,
           };
+
+          if (classifierUsage) {
+            skipResult.usage = classifierUsage;
+          }
+
+          return skipResult;
         }
 
         if (sameModelAdvisorDisabled(ctx, ctx.model, followUp?.payload.model)) {
@@ -348,7 +359,13 @@ export const registerAskAdvisorTool = ({
             usage: result.usage,
           });
           const usage = snapshotAdvisorUsage(result.usage);
-          const piUsage = advisorUsageForPi(result.usage);
+          const advisorPiUsage = advisorUsageForPi(result.usage);
+
+          const piUsage = combineAdvisorAndClassifierUsage(
+            advisorPiUsage,
+            classifierUsage
+          );
+
           updateAdvisorUsageStatus(ctx, session);
 
           const details: AdvisorToolDetails = {

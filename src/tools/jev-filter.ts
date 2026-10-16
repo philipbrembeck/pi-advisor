@@ -1,7 +1,9 @@
+import type { Usage } from "@earendil-works/pi-ai";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import type { Fetch } from "@typesafe-ai/sdk";
 
 import {
+  advisorJevClassifierModeRef,
+  advisorJevClassifierRef,
   advisorJevFilterEnabledRef,
   advisorJevFilterNoulMarginRef,
   advisorJevFilterOverrideWindowRef,
@@ -9,27 +11,24 @@ import {
   isSimpleMode,
 } from "../config/state.ts";
 import { capUtf8Bytes } from "../content-utils.ts";
-import { JevFailure, jevClientFromCredentials } from "../jev/client.ts";
-import { consumePlaintextKeyWarning } from "../jev/key-store.ts";
-import {
-  composeScreeningVerdict,
-  screeningQuestions,
-} from "../jev/questions.ts";
+import { consumeJevClassifierKey } from "../jev/classifier-key-store.ts";
+import { classifyScreening } from "../jev/classifier.ts";
+import { JevFailure } from "../jev/failure.ts";
+import { composeScreeningVerdict } from "../jev/questions.ts";
 import { buildJevState } from "../jev/state.ts";
-import { resolveJevTransport } from "../jev/transport.ts";
-import type { JevCredentials } from "../jev/transport.ts";
 import type { AdvisorSessionState } from "../session-state.ts";
 import { createOutageNotifier } from "./outage-notifier.ts";
 
 export type JevSkipKind = "screened" | "repeat";
 
 export type ScreeningOutcome =
-  | { decision: "allow" }
+  | { decision: "allow"; usage?: Usage }
   | {
       decision: "skip";
       kind: JevSkipKind;
       reason: string;
       reattachedAdvice?: string;
+      usage?: Usage;
     };
 
 export interface ScreenConsultationOptions {
@@ -40,8 +39,17 @@ export interface ScreenConsultationOptions {
 }
 
 export interface ScreeningDeps {
-  fetch?: Fetch;
-  resolveTransport?: () => Promise<JevCredentials | undefined>;
+  classify?: typeof classifyScreening;
+  classifyResult?: (
+    state: ReturnType<typeof buildJevState>,
+    signal?: AbortSignal
+  ) => Promise<
+    ReturnType<typeof classifyScreening> extends Promise<infer Result>
+      ? Result
+      : never
+  >;
+  resolveApiKey?: () => Promise<string | undefined>;
+  selectedRef?: () => string | undefined;
 }
 
 export const normalizeScreeningQuestion = (question: string | undefined) =>
@@ -57,7 +65,7 @@ const repeatSkipText = (advice: string) =>
 
 const outageNotifier = createOutageNotifier(
   (category, message) =>
-    `Advisor Jev/Decisions filter failed (${category}); allowing consultations. ${message}`
+    `Advisor Jev classifier failed (${category}); allowing consultations. ${message}`
 );
 
 const notifyOutageOnce = outageNotifier.notify;
@@ -99,6 +107,16 @@ const bypassOutcome = (
   return undefined;
 };
 
+const classifierRef = (deps: ScreeningDeps) =>
+  advisorJevClassifierModeRef === "api-key"
+    ? "typesafe/jev-latest"
+    : (deps.selectedRef?.() ?? advisorJevClassifierRef);
+
+const apiKeyFor = (deps: ScreeningDeps) =>
+  advisorJevClassifierModeRef === "api-key"
+    ? (deps.resolveApiKey ?? consumeJevClassifierKey)()
+    : Promise.resolve(undefined);
+
 const screenWithJev = async (
   ctx: ExtensionContext,
   session: AdvisorSessionState,
@@ -106,37 +124,38 @@ const screenWithJev = async (
   deps: ScreeningDeps,
   normalizedQuestion: string | undefined
 ): Promise<ScreeningOutcome> => {
-  const credentials = await (deps.resolveTransport ?? resolveJevTransport)(ctx);
+  const selectedRef = classifierRef(deps);
+  const apiKey = await apiKeyFor(deps);
 
-  if (!credentials) {
+  if (!selectedRef || (advisorJevClassifierModeRef === "api-key" && !apiKey)) {
     session.recordJevFilterFailure();
     notifyOutageOnce(
       ctx,
       "missing-key",
-      "No credentials resolved for the selected Jev/Decisions provider."
+      "No credentials resolved for the selected Jev classifier."
     );
 
     return allow();
   }
 
-  if (credentials.source === "advisor-json") {
-    const warning = consumePlaintextKeyWarning();
-
-    if (warning && ctx.hasUI) {
-      ctx.ui.notify(warning, "warning");
-    }
-  }
-
-  const client = jevClientFromCredentials(credentials, deps.fetch);
-
   try {
-    const result = await client.ask(
-      buildJevState(ctx, options),
-      screeningQuestions,
-      options.signal
-    );
+    const state = buildJevState(ctx, options);
 
-    session.recordJevFilterUsage(result.usage);
+    const result = deps.classifyResult
+      ? await deps.classifyResult(state, options.signal)
+      : await (deps.classify ?? classifyScreening)(ctx, selectedRef, state, {
+          apiKey:
+            advisorJevClassifierModeRef === "api-key" ? apiKey : undefined,
+          signal: options.signal,
+        });
+
+    if (result.usage) {
+      session.recordJevFilterUsage({
+        cost: result.usage.cost,
+        inputTokens: result.usage.inputTokens,
+        outputTokens: result.usage.outputTokens,
+      });
+    }
 
     const verdict = composeScreeningVerdict(result.answers, {
       noulMargin: advisorJevFilterNoulMarginRef,
@@ -150,12 +169,13 @@ const screenWithJev = async (
         decision: "skip",
         kind: "screened",
         reason: "low stakes and resolvable without a consultation",
+        usage: result.usage?.piUsage,
       };
     }
 
     session.recordJevFilterAllowed();
 
-    return allow();
+    return { decision: "allow", usage: result.usage?.piUsage };
   } catch (error) {
     if (options.signal?.aborted) {
       throw error;

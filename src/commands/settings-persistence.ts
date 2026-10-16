@@ -18,16 +18,12 @@ import {
   setAdvisorGitContextRef,
   setAdvisorHerdrIntegrationRef,
   setAdvisorJevDigestMaxCharsRef,
-  setAdvisorJevBaseUrlRef,
+  setAdvisorJevClassifierRef,
   setAdvisorJevFilterEnabledRef,
   setAdvisorJevFilterNoulMarginRef,
   setAdvisorJevFilterOverrideWindowRef,
   setAdvisorJevFilterSkipConfidenceRef,
-  setAdvisorJevKeyProviderRef,
-  setAdvisorJevModelRef,
-  setAdvisorJevPricePerMtokRef,
   setAdvisorJevTimeoutMsRef,
-  setAdvisorJevTransportRef,
   setAdvisorJevTurnGateEveryTurnsRef,
   setAdvisorJevTurnGateNoulThresholdRef,
   setAdvisorLoopThresholdRef,
@@ -57,10 +53,7 @@ import {
   DEFAULT_JEV_FILTER_NOUL_MARGIN,
   DEFAULT_JEV_FILTER_OVERRIDE_WINDOW,
   DEFAULT_JEV_FILTER_SKIP_CONFIDENCE,
-  DEFAULT_JEV_MODEL,
-  DEFAULT_JEV_PRICE_PER_MTOK,
   DEFAULT_JEV_TIMEOUT_MS,
-  DEFAULT_JEV_TRANSPORT,
   DEFAULT_JEV_TURN_GATE_EVERY_TURNS,
   DEFAULT_JEV_TURN_GATE_NOUL_THRESHOLD,
   DEFAULT_SCOUT_TIMEOUT_MS,
@@ -100,8 +93,7 @@ const applySessionSettings = (settings: AdvisorSettings) => {
 
 const applyJevSettings = (settings: AdvisorSettings) => {
   setAdvisorJevFilterEnabledRef(settings.jevFilterEnabled ?? false);
-  setAdvisorJevBaseUrlRef(settings.jevBaseUrl);
-  setAdvisorJevKeyProviderRef(settings.jevKeyProvider);
+  setAdvisorJevClassifierRef(settings.jevClassifier);
   setAdvisorJevFilterSkipConfidenceRef(
     settings.jevFilterSkipConfidence ?? DEFAULT_JEV_FILTER_SKIP_CONFIDENCE
   );
@@ -111,15 +103,10 @@ const applyJevSettings = (settings: AdvisorSettings) => {
   setAdvisorJevFilterOverrideWindowRef(
     settings.jevFilterOverrideWindow ?? DEFAULT_JEV_FILTER_OVERRIDE_WINDOW
   );
-  setAdvisorJevModelRef(settings.jevModel ?? DEFAULT_JEV_MODEL);
   setAdvisorJevTimeoutMsRef(settings.jevTimeoutMs ?? DEFAULT_JEV_TIMEOUT_MS);
   setAdvisorJevDigestMaxCharsRef(
     settings.jevDigestMaxChars ?? DEFAULT_JEV_DIGEST_MAX_CHARS
   );
-  setAdvisorJevPricePerMtokRef(
-    settings.jevPricePerMtok ?? DEFAULT_JEV_PRICE_PER_MTOK
-  );
-  setAdvisorJevTransportRef(settings.jevTransport ?? DEFAULT_JEV_TRANSPORT);
   setAdvisorJevTurnGateEveryTurnsRef(
     settings.jevTurnGateEveryTurns ?? DEFAULT_JEV_TURN_GATE_EVERY_TURNS
   );

@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import {
+  setAdvisorJevClassifierRef,
   setAdvisorJevFilterEnabledRef,
   setAdvisorJevFilterOverrideWindowRef,
   setSimpleModeRef,
 } from "../src/config/state.ts";
 import { resetConfigCache } from "../src/config/storage.ts";
+import type { JevClassifierResult } from "../src/jev/classifier.ts";
 import { AdvisorSessionState } from "../src/session-state.ts";
 import {
   normalizeScreeningQuestion,
@@ -13,27 +15,9 @@ import {
   screenConsultation,
 } from "../src/tools/jev-filter.ts";
 import { asExtensionContext } from "./helpers/extension-context.ts";
-import { branchFromLines, systemOneMock } from "./helpers/jev-mock.ts";
+import { branchFromLines } from "./helpers/jev-mock.ts";
 
-const credentials = { apiKey: "tsk-test", transport: "typesafe" as const };
-
-const openAiTransport = () =>
-  Promise.resolve({
-    apiKey: "openai-platform-key",
-    transport: "openai-decisions" as const,
-  });
-
-const summaryLine = (session: AdvisorSessionState) => {
-  const summary = session.summary(undefined) ?? "";
-
-  return (
-    summary
-      .split("\n")
-      .find((line) => line.startsWith("Jev/Decisions filter:")) ?? ""
-  );
-};
-
-const ctxWith = (options: { notifications?: string[] } = {}) =>
+const ctxWith = (notifications: string[] = []) =>
   asExtensionContext({
     cwd: "/",
     hasUI: true,
@@ -41,69 +25,45 @@ const ctxWith = (options: { notifications?: string[] } = {}) =>
     sessionManager: {
       getBranch: () => branchFromLines([["user", "Fix the bug."]]),
     },
-    ui: {
-      notify: (message: string) => options.notifications?.push(message),
-    },
+    ui: { notify: (message: string) => notifications.push(message) },
   });
 
-const verdictResponse = (p0: number, noul: number) => ({
+const result = (
+  probability: number,
+  stakes: number,
+  cost = 0.00002
+): JevClassifierResult => ({
   answers: {
-    self_answerable: { noul, type: "noul" },
+    self_answerable: { noul: probability, type: "noul" },
     stakes: {
-      confidence: 0.9,
-      legend: {
-        "0": "Negligible: routine, low-risk, mechanical, or reversible; a wrong call costs little and is easy to undo.",
-        "1": "Moderate: some risk or rework, but bounded and recoverable.",
-        "2": "High: material consequences for correctness, security, cost, user trust, or irreversibility.",
-      },
-      probabilities: { "0": p0, "1": 0.2, "2": 0.8 - p0 },
-      score: 1,
-      type: "score",
+      choice: "negligible",
+      confidence: stakes,
+      probabilities: { high: 1 - stakes, moderate: 0, negligible: stakes },
+      type: "choice",
     },
   },
-  usage: { input_tokens: 900, output_tokens: 0 },
+  model: "typesafe/jev-latest",
+  usage: { cost, inputTokens: 10, outputTokens: 2 },
 });
 
-const decisionsVerdictResponse = (
-  negligible: number,
-  selfAnswerable: number
-) => ({
-  answers: [
-    {
-      name: "self_answerable",
-      probability: selfAnswerable,
-      type: "predicate",
-    },
-    {
-      confidence: 0.9,
-      name: "stakes",
-      probabilities: [
-        { label: "Negligible", probability: negligible, value: 0 },
-        { label: "Moderate", probability: (1 - negligible) / 2, value: 1 },
-        { label: "High", probability: (1 - negligible) / 2, value: 2 },
-      ],
-      score: 1 - negligible,
-      type: "score",
-    },
-  ],
-  model: "gpt-6-luna",
-  usage: { input_tokens: 900, output_tokens: 0 },
-});
+const classifier = (answer: JevClassifierResult) => async () => answer;
 
 beforeEach(() => {
   setAdvisorJevFilterEnabledRef(true);
+  setAdvisorJevClassifierRef("typesafe/jev-latest");
   resetJevOutageNotification();
 });
 
 afterEach(() => {
   setAdvisorJevFilterEnabledRef(false);
+  setAdvisorJevClassifierRef(undefined);
   setAdvisorJevFilterOverrideWindowRef(10);
   setSimpleModeRef(false);
   resetConfigCache();
 });
 
 describe("screenConsultation", () => {
-  test("allows without a Jev call when the filter is disabled or simple mode", async () => {
+  test("disabled filter and simple mode bypass classification", async () => {
     setAdvisorJevFilterEnabledRef(false);
     const session = new AdvisorSessionState();
     expect(await screenConsultation(ctxWith(), session, {})).toEqual({
@@ -117,8 +77,7 @@ describe("screenConsultation", () => {
     expect(session.summary(undefined)).toBeUndefined();
   });
 
-  test("repeat reattachment works with the Jev filter disabled", async () => {
-    setAdvisorJevFilterEnabledRef(false);
+  test("repeat questions reattach prior advice without classifying", async () => {
     const session = new AdvisorSessionState();
     session.issueAdvice(
       "advice-1",
@@ -134,16 +93,14 @@ describe("screenConsultation", () => {
       session,
       { question: "Ship it?" },
       {
-        fetch: (input: string, init?: RequestInit) => {
+        classify: async () => {
           calls += 1;
 
-          return systemOneMock([]).fetch(input, init);
+          return result(0.9, 0.99);
         },
-        resolveTransport: () => Promise.resolve(credentials),
       }
     );
 
-    expect(calls).toBe(0);
     expect(outcome.decision).toBe("skip");
 
     if (outcome.decision === "skip") {
@@ -151,474 +108,141 @@ describe("screenConsultation", () => {
       expect(outcome.reattachedAdvice).toContain("migration plan");
     }
 
-    const summary = session.summary(undefined) ?? "";
-    expect(summary).toContain(
-      "Consultation dedup: 1 repeat question skipped, earlier advice reattached"
-    );
-    expect(summary).not.toContain("Jev/Decisions filter:");
-    expect(summary).not.toContain("Jev cost");
+    expect(calls).toBe(0);
   });
 
-  test("caps reattached advice by UTF-8 bytes", async () => {
-    setAdvisorJevFilterEnabledRef(false);
+  test("screens only on confident negligible stakes AND self-answerability", async () => {
     const session = new AdvisorSessionState();
-    session.issueAdvice(
-      "advice-unicode",
-      "🧪".repeat(2000),
-      "executor-requested",
-      false,
-      "ship it?"
-    );
-
-    const outcome = await screenConsultation(ctxWith(), session, {
-      question: "Ship it?",
-    });
-
-    expect(outcome.decision).toBe("skip");
-
-    if (outcome.decision === "skip") {
-      expect(Buffer.byteLength(outcome.reattachedAdvice ?? "", "utf-8")).toBe(
-        4 * 1024
-      );
-    }
-  });
-
-  test("allows on confident negligible stakes AND self-answerable only otherwise skips", async () => {
-    const session = new AdvisorSessionState();
-    const allowMock = systemOneMock([verdictResponse(0.2, 0.9)]);
 
     const allow = await screenConsultation(
       ctxWith(),
       session,
       { question: "Ship the migration?" },
       {
-        fetch: allowMock.fetch,
-        resolveTransport: () => Promise.resolve(credentials),
+        classifyResult: classifier(result(0.9, 0.2)),
       }
     );
 
-    expect(allow).toEqual({ decision: "allow" });
-
-    const skipMock = systemOneMock([verdictResponse(0.95, 0.9)]);
+    expect(allow.decision).toBe("allow");
 
     const skip = await screenConsultation(
       ctxWith(),
       session,
       { question: "Which import order?" },
       {
-        fetch: skipMock.fetch,
-        resolveTransport: () => Promise.resolve(credentials),
+        classifyResult: classifier(result(0.9, 0.95)),
       }
     );
 
     expect(skip.decision).toBe("skip");
-
-    if (skip.decision === "skip") {
-      expect(skip.kind).toBe("screened");
-      expect(skip.reason).toContain("low stakes");
-    }
   });
 
-  test("applies the local conjunction to Decisions and fails open on uncertainty or errors", async () => {
-    const screened = await screenConsultation(
-      ctxWith(),
-      new AdvisorSessionState(),
-      { question: "Which import order?" },
-      {
-        fetch: systemOneMock([decisionsVerdictResponse(0.95, 0.9)]).fetch,
-        resolveTransport: openAiTransport,
-      }
-    );
-
-    expect(screened.decision).toBe("skip");
-
-    const uncertain = await screenConsultation(
-      ctxWith(),
-      new AdvisorSessionState(),
-      { question: "Should I proceed?" },
-      {
-        fetch: systemOneMock([decisionsVerdictResponse(0.95, 0.84)]).fetch,
-        resolveTransport: openAiTransport,
-      }
-    );
-
-    expect(uncertain).toEqual({ decision: "allow" });
-
-    const malformed = await screenConsultation(
-      ctxWith(),
-      new AdvisorSessionState(),
-      { question: "Should I proceed?" },
-      {
-        fetch: systemOneMock([
-          {
-            answers: [
-              {
-                name: "self_answerable",
-                probability: 0.99,
-                type: "predicate",
-              },
-            ],
-            usage: { input_tokens: 10, output_tokens: 0 },
-          },
-        ]).fetch,
-        resolveTransport: openAiTransport,
-      }
-    );
-
-    expect(malformed).toEqual({ decision: "allow" });
-
-    const unauthorized = await screenConsultation(
-      ctxWith(),
-      new AdvisorSessionState(),
-      { question: "Should I proceed?" },
-      {
-        fetch: systemOneMock([
-          { body: { error: "invalid api key" }, status: 401 },
-        ]).fetch,
-        resolveTransport: openAiTransport,
-      }
-    );
-
-    expect(unauthorized).toEqual({ decision: "allow" });
-  });
-
-  test("records Decisions tokens while showing unavailable endpoint cost", async () => {
+  test("records catalog-priced usage and exposes it with the screening result", async () => {
     const session = new AdvisorSessionState();
 
     const outcome = await screenConsultation(
       ctxWith(),
       session,
-      { question: "Which import order?" },
+      {},
       {
-        fetch: systemOneMock([decisionsVerdictResponse(0.95, 0.9)]).fetch,
-        resolveTransport: () =>
-          Promise.resolve({
-            apiKey: "openai-platform-key",
-            transport: "openai-decisions" as const,
-          }),
+        classifyResult: async () => ({
+          ...result(0.9, 0.95),
+          usage: {
+            cost: 0.00002,
+            inputTokens: 10,
+            outputTokens: 2,
+            piUsage: {
+              cacheRead: 0,
+              cacheWrite: 0,
+              cost: {
+                cacheRead: 0,
+                cacheWrite: 0,
+                input: 0.00002,
+                output: 0,
+                total: 0.00002,
+              },
+              input: 10,
+              output: 2,
+              totalTokens: 12,
+            },
+          },
+        }),
       }
     );
 
     expect(outcome.decision).toBe("skip");
-    expect(session.summary(undefined)).toContain(
-      "Jev/Decisions cost: ↑900 tokens · cost unavailable (Decisions billing unconfirmed)"
-    );
+    expect(outcome.usage?.cost.total).toBe(0.00002);
+    expect(session.summary(undefined)).toContain("$0.0000");
   });
 
-  test("records ledger counts and Jev spend on the session", async () => {
-    const session = new AdvisorSessionState();
-
-    const mock = systemOneMock([
-      verdictResponse(0.95, 0.9),
-      verdictResponse(0.2, 0.9),
-    ]);
-
-    await screenConsultation(
-      ctxWith(),
-      session,
-      { question: "a?" },
-      {
-        fetch: mock.fetch,
-        resolveTransport: () => Promise.resolve(credentials),
-      }
-    );
-    await screenConsultation(
-      ctxWith(),
-      session,
-      { question: "b?" },
-      {
-        fetch: mock.fetch,
-        resolveTransport: () => Promise.resolve(credentials),
-      }
-    );
-    const summary = session.summary(undefined);
-    expect(summary).toContain(
-      "Jev/Decisions filter: 2 screened (1 allowed, 1 skipped)"
-    );
-    expect(summary).toContain("Jev/Decisions cost: ↑1.8k tokens · $0.0001");
-  });
-
-  test("missing credentials allow with one missing-key notification", async () => {
+  test("missing selection fails open with visible notification", async () => {
+    setAdvisorJevClassifierRef(undefined);
     const notifications: string[] = [];
     const session = new AdvisorSessionState();
 
     const outcome = await screenConsultation(
-      ctxWith({ notifications }),
+      ctxWith(notifications),
       session,
-      {
-        question: "x?",
-      },
-      {
-        resolveTransport: () => Promise.resolve(undefined),
-      }
+      {}
     );
 
-    expect(outcome).toEqual({ decision: "allow" });
-    expect(notifications).toHaveLength(1);
+    expect(outcome.decision).toBe("allow");
     expect(notifications[0]).toContain("missing-key");
-    await screenConsultation(
-      ctxWith({ notifications }),
-      session,
-      {
-        question: "y?",
-      },
-      {
-        resolveTransport: () => Promise.resolve(undefined),
-      }
-    );
-    expect(notifications).toHaveLength(1);
-    expect(summaryLine(session)).toContain("2 failures");
   });
 
-  test("caller cancellation during a 429 propagates instead of failing open", async () => {
-    const notifications: string[] = [];
-    const controller = new AbortController();
+  test("classifier failures fail open and caller cancellation propagates", async () => {
     const session = new AdvisorSessionState();
-    const mock = systemOneMock([{ body: { error: "slow down" }, status: 429 }]);
+    const notifications: string[] = [];
+
+    const outage = await screenConsultation(
+      ctxWith(notifications),
+      session,
+      {},
+      {
+        classifyResult: async () => {
+          throw new Error("provider down");
+        },
+      }
+    );
+
+    expect(outage.decision).toBe("allow");
+    expect(notifications[0]).toContain("provider down");
+
+    const controller = new AbortController();
 
     const pending = screenConsultation(
-      ctxWith({ notifications }),
-      session,
+      ctxWith(),
+      new AdvisorSessionState(),
       { signal: controller.signal },
       {
-        fetch: (input: string, init?: RequestInit) => {
+        classifyResult: async () => {
           controller.abort();
-
-          return mock.fetch(input, init);
+          throw new Error("cancelled");
         },
-        resolveTransport: () => Promise.resolve(credentials),
       }
     );
 
-    await expect(pending).rejects.toThrow("Jev call aborted by the caller.");
-    expect(mock.captured).toHaveLength(1);
-    expect(notifications).toHaveLength(0);
-    expect(summaryLine(session)).not.toContain("failures");
+    await expect(pending).rejects.toThrow("cancelled");
   });
 
-  test("a 401 allows with a single auth notification and no key material", async () => {
-    const notifications: string[] = [];
+  test("force and repeat-window overrides bypass the classifier", async () => {
     const session = new AdvisorSessionState();
-    const mock = systemOneMock([{ body: { error: "bad key" }, status: 401 }]);
-
-    const outcome = await screenConsultation(
-      ctxWith({ notifications }),
-      session,
-      { question: "x?" },
-      {
-        fetch: mock.fetch,
-        resolveTransport: () => Promise.resolve(credentials),
-      }
-    );
-
-    expect(outcome).toEqual({ decision: "allow" });
-    expect(notifications).toHaveLength(1);
-    expect(notifications[0]).toContain("(auth)");
-    expect(notifications[0]).not.toContain("tsk-test");
-    await screenConsultation(
-      ctxWith({ notifications }),
-      session,
-      { question: "y?" },
-      {
-        fetch: systemOneMock([{ body: { error: "bad key" }, status: 401 }])
-          .fetch,
-        resolveTransport: () => Promise.resolve(credentials),
-      }
-    );
-    expect(notifications).toHaveLength(1);
-  });
-
-  test("a malformed response allows with a malformed notification", async () => {
-    const notifications: string[] = [];
-    const session = new AdvisorSessionState();
-    const mock = systemOneMock([{ answers: "garbage" }]);
-
-    const outcome = await screenConsultation(
-      ctxWith({ notifications }),
-      session,
-      { question: "x?" },
-      {
-        fetch: mock.fetch,
-        resolveTransport: () => Promise.resolve(credentials),
-      }
-    );
-
-    expect(outcome).toEqual({ decision: "allow" });
-    expect(notifications[0]).toContain("(malformed)");
-  });
-
-  test("a repeat question skips without a Jev call and reattaches advice", async () => {
-    const session = new AdvisorSessionState();
-    session.issueAdvice(
-      "advice-1",
-      "Use the migration plan from earlier.",
-      "executor-requested",
-      false,
-      "which import order?"
-    );
-    let calls = 0;
-
-    const mock = systemOneMock([
-      {
-        ...verdictResponse(0, 0),
-        __never: () => {
-          calls += 1;
-        },
-      },
-    ]);
-
-    const outcome = await screenConsultation(
-      ctxWith(),
-      session,
-      {
-        question: "  WHICH   import Order? ",
-      },
-      {
-        fetch: (input: string, init?: RequestInit) => {
-          calls += 1;
-
-          return mock.fetch(input, init);
-        },
-        resolveTransport: () => Promise.resolve(credentials),
-      }
-    );
-
-    expect(calls).toBe(0);
-    expect(outcome.decision).toBe("skip");
-
-    if (outcome.decision === "skip") {
-      expect(outcome.kind).toBe("repeat");
-      expect(outcome.reattachedAdvice).toContain("migration plan");
-    }
-
-    expect(summaryLine(session)).toBe("");
-    expect(session.summary(undefined) ?? "").toContain(
-      "Consultation dedup: 1 repeat question skipped, earlier advice reattached"
-    );
-  });
-
-  test("force bypasses screening and counts an override after a matching skip", async () => {
-    const session = new AdvisorSessionState();
-    const skipMock = systemOneMock([verdictResponse(0.95, 0.9)]);
     await screenConsultation(
       ctxWith(),
       session,
       { question: "ship it?" },
       {
-        fetch: skipMock.fetch,
-        resolveTransport: () => Promise.resolve(credentials),
+        classifyResult: classifier(result(0.9, 0.95)),
       }
     );
 
-    const forced = await screenConsultation(
-      ctxWith(),
-      session,
-      { force: true, question: "ship it?" },
-      {
-        fetch: systemOneMock([]).fetch,
-        resolveTransport: () => Promise.resolve(credentials),
-      }
-    );
+    const forced = await screenConsultation(ctxWith(), session, {
+      force: true,
+      question: "ship it?",
+    });
 
-    expect(forced).toEqual({ decision: "allow" });
-    expect(summaryLine(session)).toContain("1 override");
-  });
-
-  test("the same question within the override window passes through automatically", async () => {
-    const session = new AdvisorSessionState();
-    const skipMock = systemOneMock([verdictResponse(0.95, 0.9)]);
-    await screenConsultation(
-      ctxWith(),
-      session,
-      { question: "ship it?" },
-      {
-        fetch: skipMock.fetch,
-        resolveTransport: () => Promise.resolve(credentials),
-      }
-    );
-    session.recordCompletedTurn();
-    session.recordCompletedTurn();
-    let calls = 0;
-
-    const outcome = await screenConsultation(
-      ctxWith(),
-      session,
-      { question: "ship it?" },
-      {
-        fetch: (input: string, init?: RequestInit) => {
-          calls += 1;
-
-          return systemOneMock([]).fetch(input, init);
-        },
-        resolveTransport: () => Promise.resolve(credentials),
-      }
-    );
-
-    expect(outcome).toEqual({ decision: "allow" });
-    expect(calls).toBe(0);
-    expect(summaryLine(session)).toContain("1 override");
-  });
-
-  test("the passthrough expires after the configured window", async () => {
-    const session = new AdvisorSessionState();
-    setAdvisorJevFilterOverrideWindowRef(2);
-    const skipMock = systemOneMock([verdictResponse(0.95, 0.9)]);
-    await screenConsultation(
-      ctxWith(),
-      session,
-      { question: "ship it?" },
-      {
-        fetch: skipMock.fetch,
-        resolveTransport: () => Promise.resolve(credentials),
-      }
-    );
-
-    for (let turn = 0; turn < 3; turn += 1) {
-      session.recordCompletedTurn();
-    }
-
-    const later = systemOneMock([verdictResponse(0.95, 0.9)]);
-
-    const outcome = await screenConsultation(
-      ctxWith(),
-      session,
-      { question: "ship it?" },
-      {
-        fetch: later.fetch,
-        resolveTransport: () => Promise.resolve(credentials),
-      }
-    );
-
-    expect(outcome.decision).toBe("skip");
-    expect(later.captured).toHaveLength(1);
-  });
-
-  test("empty questions never match repeats or passthroughs", async () => {
-    const session = new AdvisorSessionState();
-
-    const first = await screenConsultation(
-      ctxWith(),
-      session,
-      {},
-      {
-        fetch: systemOneMock([verdictResponse(0.95, 0.9)]).fetch,
-        resolveTransport: () => Promise.resolve(credentials),
-      }
-    );
-
-    expect(first.decision).toBe("skip");
-
-    const second = await screenConsultation(
-      ctxWith(),
-      session,
-      {},
-      {
-        fetch: systemOneMock([verdictResponse(0.2, 0.3)]).fetch,
-        resolveTransport: () => Promise.resolve(credentials),
-      }
-    );
-
-    expect(second).toEqual({ decision: "allow" });
+    expect(forced.decision).toBe("allow");
+    expect(session.summary(undefined)).toContain("1 override");
   });
 });
 

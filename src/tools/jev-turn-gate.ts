@@ -2,9 +2,10 @@ import type {
   ExtensionContext,
   TurnEndEvent,
 } from "@earendil-works/pi-coding-agent";
-import type { Fetch } from "@typesafe-ai/sdk";
 
 import {
+  advisorJevClassifierModeRef,
+  advisorJevClassifierRef,
   advisorJevTurnGateEveryTurnsRef,
   advisorJevTurnGateNoulThresholdRef,
   getAdvisorMaxCallsPerSession,
@@ -12,11 +13,11 @@ import {
 } from "../config/state.ts";
 import { herdrAdvisorActivity } from "../herdr.ts";
 import type { HerdrAdvisorActivityScope } from "../herdr.ts";
-import { JevFailure, jevClientFromCredentials } from "../jev/client.ts";
+import { consumeJevClassifierKey } from "../jev/classifier-key-store.ts";
+import { classifyTurnGate } from "../jev/classifier.ts";
+import { JevFailure } from "../jev/failure.ts";
 import { composeTurnGateVerdict } from "../jev/questions.ts";
 import { buildJevState } from "../jev/state.ts";
-import { resolveJevTransport } from "../jev/transport.ts";
-import type { JevCredentials } from "../jev/transport.ts";
 import type { AdvisorSessionState } from "../session-state.ts";
 import { advisorUsageCost } from "../usage.ts";
 import type { consultAdvisor } from "./consultation.ts";
@@ -24,21 +25,11 @@ import { updateAdvisorUsageStatus } from "./gate-policy.ts";
 import { advisorModelIsAllowed } from "./model-access.ts";
 import { createOutageNotifier } from "./outage-notifier.ts";
 
-export const turnGateQuestion = {
-  criteria: {
-    false:
-      "The executor is progressing soundly on work that matches the user's intent; interrupting would add nothing material.",
-    true: "The executor is approaching a material decision, repeating a failure, about to claim success without validation, or drifting from the user's intent; a second opinion now would change what happens next.",
-  },
-  instructions:
-    "Should a senior engineering advisor be consulted right now, before the executor continues? Judge from `recent_conversation`.",
-  type: "noul",
-} as const;
-
 export interface JevTurnGateDeps {
+  classifyResult?: () => ReturnType<typeof classifyTurnGate>;
   consult?: typeof consultAdvisor;
-  fetch?: Fetch;
-  resolveTransport?: () => Promise<JevCredentials | undefined>;
+  resolveApiKey?: () => Promise<string | undefined>;
+  selectedRef?: () => string | undefined;
 }
 
 export interface TurnGateCallDetails {
@@ -69,7 +60,7 @@ export interface JevTurnGateRegistration {
 
 const outageNotifier = createOutageNotifier(
   (category, message) =>
-    `Advisor Jev/Decisions turn gate failed (${category}); continuing without a proactive consultation. ${message}`
+    `Advisor Jev classifier turn gate failed (${category}); continuing without a proactive consultation. ${message}`
 );
 
 const notifyFailureOnce = outageNotifier.notify;
@@ -109,12 +100,90 @@ const consumeTurnGateBudget = (
 /** Test-only: re-arms the once-per-outage notification. */
 export const resetJevTurnGateNotification = outageNotifier.reset;
 
-/**
- * turn_end handler: counts turns without a consultation and, every Nth such
- * turn, asks Jev whether the Advisor should proactively weigh in. Confident
- * true runs a real consultation delivered as a steer message; everything else
- * keeps the status quo.
- */
+const classifyGate = async (ctx: ExtensionContext, deps: JevTurnGateDeps) => {
+  if (deps.classifyResult) {
+    return deps.classifyResult();
+  }
+
+  const selectedRef =
+    advisorJevClassifierModeRef === "api-key"
+      ? "typesafe/jev-latest"
+      : (deps.selectedRef?.() ?? advisorJevClassifierRef);
+
+  const apiKey =
+    advisorJevClassifierModeRef === "api-key"
+      ? await (deps.resolveApiKey ?? consumeJevClassifierKey)()
+      : undefined;
+
+  if (!selectedRef || (advisorJevClassifierModeRef === "api-key" && !apiKey)) {
+    throw new JevFailure(
+      "auth",
+      "No credentials resolved for the selected Jev classifier."
+    );
+  }
+
+  return classifyTurnGate(ctx, selectedRef, buildJevState(ctx, {}), {
+    apiKey,
+    signal: ctx.signal,
+  });
+};
+
+const sendProactiveConsultation = async (
+  registration: JevTurnGateRegistration,
+  ctx: ExtensionContext,
+  consult: typeof consultAdvisor
+) => {
+  const { session } = registration;
+  const activity = registration.herdrActivity ?? herdrAdvisorActivity;
+  const finishHerdrActivity = activity.start();
+
+  try {
+    registration.send({
+      content: "Proactive Advisor turn review",
+      customType: "advisor-turn-gate-call",
+      details: {
+        question: `Turn gate: ${session.turnsSinceConsultation} turns without a consultation`,
+        turn: session.sessionTurnOrdinal,
+      },
+      display: true,
+    });
+
+    const consulted = await consult(
+      ctx,
+      undefined,
+      ctx.signal,
+      undefined,
+      "turn-gate"
+    );
+
+    session.recordJevGateConsultation();
+    session.resetTurnsSinceConsultation();
+    session.recordInvocation({
+      cost: advisorUsageCost(consulted.usage),
+      executionEffect: "continued",
+      kind: "markdown",
+      model: consulted.model,
+      trigger: "turn-gate",
+      usage: consulted.usage,
+    });
+    updateAdvisorUsageStatus(ctx, session);
+    registration.send({
+      content: consulted.markdown,
+      customType: "advisor-turn-gate-result",
+      details: {
+        advisor: consulted.model,
+        agentRulesBytes: consulted.agentRulesBytes,
+        text: consulted.markdown,
+        usage: consulted.usage,
+      },
+      display: true,
+    });
+  } finally {
+    finishHerdrActivity();
+  }
+};
+
+/** Run the periodic policy check and optional proactive consultation. */
 export const handleJevTurnEnd = async (
   registration: JevTurnGateRegistration,
   ctx: ExtensionContext
@@ -127,31 +196,18 @@ export const handleJevTurnEnd = async (
   }
 
   const consult = registration.deps?.consult ?? registration.consult;
-  const deps = registration.deps ?? {};
 
   try {
-    const credentials = await (deps.resolveTransport ?? resolveJevTransport)(
-      ctx
+    const result = await classifyGate(ctx, registration.deps ?? {});
+    session.recordJevGateCheck(
+      result.usage
+        ? {
+            cost: result.usage.cost,
+            inputTokens: result.usage.inputTokens,
+            outputTokens: result.usage.outputTokens,
+          }
+        : undefined
     );
-
-    if (!credentials) {
-      session.recordJevGateFailure();
-      notifyFailureOnce(
-        ctx,
-        "missing-key",
-        "No credentials resolved for the selected Jev/Decisions provider."
-      );
-
-      return;
-    }
-
-    const client = jevClientFromCredentials(credentials, deps.fetch);
-
-    const result = await client.ask(buildJevState(ctx, {}), {
-      should_consult: turnGateQuestion,
-    });
-
-    session.recordJevGateCheck(result.usage);
 
     const shouldConsult = composeTurnGateVerdict(
       result.answers,
@@ -159,58 +215,10 @@ export const handleJevTurnEnd = async (
     );
 
     if (
-      !advisorModelIsAllowed(ctx) ||
-      !consumeTurnGateBudget(session, shouldConsult)
+      advisorModelIsAllowed(ctx) &&
+      consumeTurnGateBudget(session, shouldConsult)
     ) {
-      return;
-    }
-
-    const herdrActivity = registration.herdrActivity ?? herdrAdvisorActivity;
-    const finishHerdrActivity = herdrActivity.start();
-
-    try {
-      registration.send({
-        content: "Proactive Advisor turn review",
-        customType: "advisor-turn-gate-call",
-        details: {
-          question: `Turn gate: ${session.turnsSinceConsultation} turns without a consultation`,
-          turn: session.sessionTurnOrdinal,
-        },
-        display: true,
-      });
-
-      const consulted = await consult(
-        ctx,
-        undefined,
-        ctx.signal,
-        undefined,
-        "turn-gate"
-      );
-
-      session.recordJevGateConsultation();
-      session.resetTurnsSinceConsultation();
-      session.recordInvocation({
-        cost: advisorUsageCost(consulted.usage),
-        executionEffect: "continued",
-        kind: "markdown",
-        model: consulted.model,
-        trigger: "turn-gate",
-        usage: consulted.usage,
-      });
-      updateAdvisorUsageStatus(ctx, session);
-      registration.send({
-        content: consulted.markdown,
-        customType: "advisor-turn-gate-result",
-        details: {
-          advisor: consulted.model,
-          agentRulesBytes: consulted.agentRulesBytes,
-          text: consulted.markdown,
-          usage: consulted.usage,
-        },
-        display: true,
-      });
-    } finally {
-      finishHerdrActivity();
+      await sendProactiveConsultation(registration, ctx, consult);
     }
   } catch (error) {
     session.recordJevGateFailure();

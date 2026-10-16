@@ -22,6 +22,7 @@ export {
 
 export const DEFAULT_ADVISOR_GIT_CONTEXT_MAX_CHARS = 20_000;
 export const DEFAULT_JEV_MODEL = "jev-latest";
+export const JEV_API_KEY_CLASSIFIER = "jev-api-key";
 
 // Provisional: the latency benchmark was dropped from scope; revisit if live
 // measurements suggest a different bound.
@@ -90,6 +91,7 @@ export interface AdvisorConfig {
   advisorGitContextMaxChars?: number;
   advisorHerdrIntegration?: boolean;
   advisorJevBaseUrl?: string;
+  advisorJevClassifier?: string;
   advisorJevDigestMaxChars?: number;
   advisorJevFilterEnabled?: boolean;
   advisorJevFilterNoulMargin?: number;

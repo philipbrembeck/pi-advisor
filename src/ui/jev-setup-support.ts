@@ -249,7 +249,19 @@ const clearKeyFor = (transport: JevTransportKind) => {
   return clearKeyTypeSafeKey();
 };
 
-export const defaultSetupDeps: Required<JevSetupDeps> = {
+export const defaultSetupDeps: Required<
+  Omit<
+    JevSetupDeps,
+    | "modelRegistry"
+    | "resolveClassifierKey"
+    | "persistClassifierKey"
+    | "restoreClassifierKey"
+  >
+> &
+  Pick<
+    JevSetupDeps,
+    "resolveClassifierKey" | "persistClassifierKey" | "restoreClassifierKey"
+  > = {
   clearStoredKey: (transport) => clearKeyFor(transport),
   removePlaintextKey: removeTypeSafeKeyFromAdvisorJson,
   resolveEndpoint: (options) => resolveTypesafeCompatibleCredentials(options),

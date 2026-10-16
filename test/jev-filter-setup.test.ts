@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import type { ClassifierModel } from "@earendil-works/pi-ai";
+
 import { JevFilterSubmenu } from "../src/ui/jev-filter-submenu.ts";
 import type { JevFilterSelection, JevSetupDeps } from "../src/ui/types.ts";
 import { plainThemeMock } from "./helpers/theme.ts";
@@ -16,33 +18,55 @@ const open = (
   const selections: JevFilterSelection[] = [];
   const done: (string | undefined)[] = [];
 
-  const submenu = new JevFilterSubmenu(
-    {
-      currentTransport: "typesafe",
-      currentValue: options.currentValue ?? "Off",
-      done: (value) => done.push(value),
-      onSelection: (selection) => {
-        selections.push(selection);
+  const submenu = new JevFilterSubmenu({
+    currentClassifier: "typesafe/jev-latest",
+    currentValue: options.currentValue ?? "Off",
+    done: (value) => done.push(value),
+    modelRegistry: options.deps?.modelRegistry,
+    onSelection: (selection) => {
+      selections.push(selection);
 
-        return options.onSelection ? options.onSelection(selection) : true;
-      },
-      setupDeps: options.deps,
-      theme: plainThemeMock,
-      tui: { requestRender: () => undefined },
+      return options.onSelection ? options.onSelection(selection) : true;
     },
-    {}
-  );
+    theme: plainThemeMock,
+    tui: { requestRender: () => undefined },
+  });
 
   return { done, selections, submenu };
 };
 
 const resolved = (): JevSetupDeps => ({
-  resolveTransport: () =>
-    Promise.resolve({ apiKey: "verified-key", transport: "typesafe" }),
+  modelRegistry: {
+    classify: async () => {
+      throw new Error("unused");
+    },
+    findOfType: () => undefined,
+    getAvailableOfType: async () => [
+      {
+        api: "typesafe-classifier",
+        baseUrl: "https://classifier.example.test",
+        contextWindow: 10,
+        cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+        id: "jev-latest",
+        input: ["text"],
+        name: "Jev Latest",
+        provider: "typesafe",
+        type: "classifier",
+      } satisfies ClassifierModel<"typesafe-classifier">,
+    ],
+    getProviderDisplayName: () => "TypeSafe",
+  } satisfies NonNullable<JevSetupDeps["modelRegistry"]>,
 });
 
 const nothingResolves = (): JevSetupDeps => ({
-  resolveTransport: () => Promise.resolve(undefined),
+  modelRegistry: {
+    classify: async () => {
+      throw new Error("unused");
+    },
+    findOfType: () => undefined,
+    getAvailableOfType: async () => [],
+    getProviderDisplayName: () => "TypeSafe",
+  } satisfies NonNullable<JevSetupDeps["modelRegistry"]>,
 });
 
 describe("JevFilterSubmenu", () => {
@@ -64,7 +88,9 @@ describe("JevFilterSubmenu", () => {
 
     expect(selections).toEqual([]);
     // SAFETY: the component exposes its current notice for assertions.
-    expect((submenu as any).notice).toContain("No Jev provider resolves");
+    expect((submenu as any).notice).toContain(
+      "Select an available authenticated classifier"
+    );
   });
 
   test("disables an already enabled filter", async () => {
@@ -104,7 +130,16 @@ describe("JevFilterSubmenu", () => {
   test("reports a credential lookup failure instead of enabling", async () => {
     const { selections, submenu } = open({
       deps: {
-        resolveTransport: () => Promise.reject(new Error("keychain locked")),
+        modelRegistry: {
+          classify: async () => {
+            throw new Error("unused");
+          },
+          findOfType: () => undefined,
+          getAvailableOfType: async () => {
+            throw new Error("model registry unavailable");
+          },
+          getProviderDisplayName: () => "TypeSafe",
+        } satisfies NonNullable<JevSetupDeps["modelRegistry"]>,
       },
     });
 
@@ -114,6 +149,6 @@ describe("JevFilterSubmenu", () => {
 
     expect(selections).toEqual([]);
     // SAFETY: the component exposes its current notice for assertions.
-    expect((submenu as any).notice).toContain("keychain locked");
+    expect((submenu as any).notice).toContain("model registry unavailable");
   });
 });

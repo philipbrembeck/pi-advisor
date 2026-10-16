@@ -75,12 +75,14 @@ describe("Jev settings persistence", () => {
 
         // SAFETY: applyJevProvider is the selector's typed persistence boundary exercised by the provider submenu.
         const providerSaved = (selector as any).applyJevProvider({
-          transport: "openai-decisions",
+          classifier: "openai/gpt-6-luna",
+          transport: "auto",
         });
 
         expect(providerSaved).toBe(true);
         expect(savedConfig(dir)).toMatchObject({
-          advisorJevTransport: "openai-decisions",
+          advisorJevClassifier: "openai/gpt-6-luna",
+          advisorJevTransport: "auto",
           advisorOutcomeLogging: true,
           futureSetting: "keep",
         });
@@ -91,8 +93,9 @@ describe("Jev settings persistence", () => {
         const filterSaved = (selector as any).applyJevFilter({ enabled: true });
         expect(filterSaved).toBe(true);
         expect(savedConfig(dir)).toMatchObject({
+          advisorJevClassifier: "openai/gpt-6-luna",
           advisorJevFilterEnabled: true,
-          advisorJevTransport: "openai-decisions",
+          advisorJevTransport: "auto",
           advisorOutcomeLogging: true,
           futureSetting: "keep",
         });
@@ -119,16 +122,14 @@ describe("Jev settings persistence", () => {
 
         // SAFETY: applyJevProvider is the selector's typed persistence boundary exercised by the provider submenu.
         const saved = (selector as any).applyJevProvider({
-          baseUrl: "https://api.codiv.ai",
-          keyProvider: "openrouter",
-          transport: "typesafe-compatible",
+          classifier: "typesafe/jev-latest",
+          transport: "auto",
         });
 
         expect(saved).toBe(true);
         expect(savedConfig(dir)).toMatchObject({
-          advisorJevBaseUrl: "https://api.codiv.ai",
-          advisorJevKeyProvider: "openrouter",
-          advisorJevTransport: "typesafe-compatible",
+          advisorJevClassifier: "typesafe/jev-latest",
+          advisorJevTransport: "auto",
         });
         selector.dispose();
         setAdvisorJevBaseUrlRef(undefined);
@@ -151,19 +152,20 @@ describe("Jev settings persistence", () => {
 
         // SAFETY: applyJevProvider is the selector's typed persistence boundary exercised by the provider submenu.
         const saved = (selector as any).applyJevProvider({
-          transport: "openai-decisions",
+          classifier: "openai/gpt-6-luna",
+          transport: "auto",
         });
 
         expect(saved).toBe(false);
         expect(advisorJevTransportRef).toBe("auto");
         expect(getAdvisorSettings()).toMatchObject({
+          jevClassifier: undefined,
           jevFilterEnabled: false,
-          jevTransport: "auto",
         });
         // SAFETY: the selector keeps its pre-save local state on save failure.
         expect((selector as any).settings).toMatchObject({
+          jevClassifier: undefined,
           jevFilterEnabled: false,
-          jevTransport: "auto",
         });
         expect(notices.join("\n")).toContain("Could not save Advisor settings");
         selector.dispose();

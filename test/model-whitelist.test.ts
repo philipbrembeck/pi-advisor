@@ -137,7 +137,6 @@ describe("Advisor model whitelist", () => {
     setAdvisorJevTurnGateEveryTurnsRef(1);
     setAdvisorModelWhitelistRef(["provider/allowed"]);
     const session = new AdvisorSessionState();
-    let jevChecks = 0;
     let consultations = 0;
 
     const registration: JevTurnGateRegistration = {
@@ -153,16 +152,6 @@ describe("Advisor model whitelist", () => {
           trigger: "executor-requested",
         };
       },
-      deps: {
-        resolveTransport: () => {
-          jevChecks += 1;
-
-          return Promise.resolve({
-            apiKey: "test",
-            transport: "typesafe" as const,
-          });
-        },
-      },
       send: () => {},
       session,
     };
@@ -171,7 +160,6 @@ describe("Advisor model whitelist", () => {
 
     await handleJevTurnEnd(registration, ctx);
 
-    expect(jevChecks).toBe(0);
     expect(consultations).toBe(0);
     expect(session.consumedCalls).toBe(0);
   });

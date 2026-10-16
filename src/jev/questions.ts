@@ -1,3 +1,4 @@
+import type { ClassifierQuestion } from "@earendil-works/pi-ai";
 import type { Questions } from "@typesafe-ai/sdk";
 
 import { isNumber, isRecordOf } from "../content-utils.ts";
@@ -29,6 +30,37 @@ export const screeningQuestions: Questions = {
   },
 };
 
+export const nativeTurnGateQuestion: ClassifierQuestion = {
+  criteria: {
+    false:
+      "The executor is progressing soundly on work that matches the user's intent; interrupting would add nothing material.",
+    true: "The executor is approaching a material decision, repeating a failure, about to claim success without validation, or drifting from the user's intent; a second opinion now would change what happens next.",
+  },
+  instructions:
+    "Should a senior engineering advisor be consulted right now, before the executor continues? Judge from `recent_conversation`.",
+  type: "bool",
+};
+
+export const nativeScreeningQuestions = {
+  self_answerable: {
+    criteria: {
+      false: "The executor needs the Advisor's second opinion.",
+      true: "The executor can resolve this alone with available tools and context.",
+    },
+    instructions: `Can the executor confidently resolve this request alone, using available tools and context? ${EVIDENCE_RULE}`,
+    type: "bool",
+  },
+  stakes: {
+    criteria: {
+      high: STAKES_RUBRIC[2],
+      moderate: STAKES_RUBRIC[1],
+      negligible: STAKES_RUBRIC[0],
+    },
+    instructions: `How material are the stakes of the decision behind this consultation request? ${EVIDENCE_RULE}`,
+    type: "choice",
+  },
+} satisfies Record<string, ClassifierQuestion>;
+
 export interface TurnGateQuestions {
   instructions: string;
 }
@@ -42,15 +74,12 @@ export type ScreeningVerdict = { skip: false } | { skip: true };
 
 const NUMERIC_KEY_PATTERN = /^\d+$/u;
 
-const finiteNumber = (value: JsonValue | undefined): number | undefined =>
-  isNumber(value) && Number.isFinite(value) ? value : undefined;
+const finiteProbability = (value: JsonValue | undefined): number | undefined =>
+  isNumber(value) && Number.isFinite(value) && value >= 0 && value <= 1
+    ? value
+    : undefined;
 
-/**
- * Probability mass on the lowest stakes level, resolved through the answer's
- * legend (the key whose description equals level 0), falling back to the
- * smallest numeric index key only when no legend resolves. Shape-independent:
- * never hardcodes a level key and never uses `ceil(score)`.
- */
+/** Lowest-stakes probability via rubric legend or the canonical native choice label. */
 export const lowestStakesProbability = <Answer>(
   answer: Answer
 ): number | undefined => {
@@ -70,8 +99,12 @@ export const lowestStakesProbability = <Answer>(
     );
 
     if (exact) {
-      return finiteNumber(probabilities[exact]);
+      return finiteProbability(probabilities[exact]);
     }
+  }
+
+  if (Object.hasOwn(probabilities, "negligible")) {
+    return finiteProbability(probabilities.negligible);
   }
 
   const numericKeys = Object.keys(probabilities).filter((key) =>
@@ -90,15 +123,22 @@ export const lowestStakesProbability = <Answer>(
     }
   }
 
-  return finiteNumber(probabilities[lowest]);
+  return finiteProbability(probabilities[lowest]);
 };
 
-const selfAnswerableNoul = <Answer>(answer: Answer): number | undefined =>
-  isRecordOf(answer) ? finiteNumber(answer.noul) : undefined;
+const selfAnswerableProbability = <Answer>(
+  answer: Answer
+): number | undefined => {
+  if (!isRecordOf(answer)) {
+    return undefined;
+  }
 
-/** Pure composition: skip requires the hard conjunction of confident
- * negligible stakes AND confident self-answerability. Any missing, NaN, or
- * malformed input allows. Never a weighted sum. */
+  const value = answer.type === "bool" ? answer.probability : answer.noul;
+
+  return finiteProbability(value);
+};
+
+/** Pure composition; any missing, out-of-range, NaN, or malformed input allows. */
 export const composeScreeningVerdict = <Answers>(
   answers: Answers,
   { noulMargin, skipConfidence }: ScreeningCriteria
@@ -108,16 +148,15 @@ export const composeScreeningVerdict = <Answers>(
   }
 
   const negligibleMass = lowestStakesProbability(answers.stakes);
-  const noul = selfAnswerableNoul(answers.self_answerable);
+  const selfAnswerable = selfAnswerableProbability(answers.self_answerable);
 
-  if (negligibleMass === undefined || noul === undefined) {
+  if (negligibleMass === undefined || selfAnswerable === undefined) {
     return { skip: false };
   }
 
-  const confidentlySelfAnswerable = noul >= 0.5 + noulMargin;
-
   return {
-    skip: negligibleMass >= skipConfidence && confidentlySelfAnswerable,
+    skip:
+      negligibleMass >= skipConfidence && selfAnswerable >= 0.5 + noulMargin,
   };
 };
 
@@ -130,8 +169,7 @@ export const composeTurnGateVerdict = <Answers>(
     return false;
   }
 
-  const answer = answers.should_consult;
-  const noul = isRecordOf(answer) ? finiteNumber(answer.noul) : undefined;
+  const probability = selfAnswerableProbability(answers.should_consult);
 
-  return noul !== undefined && noul >= threshold;
+  return probability !== undefined && probability >= threshold;
 };

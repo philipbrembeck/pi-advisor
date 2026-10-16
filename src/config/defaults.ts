@@ -14,6 +14,7 @@ import {
   setAdvisorHerdrIntegrationRef,
   setAdvisorJevDigestMaxCharsRef,
   setAdvisorJevBaseUrlRef,
+  setAdvisorJevClassifierRef,
   setAdvisorJevFilterEnabledRef,
   setAdvisorJevFilterNoulMarginRef,
   setAdvisorJevFilterOverrideWindowRef,
@@ -97,6 +98,7 @@ export const resetDefaults = () => {
   setAdvisorFailureModeRef("block-session");
   setAdvisorHerdrIntegrationRef(true);
   setAdvisorJevModelRef(DEFAULT_JEV_MODEL);
+  setAdvisorJevClassifierRef(undefined);
   setAdvisorJevBaseUrlRef(undefined);
   setAdvisorJevKeyProviderRef(undefined);
   setAdvisorJevFilterEnabledRef(false);
@@ -246,6 +248,11 @@ export const applyConfig = (config: AdvisorConfig) => {
     setAdvisorJevFilterOverrideWindowRef
   );
   applyNonEmptyStringConfig(config.advisorJevModel, setAdvisorJevModelRef);
+  applyOptionalConfig(
+    config,
+    "advisorJevClassifier",
+    setAdvisorJevClassifierRef
+  );
   applyOptionalConfig(config, "advisorJevBaseUrl", setAdvisorJevBaseUrlRef);
   applyOptionalConfig(
     config,
