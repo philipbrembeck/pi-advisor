@@ -8758,6 +8758,43 @@ var registerCommands = (pi, dependencies = {}) => {
   registerSettingsCommands(runtime);
 };
 
+// src/tools/budget-feedback.ts
+var advisorBudgetMessage = (session) => {
+  const simple = isSimpleMode();
+  const remaining = simple ? undefined : session.remainingCalls(getAdvisorMaxCallsPerSession());
+  return {
+    content: [
+      `Advisor calls remaining this session: ${remaining ?? "unlimited"}.`,
+      simple ? "Call budgets are disabled in Simple mode." : undefined,
+      "This is the current available allowance after consumed and reserved calls. Do not subtract earlier consultations again; this report supersedes earlier budget reports."
+    ].filter(Boolean).join(`
+`),
+    customType: "advisor-budget",
+    display: false
+  };
+};
+var advisorBudgetUpdate = (event, ctx, pi, session) => {
+  if (!pi.getActiveTools().includes("ask_advisor")) {
+    return;
+  }
+  try {
+    loadConfig(ctx);
+  } catch {
+    return;
+  }
+  if (!advisorToolsEnabledRef || !advisorModelIsAllowed(ctx)) {
+    return;
+  }
+  const message = advisorBudgetMessage(session);
+  const previous = event.context?.contextMessages.findLast((entry) => entry.role === "custom" && entry.customType === "advisor-budget");
+  if (previous?.role === "custom" && previous.content === message.content) {
+    return;
+  }
+  return {
+    entries: [{ ...message, type: "custom_message" }]
+  };
+};
+
 // src/tools/gate-policy.ts
 var updateAdvisorUsageStatus = (ctx, session) => {
   if (ctx.hasUI) {
@@ -9576,20 +9613,19 @@ var registerToolLifecycle = ({
       return;
     }
     loadConfig(ctx);
-    if (!advisorModelAccess(ctx).allowed || sameModelAdvisorDisabled(ctx)) {
+    if (!advisorToolsEnabledRef || !advisorModelAccess(ctx).allowed || sameModelAdvisorDisabled(ctx)) {
       return;
     }
     const guidelines = advisorInvocationGuidelines();
-    const budget = isSimpleMode() ? undefined : session.remainingCalls(getAdvisorMaxCallsPerSession());
-    if (budget !== undefined) {
-      guidelines.push(`Advisor calls remaining this session: ${budget}.
-Reserve calls for material decisions, repeated failures, or final review.`);
+    if (!isSimpleMode()) {
+      guidelines.push("Use the latest advisor-budget message for the current call allowance. Reserve calls for material decisions, repeated failures, or final review.");
     }
     if (guidelines.length > 0) {
       sections.advisor_invocation_settings = `Advisor invocation settings:
 ${guidelines.map((rule) => `- ${rule}`).join(`
 `)}`;
     }
+    return { message: advisorBudgetMessage(session) };
   });
   pi.on("input", () => {
     session.clearFollowUps();
@@ -9828,7 +9864,10 @@ var registerAdvisorTool = (pi, session = sessionStateFor(pi), dependencies = {})
   if (dependencies.turnGateDeps) {
     turnGate.deps = dependencies.turnGateDeps;
   }
-  registerJevTurnGate((event, handler) => pi.on(event, handler), turnGate);
+  registerJevTurnGate((event, handler) => pi.on(event, async (turn, ctx) => {
+    await handler(turn, ctx);
+    return advisorBudgetUpdate(turn, ctx, pi, session);
+  }), turnGate);
 };
 
 // extensions/index.ts

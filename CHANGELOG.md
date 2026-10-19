@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## Unreleased
 
+### Fixed
+
+- Preserve the Executor's cached prompt prefix when Advisor call budgets change, including providers that collapse mid-conversation system messages. Current allowances are appended as hidden conversation messages at run start and after consultation turns, with explicit unlimited and Simple mode reports.
+
 ## 0.14.0 - 2026-10-16
 
 ### Added

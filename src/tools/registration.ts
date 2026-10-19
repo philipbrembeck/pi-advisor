@@ -3,6 +3,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { herdrAdvisorActivity, herdrAdvisorBlock } from "../herdr.ts";
 import { appendOutcome } from "../outcomes.ts";
 import type { AdvisorSessionState } from "../session-state.ts";
+import { advisorBudgetUpdate } from "./budget-feedback.ts";
 import { consultAdvisor, runAdvisorGate } from "./consultation.ts";
 import { screenConsultation } from "./jev-filter.ts";
 import { registerJevTurnGate } from "./jev-turn-gate.ts";
@@ -53,5 +54,13 @@ export const registerAdvisorTool = (
     turnGate.deps = dependencies.turnGateDeps;
   }
 
-  registerJevTurnGate((event, handler) => pi.on(event, handler), turnGate);
+  registerJevTurnGate(
+    (event, handler) =>
+      pi.on(event, async (turn, ctx) => {
+        await handler(turn, ctx);
+
+        return advisorBudgetUpdate(turn, ctx, pi, session);
+      }),
+    turnGate
+  );
 };

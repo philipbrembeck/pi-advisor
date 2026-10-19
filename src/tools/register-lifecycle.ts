@@ -5,6 +5,7 @@ import {
   isSimpleMode,
 } from "../config/state.ts";
 import { loadConfig } from "../config/storage.ts";
+import { advisorBudgetMessage } from "./budget-feedback.ts";
 import { reserveAdvisorCall } from "./gate-policy.ts";
 import { handleAutomaticGate } from "./loop-gate.ts";
 import {
@@ -96,25 +97,27 @@ export const registerToolLifecycle = ({
 
     loadConfig(ctx);
 
-    if (!advisorModelAccess(ctx).allowed || sameModelAdvisorDisabled(ctx)) {
+    if (
+      !advisorToolsEnabledRef ||
+      !advisorModelAccess(ctx).allowed ||
+      sameModelAdvisorDisabled(ctx)
+    ) {
       return;
     }
 
     const guidelines = advisorInvocationGuidelines();
 
-    const budget = isSimpleMode()
-      ? undefined
-      : session.remainingCalls(getAdvisorMaxCallsPerSession());
-
-    if (budget !== undefined) {
+    if (!isSimpleMode()) {
       guidelines.push(
-        `Advisor calls remaining this session: ${budget}.\nReserve calls for material decisions, repeated failures, or final review.`
+        "Use the latest advisor-budget message for the current call allowance. Reserve calls for material decisions, repeated failures, or final review."
       );
     }
 
     if (guidelines.length > 0) {
       sections.advisor_invocation_settings = `Advisor invocation settings:\n${guidelines.map((rule) => `- ${rule}`).join("\n")}`;
     }
+
+    return { message: advisorBudgetMessage(session) };
   });
 
   pi.on("input", () => {

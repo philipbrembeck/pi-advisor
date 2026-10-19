@@ -556,7 +556,13 @@ describe("Advisor consultation request construction", () => {
         );
 
         const prompt = sections.advisor_invocation_settings;
-        expect(result).toBeUndefined();
+        expect(result.message).toMatchObject({
+          content: expect.stringContaining(
+            "remaining this session: unlimited."
+          ),
+          customType: "advisor-budget",
+          display: false,
+        });
         expect(sections.mcp_servers).toBe("<mcp_servers>servers</mcp_servers>");
         expect(prompt).toStartWith("Advisor invocation settings:");
         expect(prompt).toContain(
