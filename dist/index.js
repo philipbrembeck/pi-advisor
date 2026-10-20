@@ -1703,9 +1703,11 @@ var SOURCE = "pi-advisor:advisor-activity";
 var NOTIFICATION_SOURCE = "pi-advisor:advisor-notification";
 var BLOCK_SOURCE = "pi-advisor:advisor-block";
 var HERDR_PI_SOURCE = "herdr:pi";
-var sequence = Date.now() * 1000;
+var SEQUENCE_KEY = Symbol.for("pi-advisor:herdr:sequence");
+var sequenceState = globalThis;
 var nextSequence = () => {
-  sequence += 1;
+  const sequence = Math.max((sequenceState[SEQUENCE_KEY] ?? 0) + 1, Date.now() * 1000);
+  sequenceState[SEQUENCE_KEY] = sequence;
   return sequence;
 };
 var emitBlocked;

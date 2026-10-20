@@ -39,10 +39,21 @@ export type HerdrRequest = HerdrMetadataRequest | HerdrNotificationRequest;
 
 export type Report = (request: HerdrRequest) => void;
 
-let sequence = Date.now() * 1000;
+const SEQUENCE_KEY = Symbol.for("pi-advisor:herdr:sequence");
+
+type HerdrSequenceState = typeof globalThis & {
+  [SEQUENCE_KEY]?: number;
+};
+
+const sequenceState: HerdrSequenceState = globalThis;
 
 export const nextSequence = () => {
-  sequence += 1;
+  const sequence = Math.max(
+    (sequenceState[SEQUENCE_KEY] ?? 0) + 1,
+    Date.now() * 1000
+  );
+
+  sequenceState[SEQUENCE_KEY] = sequence;
 
   return sequence;
 };

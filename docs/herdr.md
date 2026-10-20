@@ -112,10 +112,13 @@ Herdr 0.9.3 requires a visible title after normalization. It permits `sound` val
 - `source` identifies pi-advisor's metadata owner. Herdr restricts source identifiers to 80 characters using ASCII letters, digits, colon, dot, underscore, and hyphen.
 - `agent: "pi"` guards presentation fields so they apply only to a Pi agent.
 - `applies_to_source: "herdr:pi"` guards presentation fields so they apply only while Herdr's Pi lifecycle integration is authoritative.
-- `seq` prevents stale updates from winning. For the same source, Herdr accepts but ignores sequence numbers less than or equal to the last accepted value.
+- `seq` prevents stale updates from winning. For the same pane and source, Herdr accepts but ignores sequence numbers less than or equal to the last accepted value.
+- Each new sequence uses the greater of the current clock baseline and the previous sequence plus one. A numeric watermark on `globalThis` survives module reloads in the same JavaScript realm; retries keep their original request ID and sequence.
 - `clear_state_labels: true` clears labels owned by that metadata source; it does not clear semantic agent state.
 
 Keep activity and block reports on their existing distinct sources. Combining them would let one cleanup operation erase the other's label.
+
+The clock baseline helps a long-running Pi overtake earlier reports from a later-started process as time advances. It is not a shared counter or ownership lock between processes or JavaScript realms; same-millisecond reports, clock rollback, or a historical sequence above the current clock can still prevent a later report from winning. Recovery requires an actual clear request to be created and delivered with a higher sequence. Startup and ordinary turns do not automatically reconcile a stored label when there is no local activity to clear.
 
 ## Available Herdr features not used here
 
@@ -133,6 +136,8 @@ Herdr is best-effort in pi-advisor:
 - pending notifications are capped at 16 while Herdr is unavailable;
 - socket, emitter, and reporting errors are swallowed; and
 - Herdr transport failures never weaken or strengthen Advisor safety policy.
+
+Ordinary Bun, benchmark, and Node loader tests initialize with `HERDR_ENV=0` and remove inherited pane/socket variables. Transport fixtures explicitly enable their own temporary sockets.
 
 Activity reports contain fixed labels only. Block labels and notification text pass through pi-advisor's local secret redaction before they leave the process. Session summaries and Advisor conversation context are never sent to Herdr.
 

@@ -10,6 +10,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 - Updated Oxfmt to 0.74.0, Oxlint and plugins to 1.89.0, and Knip to 6.42.1; adjusted tests for the updated Oxlint rules.
 
+### Fixed
+
+- Let a long-running Pi use fresh Herdr sequence numbers for later consultation cleanup, preserving its sequence watermark across module reloads.
+- Prevent ordinary, benchmark, and Node loader tests from sending reports or notifications to an inherited Herdr pane.
+
 ## 0.14.1 - 2026-10-19
 
 ### Changed

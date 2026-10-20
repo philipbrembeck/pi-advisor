@@ -1,2 +1,3 @@
 [test]
+preload = ["./test/isolate-herdr.mjs"]
 pathIgnorePatterns = ["**/bench/reports/**"]

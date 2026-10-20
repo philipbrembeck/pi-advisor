@@ -42,6 +42,8 @@ Keep implementation on a fast model and borrow frontier reasoning only when deci
 
 Regular consultations never block execution. Automatic loop gates are different: they evaluate repeated tool calls and can stop a tool action or session based on your configured failure policy.
 
+Herdr status reports refresh their sequence numbers so later consultation cleanup can recover from earlier reports as time advances. Recovery still requires a new clear request; ordinary turns do not clear existing labels automatically. See [Herdr integration](docs/herdr.md) for ordering and delivery limits.
+
 ## Install
 
 Requires Pi 1.0.0+ (1.x).
