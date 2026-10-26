@@ -6,6 +6,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## Unreleased
 
+## 0.14.3 - 2026-10-26
+
 ### Changed
 
 - Updated development dependencies: Knip to 6.43.0 and Ultracite to 8.1.0.
