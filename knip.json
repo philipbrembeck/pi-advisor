@@ -6,6 +6,5 @@
     "extensions/**/*.ts",
     "test/**/*.{ts,mjs}",
     "scripts/**/*.mjs"
-  ],
-  "ignoreBinaries": ["fmt"]
+  ]
 }

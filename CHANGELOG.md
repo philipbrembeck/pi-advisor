@@ -8,6 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- Updated development dependencies: Knip to 6.43.0 and Ultracite to 8.1.0.
 - Updated the required Bun version to 1.4.4, Pi development dependencies to 1.4.0, and TypeBox to 1.4.3; replaced Oxfmt with Bun's native formatter and kept lint-staged for safe staged-file handling.
 
 ## 0.14.2 - 2026-10-21
