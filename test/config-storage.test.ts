@@ -44,12 +44,19 @@ const readSavedConfig = () =>
   JSON.parse(readFileSync(configPath(), "utf-8")) as Record<string, JsonValue>;
 
 describe("Advisor config persistence", () => {
+  let advisorToolsEnabledSnapshot: boolean;
+
   beforeEach(() => {
     agentDir = mkdtempSync(join(tmpdir(), "pi-advisor-flow-test-"));
     process.env.PI_CODING_AGENT_DIR = agentDir;
+    advisorToolsEnabledSnapshot = getAdvisorSettings().advisorToolsEnabled;
   });
 
   afterEach(() => {
+    // setAdvisorToolsEnabledRef mutates module-global state that concurrently
+    // scheduled test files observe; restore it so the opt-out test cannot
+    // leak "disabled" into other suites.
+    setAdvisorToolsEnabledRef(advisorToolsEnabledSnapshot);
     resetConfigCache();
     rmSync(agentDir, { force: true, recursive: true });
 
