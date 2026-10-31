@@ -8,7 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
-- Updated development dependencies: Oxlint and `@oxlint/plugins` to 1.90.0 and `@types/node` to 26.6.6. Bun 1.4.4 remains the latest stable version.
+- Updated Knip to 6.44.1. Bun 1.4.4 remains the latest stable version.
 
 ## 0.14.3 - 2026-10-26
 
