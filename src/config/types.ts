@@ -74,6 +74,7 @@ export interface AdvisorConfig {
   advisorAgentsMdContext?: boolean;
   advisorAutoLoopGate?: boolean;
   advisorBlockOnBlocked?: boolean;
+  advisorLogFeedback?: boolean;
   advisorCollapseResponses?: boolean;
   advisorCompletionGate?: boolean;
   advisorCustomInvocation?: string;

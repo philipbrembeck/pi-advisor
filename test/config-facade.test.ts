@@ -148,12 +148,14 @@ describe("Config Module", () => {
       expect(getAdvisorSettings().advisorToolsEnabled).toBe(true);
       expect(advisorSessionSummaryRef).toBe(false);
       expect(advisorScoutEnabledRef).toBe(false);
+      expect(getAdvisorSettings().logFeedback).toBe(false);
       expect(advisorModelWhitelistRef).toEqual([]);
       expect(showUsageDetailsRef).toBe(true);
       expect(showUsageFooterRef).toBe(false);
       expect(advisorHerdrIntegrationRef).toBe(true);
       expect(validateConfig({ advisorAgentsMdContext: false })).toBe(true);
       expect(validateConfig({ advisorScoutEnabled: true })).toBe(true);
+      expect(validateConfig({ advisorLogFeedback: true })).toBe(true);
       expect(validateConfig({ advisorToolsEnabled: false })).toBe(true);
       expect(
         validateConfig({ advisorModelWhitelist: ["provider/model"] })
@@ -171,6 +173,9 @@ describe("Config Module", () => {
       );
       expect(() => validateConfig({ advisorScoutEnabled: "yes" })).toThrow(
         INVALID_SCOUT_ENABLED_PATTERN
+      );
+      expect(() => validateConfig({ advisorLogFeedback: "yes" })).toThrow(
+        /advisorLogFeedback/u
       );
       expect(() => validateConfig({ advisorToolsEnabled: "yes" })).toThrow(
         /advisorToolsEnabled/u

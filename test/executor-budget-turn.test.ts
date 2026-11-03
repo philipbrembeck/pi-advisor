@@ -33,7 +33,9 @@ const harness = (cwd: string, dependencies: ToolRegistrationDependencies) => {
     ctx
   );
 
-  const history = [{ ...initial.message, role: "custom", timestamp: 0 }];
+  const history = initial?.message
+    ? [{ ...initial.message, role: "custom", timestamp: 0 }]
+    : [];
 
   return {
     async call(id: string) {
@@ -73,7 +75,11 @@ const consultation = async () => ({
 describe("Budget feedback after registered consultation paths", () => {
   test("reports a consumed direct call without changing its structured result", async () => {
     await withAgentDir(
-      { advisorHerdrIntegration: false, advisorMaxCallsPerSession: 1 },
+      {
+        advisorHerdrIntegration: false,
+        advisorLogFeedback: true,
+        advisorMaxCallsPerSession: 1,
+      },
       async (dir) => {
         const h = harness(dir, { consult: consultation });
         const result = await h.call("direct");
@@ -95,7 +101,11 @@ describe("Budget feedback after registered consultation paths", () => {
 
   test("reports consumption after a provider failure and releases skipped reservations", async () => {
     await withAgentDir(
-      { advisorHerdrIntegration: false, advisorMaxCallsPerSession: 1 },
+      {
+        advisorHerdrIntegration: false,
+        advisorLogFeedback: true,
+        advisorMaxCallsPerSession: 1,
+      },
       async (dir) => {
         const failed = harness(dir, {
           consult: () => Promise.reject(new Error("Provider unavailable")),
@@ -133,6 +143,7 @@ describe("Budget feedback after registered consultation paths", () => {
       {
         advisorHerdrIntegration: false,
         advisorJevTurnGateEveryTurns: 1,
+        advisorLogFeedback: true,
         advisorMaxCallsPerSession: 2,
       },
       async (dir) => {
@@ -160,9 +171,31 @@ describe("Budget feedback after registered consultation paths", () => {
     );
   });
 
+  test("keeps actual Advisor results when auxiliary log feedback is disabled", async () => {
+    await withAgentDir(
+      {
+        advisorHerdrIntegration: false,
+        advisorLogFeedback: false,
+        advisorMaxCallsPerSession: 1,
+      },
+      async (dir) => {
+        const h = harness(dir, { consult: consultation });
+        const result = await h.call("direct");
+
+        expect(result.structuredContent.text).toBe("Review complete.");
+        expect(await h.end()).toBeUndefined();
+        expect(h.session.consumedCalls).toBe(1);
+      }
+    );
+  });
+
   test("suppresses feedback when model access is lost or tools are disabled", async () => {
     await withAgentDir(
-      { advisorHerdrIntegration: false, advisorMaxCallsPerSession: 2 },
+      {
+        advisorHerdrIntegration: false,
+        advisorLogFeedback: true,
+        advisorMaxCallsPerSession: 2,
+      },
       async (dir) => {
         const h = harness(dir, { consult: consultation });
         h.ctx.model = asExtensionContext({

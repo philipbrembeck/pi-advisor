@@ -90,6 +90,7 @@ export interface AdvisorSettings {
   alwaysOn?: boolean;
   autoLoopGate?: boolean;
   blockOnBlocked?: boolean;
+  logFeedback?: boolean;
   collapseResponses: boolean;
   completionGate: boolean;
   contextMaxChars: number;

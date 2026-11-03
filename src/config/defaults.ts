@@ -27,6 +27,7 @@ import {
   setAdvisorJevTransportRef,
   setAdvisorJevTurnGateEveryTurnsRef,
   setAdvisorJevTurnGateNoulThresholdRef,
+  setAdvisorLogFeedbackRef,
   setAdvisorLoopThresholdRef,
   setAdvisorMaxCallsPerSessionRef,
   setAdvisorModelWhitelistRef,
@@ -92,6 +93,7 @@ export const resetDefaults = () => {
   setAdvisorMaxCallsPerSessionRef(undefined);
   setAdvisorModelWhitelistRef([]);
   setAdvisorSessionSummaryRef(false);
+  setAdvisorLogFeedbackRef(false);
   setSimpleModeRef(false);
   setAdvisorToolsEnabledRef(true);
   setAlwaysOnRef(false);
@@ -210,6 +212,7 @@ export const applyConfig = (config: AdvisorConfig) => {
     "advisorSessionSummary",
     setAdvisorSessionSummaryRef
   );
+  applyOptionalConfig(config, "advisorLogFeedback", setAdvisorLogFeedbackRef);
   applyOptionalConfig(config, "advisorScoutEnabled", setAdvisorScoutEnabledRef);
   applyOptionalConfig(
     config,

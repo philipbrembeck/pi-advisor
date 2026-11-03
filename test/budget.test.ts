@@ -24,7 +24,11 @@ const deferred = () => {
 describe("Advisor loop-gate budget behavior", () => {
   test("renders automatic-gate Scout fallback before the unaffected Advisor gate", async () => {
     await withAgentDir(
-      { advisorLoopThreshold: 2, advisorScoutEnabled: true },
+      {
+        advisorLogFeedback: true,
+        advisorLoopThreshold: 2,
+        advisorScoutEnabled: true,
+      },
       async (agentDir) => {
         const timeline: string[] = [];
         const sentMessages: any[] = [];

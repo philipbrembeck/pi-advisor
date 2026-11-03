@@ -42,6 +42,7 @@ const custom = async (factory: any) =>
     focusSettingsRow(selector, "Experimental Advisor Scout");
     changeSetting(selector, "Experimental Advisor Scout");
     changeSetting(selector, "Max Advisor calls/session");
+    changeSetting(selector, "Advisor log feedback");
     selector.handleInput("\u001B");
   });
 
@@ -119,8 +120,13 @@ describe("Advisor settings selector", () => {
 
     changeSetting(selector, "Context window");
     changeSetting(selector, "Show usage and cost details");
+    expect(focusSettingsRow(selector, "Advisor log feedback")).toBeGreaterThan(
+      0
+    );
+    changeSetting(selector, "Advisor log feedback");
     expect(saved.at(-1)).toMatchObject({
       contextMaxChars: 10_000,
+      logFeedback: true,
       showUsageDetails: false,
     });
 
@@ -347,6 +353,7 @@ describe("Advisor settings selector", () => {
 
       await commands.get("advisor-settings").handler("", context);
       expect(savedConfig(agentDir)).toMatchObject({
+        advisorLogFeedback: true,
         advisorMaxCallsPerSession: 10,
         advisorScoutEnabled: true,
       });

@@ -5,6 +5,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 
 import {
+  advisorLogFeedbackRef,
   advisorToolsEnabledRef,
   getAdvisorMaxCallsPerSession,
   isSimpleMode,
@@ -39,7 +40,7 @@ export const advisorBudgetUpdate = (
   pi: ExtensionAPI,
   session: AdvisorSessionState
 ) => {
-  if (!pi.getActiveTools().includes("ask_advisor")) {
+  if (!advisorLogFeedbackRef || !pi.getActiveTools().includes("ask_advisor")) {
     return;
   }
 

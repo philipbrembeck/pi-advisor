@@ -5,6 +5,7 @@ const BOOLEAN_SETTING_FIELDS = [
   "agentsMdContext",
   "autoLoopGate",
   "blockOnBlocked",
+  "logFeedback",
   "collapseResponses",
   "completionGate",
   "disableSameModel",

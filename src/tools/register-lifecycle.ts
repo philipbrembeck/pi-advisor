@@ -1,4 +1,5 @@
 import {
+  advisorLogFeedbackRef,
   advisorSessionSummaryRef,
   advisorToolsEnabledRef,
   getAdvisorMaxCallsPerSession,
@@ -109,15 +110,23 @@ export const registerToolLifecycle = ({
 
     if (!isSimpleMode()) {
       guidelines.push(
-        "Use the latest advisor-budget message for the current call allowance. Reserve calls for material decisions, repeated failures, or final review."
+        "Reserve Advisor calls for material decisions, repeated failures, or final review."
       );
+
+      if (advisorLogFeedbackRef) {
+        guidelines.push(
+          "Use the latest advisor-budget message for the current call allowance."
+        );
+      }
     }
 
     if (guidelines.length > 0) {
       sections.advisor_invocation_settings = `Advisor invocation settings:\n${guidelines.map((rule) => `- ${rule}`).join("\n")}`;
     }
 
-    return { message: advisorBudgetMessage(session) };
+    if (advisorLogFeedbackRef) {
+      return { message: advisorBudgetMessage(session) };
+    }
   });
 
   pi.on("input", () => {

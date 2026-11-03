@@ -61,6 +61,7 @@ var advisorLoopThresholdRef = 3;
 var advisorMaxCallsPerSessionRef;
 var advisorModelWhitelistRef = [];
 var advisorSessionSummaryRef = false;
+var advisorLogFeedbackRef = false;
 var simpleModeRef = false;
 var advisorToolsEnabledRef = true;
 var alwaysOnRef = false;
@@ -163,6 +164,9 @@ var setAdvisorModelWhitelistRef = (models) => {
 };
 var setAdvisorSessionSummaryRef = (enabled) => {
   advisorSessionSummaryRef = enabled;
+};
+var setAdvisorLogFeedbackRef = (enabled) => {
+  advisorLogFeedbackRef = enabled;
 };
 var setSimpleModeRef = (enabled) => {
   simpleModeRef = enabled;
@@ -294,6 +298,7 @@ var getAdvisorSettings = () => ({
   jevTransport: advisorJevTransportRef,
   jevTurnGateEveryTurns: advisorJevTurnGateEveryTurnsRef,
   jevTurnGateNoulThreshold: advisorJevTurnGateNoulThresholdRef,
+  logFeedback: advisorLogFeedbackRef,
   loopThreshold: advisorLoopThresholdRef,
   maxCallsPerSession: advisorMaxCallsPerSessionRef,
   modelWhitelist: [...advisorModelWhitelistRef],
@@ -725,6 +730,12 @@ var CONFIG_SCHEMA = {
     type: "number",
     validate: isValidJevSkipConfidence
   },
+  advisorLogFeedback: {
+    accepted: "true or false",
+    current: () => advisorLogFeedbackRef,
+    persisted: true,
+    type: "boolean"
+  },
   advisorLoopThreshold: {
     accepted: "a safe integer of at least 2",
     current: () => advisorLoopThresholdRef,
@@ -971,6 +982,7 @@ var resetDefaults = () => {
   setAdvisorMaxCallsPerSessionRef(undefined);
   setAdvisorModelWhitelistRef([]);
   setAdvisorSessionSummaryRef(false);
+  setAdvisorLogFeedbackRef(false);
   setSimpleModeRef(false);
   setAdvisorToolsEnabledRef(true);
   setAlwaysOnRef(false);
@@ -1035,6 +1047,7 @@ var applyConfig = (config) => {
   applyOptionalConfig(config, "advisorMaxCallsPerSession", setAdvisorMaxCallsPerSessionRef);
   applyOptionalConfig(config, "advisorModelWhitelist", setAdvisorModelWhitelistRef);
   applyOptionalConfig(config, "advisorSessionSummary", setAdvisorSessionSummaryRef);
+  applyOptionalConfig(config, "advisorLogFeedback", setAdvisorLogFeedbackRef);
   applyOptionalConfig(config, "advisorScoutEnabled", setAdvisorScoutEnabledRef);
   applyOptionalConfig(config, "advisorScoutTimeoutMs", setAdvisorScoutTimeoutMsRef);
   applyOptionalConfig(config, "showUsageDetails", setShowUsageDetailsRef);
@@ -4672,7 +4685,7 @@ var scoutDetailsFromEvent = (event, previous) => {
 };
 var appendScoutLifecycleEntry = (pi, event, previous) => {
   const scout = scoutDetailsFromEvent(event, previous);
-  if (event.type === "success" || event.type === "fallback" || event.type === "cancelled") {
+  if (advisorLogFeedbackRef && (event.type === "success" || event.type === "fallback" || event.type === "cancelled")) {
     pi.appendEntry?.("advisor-scout-result", scout);
   }
   return scout;
@@ -8067,7 +8080,7 @@ var createSettingsItems = ({
     id: "maxCallsPerSession",
     label: "Max Advisor calls/session",
     values: maxCallValues(settings.maxCallsPerSession === undefined ? "∞" : String(settings.maxCallsPerSession))
-  }, toggle("sessionSummary", "Session Advisor Summary", "Show a local summary when the session ends.", settings.sessionSummary, false), {
+  }, toggle("sessionSummary", "Session Advisor Summary", "Show a local summary when the session ends.", settings.sessionSummary, false), toggle("logFeedback", "Advisor log feedback", "Include budget and Scout status messages in session logs. Actual Advisor calls and results remain visible either way.", settings.logFeedback, false), {
     currentValue: settings.failureMode ?? "block-session",
     description: "Choose what happens when an Advisor gate fails.",
     id: "failureMode",
@@ -8218,6 +8231,7 @@ var BOOLEAN_SETTING_FIELDS = [
   "agentsMdContext",
   "autoLoopGate",
   "blockOnBlocked",
+  "logFeedback",
   "collapseResponses",
   "completionGate",
   "disableSameModel",
@@ -8584,6 +8598,7 @@ var applySessionSettings = (settings) => {
   setAdvisorMaxCallsPerSessionRef(settings.maxCallsPerSession);
   setAdvisorModelWhitelistRef(settings.modelWhitelist ?? []);
   setAdvisorSessionSummaryRef(settings.sessionSummary ?? false);
+  setAdvisorLogFeedbackRef(settings.logFeedback ?? false);
   setAdvisorScoutEnabledRef(settings.scoutEnabled ?? false);
   setAdvisorScoutTimeoutMsRef(settings.scoutTimeoutMs ?? DEFAULT_SCOUT_TIMEOUT_MS);
   setShowUsageDetailsRef(settings.showUsageDetails ?? true);
@@ -8776,7 +8791,7 @@ var advisorBudgetMessage = (session) => {
   };
 };
 var advisorBudgetUpdate = (event, ctx, pi, session) => {
-  if (!pi.getActiveTools().includes("ask_advisor")) {
+  if (!advisorLogFeedbackRef || !pi.getActiveTools().includes("ask_advisor")) {
     return;
   }
   try {
@@ -9620,14 +9635,19 @@ var registerToolLifecycle = ({
     }
     const guidelines = advisorInvocationGuidelines();
     if (!isSimpleMode()) {
-      guidelines.push("Use the latest advisor-budget message for the current call allowance. Reserve calls for material decisions, repeated failures, or final review.");
+      guidelines.push("Reserve Advisor calls for material decisions, repeated failures, or final review.");
+      if (advisorLogFeedbackRef) {
+        guidelines.push("Use the latest advisor-budget message for the current call allowance.");
+      }
     }
     if (guidelines.length > 0) {
       sections.advisor_invocation_settings = `Advisor invocation settings:
 ${guidelines.map((rule) => `- ${rule}`).join(`
 `)}`;
     }
-    return { message: advisorBudgetMessage(session) };
+    if (advisorLogFeedbackRef) {
+      return { message: advisorBudgetMessage(session) };
+    }
   });
   pi.on("input", () => {
     session.clearFollowUps();

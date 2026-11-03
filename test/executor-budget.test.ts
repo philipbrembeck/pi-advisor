@@ -11,6 +11,11 @@ import { withAgentDir } from "./helpers/config-fixture.ts";
 import { asExtensionContext } from "./helpers/extension-context.ts";
 import { mockPi } from "./helpers/mock-pi.ts";
 
+const withLogFeedback = (
+  config: Parameters<typeof withAgentDir>[0],
+  run: Parameters<typeof withAgentDir>[1]
+) => withAgentDir({ ...config, advisorLogFeedback: true }, run);
+
 type PromptSections = BeforeAgentStartEvent["systemPromptOptions"]["sections"];
 
 const harness = (cwd: string, activeTools = ["ask_advisor"]) => {
@@ -53,9 +58,54 @@ const inContext = (message: any) => ({
   timestamp: 0,
 });
 
-describe("Executor Advisor budget feedback", () => {
+describe("Executor Advisor log feedback", () => {
+  test("is disabled by default without affecting budget enforcement", async () => {
+    await withAgentDir({ advisorMaxCallsPerSession: 1 }, async (dir) => {
+      const h = harness(dir);
+      const start = h.start();
+
+      expect(start.result).toBeUndefined();
+      expect(JSON.stringify(start.sections)).not.toContain("advisor-budget");
+      expect(start.sections.advisor_invocation_settings).toContain(
+        "Reserve Advisor calls for material decisions"
+      );
+      expect(start.sections.advisor_invocation_settings).not.toContain(
+        "latest advisor-budget message"
+      );
+      expect(await h.end([])).toBeUndefined();
+      expect(h.session.remainingCalls(1)).toBe(1);
+    });
+  });
+
+  test("stops feedback after disabling it during a session", async () => {
+    await withLogFeedback({ advisorMaxCallsPerSession: 1 }, async (dir) => {
+      const h = harness(dir);
+      expect(h.start().result.message.customType).toBe("advisor-budget");
+
+      writeFileSync(
+        join(dir, "advisor.json"),
+        JSON.stringify({
+          advisorLogFeedback: false,
+          advisorMaxCallsPerSession: 1,
+        })
+      );
+      resetConfigCache();
+
+      const disabled = h.start();
+      expect(disabled.result).toBeUndefined();
+      expect(disabled.sections.advisor_invocation_settings).toContain(
+        "Reserve Advisor calls for material decisions"
+      );
+      expect(disabled.sections.advisor_invocation_settings).not.toContain(
+        "latest advisor-budget message"
+      );
+      expect(await h.end([])).toBeUndefined();
+      expect(h.session.remainingCalls(1)).toBe(1);
+    });
+  });
+
   test("keeps invocation sections stable as the allowance reaches zero", async () => {
-    await withAgentDir({ advisorMaxCallsPerSession: 2 }, (dir) => {
+    await withLogFeedback({ advisorMaxCallsPerSession: 2 }, (dir) => {
       const h = harness(dir);
       const first = h.start();
       h.session.consumeCall();
@@ -86,7 +136,7 @@ describe("Executor Advisor budget feedback", () => {
   });
 
   test("appends changed feedback after a turn without requesting continuation", async () => {
-    await withAgentDir({ advisorMaxCallsPerSession: 2 }, async (dir) => {
+    await withLogFeedback({ advisorMaxCallsPerSession: 2 }, async (dir) => {
       const h = harness(dir);
       const previous = inContext(h.start().result.message);
       const history = [previous];
@@ -111,7 +161,7 @@ describe("Executor Advisor budget feedback", () => {
   });
 
   test("reinstates feedback when compaction removed the previous report", async () => {
-    await withAgentDir({ advisorMaxCallsPerSession: 2 }, async (dir) => {
+    await withLogFeedback({ advisorMaxCallsPerSession: 2 }, async (dir) => {
       const h = harness(dir);
       const report = h.start().result.message;
       const update = await h.end([]);
@@ -121,7 +171,7 @@ describe("Executor Advisor budget feedback", () => {
   });
 
   test("reports live reservations, releases, and the existing session reset", async () => {
-    await withAgentDir({ advisorMaxCallsPerSession: 2 }, (dir) => {
+    await withLogFeedback({ advisorMaxCallsPerSession: 2 }, (dir) => {
       const h = harness(dir);
       expect(h.session.reserveCall("pending", 2)).toBe(true);
       expect(h.start().result.message.content).toContain(
@@ -145,18 +195,25 @@ describe("Executor Advisor budget feedback", () => {
   });
 
   test("supersedes finite history after unlimited and Simple mode changes", async () => {
-    await withAgentDir({ advisorMaxCallsPerSession: 1 }, (dir) => {
+    await withLogFeedback({ advisorMaxCallsPerSession: 1 }, (dir) => {
       const h = harness(dir);
       const finite = h.start().result.message;
       h.session.consumeCall();
-      writeFileSync(join(dir, "advisor.json"), JSON.stringify({}));
+      writeFileSync(
+        join(dir, "advisor.json"),
+        JSON.stringify({ advisorLogFeedback: true })
+      );
       resetConfigCache();
       expect(h.start().result.message.content).toContain(
         "remaining this session: unlimited."
       );
       writeFileSync(
         join(dir, "advisor.json"),
-        JSON.stringify({ advisorMaxCallsPerSession: 1, simpleMode: true })
+        JSON.stringify({
+          advisorLogFeedback: true,
+          advisorMaxCallsPerSession: 1,
+          simpleMode: true,
+        })
       );
       resetConfigCache();
       const simple = h.start();

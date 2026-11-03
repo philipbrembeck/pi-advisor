@@ -31,6 +31,7 @@ import {
   advisorJevTransportRef,
   advisorJevTurnGateEveryTurnsRef,
   advisorJevTurnGateNoulThresholdRef,
+  advisorLogFeedbackRef,
   advisorLoopThresholdRef,
   advisorMaxCallsPerSessionRef,
   advisorModelWhitelistRef,
@@ -365,6 +366,12 @@ export const CONFIG_SCHEMA = {
     persisted: true,
     type: "number",
     validate: isValidJevSkipConfidence,
+  },
+  advisorLogFeedback: {
+    accepted: "true or false",
+    current: () => advisorLogFeedbackRef,
+    persisted: true,
+    type: "boolean",
   },
   advisorLoopThreshold: {
     accepted: "a safe integer of at least 2",

@@ -489,6 +489,13 @@ export const createSettingsItems = ({
       settings.sessionSummary,
       false
     ),
+    toggle(
+      "logFeedback",
+      "Advisor log feedback",
+      "Include budget and Scout status messages in session logs. Actual Advisor calls and results remain visible either way.",
+      settings.logFeedback,
+      false
+    ),
     {
       currentValue: settings.failureMode ?? "block-session",
       description: "Choose what happens when an Advisor gate fails.",

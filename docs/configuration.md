@@ -34,6 +34,7 @@ All fields are optional. The model refs below are explicit examples of models av
   "gateFailureMode": "block-session",
 
   "advisorSessionSummary": false,
+  "advisorLogFeedback": false,
   "advisorScoutEnabled": false,
   "showUsageDetails": true,
   "showUsageFooter": false,
@@ -103,6 +104,10 @@ Scout receives at most 64 KiB of serialized manifest data in 64 protocol-safe gr
 Scout has a 30-second total timeout. Missing model or authentication, provider errors, timeouts, invalid JSON, duplicate group IDs, and over-budget output produce a visible fallback. Unknown selected group IDs are ignored, required groups are retained automatically, and optional selections are trimmed to the selection limit. Fallback sends the exact original conversation to the Advisor and does not change the gate decision, blocking policy, Herdr state, or Advisor-call budget. Cancelling the parent operation stops Scout and prevents the Advisor call from starting.
 
 Scout usage, latency, selection counts, pre-Scout omissions, and fallback reasons are displayed separately from Advisor usage. Usage and cost details are shown by default; set `showUsageDetails` to `false` to hide details from extension-rendered Advisor, Scout, and gate output without changing usage accounting or Pi's `/cost` totals. The cumulative Advisor footer is controlled independently by `showUsageFooter`, which defaults to `false`. Both settings apply immediately when saved and do not require a reload. These displays remain local and ephemeral and are not included in Session Advisor Summary or Herdr reports.
+
+## Advisor log feedback
+
+`advisorLogFeedback` defaults to `false`. When enabled, pi-advisor adds remaining-call budget and Scout status messages to session logs. Turn on **Advisor log feedback** in `/advisor-settings` to include them. Actual Advisor call and result messages remain visible either way. This setting does not change call accounting, reservations, or enforcement.
 
 ## Context and limits
 

@@ -44,6 +44,7 @@ export let advisorLoopThresholdRef = 3;
 export let advisorMaxCallsPerSessionRef: number | undefined;
 export let advisorModelWhitelistRef: string[] = [];
 export let advisorSessionSummaryRef = false;
+export let advisorLogFeedbackRef = false;
 export let simpleModeRef = false;
 export let advisorToolsEnabledRef = true;
 export let alwaysOnRef = false;
@@ -184,6 +185,10 @@ export const setAdvisorModelWhitelistRef = (models: string[]) => {
 
 export const setAdvisorSessionSummaryRef = (enabled: boolean) => {
   advisorSessionSummaryRef = enabled;
+};
+
+export const setAdvisorLogFeedbackRef = (enabled: boolean) => {
+  advisorLogFeedbackRef = enabled;
 };
 
 export const setSimpleModeRef = (enabled: boolean) => {
@@ -355,6 +360,7 @@ export const getAdvisorSettings = () => ({
   jevTransport: advisorJevTransportRef,
   jevTurnGateEveryTurns: advisorJevTurnGateEveryTurnsRef,
   jevTurnGateNoulThreshold: advisorJevTurnGateNoulThresholdRef,
+  logFeedback: advisorLogFeedbackRef,
   loopThreshold: advisorLoopThresholdRef,
   maxCallsPerSession: advisorMaxCallsPerSessionRef,
   modelWhitelist: [...advisorModelWhitelistRef],

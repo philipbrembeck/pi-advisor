@@ -11,6 +11,7 @@ import { registerCommands } from "../src/commands.ts";
 import { HerdrAdvisorActivity } from "../src/herdr.ts";
 import { AdvisorSessionState } from "../src/session-state.ts";
 import { parseAutomaticDecision, registerAdvisorTool } from "../src/tools.ts";
+import { withAgentDir } from "./helpers/config-fixture.ts";
 import { asExtensionContext } from "./helpers/extension-context.ts";
 import type { JsonValue } from "./helpers/extension-context.ts";
 import { mockPi } from "./helpers/mock-pi.ts";
@@ -253,65 +254,67 @@ describe("Extension Registration", () => {
   });
 
   test("renders one terminal manual Scout entry before the Advisor response", async () => {
-    const commands = new Map<string, any>();
-    const entries: { type: string; data: any }[] = [];
-    const timeline: string[] = [];
-    registerCommands(
-      mockPi(
-        { commands },
+    await withAgentDir({ advisorLogFeedback: true }, async () => {
+      const commands = new Map<string, any>();
+      const entries: { type: string; data: any }[] = [];
+      const timeline: string[] = [];
+      registerCommands(
+        mockPi(
+          { commands },
+          {
+            appendEntry(type: string, data: JsonValue) {
+              entries.push({ data, type });
+              timeline.push(type);
+            },
+            sendMessage(message: any) {
+              timeline.push(message.customType);
+            },
+          }
+        ),
         {
-          appendEntry(type: string, data: JsonValue) {
-            entries.push({ data, type });
-            timeline.push(type);
-          },
-          sendMessage(message: any) {
-            timeline.push(message.customType);
+          consult: (_ctx, _question, _signal, _onChunk, onScout) => {
+            onScout?.({ model: "provider/executor", type: "call" });
+            onScout?.({
+              outcome: {
+                conversation: "selected evidence",
+                metrics: {
+                  availableCount: 3,
+                  inputBytes: 100,
+                  latencyMs: 12,
+                  omittedBeforeScout: 1,
+                  selectedCount: 2,
+                },
+                model: "provider/executor",
+                ok: true,
+                selectedLabels: ["current request"],
+                selection: {
+                  selectedIds: ["g_required"],
+                  synthesis: "Open decision",
+                },
+              },
+              type: "success",
+            });
+
+            return Promise.resolve({ markdown: "Proceed.", thinkingText: "" });
           },
         }
-      ),
-      {
-        consult: (_ctx, _question, _signal, _onChunk, onScout) => {
-          onScout?.({ model: "provider/executor", type: "call" });
-          onScout?.({
-            outcome: {
-              conversation: "selected evidence",
-              metrics: {
-                availableCount: 3,
-                inputBytes: 100,
-                latencyMs: 12,
-                omittedBeforeScout: 1,
-                selectedCount: 2,
-              },
-              model: "provider/executor",
-              ok: true,
-              selectedLabels: ["current request"],
-              selection: {
-                selectedIds: ["g_required"],
-                synthesis: "Open decision",
-              },
-            },
-            type: "success",
-          });
-
-          return Promise.resolve({ markdown: "Proceed.", thinkingText: "" });
-        },
-      }
-    );
-    await commands.get("advisor-manual").handler("Check", {
-      cwd: tmpdir(),
-      hasUI: false,
-      isProjectTrusted: () => false,
-    });
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(timeline).toEqual([
-      "advisor-manual-call",
-      "advisor-scout-result",
-      "advisor-manual-result",
-    ]);
-    expect(entries[1].data).toMatchObject({
-      model: "provider/executor",
-      selectedCount: 2,
-      status: "curated",
+      );
+      await commands.get("advisor-manual").handler("Check", {
+        cwd: tmpdir(),
+        hasUI: false,
+        isProjectTrusted: () => false,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(timeline).toEqual([
+        "advisor-manual-call",
+        "advisor-scout-result",
+        "advisor-manual-result",
+      ]);
+      expect(entries[1].data).toMatchObject({
+        model: "provider/executor",
+        selectedCount: 2,
+        status: "curated",
+      });
     });
   });
 

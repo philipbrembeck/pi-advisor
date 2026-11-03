@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## Unreleased
 
+### Added
+
+- Added an opt-in **Advisor log feedback** setting in `/advisor-settings`; budget and Scout status messages are off by default while actual Advisor calls/results and budget enforcement remain unchanged.
+
 ### Changed
 
 - Updated Knip to 6.44.1. Bun 1.4.4 remains the latest stable version.

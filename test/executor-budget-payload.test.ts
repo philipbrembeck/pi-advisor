@@ -16,6 +16,11 @@ import { withAgentDir } from "./helpers/config-fixture.ts";
 import { asExtensionContext } from "./helpers/extension-context.ts";
 import { mockPi } from "./helpers/mock-pi.ts";
 
+const withLogFeedback = (
+  config: Parameters<typeof withAgentDir>[0],
+  run: Parameters<typeof withAgentDir>[1]
+) => withAgentDir({ ...config, advisorLogFeedback: true }, run);
+
 type Messages = Parameters<typeof convertToLlm>[0];
 
 type PromptSections = BeforeAgentStartEvent["systemPromptOptions"]["sections"];
@@ -87,7 +92,7 @@ describe("Executor budget provider projection", () => {
   for (const api of ["openai-responses", "openai-completions"] as const) {
     for (const midConversationSupport of [false, undefined] as const) {
       test(`${api} preserves the complete prefix with mid-conversation support ${midConversationSupport ?? "unset"}`, async () => {
-        await withAgentDir({ advisorMaxCallsPerSession: 2 }, async (cwd) => {
+        await withLogFeedback({ advisorMaxCallsPerSession: 2 }, async (cwd) => {
           const events = new Map<string, any>();
           const state = new AdvisorSessionState();
           registerAdvisorTool(

@@ -524,6 +524,7 @@ describe("Advisor consultation request construction", () => {
         advisorCompletionGate: false,
         advisorCustomInvocation: "a deployment changes production data",
         advisorFailureGate: true,
+        advisorLogFeedback: true,
         advisorPlanGate: false,
       },
       () => {

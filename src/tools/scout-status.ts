@@ -6,7 +6,11 @@ import type {
 import { Text } from "@earendil-works/pi-tui";
 import type { Box } from "@earendil-works/pi-tui";
 
-import { executorRef, getAdvisorSettings } from "../config/state.ts";
+import {
+  advisorLogFeedbackRef,
+  executorRef,
+  getAdvisorSettings,
+} from "../config/state.ts";
 import type { ScoutLifecycleEvent } from "../scout.ts";
 import { uiAction, uiAvailable } from "../ui-guard.ts";
 import { formatAdvisorUsage, snapshotAdvisorUsage } from "../usage.ts";
@@ -71,9 +75,10 @@ export const appendScoutLifecycleEntry = (
   const scout = scoutDetailsFromEvent(event, previous);
 
   if (
-    event.type === "success" ||
-    event.type === "fallback" ||
-    event.type === "cancelled"
+    advisorLogFeedbackRef &&
+    (event.type === "success" ||
+      event.type === "fallback" ||
+      event.type === "cancelled")
   ) {
     pi.appendEntry?.("advisor-scout-result", scout);
   }
