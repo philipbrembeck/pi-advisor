@@ -12,6 +12,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- Updated development dependencies: Pi packages (`pi-ai`, `pi-coding-agent`, and `pi-tui`) to 1.5.0 and Ultracite to 8.1.1. Pi 1.5 adds extension-update changelogs and faster streaming; tool argument validation now uses `pi-schema`, so TypeBox-only features outside JSON Schema are no longer applied to tool arguments.
 - Updated Knip to 6.44.1. Bun 1.4.4 remains the latest stable version.
 
 ## 0.14.3 - 2026-10-26
