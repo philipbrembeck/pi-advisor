@@ -6,6 +6,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## Unreleased
 
+## 0.14.4 - 2026-11-03
+
 ### Added
 
 - Added an opt-in **Advisor log feedback** setting in `/advisor-settings`; budget and Scout status messages are off by default while actual Advisor calls/results and budget enforcement remain unchanged.
