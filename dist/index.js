@@ -2048,10 +2048,12 @@ var resolveConfiguredModel = async (ctx, ref, label) => {
     throw new Error(`${label} model not found: ${ref}`);
   }
   const { streamSimple } = ctx.modelRegistry;
+  const sessionId = ctx.sessionManager?.getSessionId?.();
   if (streamSimple) {
     return {
       model,
       ref,
+      sessionId,
       streamSimple: streamSimple.bind(ctx.modelRegistry)
     };
   }
@@ -2067,7 +2069,8 @@ var resolveConfiguredModel = async (ctx, ref, label) => {
     env: auth.env,
     headers: auth.headers,
     model,
-    ref
+    ref,
+    sessionId
   };
 };
 var ADVISOR_STREAM_UPDATE_INTERVAL_MS = 90;
@@ -2169,6 +2172,7 @@ var createTextEventStream = (resolved, options, streamModel) => {
   if (!streamModel && resolved.streamSimple) {
     return resolved.streamSimple(resolved.model, context, {
       reasoning: toSimpleReasoning(options.reasoning),
+      sessionId: resolved.sessionId,
       signal: options.signal
     });
   }
@@ -2177,6 +2181,7 @@ var createTextEventStream = (resolved, options, streamModel) => {
     env: resolved.env,
     headers: resolved.headers,
     reasoning: options.reasoning,
+    sessionId: resolved.sessionId,
     signal: options.signal
   };
   if (options.reasoning !== undefined) {

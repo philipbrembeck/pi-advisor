@@ -1,6 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
+import type {
+  Api,
+  Context,
+  Model,
+  SimpleStreamOptions,
+} from "@earendil-works/pi-ai/compat";
 import { ModelRegistry, ModelRuntime } from "@earendil-works/pi-coding-agent";
 
 import {
@@ -47,6 +53,7 @@ interface FakeStreamOptions {
   headers?: Record<string, string | null>;
   reasoning?: string;
   reasoningEffort?: string;
+  sessionId?: string;
   signal?: AbortSignal;
 }
 
@@ -550,8 +557,45 @@ describe("model stream", () => {
     }
   });
 
+  test("forwards one stable session id to registry streaming requests", async () => {
+    const sessionIds: (string | undefined)[] = [];
+
+    const ctx = asExtensionContext({
+      modelRegistry: {
+        find: () => model,
+        streamSimple: (
+          _model: Model<Api>,
+          _context: Context,
+          options?: SimpleStreamOptions
+        ) => {
+          sessionIds.push(options?.sessionId);
+
+          return fakeStream([], assistant("advice"))();
+        },
+      },
+      sessionManager: { getSessionId: () => "session-1" },
+    });
+
+    const primary = await resolveConfiguredModel(
+      ctx,
+      "provider/model",
+      "Advisor"
+    );
+
+    const fallback = await resolveConfiguredModel(
+      ctx,
+      "provider/model",
+      "Advisor fallback"
+    );
+
+    await collectTextStream(primary, { messages: [], systemPrompt: "sys" });
+    await collectTextStream(fallback, { messages: [], systemPrompt: "sys" });
+
+    expect(sessionIds).toEqual(["session-1", "session-1"]);
+  });
+
   test("uses compat streaming only when the registry has no streamSimple", async () => {
-    let capturedOptions: any;
+    let capturedOptions: FakeStreamOptions | undefined;
 
     const ctx = asExtensionContext({
       modelRegistry: {
@@ -560,6 +604,7 @@ describe("model stream", () => {
           Promise.resolve({ apiKey: "legacy-key", ok: true }),
         streamSimple: undefined,
       },
+      sessionManager: { getSessionId: () => "session-1" },
     });
 
     const resolved = await resolveConfiguredModel(
@@ -580,6 +625,7 @@ describe("model stream", () => {
       apiKey: "legacy-key",
       reasoning: "medium",
       reasoningEffort: "medium",
+      sessionId: "session-1",
     });
     expect(result.text).toBe("legacy stream");
   });

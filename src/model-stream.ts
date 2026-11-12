@@ -18,6 +18,7 @@ export interface ResolvedConfiguredModel {
   headers?: Record<string, string | null>;
   model: Model<Api>;
   ref: string;
+  sessionId?: string;
   streamSimple?: (
     model: Model<Api>,
     context: Context,
@@ -43,11 +44,13 @@ export const resolveConfiguredModel = async (
   }
 
   const { streamSimple } = ctx.modelRegistry;
+  const sessionId = ctx.sessionManager?.getSessionId?.();
 
   if (streamSimple) {
     return {
       model,
       ref,
+      sessionId,
       streamSimple: streamSimple.bind(ctx.modelRegistry),
     };
   }
@@ -68,6 +71,7 @@ export const resolveConfiguredModel = async (
     headers: auth.headers,
     model,
     ref,
+    sessionId,
   };
 };
 
@@ -250,6 +254,7 @@ const createTextEventStream = (
   if (!streamModel && resolved.streamSimple) {
     return resolved.streamSimple(resolved.model, context, {
       reasoning: toSimpleReasoning(options.reasoning),
+      sessionId: resolved.sessionId,
       signal: options.signal,
     });
   }
@@ -259,6 +264,7 @@ const createTextEventStream = (
     env: resolved.env,
     headers: resolved.headers,
     reasoning: options.reasoning,
+    sessionId: resolved.sessionId,
     signal: options.signal,
   };
 
