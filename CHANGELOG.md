@@ -8,7 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
-- Updated development dependencies: Pi packages (`pi-ai`, `pi-coding-agent`, and `pi-tui`) to 1.5.1, Oxlint and plugins to 1.93.0, Knip to 6.44.2, and TypeBox to 1.4.6. Existing peer dependency ranges remain unchanged.
+- Updated development dependencies: Pi packages (`pi-ai`, `pi-coding-agent`, and `pi-tui`) to 1.5.2, Oxlint and plugins to 1.93.0, Knip to 6.45.1, TypeBox to 1.4.6, and Ultracite to 8.2.0. Existing peer dependency ranges remain unchanged.
 
 ## 0.14.4 - 2026-11-03
 
