@@ -457,6 +457,53 @@ describe("model stream", () => {
     ).rejects.toThrow("Unsupported Advisor reasoning level: unsupported");
   });
 
+  test("routes a keyless virtual model through its physical provider", async () => {
+    const runtime = await ModelRuntime.create({
+      credentials: new InMemoryCredentialStore(),
+      modelsPath: null,
+      refreshOnCreate: false,
+    });
+
+    const registry = new ModelRegistry(runtime);
+    let routedApiKey: string | undefined;
+
+    registry.registerProvider("provider", {
+      api: "test-api",
+      apiKey: "PHYSICAL-KEY",
+      models: [model],
+      streamSimple: (physicalModel, context, options) => {
+        routedApiKey = options?.apiKey;
+
+        return fakeStream([], assistant("routed advice"))(
+          physicalModel,
+          context,
+          options
+        );
+      },
+    });
+    registry.registerVirtualModel({
+      id: "auto",
+      name: "Auto",
+      provider: "router",
+      route: () => ({ model, thinkingLevel: "off" }),
+    });
+
+    const resolved = await resolveConfiguredModel(
+      asExtensionContext({ modelRegistry: registry }),
+      "router/auto",
+      "Advisor"
+    );
+
+    const result = await collectTextStream(resolved, {
+      messages: [],
+      systemPrompt: "system",
+    });
+
+    expect(resolved.model.api).toBe("pi-virtual");
+    expect(result.text).toBe("routed advice");
+    expect(routedApiKey).toBe("PHYSICAL-KEY");
+  });
+
   test("surfaces registry auth errors without calling the provider wrapper", async () => {
     const previousEnvValue = process.env.PI_ADVISOR_TEST_MISSING_STREAM_KEY;
     delete process.env.PI_ADVISOR_TEST_MISSING_STREAM_KEY;

@@ -2,7 +2,12 @@ import { describe, expect, test } from "bun:test";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { initTheme } from "@earendil-works/pi-coding-agent";
+import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
+import {
+  initTheme,
+  ModelRegistry,
+  ModelRuntime,
+} from "@earendil-works/pi-coding-agent";
 
 import { registerCommands } from "../src/commands.ts";
 import {
@@ -242,6 +247,58 @@ describe("Advisor activation flow", () => {
         expect(pi.getActiveTools()).toContain("ask_advisor");
       }
     );
+  });
+
+  test("activates a keyless virtual Advisor from a real Pi registry", async () => {
+    await withAgentDir({ advisor: "router/auto" }, async (agentDir) => {
+      const { commands, pi } = activationHarness();
+
+      const runtime = await ModelRuntime.create({
+        credentials: new InMemoryCredentialStore(),
+        modelsPath: null,
+        refreshOnCreate: false,
+      });
+
+      const registry = new ModelRegistry(runtime);
+
+      registry.registerVirtualModel({
+        id: "auto",
+        name: "Auto",
+        provider: "router",
+        route: () => {
+          throw new Error("Activation must not route the model");
+        },
+      });
+
+      await registry.refresh();
+
+      const ctx = asExtensionContext({
+        cwd: agentDir,
+        hasUI: true,
+        isProjectTrusted: () => false,
+        modelRegistry: registry,
+        ui: { notify: () => {} },
+      });
+
+      expect(
+        registry.getAvailable().map((model) => `${model.provider}/${model.id}`)
+      ).toContain("router/auto");
+      const availableVirtualModel = registry.find("router", "auto");
+
+      if (!availableVirtualModel) {
+        throw new Error("Registered virtual model is missing");
+      }
+
+      expect(
+        await registry.getApiKeyAndHeaders(availableVirtualModel)
+      ).toMatchObject({ ok: true, apiKey: undefined });
+
+      registerCommands(pi);
+      await commands.get("advisor").handler("", ctx);
+
+      expect(savedConfig(agentDir).advisor).toBe("router/auto");
+      expect(pi.getActiveTools()).toContain("ask_advisor");
+    });
   });
 
   test("opens the picker when a persisted model is unavailable", async () => {

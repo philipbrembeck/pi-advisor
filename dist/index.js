@@ -5525,12 +5525,14 @@ var resolveActivationModels = async (runtime, ctx, canContinue) => {
       error: advisorRef ? `Advisor model not found: ${advisorRef}` : "Advisor model not configured"
     };
   }
-  const advisorAuth = await ctx.modelRegistry.getApiKeyAndHeaders(advisor);
-  if (!canContinue()) {
-    return { cancelled: true };
-  }
-  if (!(advisorAuth.ok && advisorAuth.apiKey)) {
-    return { error: `No API key for Advisor ${advisorRef}` };
+  if (advisor.api !== "pi-virtual") {
+    const advisorAuth = await ctx.modelRegistry.getApiKeyAndHeaders(advisor);
+    if (!canContinue()) {
+      return { cancelled: true };
+    }
+    if (!(advisorAuth.ok && advisorAuth.apiKey)) {
+      return { error: `No API key for Advisor ${advisorRef}` };
+    }
   }
   if (executor && !isMarkedSubagent() && !await runtime.setExecutorModel(executor)) {
     return { error: `No API key for Executor ${executorRef}` };

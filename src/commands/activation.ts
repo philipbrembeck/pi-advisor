@@ -64,14 +64,16 @@ const resolveActivationModels = async (
     };
   }
 
-  const advisorAuth = await ctx.modelRegistry.getApiKeyAndHeaders(advisor);
+  if (advisor.api !== "pi-virtual") {
+    const advisorAuth = await ctx.modelRegistry.getApiKeyAndHeaders(advisor);
 
-  if (!canContinue()) {
-    return { cancelled: true };
-  }
+    if (!canContinue()) {
+      return { cancelled: true };
+    }
 
-  if (!(advisorAuth.ok && advisorAuth.apiKey)) {
-    return { error: `No API key for Advisor ${advisorRef}` };
+    if (!(advisorAuth.ok && advisorAuth.apiKey)) {
+      return { error: `No API key for Advisor ${advisorRef}` };
+    }
   }
 
   if (

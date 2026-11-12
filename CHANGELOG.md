@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## Unreleased
 
+### Added
+
+- Support Pi virtual models as Advisor models. Activation defers credentials to Pi's request-time router, which resolves auth for the selected physical model.
+
 ### Changed
 
 - Updated development dependencies: Pi packages (`pi-ai`, `pi-coding-agent`, and `pi-tui`) to 1.5.2, Oxlint and plugins to 1.93.0, Knip to 6.45.1, TypeBox to 1.4.6, and Ultracite to 8.2.0. Existing peer dependency ranges remain unchanged.
