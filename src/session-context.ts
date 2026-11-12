@@ -51,6 +51,10 @@ const projectBranch = (source: SessionEntry[]): SessionEntry[] => {
   return [...projected, ...branch.slice(compactionIndex + 1)];
 };
 
+export const currentSessionId = (ctx: {
+  sessionManager?: { getSessionId?: () => string };
+}): string | undefined => ctx.sessionManager?.getSessionId?.();
+
 export const sessionContextEntries = (
   ctx: ExtensionContext
 ): SessionEntry[] => {

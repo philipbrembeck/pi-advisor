@@ -15,6 +15,7 @@ import {
   resolveConfiguredModel,
 } from "../src/model-stream.ts";
 import type { CoalescedUpdateScheduler } from "../src/model-stream.ts";
+import { currentSessionId } from "../src/session-context.ts";
 import { asExtensionContext } from "./helpers/extension-context.ts";
 
 // SAFETY: fixture mirrors the catalogue fields stream() reads; "test-api" is a synthetic Api label.
@@ -557,7 +558,8 @@ describe("model stream", () => {
     }
   });
 
-  test("forwards one stable session id to registry streaming requests", async () => {
+  test("reads the session id for each stream request", async () => {
+    let sessionId = "session-a";
     const sessionIds: (string | undefined)[] = [];
 
     const ctx = asExtensionContext({
@@ -573,25 +575,65 @@ describe("model stream", () => {
           return fakeStream([], assistant("advice"))();
         },
       },
-      sessionManager: { getSessionId: () => "session-1" },
+      sessionManager: { getSessionId: () => sessionId },
     });
 
-    const primary = await resolveConfiguredModel(
+    const resolved = await resolveConfiguredModel(
       ctx,
       "provider/model",
       "Advisor"
     );
 
-    const fallback = await resolveConfiguredModel(
+    await collectTextStream(resolved, {
+      messages: [],
+      sessionId: currentSessionId(ctx),
+      systemPrompt: "sys",
+    });
+
+    sessionId = "session-b";
+
+    await collectTextStream(resolved, {
+      messages: [],
+      sessionId: currentSessionId(ctx),
+      systemPrompt: "sys",
+    });
+
+    expect(sessionIds).toEqual(["session-a", "session-b"]);
+  });
+
+  test("streams without a session id when the host has no accessor", async () => {
+    let capturedOptions: SimpleStreamOptions | undefined;
+
+    const ctx = asExtensionContext({
+      modelRegistry: {
+        find: () => model,
+        streamSimple: (
+          _model: Model<Api>,
+          _context: Context,
+          options?: SimpleStreamOptions
+        ) => {
+          capturedOptions = options;
+
+          return fakeStream([], assistant("advice"))();
+        },
+      },
+      sessionManager: {},
+    });
+
+    const resolved = await resolveConfiguredModel(
       ctx,
       "provider/model",
-      "Advisor fallback"
+      "Advisor"
     );
 
-    await collectTextStream(primary, { messages: [], systemPrompt: "sys" });
-    await collectTextStream(fallback, { messages: [], systemPrompt: "sys" });
+    const result = await collectTextStream(resolved, {
+      messages: [],
+      sessionId: currentSessionId(ctx),
+      systemPrompt: "sys",
+    });
 
-    expect(sessionIds).toEqual(["session-1", "session-1"]);
+    expect(capturedOptions?.sessionId).toBeUndefined();
+    expect(result.text).toBe("advice");
   });
 
   test("uses compat streaming only when the registry has no streamSimple", async () => {
@@ -615,7 +657,12 @@ describe("model stream", () => {
 
     const result = await collectTextStream(
       resolved,
-      { messages: [], reasoning: "medium", systemPrompt: "system" },
+      {
+        messages: [],
+        reasoning: "medium",
+        sessionId: currentSessionId(ctx),
+        systemPrompt: "system",
+      },
       fakeStream([], assistant("legacy stream"), (options) => {
         capturedOptions = options;
       })

@@ -17,6 +17,7 @@ import type { GitContextLevel } from "../git.ts";
 import { collectTextStream, resolveConfiguredModel } from "../model-stream.ts";
 import { redactSecrets } from "../redaction.ts";
 import type { ScoutLifecycleEvent } from "../scout.ts";
+import { currentSessionId } from "../session-context.ts";
 import type { ConsultationTrigger, GateTrigger } from "../session-state.ts";
 import { assembleConsultationContext } from "./consult-context.ts";
 import type { ConsultationContext } from "./consult-context.ts";
@@ -282,6 +283,7 @@ const runAdvisorAttempt = async (
     messages: structuredClone(prepared.messages),
     onChunk: options.onChunk,
     reasoning: advisorEffortRef,
+    sessionId: currentSessionId(options.ctx),
     signal: options.signal,
     systemPrompt: prepared.systemPrompt,
   });
