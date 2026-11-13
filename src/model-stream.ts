@@ -52,6 +52,12 @@ export const resolveConfiguredModel = async (
     };
   }
 
+  if (model.api === "pi-virtual") {
+    throw new Error(
+      `Pi virtual model ${ref} requires modelRegistry.streamSimple, which is unavailable in this Pi runtime. Update Pi or select a physical ${label} model.`
+    );
+  }
+
   const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
 
   if (!auth.ok) {

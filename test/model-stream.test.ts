@@ -512,6 +512,37 @@ describe("model stream", () => {
     expect(routedApiKey).toBe("PHYSICAL-KEY");
   });
 
+  test("rejects virtual models when registry streaming is unavailable", async () => {
+    const virtualModel = {
+      ...model,
+      api: "pi-virtual",
+      id: "auto",
+      provider: "router",
+    };
+
+    let authLookups = 0;
+
+    const ctx = asExtensionContext({
+      modelRegistry: {
+        find: () => virtualModel,
+        getApiKeyAndHeaders: () => {
+          authLookups += 1;
+
+          return Promise.resolve({ apiKey: undefined, ok: true });
+        },
+        streamSimple: undefined,
+      },
+    });
+
+    await expect(
+      resolveConfiguredModel(ctx, "router/auto", "Advisor")
+    ).rejects.toThrow(
+      "Pi virtual model router/auto requires modelRegistry.streamSimple, which is unavailable in this Pi runtime. Update Pi or select a physical Advisor model."
+    );
+
+    expect(authLookups).toBe(0);
+  });
+
   test("surfaces registry auth errors without calling the provider wrapper", async () => {
     const previousEnvValue = process.env.PI_ADVISOR_TEST_MISSING_STREAM_KEY;
     delete process.env.PI_ADVISOR_TEST_MISSING_STREAM_KEY;

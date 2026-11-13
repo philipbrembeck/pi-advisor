@@ -103,6 +103,45 @@ describe("Advisor consultation request construction", () => {
     }
   });
 
+  test("returns an actionable error for virtual models without registry streaming", async () => {
+    const virtualModel = {
+      api: "pi-virtual",
+      id: "auto",
+      name: "Auto",
+      provider: "router",
+    };
+
+    let authLookups = 0;
+
+    await withAgentDir(
+      { advisor: "router/auto", advisorGitContext: "off" },
+      async (agentDir) => {
+        const context = asExtensionContext({
+          cwd: agentDir,
+          isProjectTrusted: () => false,
+          modelRegistry: {
+            find: () => virtualModel,
+            getApiKeyAndHeaders: () => {
+              authLookups += 1;
+
+              return Promise.resolve({ apiKey: undefined, ok: true });
+            },
+            streamSimple: undefined,
+          },
+          sessionManager: {
+            buildContextEntries: () => [],
+            getBranch: () => [],
+          },
+        });
+
+        await expect(consultAdvisor(context)).rejects.toThrow(
+          "Pi virtual model router/auto requires modelRegistry.streamSimple, which is unavailable in this Pi runtime. Update Pi or select a physical Advisor model."
+        );
+        expect(authLookups).toBe(0);
+      }
+    );
+  });
+
   test("omits AGENTS.md context when the setting is disabled", async () => {
     const captured: string[] = [];
 
