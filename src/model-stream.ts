@@ -75,6 +75,7 @@ export interface CollectTextStreamOptions {
   messages: Message[];
   onChunk?: (thinking: string, text: string) => void;
   reasoning?: string;
+  sessionId?: string;
   signal?: AbortSignal;
   systemPrompt: string;
 }
@@ -250,6 +251,7 @@ const createTextEventStream = (
   if (!streamModel && resolved.streamSimple) {
     return resolved.streamSimple(resolved.model, context, {
       reasoning: toSimpleReasoning(options.reasoning),
+      sessionId: options.sessionId,
       signal: options.signal,
     });
   }
@@ -259,6 +261,7 @@ const createTextEventStream = (
     env: resolved.env,
     headers: resolved.headers,
     reasoning: options.reasoning,
+    sessionId: options.sessionId,
     signal: options.signal,
   };
 

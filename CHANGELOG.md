@@ -14,6 +14,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 - Updated development dependencies: Pi packages (`pi-ai`, `pi-coding-agent`, and `pi-tui`) to 1.5.2, Oxlint and plugins to 1.93.0, Knip to 6.45.1, TypeBox to 1.4.6, and Ultracite to 8.2.0. Existing peer dependency ranges remain unchanged.
 
+### Fixed
+
+- Advisor and fallback Advisor requests now forward the active Pi session id, so providers that require a session header (such as OpenCode Go's `x-opencode-session`) no longer fail with HTTP 400 `MissingSessionID`.
+
 ## 0.14.4 - 2026-11-03
 
 ### Added

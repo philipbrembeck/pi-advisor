@@ -1,6 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
+import type {
+  Api,
+  Context,
+  Model,
+  SimpleStreamOptions,
+} from "@earendil-works/pi-ai/compat";
 import { ModelRegistry, ModelRuntime } from "@earendil-works/pi-coding-agent";
 
 import {
@@ -9,6 +15,7 @@ import {
   resolveConfiguredModel,
 } from "../src/model-stream.ts";
 import type { CoalescedUpdateScheduler } from "../src/model-stream.ts";
+import { currentSessionId } from "../src/session-context.ts";
 import { asExtensionContext } from "./helpers/extension-context.ts";
 
 // SAFETY: fixture mirrors the catalogue fields stream() reads; "test-api" is a synthetic Api label.
@@ -47,6 +54,7 @@ interface FakeStreamOptions {
   headers?: Record<string, string | null>;
   reasoning?: string;
   reasoningEffort?: string;
+  sessionId?: string;
   signal?: AbortSignal;
 }
 
@@ -550,8 +558,86 @@ describe("model stream", () => {
     }
   });
 
+  test("reads the session id for each stream request", async () => {
+    let sessionId = "session-a";
+    const sessionIds: (string | undefined)[] = [];
+
+    const ctx = asExtensionContext({
+      modelRegistry: {
+        find: () => model,
+        streamSimple: (
+          _model: Model<Api>,
+          _context: Context,
+          options?: SimpleStreamOptions
+        ) => {
+          sessionIds.push(options?.sessionId);
+
+          return fakeStream([], assistant("advice"))();
+        },
+      },
+      sessionManager: { getSessionId: () => sessionId },
+    });
+
+    const resolved = await resolveConfiguredModel(
+      ctx,
+      "provider/model",
+      "Advisor"
+    );
+
+    await collectTextStream(resolved, {
+      messages: [],
+      sessionId: currentSessionId(ctx),
+      systemPrompt: "sys",
+    });
+
+    sessionId = "session-b";
+
+    await collectTextStream(resolved, {
+      messages: [],
+      sessionId: currentSessionId(ctx),
+      systemPrompt: "sys",
+    });
+
+    expect(sessionIds).toEqual(["session-a", "session-b"]);
+  });
+
+  test("streams without a session id when the host has no accessor", async () => {
+    let capturedOptions: SimpleStreamOptions | undefined;
+
+    const ctx = asExtensionContext({
+      modelRegistry: {
+        find: () => model,
+        streamSimple: (
+          _model: Model<Api>,
+          _context: Context,
+          options?: SimpleStreamOptions
+        ) => {
+          capturedOptions = options;
+
+          return fakeStream([], assistant("advice"))();
+        },
+      },
+      sessionManager: {},
+    });
+
+    const resolved = await resolveConfiguredModel(
+      ctx,
+      "provider/model",
+      "Advisor"
+    );
+
+    const result = await collectTextStream(resolved, {
+      messages: [],
+      sessionId: currentSessionId(ctx),
+      systemPrompt: "sys",
+    });
+
+    expect(capturedOptions?.sessionId).toBeUndefined();
+    expect(result.text).toBe("advice");
+  });
+
   test("uses compat streaming only when the registry has no streamSimple", async () => {
-    let capturedOptions: any;
+    let capturedOptions: FakeStreamOptions | undefined;
 
     const ctx = asExtensionContext({
       modelRegistry: {
@@ -560,6 +646,7 @@ describe("model stream", () => {
           Promise.resolve({ apiKey: "legacy-key", ok: true }),
         streamSimple: undefined,
       },
+      sessionManager: { getSessionId: () => "session-1" },
     });
 
     const resolved = await resolveConfiguredModel(
@@ -570,7 +657,12 @@ describe("model stream", () => {
 
     const result = await collectTextStream(
       resolved,
-      { messages: [], reasoning: "medium", systemPrompt: "system" },
+      {
+        messages: [],
+        reasoning: "medium",
+        sessionId: currentSessionId(ctx),
+        systemPrompt: "system",
+      },
       fakeStream([], assistant("legacy stream"), (options) => {
         capturedOptions = options;
       })
@@ -580,6 +672,7 @@ describe("model stream", () => {
       apiKey: "legacy-key",
       reasoning: "medium",
       reasoningEffort: "medium",
+      sessionId: "session-1",
     });
     expect(result.text).toBe("legacy stream");
   });

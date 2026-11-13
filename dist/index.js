@@ -2169,6 +2169,7 @@ var createTextEventStream = (resolved, options, streamModel) => {
   if (!streamModel && resolved.streamSimple) {
     return resolved.streamSimple(resolved.model, context, {
       reasoning: toSimpleReasoning(options.reasoning),
+      sessionId: options.sessionId,
       signal: options.signal
     });
   }
@@ -2177,6 +2178,7 @@ var createTextEventStream = (resolved, options, streamModel) => {
     env: resolved.env,
     headers: resolved.headers,
     reasoning: options.reasoning,
+    sessionId: options.sessionId,
     signal: options.signal
   };
   if (options.reasoning !== undefined) {
@@ -2212,6 +2214,36 @@ var collectTextStream = async (resolved, options, streamModel) => {
     thinking,
     usage: lastAssistant?.usage
   };
+};
+
+// src/session-context.ts
+var projectBranch = (source) => {
+  const resetBoundaryIndex = source.findLastIndex((entry) => Object.is(entry.type, "reset_boundary"));
+  const branch = source.slice(resetBoundaryIndex + 1);
+  const compactionIndex = branch.findLastIndex((entry) => entry.type === "compaction");
+  if (compactionIndex === -1) {
+    return branch;
+  }
+  const compaction = branch[compactionIndex];
+  if (compaction.type !== "compaction") {
+    return branch;
+  }
+  const firstKeptIndex = branch.findIndex((entry, index) => index < compactionIndex && entry.id === compaction.firstKeptEntryId);
+  const projected = [compaction];
+  if (firstKeptIndex !== -1) {
+    for (let index = firstKeptIndex;index < compactionIndex; index += 1) {
+      const entry = branch[index];
+      if (entry.type !== "compaction" && !(entry.type === "message" && entry.message.role === "system")) {
+        projected.push(entry);
+      }
+    }
+  }
+  return [...projected, ...branch.slice(compactionIndex + 1)];
+};
+var currentSessionId = (ctx) => ctx.sessionManager?.getSessionId?.();
+var sessionContextEntries = (ctx) => {
+  const sessionManager = ctx.sessionManager;
+  return sessionManager.buildContextEntries ? sessionManager.buildContextEntries() : projectBranch(sessionManager.getBranch());
 };
 
 // src/tools/consult-context.ts
@@ -2594,35 +2626,6 @@ var detectImageFormat = (bytes) => {
   if (isWebp(bytes)) {
     return "image/webp";
   }
-};
-
-// src/session-context.ts
-var projectBranch = (source) => {
-  const resetBoundaryIndex = source.findLastIndex((entry) => Object.is(entry.type, "reset_boundary"));
-  const branch = source.slice(resetBoundaryIndex + 1);
-  const compactionIndex = branch.findLastIndex((entry) => entry.type === "compaction");
-  if (compactionIndex === -1) {
-    return branch;
-  }
-  const compaction = branch[compactionIndex];
-  if (compaction.type !== "compaction") {
-    return branch;
-  }
-  const firstKeptIndex = branch.findIndex((entry, index) => index < compactionIndex && entry.id === compaction.firstKeptEntryId);
-  const projected = [compaction];
-  if (firstKeptIndex !== -1) {
-    for (let index = firstKeptIndex;index < compactionIndex; index += 1) {
-      const entry = branch[index];
-      if (entry.type !== "compaction" && !(entry.type === "message" && entry.message.role === "system")) {
-        projected.push(entry);
-      }
-    }
-  }
-  return [...projected, ...branch.slice(compactionIndex + 1)];
-};
-var sessionContextEntries = (ctx) => {
-  const sessionManager = ctx.sessionManager;
-  return sessionManager.buildContextEntries ? sessionManager.buildContextEntries() : projectBranch(sessionManager.getBranch());
 };
 
 // src/images.ts
@@ -3787,7 +3790,7 @@ var setupAbortWatch = (parentSignal, timeoutMs) => {
     wasTimedOut: () => timedOut
   };
 };
-var streamScoutResponse = async (dependencies, resolved, executorModel, executorEffort, manifest, parentSignal, timeoutMs, publish) => {
+var streamScoutResponse = async (dependencies, resolved, executorModel, executorEffort, sessionId, manifest, parentSignal, timeoutMs, publish) => {
   const { abortPromise, controller, teardown, wasTimedOut } = setupAbortWatch(parentSignal, timeoutMs);
   try {
     const collection = dependencies.collect(resolved, {
@@ -3798,6 +3801,7 @@ var streamScoutResponse = async (dependencies, resolved, executorModel, executor
         }
       },
       reasoning: executorEffort,
+      sessionId,
       signal: controller.signal,
       systemPrompt: SCOUT_SYSTEM
     });
@@ -3855,7 +3859,7 @@ var runAdvisorScout = async (ctx, manifest, parentSignal, onEvent, timeoutMs = a
     return cancelled();
   }
   publish({ model: executorModel, type: "call" });
-  const streamed = await streamScoutResponse(dependencies, resolved, executorModel, executorEffort, manifest, parentSignal, timeoutMs, publish);
+  const streamed = await streamScoutResponse(dependencies, resolved, executorModel, executorEffort, currentSessionId(ctx), manifest, parentSignal, timeoutMs, publish);
   if (!streamed.ok) {
     if (parentSignal?.aborted) {
       return cancelled();
@@ -4337,6 +4341,7 @@ var runAdvisorAttempt = async (options, prepared, resolved, modelRef) => {
     messages: structuredClone(prepared.messages),
     onChunk: options.onChunk,
     reasoning: advisorEffortRef,
+    sessionId: currentSessionId(options.ctx),
     signal: options.signal,
     systemPrompt: prepared.systemPrompt
   });

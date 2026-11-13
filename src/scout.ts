@@ -19,6 +19,7 @@ import {
   SCOUT_SYNTHESIS_MAX_BYTES,
 } from "./scout-types.ts";
 import type { ScoutManifest } from "./scout-types.ts";
+import { currentSessionId } from "./session-context.ts";
 import { snapshotAdvisorUsage } from "./usage.ts";
 import type { AdvisorUsageSnapshot } from "./usage.ts";
 
@@ -281,6 +282,7 @@ const streamScoutResponse = async (
   resolved: ResolvedConfiguredModel,
   executorModel: string,
   executorEffort: string | undefined,
+  sessionId: string | undefined,
   manifest: ScoutManifest,
   parentSignal: AbortSignal | undefined,
   timeoutMs: number,
@@ -300,6 +302,7 @@ const streamScoutResponse = async (
         }
       },
       reasoning: executorEffort,
+      sessionId,
       signal: controller.signal,
       systemPrompt: SCOUT_SYSTEM,
     });
@@ -395,6 +398,7 @@ export const runAdvisorScout = async (
     resolved,
     executorModel,
     executorEffort,
+    currentSessionId(ctx),
     manifest,
     parentSignal,
     timeoutMs,
