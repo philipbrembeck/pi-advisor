@@ -6,6 +6,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## Unreleased
 
+## 0.15.0 - 2026-11-13
+
 ### Added
 
 - Support Pi virtual models as Advisor models. Activation defers credentials to Pi's request-time router, which resolves auth for the selected physical model. Runtimes without `modelRegistry.streamSimple` now get an explicit upgrade/physical-model error instead of a misleading missing-key error.
