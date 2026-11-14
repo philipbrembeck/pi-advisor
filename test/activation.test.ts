@@ -291,14 +291,76 @@ describe("Advisor activation flow", () => {
 
       expect(
         await registry.getApiKeyAndHeaders(availableVirtualModel)
-      ).toMatchObject({ ok: true, apiKey: undefined });
+      ).toMatchObject({ apiKey: undefined, ok: true });
 
       registerCommands(pi);
       await commands.get("advisor").handler("", ctx);
 
       expect(savedConfig(agentDir).advisor).toBe("router/auto");
+
       expect(pi.getActiveTools()).toContain("ask_advisor");
     });
+  });
+
+  test("activates an Advisor with header-only provider auth", async () => {
+    await withAgentDir({ advisor: "provider/advisor" }, async (agentDir) => {
+      const { commands, pi } = activationHarness();
+      const headers = { "x-provider-token": "configured-token" };
+      const model = { id: "advisor", provider: "provider" };
+
+      const ctx = asExtensionContext({
+        cwd: agentDir,
+        hasUI: true,
+        isProjectTrusted: () => false,
+        modelRegistry: {
+          find: () => model,
+          getApiKeyAndHeaders: () => Promise.resolve({ headers, ok: true }),
+          getAvailable: () => [model],
+        },
+        ui: { notify: () => {} },
+      });
+
+      registerCommands(pi);
+      await commands.get("advisor").handler("", ctx);
+
+      expect(savedConfig(agentDir).advisor).toBe("provider/advisor");
+
+      expect(pi.getActiveTools()).toContain("ask_advisor");
+    });
+  });
+
+  test("does not activate when header auth resolution fails", async () => {
+    await withAgentDir(
+      { advisor: "provider/advisor", advisorToolsEnabled: false },
+      async (agentDir) => {
+        const { commands, pi, setActiveTools } = activationHarness();
+        const model = { id: "advisor", provider: "provider" };
+        setActiveTools(["read"]);
+
+        const ctx = asExtensionContext({
+          cwd: agentDir,
+          hasUI: true,
+          isProjectTrusted: () => false,
+          modelRegistry: {
+            find: () => model,
+            getApiKeyAndHeaders: () =>
+              Promise.resolve({
+                error: "provider auth rejected",
+                headers: { "x-provider-token": "configured-token" },
+                ok: false,
+              }),
+            getAvailable: () => [model],
+          },
+          ui: { notify: () => {} },
+        });
+
+        registerCommands(pi);
+        await commands.get("advisor").handler("", ctx);
+
+        expect(savedConfig(agentDir).advisorToolsEnabled).toBe(false);
+        expect(pi.getActiveTools()).toEqual(["read"]);
+      }
+    );
   });
 
   test("opens the picker when a persisted model is unavailable", async () => {

@@ -1220,6 +1220,9 @@ var saveGlobalOutcomeLogging = (enabled) => {
   return path;
 };
 
+// src/model-auth.ts
+var hasUsableModelAuth = (auth) => Boolean(auth.apiKey?.trim()) || Object.values(auth.headers ?? {}).some((value) => Boolean(value?.trim()));
+
 // src/tools/model-access.ts
 var currentModelRef = (ctx) => {
   const { model } = ctx;
@@ -2062,7 +2065,7 @@ var resolveConfiguredModel = async (ctx, ref, label) => {
   if (!auth.ok) {
     throw new Error(auth.error);
   }
-  if (!auth.apiKey) {
+  if (!hasUsableModelAuth(auth)) {
     throw new Error(`No API key for ${ref}`);
   }
   return {
@@ -5538,7 +5541,7 @@ var resolveActivationModels = async (runtime, ctx, canContinue) => {
     if (!canContinue()) {
       return { cancelled: true };
     }
-    if (!(advisorAuth.ok && advisorAuth.apiKey)) {
+    if (!(advisorAuth.ok && hasUsableModelAuth(advisorAuth))) {
       return { error: `No API key for Advisor ${advisorRef}` };
     }
   }

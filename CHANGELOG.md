@@ -8,6 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- Advisor activation and legacy model streaming now accept providers authenticated with non-empty headers and no API key.
 - Removed the withdrawn `5.1.0` changelog entry that caused Pi to show an extension update notice on every launch.
 
 ## 0.15.0 - 2026-11-13

@@ -72,6 +72,7 @@ const expectedFiles = [
   "src/jev/questions.ts",
   "src/jev/state.ts",
   "src/jev/transport.ts",
+  "src/model-auth.ts",
   "src/model-stream.ts",
   "src/outcome-stats.ts",
   "src/outcomes.ts",

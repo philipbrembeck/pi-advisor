@@ -32,6 +32,23 @@ const model = {
   reasoning: true,
 } as any;
 
+type MockModelAuth = {
+  apiKey?: string;
+  headers?: Record<string, string | null>;
+} & ({ ok: true } | { error: string; ok: false });
+
+const resolveWithAuth = (auth: MockModelAuth) =>
+  resolveConfiguredModel(
+    asExtensionContext({
+      modelRegistry: {
+        find: () => model,
+        getApiKeyAndHeaders: () => Promise.resolve(auth),
+      },
+    }),
+    "provider/model",
+    "Scout"
+  );
+
 interface StreamUsageFixture {
   input: number;
 }
@@ -239,7 +256,67 @@ describe("model stream", () => {
     });
   });
 
-  test("reports missing models and auth without substitution", async () => {
+  test("forwards header-only provider auth to legacy streams", async () => {
+    const headers = { "x-provider-token": "configured-token" };
+    let streamOptions: FakeStreamOptions | undefined;
+
+    const runtime = await ModelRuntime.create({
+      credentials: new InMemoryCredentialStore(),
+      modelsPath: null,
+      refreshOnCreate: false,
+    });
+
+    const registry = new ModelRegistry(runtime);
+    registry.registerProvider("provider", {
+      api: "test-api",
+      authHeader: false,
+      headers,
+      models: [model],
+      streamSimple: () => fakeStream([], assistant("unused"))(),
+    });
+
+    const ctx = asExtensionContext({
+      modelRegistry: {
+        find: registry.find.bind(registry),
+        getApiKeyAndHeaders: registry.getApiKeyAndHeaders.bind(registry),
+        streamSimple: undefined,
+      },
+    });
+
+    const resolved = await resolveConfiguredModel(
+      ctx,
+      "provider/model",
+      "Advisor"
+    );
+
+    const result = await collectTextStream(
+      resolved,
+      { messages: [], systemPrompt: "sys" },
+      fakeStream([], assistant("header-auth advice"), (options) => {
+        streamOptions = options;
+      })
+    );
+
+    expect(resolved).toMatchObject({ apiKey: undefined, headers });
+
+    expect(streamOptions).toMatchObject({ apiKey: undefined, headers });
+
+    expect(result.text).toBe("header-auth advice");
+  });
+
+  test("accepts usable headers with a whitespace-only API key", async () => {
+    const headers = { token: "value" };
+
+    const resolved = await resolveWithAuth({
+      apiKey: "   ",
+      headers,
+      ok: true,
+    });
+
+    expect(resolved).toMatchObject({ apiKey: "   ", headers });
+  });
+
+  test("reports missing models and unusable auth without substitution", async () => {
     await expect(
       resolveConfiguredModel(
         asExtensionContext({ modelRegistry: { find: () => undefined } }),
@@ -247,19 +324,29 @@ describe("model stream", () => {
         "Scout"
       )
     ).rejects.toThrow("Scout model not found: provider/missing");
+
     await expect(
-      resolveConfiguredModel(
-        asExtensionContext({
-          modelRegistry: {
-            find: () => model,
-            getApiKeyAndHeaders: () =>
-              Promise.resolve({ error: "login", ok: false }),
-          },
-        }),
-        "provider/model",
-        "Scout"
-      )
+      resolveWithAuth({
+        error: "login",
+        headers: { token: "value" },
+        ok: false,
+      })
     ).rejects.toThrow("login");
+
+    const unusableAuthResults: MockModelAuth[] = [
+      { apiKey: "   ", ok: true },
+      { ok: true },
+      { headers: {}, ok: true },
+      { headers: { token: null }, ok: true },
+      { headers: { token: "" }, ok: true },
+      { headers: { token: "   " }, ok: true },
+    ];
+
+    for (const auth of unusableAuthResults) {
+      await expect(resolveWithAuth(auth)).rejects.toThrow(
+        "No API key for provider/model"
+      );
+    }
   });
 
   test("preserves stream options, chunk order, final text, and usage", async () => {

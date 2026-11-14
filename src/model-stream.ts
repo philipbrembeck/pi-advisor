@@ -11,6 +11,7 @@ import type {
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 import { splitRef } from "./config/state.ts";
+import { hasUsableModelAuth } from "./model-auth.ts";
 
 export interface ResolvedConfiguredModel {
   apiKey?: string;
@@ -64,7 +65,7 @@ export const resolveConfiguredModel = async (
     throw new Error(auth.error);
   }
 
-  if (!auth.apiKey) {
+  if (!hasUsableModelAuth(auth)) {
     throw new Error(`No API key for ${ref}`);
   }
 

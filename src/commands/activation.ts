@@ -22,6 +22,7 @@ import {
   setExecutorRef,
 } from "../config/state.ts";
 import { saveConfig } from "../config/storage.ts";
+import { hasUsableModelAuth } from "../model-auth.ts";
 import { sameModelAdvisorDisabled } from "../tools/model-access.ts";
 import {
   loadCommandConfig,
@@ -71,7 +72,7 @@ const resolveActivationModels = async (
       return { cancelled: true };
     }
 
-    if (!(advisorAuth.ok && advisorAuth.apiKey)) {
+    if (!(advisorAuth.ok && hasUsableModelAuth(advisorAuth))) {
       return { error: `No API key for Advisor ${advisorRef}` };
     }
   }
