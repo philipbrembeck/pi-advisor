@@ -15,26 +15,26 @@ if (localPrefix && resolve(localPrefix) !== projectRoot) {
 }
 
 const packageJson = JSON.parse(
-  readFileSync(resolve(projectRoot, "package.json"), "utf-8")
+  readFileSync(resolve(projectRoot, "package.json"), "utf-8"),
 );
 
 const minimumVersion = /^bun@(?<version>\d+\.\d+\.\d+)$/u.exec(
-  packageJson.packageManager ?? ""
+  packageJson.packageManager ?? "",
 )?.groups?.version;
 
 const currentVersion = /^bun\/(?<version>[^\s]+)/u.exec(
-  process.env.npm_config_user_agent ?? ""
+  process.env.npm_config_user_agent ?? "",
 )?.groups?.version;
 
 const isAtLeast = (version, minimum) => {
   const current =
     /^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)(?:-(?<prerelease>[^\s]+))?$/u.exec(
-      version
+      version,
     )?.groups;
 
   const required =
     /^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)(?:-(?<prerelease>[^\s]+))?$/u.exec(
-      minimum
+      minimum,
     )?.groups;
 
   if (!current || !required) {
@@ -42,11 +42,11 @@ const isAtLeast = (version, minimum) => {
   }
 
   const currentParts = [current.major, current.minor, current.patch].map(
-    Number
+    Number,
   );
 
   const requiredParts = [required.major, required.minor, required.patch].map(
-    Number
+    Number,
   );
 
   for (let index = 0; index < currentParts.length; index += 1) {
@@ -66,11 +66,11 @@ if (
   !isAtLeast(currentVersion, minimumVersion)
 ) {
   console.error(
-    `This repository requires Bun ${minimumVersion ?? "1.4.4"} or newer; found ${currentVersion ?? "a non-Bun package manager"}.`
+    `This repository requires Bun ${minimumVersion ?? "1.4.4"} or newer; found ${currentVersion ?? "a non-Bun package manager"}.`,
   );
   process.exitCode = 1;
 } else {
   console.log(
-    `Bun ${currentVersion} meets the repository minimum ${minimumVersion}.`
+    `Bun ${currentVersion} meets the repository minimum ${minimumVersion}.`,
   );
 }

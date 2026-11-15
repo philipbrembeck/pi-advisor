@@ -5,8 +5,8 @@ const sourceRoot = resolve("src");
 
 const facadePaths = new Set(
   ["config.ts", "ui.ts", "tools.ts", "commands.ts"].map((file) =>
-    resolve(sourceRoot, file)
-  )
+    resolve(sourceRoot, file),
+  ),
 );
 
 const collectTypeScriptFiles = (directory) => {
@@ -85,17 +85,17 @@ for (const importer of collectTypeScriptFiles(sourceRoot)) {
 
     const line = source.slice(0, index).split("\n").length;
     violations.push(
-      `${importer}:${line} imports facade ${specifier}; import a config/UI/tools/commands leaf instead`
+      `${importer}:${line} imports facade ${specifier}; import a config/UI/tools/commands leaf instead`,
     );
   }
 }
 
 if (violations.length > 0) {
   throw new Error(
-    `Module boundary violations detected:\n${violations.toSorted().join("\n")}`
+    `Module boundary violations detected:\n${violations.toSorted().join("\n")}`,
   );
 }
 
 console.log(
-  "Module boundaries verified: production leaves do not import facades."
+  "Module boundaries verified: production leaves do not import facades.",
 );

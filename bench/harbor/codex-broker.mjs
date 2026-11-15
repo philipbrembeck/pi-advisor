@@ -132,7 +132,7 @@ const decodeAccountId = (token) => {
       return;
     }
     const payload = JSON.parse(
-      Buffer.from(parts[1], "base64url").toString("utf8")
+      Buffer.from(parts[1], "base64url").toString("utf8"),
     );
     const value = payload?.[CODEX_ACCOUNT_CLAIM]?.chatgpt_account_id;
     return typeof value === "string" && value.trim() ? value.trim() : undefined;
@@ -293,7 +293,7 @@ const estimate = (payload, bodyBytes) => {
   const inputRate = Math.max(
     rates.inputPerMillion,
     rates.cacheReadPerMillion,
-    rates.cacheWritePerMillion
+    rates.cacheWritePerMillion,
   );
   return (
     (bodyBytes * inputRate +
@@ -348,14 +348,14 @@ const forward = async (rawBody, incomingHeaders, forceRefresh = false) => {
   return fetch(
     new URL(
       "codex/responses",
-      `${CODEX_UPSTREAM.replace(TRAILING_SLASHES, "")}/`
+      `${CODEX_UPSTREAM.replace(TRAILING_SLASHES, "")}/`,
     ),
     {
       body: rawBody,
       headers,
       method: "POST",
       redirect: "manual",
-    }
+    },
   );
 };
 
@@ -445,11 +445,11 @@ server.on("upgrade", (request, socket) => {
   // avoids forwarding an unbudgeted opaque WebSocket frame stream.
   if (request.headers[TOKEN_HEADER] === brokerToken) {
     socket.end(
-      "HTTP/1.1 426 Upgrade Required\r\nConnection: close\r\nContent-Length: 0\r\n\r\n"
+      "HTTP/1.1 426 Upgrade Required\r\nConnection: close\r\nContent-Length: 0\r\n\r\n",
     );
   } else {
     socket.end(
-      "HTTP/1.1 403 Forbidden\r\nConnection: close\r\nContent-Length: 0\r\n\r\n"
+      "HTTP/1.1 403 Forbidden\r\nConnection: close\r\nContent-Length: 0\r\n\r\n",
     );
   }
 });

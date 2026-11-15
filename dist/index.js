@@ -3811,13 +3811,16 @@ var formatAdvisorUsage = (usage) => {
 var formatAdvisorUsageTotals = (totals) => {
   const usage = formatUsageFields(totals);
   const missing = totals.calls - totals.knownCalls;
-  return [usage, missing > 0 ? `${missing} without usage data` : undefined].filter((value) => value !== undefined).join(" · ") || "unavailable";
+  return [
+    usage,
+    missing > 0 ? `${missing} ${t("usage.withoutData", "without usage data")}` : undefined
+  ].filter((value) => value !== undefined).join(" · ") || t("usage.unavailable", "unavailable");
 };
 var formatAdvisorUsageStatus = (totals) => {
   if (totals.calls === 0) {
     return;
   }
-  return `Advisor: ${totals.calls} call${totals.calls === 1 ? "" : "s"} · ${formatAdvisorUsageTotals(totals)}`;
+  return `${t("usage.advisorPrefix", "Advisor:")} ${totals.calls} ${totals.calls === 1 ? t("usage.call", "call") : t("usage.calls", "calls")} · ${formatAdvisorUsageTotals(totals)}`;
 };
 
 // src/scout.ts
@@ -4717,7 +4720,7 @@ class ThinkingMarkdown {
   }
 }
 var hiddenThinkingLabel = (theme) => {
-  const label = theme.fg("thinkingText", `${THINKING_PREFIX}Thinking…`);
+  const label = theme.fg("thinkingText", `${THINKING_PREFIX}${t("render.thinking", "Thinking…")}`);
   return {
     invalidate: noop,
     render: () => [label]
@@ -4728,7 +4731,7 @@ var resolveAdvisorRequest = (question) => question?.trim() || undefined;
 var renderAdvisorCallBox = (question, theme, followUp = false) => {
   const box = new Box(1, 1, (text) => theme.bg("customMessageBg", text));
   const label = theme.fg("customMessageLabel", theme.bold("[advisor]"));
-  const title = theme.fg("customMessageText", followUp ? "Executor → Advisor · Follow-up" : "Executor → Advisor");
+  const title = theme.fg("customMessageText", followUp ? `${t("render.executorToAdvisor", "Executor → Advisor")} · ${t("render.followUp", "Follow-up")}` : t("render.executorToAdvisor", "Executor → Advisor"));
   box.addChild(new Text(question ? `${label} ${title}
 ${theme.fg("dim", `  ${question}`)}` : `${label} ${title}`, 0, 0));
   return box;
@@ -4737,7 +4740,7 @@ var COLLAPSED_ADVICE_LINES = 12;
 var SOUND_VERDICT = /^Verdict:\s*sound$/u;
 var hasSoundVerdict = (advice) => SOUND_VERDICT.test((advice.split(`
 `).find((line) => line.trim()) ?? "").trim());
-var renderAdvisorResponseHeader = (sound, theme) => sound ? theme.fg("accent", theme.bold("◆ ADVISOR · SOUND")) : theme.fg("warning", theme.bold("◆ ADVISOR RESPONSE"));
+var renderAdvisorResponseHeader = (sound, theme) => sound ? theme.fg("accent", theme.bold(`◆ ADVISOR · ${t("render.sound", "SOUND")}`)) : theme.fg("warning", theme.bold(`◆ ADVISOR ${t("render.response", "RESPONSE")}`));
 var adviceForDisplay = (advice, expanded) => {
   if (!advisorCollapseResponsesRef || expanded) {
     return advice;
@@ -7807,11 +7810,11 @@ class ManualAdvisorProgressComponent {
       return box.render(width);
     }
     const frame = SPINNER_FRAMES[Math.floor(Date.now() / 80) % SPINNER_FRAMES.length];
-    let status = "Working…";
+    let status = t("manualProgress.working", "Working…");
     if (this.state.phase === "preparing") {
-      status = "Preparing…";
+      status = t("manualProgress.preparing", "Preparing…");
     } else if (this.state.text?.trim()) {
-      status = "Responding…";
+      status = t("manualProgress.responding", "Responding…");
     }
     box.addChild(new Text4(`${this.theme.fg("warning", this.theme.bold(`◆ ADVISOR ${frame}`))} ${this.theme.fg("dim", `· ${status}`)}`, 0, 0));
     if (this.state.thinking?.trim()) {
@@ -9714,14 +9717,14 @@ var attachmentLabels = (details) => [
   details?.agentRulesBytes ? `AGENTS.md rules attached · ${formatByteSize2(details.agentRulesBytes)}` : undefined,
   details?.draftBytes ? `Draft attached · ${formatByteSize2(details.draftBytes)}` : undefined,
   details?.preferenceBytes ? `Project preferences attached · ${formatByteSize2(details.preferenceBytes)}` : undefined,
-  details?.trackedBytes ? `Tracked files attached · ${formatByteSize2(details.trackedBytes)}` : undefined,
-  details?.untrackedBytes ? `Untracked files attached · ${formatByteSize2(details.untrackedBytes)}` : undefined,
-  details?.imageCount ? `${details.imageCount} image${details.imageCount === 1 ? "" : "s"} attached${details.imageBytes ? ` · ${formatByteSize2(details.imageBytes)}` : ""}${details.imageOmissions ? ` · ${details.imageOmissions} withheld` : ""}` : undefined
+  details?.trackedBytes ? `${t("render.trackedAttached", "Tracked files attached")} · ${formatByteSize2(details.trackedBytes)}` : undefined,
+  details?.untrackedBytes ? `${t("render.untrackedAttached", "Untracked files attached")} · ${formatByteSize2(details.untrackedBytes)}` : undefined,
+  details?.imageCount ? `${details.imageCount} ${details.imageCount === 1 ? t("render.image", "image") : t("render.images", "images")} ${t("render.attached", "attached")}${details.imageBytes ? ` · ${formatByteSize2(details.imageBytes)}` : ""}${details.imageOmissions ? ` · ${details.imageOmissions} ${t("render.withheld", "withheld")}` : ""}` : undefined
 ].filter((label) => label !== undefined);
 var renderSkipBox = (box, result, expanded, theme) => {
   const details = advisorResultDetails(result);
   const lines = [
-    theme.fg("dim", theme.bold("◆ ADVISOR · SKIPPED")),
+    theme.fg("dim", theme.bold(`◆ ADVISOR · ${t("render.skipped", "SKIPPED")}`)),
     theme.fg("dim", `  ${details?.skipReason ?? details?.jev?.reason ?? ""}`)
   ];
   box.addChild(new Text6(lines.join(`
@@ -9747,7 +9750,7 @@ var renderPartialAdvisorResult = (box, result, expanded, theme, context) => {
   }
   const frame = SPINNER_FRAMES[Math.floor(Date.now() / 80) % SPINNER_FRAMES.length];
   const lines = [
-    `${theme.fg("warning", theme.bold(`◆ ADVISOR ${frame}`))} ${theme.fg("dim", "· Working…")}`
+    `${theme.fg("warning", theme.bold(`◆ ADVISOR ${frame}`))} ${theme.fg("dim", `· ${t("render.working", "Working…")}`)}`
   ];
   box.addChild(new Text6(lines.join(`
 `), 0, 0));
@@ -9763,7 +9766,7 @@ var thinkingPreview = (details) => details?.thinking?.trim() ? `${details.thinki
 var finalResultLines = (details, advice, theme) => {
   const lines = [renderAdvisorResponseHeader(hasSoundVerdict(advice), theme)];
   if (details?.followUp) {
-    lines.push(theme.fg("dim", "  Follow-up consultation"));
+    lines.push(theme.fg("dim", `  ${t("render.followUpConsultation", "Follow-up consultation")}`));
   }
   if (details?.advisor) {
     lines.push(theme.fg("dim", `  ${details.advisor}`));
@@ -9771,7 +9774,7 @@ var finalResultLines = (details, advice, theme) => {
   if (getAdvisorSettings().showUsageDetails) {
     const usage = formatAdvisorUsage(details?.usage);
     if (usage) {
-      lines.push(theme.fg("dim", `  Usage: ${usage}`));
+      lines.push(theme.fg("dim", `  ${t("render.usage", "Usage:")} ${usage}`));
     }
   }
   const attachments = attachmentLabels(details);
@@ -9804,7 +9807,7 @@ var renderFinalAdvisorResult = (box, result, expanded, theme, context) => {
   const advice = details?.text || textFrom(result.content);
   const thinking = thinkingPreview(details);
   const lines = finalResultLines(details, advice, theme);
-  const displayAdvice = advice || "(Advisor returned no advice.)";
+  const displayAdvice = advice || t("render.noAdvice", "(Advisor returned no advice.)");
   box.addChild(new Text6(lines.join(`
 `), 0, 0));
   if (thinking) {
@@ -10492,7 +10495,7 @@ var turnGateResultRenderer = (message, { expanded }, theme) => {
   if (details?.text) {
     box.addChild(new Markdown5(adviceForDisplay(details.text, Boolean(expanded)), 0, 0, getMarkdownTheme5()));
   } else {
-    box.addChild(new Text8(theme.fg("error", isString(message.content) ? message.content : "Advisor turn review failed."), 0, 0));
+    box.addChild(new Text8(theme.fg("error", isString(message.content) ? message.content : t("render.turnReviewFailed", "Advisor turn review failed.")), 0, 0));
   }
   return box;
 };
@@ -10507,7 +10510,7 @@ var loopResultRenderer = (message, { expanded }, theme) => {
   if (details?.text) {
     box.addChild(new Markdown5(adviceForDisplay(details.text, Boolean(expanded)), 0, 0, getMarkdownTheme5()));
   } else {
-    box.addChild(new Text8(theme.fg("error", isString(message.content) ? message.content : "Advisor gate failed."), 0, 0));
+    box.addChild(new Text8(theme.fg("error", isString(message.content) ? message.content : t("render.gateFailed", "Advisor gate failed.")), 0, 0));
   }
   return box;
 };

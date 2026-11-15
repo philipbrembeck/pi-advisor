@@ -203,7 +203,10 @@ describe("Budget feedback after registered consultation paths", () => {
         }).model;
         writeFileSync(
           join(dir, "advisor.json"),
-          JSON.stringify({ advisor: "test/same", advisorMaxCallsPerSession: 2 })
+          JSON.stringify({
+            advisor: "test/same",
+            advisorMaxCallsPerSession: 2,
+          })
         );
         expect(await h.end()).toBeUndefined();
         writeFileSync(

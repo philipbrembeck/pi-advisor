@@ -7,7 +7,7 @@ const [result] = JSON.parse(
   execFileSync("npm", ["pack", "--dry-run", "--json"], {
     encoding: "utf-8",
     stdio: ["ignore", "pipe", "inherit"],
-  })
+  }),
 );
 
 const actualFiles = result.files.map(({ path }) => path).toSorted();
@@ -156,7 +156,7 @@ const expectedFiles = [
 ];
 
 const benchmarkFiles = actualFiles.filter(
-  (path) => path === "bench" || path.startsWith("bench/")
+  (path) => path === "bench" || path.startsWith("bench/"),
 );
 
 if (actualFiles.includes("bun.lock")) {
@@ -165,7 +165,7 @@ if (actualFiles.includes("bun.lock")) {
 
 if (benchmarkFiles.length > 0) {
   throw new Error(
-    `Repository-only benchmark files leaked into the package:\n${benchmarkFiles.join("\n")}`
+    `Repository-only benchmark files leaked into the package:\n${benchmarkFiles.join("\n")}`,
   );
 }
 
@@ -174,7 +174,7 @@ if (
   result.version !== packageJson.version
 ) {
   throw new Error(
-    `Packed metadata mismatch: ${result.name}@${result.version} (expected ${packageJson.name}@${packageJson.version})`
+    `Packed metadata mismatch: ${result.name}@${result.version} (expected ${packageJson.name}@${packageJson.version})`,
   );
 }
 
@@ -187,5 +187,5 @@ if (JSON.stringify(actualFiles) !== JSON.stringify(expectedFiles)) {
 }
 
 console.log(
-  `Package contents verified: ${result.name}@${result.version} (${actualFiles.length} files)`
+  `Package contents verified: ${result.name}@${result.version} (${actualFiles.length} files)`,
 );

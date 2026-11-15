@@ -8,6 +8,7 @@ import { Box, Markdown, Spacer, Text } from "@earendil-works/pi-tui";
 
 import { getAdvisorSettings } from "../config/state.ts";
 import { textFrom } from "../conversation.ts";
+import { t } from "../i18n.ts";
 import { formatAdvisorUsage } from "../usage.ts";
 import {
   adviceForDisplay,
@@ -77,13 +78,13 @@ const attachmentLabels = (details: AdvisorToolDetails | undefined) =>
       ? `Project preferences attached · ${formatByteSize(details.preferenceBytes)}`
       : undefined,
     details?.trackedBytes
-      ? `Tracked files attached · ${formatByteSize(details.trackedBytes)}`
+      ? `${t("render.trackedAttached", "Tracked files attached")} · ${formatByteSize(details.trackedBytes)}`
       : undefined,
     details?.untrackedBytes
-      ? `Untracked files attached · ${formatByteSize(details.untrackedBytes)}`
+      ? `${t("render.untrackedAttached", "Untracked files attached")} · ${formatByteSize(details.untrackedBytes)}`
       : undefined,
     details?.imageCount
-      ? `${details.imageCount} image${details.imageCount === 1 ? "" : "s"} attached${details.imageBytes ? ` · ${formatByteSize(details.imageBytes)}` : ""}${details.imageOmissions ? ` · ${details.imageOmissions} withheld` : ""}`
+      ? `${details.imageCount} ${details.imageCount === 1 ? t("render.image", "image") : t("render.images", "images")} ${t("render.attached", "attached")}${details.imageBytes ? ` · ${formatByteSize(details.imageBytes)}` : ""}${details.imageOmissions ? ` · ${details.imageOmissions} ${t("render.withheld", "withheld")}` : ""}`
       : undefined,
   ].filter((label): label is string => label !== undefined);
 
@@ -96,7 +97,10 @@ const renderSkipBox = (
   const details = advisorResultDetails(result);
 
   const lines = [
-    theme.fg("dim", theme.bold("◆ ADVISOR · SKIPPED")),
+    theme.fg(
+      "dim",
+      theme.bold(`◆ ADVISOR · ${t("render.skipped", "SKIPPED")}`)
+    ),
     theme.fg("dim", `  ${details?.skipReason ?? details?.jev?.reason ?? ""}`),
   ];
 
@@ -147,7 +151,7 @@ const renderPartialAdvisorResult = (
     SPINNER_FRAMES[Math.floor(Date.now() / 80) % SPINNER_FRAMES.length];
 
   const lines = [
-    `${theme.fg("warning", theme.bold(`◆ ADVISOR ${frame}`))} ${theme.fg("dim", "· Working…")}`,
+    `${theme.fg("warning", theme.bold(`◆ ADVISOR ${frame}`))} ${theme.fg("dim", `· ${t("render.working", "Working…")}`)}`,
   ];
 
   box.addChild(new Text(lines.join("\n"), 0, 0));
@@ -186,7 +190,12 @@ const finalResultLines = (
   const lines = [renderAdvisorResponseHeader(hasSoundVerdict(advice), theme)];
 
   if (details?.followUp) {
-    lines.push(theme.fg("dim", "  Follow-up consultation"));
+    lines.push(
+      theme.fg(
+        "dim",
+        `  ${t("render.followUpConsultation", "Follow-up consultation")}`
+      )
+    );
   }
 
   if (details?.advisor) {
@@ -197,7 +206,7 @@ const finalResultLines = (
     const usage = formatAdvisorUsage(details?.usage);
 
     if (usage) {
-      lines.push(theme.fg("dim", `  Usage: ${usage}`));
+      lines.push(theme.fg("dim", `  ${t("render.usage", "Usage:")} ${usage}`));
     }
   }
 
@@ -249,7 +258,10 @@ const renderFinalAdvisorResult = (
   const advice = details?.text || textFrom(result.content);
   const thinking = thinkingPreview(details);
   const lines = finalResultLines(details, advice, theme);
-  const displayAdvice = advice || "(Advisor returned no advice.)";
+
+  const displayAdvice =
+    advice || t("render.noAdvice", "(Advisor returned no advice.)");
+
   box.addChild(new Text(lines.join("\n"), 0, 0));
 
   if (thinking) {

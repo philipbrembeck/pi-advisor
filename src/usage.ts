@@ -2,6 +2,7 @@ import type { Usage } from "@earendil-works/pi-ai/compat";
 
 import { isNumber, isRecordOf } from "./content-utils.ts";
 import type { JsonValue, RecordValue } from "./content-utils.ts";
+import { t } from "./i18n.ts";
 
 export interface AdvisorUsageSnapshot {
   cacheRead?: number;
@@ -287,9 +288,14 @@ export const formatAdvisorUsageTotals = (totals: AdvisorUsageTotals) => {
   const missing = totals.calls - totals.knownCalls;
 
   return (
-    [usage, missing > 0 ? `${missing} without usage data` : undefined]
+    [
+      usage,
+      missing > 0
+        ? `${missing} ${t("usage.withoutData", "without usage data")}`
+        : undefined,
+    ]
       .filter((value): value is string => value !== undefined)
-      .join(" · ") || "unavailable"
+      .join(" · ") || t("usage.unavailable", "unavailable")
   );
 };
 
@@ -298,5 +304,5 @@ export const formatAdvisorUsageStatus = (totals: AdvisorUsageTotals) => {
     return undefined;
   }
 
-  return `Advisor: ${totals.calls} call${totals.calls === 1 ? "" : "s"} · ${formatAdvisorUsageTotals(totals)}`;
+  return `${t("usage.advisorPrefix", "Advisor:")} ${totals.calls} ${totals.calls === 1 ? t("usage.call", "call") : t("usage.calls", "calls")} · ${formatAdvisorUsageTotals(totals)}`;
 };

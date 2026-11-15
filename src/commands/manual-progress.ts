@@ -3,6 +3,7 @@ import type { Theme } from "@earendil-works/pi-coding-agent";
 import { Markdown, Text } from "@earendil-works/pi-tui";
 import type { Component } from "@earendil-works/pi-tui";
 
+import { t } from "../i18n.ts";
 import {
   adviceForDisplay,
   noop,
@@ -68,12 +69,12 @@ export class ManualAdvisorProgressComponent implements Component {
     const frame =
       SPINNER_FRAMES[Math.floor(Date.now() / 80) % SPINNER_FRAMES.length];
 
-    let status = "Working…";
+    let status = t("manualProgress.working", "Working…");
 
     if (this.state.phase === "preparing") {
-      status = "Preparing…";
+      status = t("manualProgress.preparing", "Preparing…");
     } else if (this.state.text?.trim()) {
-      status = "Responding…";
+      status = t("manualProgress.responding", "Responding…");
     }
 
     box.addChild(

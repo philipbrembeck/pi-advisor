@@ -106,7 +106,7 @@ const checks = await Promise.all(
       exit_code: result.exit_code,
       truncated: result.truncated,
     };
-  })
+  }),
 );
 return await tools.ask_advisor({
   draft: JSON.stringify({

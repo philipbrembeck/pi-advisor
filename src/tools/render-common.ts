@@ -10,6 +10,7 @@ import {
 import type { Component } from "@earendil-works/pi-tui";
 
 import { advisorCollapseResponsesRef } from "../config/state.ts";
+import { t } from "../i18n.ts";
 import { piHideThinkingEnabled } from "../pi-settings.ts";
 
 export const SPINNER_FRAMES = [
@@ -67,7 +68,10 @@ class ThinkingMarkdown implements Component {
 
 /** Collapsed placeholder shown when Pi's hide_thinking setting is on. */
 const hiddenThinkingLabel = (theme: ThinkingTheme): Component => {
-  const label = theme.fg("thinkingText", `${THINKING_PREFIX}Thinking…`);
+  const label = theme.fg(
+    "thinkingText",
+    `${THINKING_PREFIX}${t("render.thinking", "Thinking…")}`
+  );
 
   return {
     invalidate: noop,
@@ -96,7 +100,9 @@ export const renderAdvisorCallBox = (
 
   const title = theme.fg(
     "customMessageText",
-    followUp ? "Executor → Advisor · Follow-up" : "Executor → Advisor"
+    followUp
+      ? `${t("render.executorToAdvisor", "Executor → Advisor")} · ${t("render.followUp", "Follow-up")}`
+      : t("render.executorToAdvisor", "Executor → Advisor")
   );
 
   box.addChild(
@@ -125,8 +131,14 @@ export const hasSoundVerdict = (advice: string) =>
 /** The single Advisor response header shared by tool and manual renderers. */
 export const renderAdvisorResponseHeader = (sound: boolean, theme: Theme) =>
   sound
-    ? theme.fg("accent", theme.bold("◆ ADVISOR · SOUND"))
-    : theme.fg("warning", theme.bold("◆ ADVISOR RESPONSE"));
+    ? theme.fg(
+        "accent",
+        theme.bold(`◆ ADVISOR · ${t("render.sound", "SOUND")}`)
+      )
+    : theme.fg(
+        "warning",
+        theme.bold(`◆ ADVISOR ${t("render.response", "RESPONSE")}`)
+      );
 
 export const adviceForDisplay = (advice: string, expanded: boolean) => {
   if (!advisorCollapseResponsesRef || expanded) {

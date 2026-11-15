@@ -212,7 +212,10 @@ describe("Advisor image disclosure", () => {
       })
     ).toBeDefined();
     expect(
-      imageFromPart({ ...image, data: "A".repeat(ADVISOR_IMAGE_MAX_BYTES * 2) })
+      imageFromPart({
+        ...image,
+        data: "A".repeat(ADVISOR_IMAGE_MAX_BYTES * 2),
+      })
     ).toBeUndefined();
 
     const bad = await capturedConsultation(

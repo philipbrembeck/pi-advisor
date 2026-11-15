@@ -9,6 +9,7 @@ import { Box, Markdown, Text } from "@earendil-works/pi-tui";
 
 import { getAdvisorSettings } from "../config/state.ts";
 import { isString } from "../content-utils.ts";
+import { t } from "../i18n.ts";
 import { formatAdvisorUsage } from "../usage.ts";
 import type { TurnGateResultDetails as TurnGateResultRecord } from "./jev-turn-gate.ts";
 import { adviceForDisplay, renderAdvisorCallBox } from "./render-common.ts";
@@ -137,7 +138,7 @@ const turnGateResultRenderer: MessageRenderer<TurnGateResultDetails> = (
           "error",
           isString(message.content)
             ? message.content
-            : "Advisor turn review failed."
+            : t("render.turnReviewFailed", "Advisor turn review failed.")
         ),
         0,
         0
@@ -186,7 +187,9 @@ const loopResultRenderer: MessageRenderer<LoopResultDetails> = (
       new Text(
         theme.fg(
           "error",
-          isString(message.content) ? message.content : "Advisor gate failed."
+          isString(message.content)
+            ? message.content
+            : t("render.gateFailed", "Advisor gate failed.")
         ),
         0,
         0

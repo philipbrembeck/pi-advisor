@@ -43,14 +43,14 @@ const runAudit = () => {
   const text = output.replaceAll(/https?:\/\/\S+/gu, " ");
 
   const serviceError = SERVICE_ERROR_PATTERNS.some((pattern) =>
-    pattern.test(text)
+    pattern.test(text),
   );
 
   const reportsFindings = FINDING_MARKERS.test(text);
 
   if (serviceError && !reportsFindings) {
     console.warn(
-      "bun audit could not reach the registry (service error) — failing open. Re-run scripts/audit.mjs manually once the registry is healthy."
+      "bun audit could not reach the registry (service error) — failing open. Re-run scripts/audit.mjs manually once the registry is healthy.",
     );
 
     return;
