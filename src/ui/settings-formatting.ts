@@ -1,6 +1,7 @@
 import { visibleWidth } from "@earendil-works/pi-tui";
 
 import { DEFAULT_EFFORT_LEVEL } from "../commands/model-options.ts";
+import { t } from "../i18n.ts";
 import type { ContextPreset } from "./types.ts";
 
 export const TOGGLE_VALUES = ["On", "Off"];
@@ -129,9 +130,11 @@ export const contextDescription = (
   const markerLabel = `${" ".repeat(labelStart)}${label}`;
 
   const description =
-    exactIndex === -1 ? "Custom context limit." : selectedPreset?.description;
+    exactIndex === -1
+      ? t("settings.context.customLimit", "Custom context limit.")
+      : selectedPreset?.description;
 
-  return `${description ?? "Custom context limit."}\n${meterPrefix}${meter}  full\n${markerLabel}`;
+  return `${description ?? t("settings.context.customLimit", "Custom context limit.")}\n${meterPrefix}${meter}  full\n${markerLabel}`;
 };
 
 export const currentEffort = (effort: string | undefined): string =>

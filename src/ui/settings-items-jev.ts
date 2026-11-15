@@ -10,6 +10,7 @@ import {
   DEFAULT_JEV_TIMEOUT_MS,
   DEFAULT_JEV_TURN_GATE_NOUL_THRESHOLD,
 } from "../config/types.ts";
+import { t } from "../i18n.ts";
 import type { JevClassifierKeySnapshot } from "../jev/classifier-key-store.ts";
 import { JevClassifierSubmenu } from "./jev-classifier-submenu.ts";
 import { JevFilterSubmenu } from "./jev-filter-submenu.ts";
@@ -42,7 +43,9 @@ const jevFilterRowValue = (settings: AdvisorSettings) => {
     return "Off";
   }
 
-  return settings.jevClassifier ? "On" : "On (unavailable: no classifier)";
+  return settings.jevClassifier
+    ? "On"
+    : t("settings.jevFilter.onUnavailable", "On (unavailable: no classifier)");
 };
 
 export const jevItems = (
@@ -57,11 +60,15 @@ export const jevItems = (
   }: JevItemsDependencies
 ): SettingItem[] => [
   {
-    currentValue: settings.jevClassifier ?? "Choose classifier",
-    description:
-      "Select a Pi-authenticated classifier or explicitly configure the separate Jev API Key option.",
+    currentValue:
+      settings.jevClassifier ??
+      t("settings.jevProvider.choose", "Choose classifier"),
+    description: t(
+      "settings.jevProvider.desc",
+      "Select a Pi-authenticated classifier or explicitly configure the separate Jev API Key option."
+    ),
     id: "jevProvider",
-    label: "Jev classifier",
+    label: t("settings.jevProvider.label", "Jev classifier"),
     submenu: (currentValue, done) =>
       new JevClassifierSubmenu({
         currentValue,
@@ -78,10 +85,12 @@ export const jevItems = (
   },
   {
     currentValue: jevFilterRowValue(settings),
-    description:
-      "Screen low-stakes ask_advisor consultations with the selected Jev provider.",
+    description: t(
+      "settings.jevFilter.desc",
+      "Screen low-stakes ask_advisor consultations with the selected Jev provider."
+    ),
     id: "jevFilter",
-    label: "Jev/Decisions consultation filter",
+    label: t("settings.jevFilter.label", "Jev/Decisions consultation filter"),
     submenu: (currentValue, done) =>
       new JevFilterSubmenu({
         currentClassifier: settings.jevClassifier,
@@ -98,10 +107,12 @@ export const jevItems = (
     currentValue: String(
       settings.jevFilterSkipConfidence ?? DEFAULT_JEV_FILTER_SKIP_CONFIDENCE
     ),
-    description:
-      "Required probability on negligible stakes before a consultation is skipped.",
+    description: t(
+      "settings.jevFilterSkipConfidence.desc",
+      "Required probability on negligible stakes before a consultation is skipped."
+    ),
     id: "jevFilterSkipConfidence",
-    label: "Jev skip confidence",
+    label: t("settings.jevFilterSkipConfidence.label", "Jev skip confidence"),
     values: numericValues(
       settings.jevFilterSkipConfidence ?? DEFAULT_JEV_FILTER_SKIP_CONFIDENCE,
       [0.6, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95]
@@ -111,31 +122,38 @@ export const jevItems = (
     currentValue: String(
       settings.jevFilterNoulMargin ?? DEFAULT_JEV_FILTER_NOUL_MARGIN
     ),
-    description:
-      "Extra margin over a coin flip required on self-answerability before skipping.",
+    description: t(
+      "settings.jevFilterNoulMargin.desc",
+      "Extra margin over a coin flip required on self-answerability before skipping."
+    ),
     id: "jevFilterNoulMargin",
-    label: "Jev Noul margin",
+    label: t("settings.jevFilterNoulMargin.label", "Jev Noul margin"),
     values: numericValues(
       settings.jevFilterNoulMargin ?? DEFAULT_JEV_FILTER_NOUL_MARGIN,
       [0.1, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45]
     ),
   },
   {
-    currentValue: `${settings.jevFilterOverrideWindow ?? DEFAULT_JEV_FILTER_OVERRIDE_WINDOW} turns`,
-    description:
-      "Turns after a skip during which the same question passes automatically.",
+    currentValue: `${settings.jevFilterOverrideWindow ?? DEFAULT_JEV_FILTER_OVERRIDE_WINDOW} ${t("settings.jev.turnsUnit", "turns")}`,
+    description: t(
+      "settings.jevFilterOverrideWindow.desc",
+      "Turns after a skip during which the same question passes automatically."
+    ),
     id: "jevFilterOverrideWindow",
-    label: "Jev override window",
+    label: t("settings.jevFilterOverrideWindow.label", "Jev override window"),
     values: numericValues(
       settings.jevFilterOverrideWindow ?? DEFAULT_JEV_FILTER_OVERRIDE_WINDOW,
       [0, 3, 5, 10, 20, 50]
-    ).map((value) => `${value} turns`),
+    ).map((value) => `${value} ${t("settings.jev.turnsUnit", "turns")}`),
   },
   {
     currentValue: String(settings.jevTimeoutMs ?? DEFAULT_JEV_TIMEOUT_MS),
-    description: "Total wall-time budget for one Jev call, including retries.",
+    description: t(
+      "settings.jevTimeoutMs.desc",
+      "Total wall-time budget for one Jev call, including retries."
+    ),
     id: "jevTimeoutMs",
-    label: "Jev timeout ms",
+    label: t("settings.jevTimeoutMs.label", "Jev timeout ms"),
     values: numericValues(
       settings.jevTimeoutMs ?? DEFAULT_JEV_TIMEOUT_MS,
       [1000, 2000, 5000, 8000, 15_000, 30_000]
@@ -145,9 +163,12 @@ export const jevItems = (
     currentValue: String(
       settings.jevDigestMaxChars ?? DEFAULT_JEV_DIGEST_MAX_CHARS
     ),
-    description: "Conversation characters sent to Jev as screening evidence.",
+    description: t(
+      "settings.jevDigestMaxChars.desc",
+      "Conversation characters sent to Jev as screening evidence."
+    ),
     id: "jevDigestMaxChars",
-    label: "Jev digest chars",
+    label: t("settings.jevDigestMaxChars.label", "Jev digest chars"),
     values: numericValues(
       settings.jevDigestMaxChars ?? DEFAULT_JEV_DIGEST_MAX_CHARS,
       [0, 1000, 2000, 4000, 8000, 15_000]
@@ -160,10 +181,12 @@ export const jevItems = (
       settings.jevTurnGateEveryTurns === undefined
         ? "Off"
         : `every ${settings.jevTurnGateEveryTurns} turns`,
-    description:
-      "Proactively consult the Advisor every N turns without a consultation (0 = off).",
+    description: t(
+      "settings.jevTurnGateEveryTurns.desc",
+      "Proactively consult the Advisor every N turns without a consultation (0 = off)."
+    ),
     id: "jevTurnGateEveryTurns",
-    label: "Jev/Decisions turn gate",
+    label: t("settings.jevTurnGateEveryTurns.label", "Jev/Decisions turn gate"),
     values: [
       "Off",
       "every 3 turns",
@@ -176,10 +199,15 @@ export const jevItems = (
     currentValue: String(
       settings.jevTurnGateNoulThreshold ?? DEFAULT_JEV_TURN_GATE_NOUL_THRESHOLD
     ),
-    description:
-      "Jev confidence required before the turn gate interrupts with advice.",
+    description: t(
+      "settings.jevTurnGateNoulThreshold.desc",
+      "Jev confidence required before the turn gate interrupts with advice."
+    ),
     id: "jevTurnGateNoulThreshold",
-    label: "Jev/Decisions turn-gate threshold",
+    label: t(
+      "settings.jevTurnGateNoulThreshold.label",
+      "Jev/Decisions turn-gate threshold"
+    ),
     values: numericValues(
       settings.jevTurnGateNoulThreshold ?? DEFAULT_JEV_TURN_GATE_NOUL_THRESHOLD,
       [0.6, 0.7, 0.8, 0.85, 0.9, 0.95]
