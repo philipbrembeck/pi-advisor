@@ -19,7 +19,7 @@ import {
 const packageRoot = resolvePath(import.meta.dirname, "..");
 
 const packageManifest = JSON.parse(
-  readFileSync(join(packageRoot, "package.json"), "utf-8"),
+  readFileSync(join(packageRoot, "package.json"), "utf-8")
 );
 
 const bundledEntry = resolvePath(packageRoot, packageManifest.main);
@@ -89,7 +89,7 @@ test("bundled package keeps settings state shared under Node DefaultResourceLoad
   try {
     writeFileSync(
       join(agentDir, "settings.json"),
-      JSON.stringify({ extensions: [packageRoot] }),
+      JSON.stringify({ extensions: [packageRoot] })
     );
     writeFileSync(
       join(agentDir, "advisor.json"),
@@ -97,7 +97,7 @@ test("bundled package keeps settings state shared under Node DefaultResourceLoad
         advisor: "provider/advisor",
         contextMaxChars: 25_000,
         executor: "provider/executor",
-      }),
+      })
     );
 
     initTheme("dark");
@@ -108,7 +108,7 @@ test("bundled package keeps settings state shared under Node DefaultResourceLoad
     assert.deepEqual(
       result.errors,
       [],
-      result.errors.map((error) => `${error.path}: ${error.error}`).join("\n"),
+      result.errors.map((error) => `${error.path}: ${error.error}`).join("\n")
     );
     assert.equal(result.extensions.length, 1);
     const [firstExtension] = result.extensions;
@@ -121,13 +121,13 @@ test("bundled package keeps settings state shared under Node DefaultResourceLoad
     const firstRendered = await runSettingsCommand(
       firstCommand.handler,
       context,
-      true,
+      true
     );
 
     assert.match(firstRendered, MODEL_WHITELIST_PATTERN);
 
     const saved = JSON.parse(
-      readFileSync(join(agentDir, "advisor.json"), "utf-8"),
+      readFileSync(join(agentDir, "advisor.json"), "utf-8")
     );
 
     assert.equal(saved.contextMaxChars, 100_000);
@@ -140,13 +140,13 @@ test("bundled package keeps settings state shared under Node DefaultResourceLoad
     const secondCommand = result.extensions[0].commands.get("advisor-settings");
     assert.ok(
       secondCommand,
-      "advisor-settings command disappeared after reload",
+      "advisor-settings command disappeared after reload"
     );
 
     const reopened = await runSettingsCommand(
       secondCommand.handler,
       context,
-      false,
+      false
     );
 
     assert.match(reopened, CONTEXT_WINDOW_PATTERN);
@@ -165,7 +165,7 @@ test("bundled package keeps settings state shared under Node DefaultResourceLoad
     await runSettingsCommand(freshCommand.handler, context, false);
 
     const reloaded = JSON.parse(
-      readFileSync(join(agentDir, "advisor.json"), "utf-8"),
+      readFileSync(join(agentDir, "advisor.json"), "utf-8")
     );
 
     assert.equal(reloaded.contextMaxChars, 100_000);
