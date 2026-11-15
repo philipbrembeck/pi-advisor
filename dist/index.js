@@ -518,8 +518,7 @@ var normalizeJevBaseUrl = (input) => {
   return { baseUrl: `${parsed.origin}${stripContractPath(parsed.pathname)}` };
 };
 
-// src/config/schema.ts
-var configuredModelRef = (value) => value?.trim() || undefined;
+// src/config/schema-validators.ts
 var isNonEmptyModel = (model) => typeof model === "string" && model.trim().length > 0;
 var isValidAdvisorModelWhitelist = (value) => Array.isArray(value) && value.every(isNonEmptyModel);
 var ADVISOR_TOOL_POLICY_NAMES = new Set(ADVISOR_TOOL_POLICIES);
@@ -529,17 +528,17 @@ var isValidAdvisorToolPolicies = (value) => {
   }
   return Object.entries(value).every(([toolName, policy]) => toolName.trim().length > 0 && isString(policy) && ADVISOR_TOOL_POLICY_NAMES.has(policy));
 };
-var nonNegativeSafeInteger = (value) => typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+var isValidNonNegativeSafeInteger = (value) => typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 var isValidContextMaxChars = (value) => typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && value <= MAX_CONTEXT_MAX_CHARS;
 var isValidLoopThreshold = (value) => typeof value === "number" && Number.isSafeInteger(value) && value >= 2;
-var isValidMaxCallsPerSession = (value) => nonNegativeSafeInteger(value);
+var isValidMaxCallsPerSession = (value) => isValidNonNegativeSafeInteger(value);
 var GATE_FAILURE_MODE_NAMES = new Set(GATE_FAILURE_MODES);
 var isValidGateFailureMode = (value) => isString(value) && GATE_FAILURE_MODE_NAMES.has(value);
-var isValidToolResultMaxLines = (value) => nonNegativeSafeInteger(value);
-var isValidToolResultMaxBytes = (value) => nonNegativeSafeInteger(value);
+var isValidToolResultMaxLines = (value) => isValidNonNegativeSafeInteger(value);
+var isValidToolResultMaxBytes = (value) => isValidNonNegativeSafeInteger(value);
 var isValidJevTimeoutMs = (value) => typeof value === "number" && Number.isSafeInteger(value) && value >= 1;
 var isValidScoutTimeoutMs = (value) => typeof value === "number" && Number.isSafeInteger(value) && value >= 1 && value <= MAX_SCOUT_TIMEOUT_MS;
-var isValidJevDigestMaxChars = (value) => nonNegativeSafeInteger(value);
+var isValidJevDigestMaxChars = (value) => isValidNonNegativeSafeInteger(value);
 var isValidJevPricePerMtok = (value) => typeof value === "number" && Number.isFinite(value) && value > 0;
 var isValidJevSkipConfidence = (value) => typeof value === "number" && Number.isFinite(value) && value >= 0.5 && value <= 1;
 var isValidJevNoulMargin = (value) => typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 0.5;
@@ -547,6 +546,9 @@ var JEV_TRANSPORT_NAMES = new Set(JEV_TRANSPORTS);
 var isValidJevTransport = (value) => isString(value) && JEV_TRANSPORT_NAMES.has(value);
 var isValidJevBaseUrl = (value) => isString(value) && (value.trim() === "" || normalizeJevBaseUrl(value).baseUrl !== undefined);
 var isValidJevKeyProvider = (value) => isString(value) && (value.trim() === "" || !/\s/u.test(value.trim()));
+
+// src/config/schema.ts
+var configuredModelRef = (value) => value?.trim() || undefined;
 var CONFIG_SCHEMA = {
   advisor: {
     accepted: "a provider/model string",
@@ -626,7 +628,7 @@ var CONFIG_SCHEMA = {
     current: () => advisorGitContextMaxCharsRef,
     persisted: true,
     type: "number",
-    validate: nonNegativeSafeInteger
+    validate: isValidNonNegativeSafeInteger
   },
   advisorHerdrIntegration: {
     accepted: "true or false",
@@ -673,7 +675,7 @@ var CONFIG_SCHEMA = {
     current: () => advisorJevFilterOverrideWindowRef,
     persisted: true,
     type: "number",
-    validate: nonNegativeSafeInteger
+    validate: isValidNonNegativeSafeInteger
   },
   advisorJevFilterSkipConfidence: {
     accepted: "a number between 0.5 and 1 inclusive",
@@ -721,7 +723,7 @@ var CONFIG_SCHEMA = {
     current: () => advisorJevTurnGateEveryTurnsRef,
     persisted: true,
     type: "number",
-    validate: nonNegativeSafeInteger
+    validate: isValidNonNegativeSafeInteger
   },
   advisorJevTurnGateNoulThreshold: {
     accepted: "a number between 0.5 and 1 inclusive",
@@ -2959,9 +2961,6 @@ var readProjectRules = async (ctx, maxBytes = PREFERENCES_MAX_BYTES, redact = tr
   };
 };
 
-// src/scout-groups.ts
-import { createHash as createHash2 } from "node:crypto";
-
 // src/tool-result-cap.ts
 var OMITTED_MARKER = "[... omitted tool-result section ...]";
 var collect = (candidates, maxEntries, maxContentBytes) => {
@@ -3152,6 +3151,52 @@ var recentConversation = (ctx, maxChars = 15000, toolResultMaxLines = advisorToo
   return selectRecentEntries(entries, maxChars);
 };
 
+// src/scout-group-serialization.ts
+import { createHash as createHash2 } from "node:crypto";
+
+// src/scout-types.ts
+var SCOUT_MANIFEST_MAX_BYTES = 64 * 1024;
+var SCOUT_MANIFEST_MAX_GROUPS = 64;
+var SCOUT_GROUP_MAX_BYTES = 24 * 1024;
+var SCOUT_LABEL_MAX_CHARS = 160;
+var SCOUT_SELECTION_MAX_IDS = 32;
+var SCOUT_SYNTHESIS_MAX_BYTES = 4 * 1024;
+
+// src/scout-group-serialization.ts
+var SPEAKER_PREFIX = /^(?<speaker>User|Executor):\s*/u;
+var boundedLabel = (value) => [...value.replaceAll(/\s+/gu, " ").trim()].slice(0, SCOUT_LABEL_MAX_CHARS).join("");
+var labelFor = (kind, content) => {
+  const preview = boundedLabel(content.replace(SPEAKER_PREFIX, ""));
+  const prefix = {
+    assistant: "Executor",
+    compaction: "Compaction summary",
+    "pending-invocation": "Current Advisor invocation",
+    "tool-exchange": "Tool exchange",
+    user: "User request"
+  };
+  return boundedLabel(`${prefix[kind]}: ${preview || "(no text)"}`);
+};
+var stableId = (index, entryIds, kind, content) => `g_${createHash2("sha256").update(JSON.stringify([index, entryIds, kind, content])).digest("hex").slice(0, 16)}`;
+var createScoutContextGroup = (originalIndex, entryIds, kind, content, required) => ({
+  bytes: byteLength(content),
+  content,
+  entryIds,
+  id: stableId(originalIndex, entryIds, kind, content),
+  kind,
+  label: labelFor(kind, content),
+  originalIndex,
+  required
+});
+var groupWire = (group) => ({
+  bytes: group.bytes,
+  content: group.content,
+  id: group.id,
+  kind: group.kind,
+  label: group.label,
+  required: group.required
+});
+var groupWireBytes = (group) => byteLength(JSON.stringify(groupWire(group)));
+
 // src/scout-protocol.ts
 var invalid = (message) => ({
   message,
@@ -3226,48 +3271,7 @@ var indexToolCalls = (entries) => {
   };
 };
 
-// src/scout-types.ts
-var SCOUT_MANIFEST_MAX_BYTES = 64 * 1024;
-var SCOUT_MANIFEST_MAX_GROUPS = 64;
-var SCOUT_GROUP_MAX_BYTES = 24 * 1024;
-var SCOUT_LABEL_MAX_CHARS = 160;
-var SCOUT_SELECTION_MAX_IDS = 32;
-var SCOUT_SYNTHESIS_MAX_BYTES = 4 * 1024;
-
 // src/scout-groups.ts
-var SPEAKER_PREFIX = /^(?<speaker>User|Executor):\s*/u;
-var boundedLabel = (value) => [...value.replaceAll(/\s+/gu, " ").trim()].slice(0, SCOUT_LABEL_MAX_CHARS).join("");
-var labelFor = (kind, content) => {
-  const preview = boundedLabel(content.replace(SPEAKER_PREFIX, ""));
-  const prefix = {
-    assistant: "Executor",
-    compaction: "Compaction summary",
-    "pending-invocation": "Current Advisor invocation",
-    "tool-exchange": "Tool exchange",
-    user: "User request"
-  };
-  return boundedLabel(`${prefix[kind]}: ${preview || "(no text)"}`);
-};
-var stableId = (index, entryIds, kind, content) => `g_${createHash2("sha256").update(JSON.stringify([index, entryIds, kind, content])).digest("hex").slice(0, 16)}`;
-var groupWire = (group) => ({
-  bytes: group.bytes,
-  content: group.content,
-  id: group.id,
-  kind: group.kind,
-  label: group.label,
-  required: group.required
-});
-var groupWireBytes = (group) => byteLength(JSON.stringify(groupWire(group)));
-var createGroup = (originalIndex, entryIds, kind, content, required) => ({
-  bytes: byteLength(content),
-  content,
-  entryIds,
-  id: stableId(originalIndex, entryIds, kind, content),
-  kind,
-  label: labelFor(kind, content),
-  originalIndex,
-  required
-});
 var pendingAdvisorArguments = (part) => {
   const value = isRecord(part.arguments) ? part.arguments : {};
   const allowed = {};
@@ -3335,7 +3339,7 @@ var missingOutcome = (entry, index, entryId, disclosed, callIds, missing, result
   }
   const pendingDisclosed = pendingInvocationDisclosure(entry, currentInvocationId, caps.toolResultMaxLines, caps.toolResultMaxBytes, caps.policies, caps.redact, caps.imageNonce, disclosed);
   return {
-    group: createGroup(index, [entryId, ...resultEntryIds], "pending-invocation", [pendingDisclosed ?? disclosed, ...resultParts].join(`
+    group: createScoutContextGroup(index, [entryId, ...resultEntryIds], "pending-invocation", [pendingDisclosed ?? disclosed, ...resultParts].join(`
 
 `), true),
     kind: "group"
@@ -3359,7 +3363,7 @@ var toolExchangeGroup = (entry, message, index, entryId, disclosed, immediate, i
     return missingOutcome(entry, index, entryId, disclosed, callIds, missing, resultParts, resultEntryIds, caps);
   }
   return {
-    group: createGroup(index, [entryId, ...resultEntryIds], "tool-exchange", [disclosed, ...resultParts].join(`
+    group: createScoutContextGroup(index, [entryId, ...resultEntryIds], "tool-exchange", [disclosed, ...resultParts].join(`
 
 `), false),
     kind: "group"
@@ -3384,14 +3388,14 @@ var groupForEntry = (entry, index, disclosed, immediate, indexed, consumedResult
   const entryId = isString(entry.id) ? entry.id : String(index);
   if (entry.type !== "message" || !isRecord(entry.message)) {
     return {
-      group: createGroup(index, [entryId], "compaction", disclosed, false),
+      group: createScoutContextGroup(index, [entryId], "compaction", disclosed, false),
       kind: "group"
     };
   }
   const { message } = entry;
   if (message.role === "user") {
     return {
-      group: createGroup(index, [entryId], "user", disclosed, index === indexed.latestUserIndex),
+      group: createScoutContextGroup(index, [entryId], "user", disclosed, index === indexed.latestUserIndex),
       kind: "group"
     };
   }
@@ -3403,7 +3407,7 @@ var groupForEntry = (entry, index, disclosed, immediate, indexed, consumedResult
   }
   if (!hasCalls(message)) {
     return {
-      group: createGroup(index, [entryId], "assistant", disclosed, false),
+      group: createScoutContextGroup(index, [entryId], "assistant", disclosed, false),
       kind: "group"
     };
   }

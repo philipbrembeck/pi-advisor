@@ -1,7 +1,26 @@
 import { isString } from "../content-utils.ts";
 import type { JsonValue } from "../content-utils.ts";
 import { GIT_CONTEXT_LEVELS, isValidGitContextLevel } from "../git.ts";
-import { normalizeJevBaseUrl } from "../jev/base-url.ts";
+import {
+  isValidAdvisorModelWhitelist,
+  isValidAdvisorToolPolicies,
+  isValidContextMaxChars,
+  isValidGateFailureMode,
+  isValidJevBaseUrl,
+  isValidJevDigestMaxChars,
+  isValidJevKeyProvider,
+  isValidJevNoulMargin,
+  isValidJevPricePerMtok,
+  isValidJevSkipConfidence,
+  isValidJevTimeoutMs,
+  isValidJevTransport,
+  isValidLoopThreshold,
+  isValidMaxCallsPerSession,
+  isValidNonNegativeSafeInteger,
+  isValidScoutTimeoutMs,
+  isValidToolResultMaxBytes,
+  isValidToolResultMaxLines,
+} from "./schema-validators.ts";
 import {
   advisorAgentsMdContextRef,
   advisorAutoLoopGateRef,
@@ -56,114 +75,28 @@ import {
   showUsageFooterRef,
   simpleModeRef,
 } from "./state.ts";
-import type {
-  AdvisorConfig,
-  AdvisorConfigValue,
-  JevTransport,
-} from "./types.ts";
+import type { AdvisorConfig, AdvisorConfigValue } from "./types.ts";
 import {
-  ADVISOR_TOOL_POLICIES,
   GATE_FAILURE_MODES,
   JEV_TRANSPORTS,
   MAX_CONTEXT_MAX_CHARS,
   MAX_SCOUT_TIMEOUT_MS,
 } from "./types.ts";
 
+export {
+  isValidAdvisorModelWhitelist,
+  isValidAdvisorToolPolicies,
+  isValidContextMaxChars,
+  isValidGateFailureMode,
+  isValidLoopThreshold,
+  isValidMaxCallsPerSession,
+  isValidToolResultMaxBytes,
+  isValidToolResultMaxLines,
+} from "./schema-validators.ts";
+
 /** An empty ref means no model has been selected yet. */
 const configuredModelRef = (value: string | undefined): string | undefined =>
   value?.trim() || undefined;
-
-const isNonEmptyModel = (model: unknown): model is string =>
-  typeof model === "string" && model.trim().length > 0;
-
-export const isValidAdvisorModelWhitelist = (
-  value: unknown
-): value is string[] => Array.isArray(value) && value.every(isNonEmptyModel);
-
-const ADVISOR_TOOL_POLICY_NAMES = new Set<string>(ADVISOR_TOOL_POLICIES);
-
-export const isValidAdvisorToolPolicies = (
-  value: unknown
-): value is Record<string, (typeof ADVISOR_TOOL_POLICIES)[number]> => {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return false;
-  }
-
-  return Object.entries(value).every(
-    ([toolName, policy]) =>
-      toolName.trim().length > 0 &&
-      isString(policy) &&
-      ADVISOR_TOOL_POLICY_NAMES.has(policy)
-  );
-};
-
-const nonNegativeSafeInteger = (value: unknown): value is number =>
-  typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
-
-export const isValidContextMaxChars = (value: unknown): value is number =>
-  typeof value === "number" &&
-  Number.isSafeInteger(value) &&
-  value >= 0 &&
-  value <= MAX_CONTEXT_MAX_CHARS;
-
-export const isValidLoopThreshold = (value: unknown): value is number =>
-  typeof value === "number" && Number.isSafeInteger(value) && value >= 2;
-
-export const isValidMaxCallsPerSession = (value: unknown): value is number =>
-  nonNegativeSafeInteger(value);
-
-const GATE_FAILURE_MODE_NAMES = new Set<string>(GATE_FAILURE_MODES);
-
-export const isValidGateFailureMode = (
-  value: unknown
-): value is (typeof GATE_FAILURE_MODES)[number] =>
-  isString(value) && GATE_FAILURE_MODE_NAMES.has(value);
-
-export const isValidToolResultMaxLines = (value: unknown): value is number =>
-  nonNegativeSafeInteger(value);
-
-export const isValidToolResultMaxBytes = (value: unknown): value is number =>
-  nonNegativeSafeInteger(value);
-
-const isValidJevTimeoutMs = (value: unknown): value is number =>
-  typeof value === "number" && Number.isSafeInteger(value) && value >= 1;
-
-const isValidScoutTimeoutMs = (value: unknown): value is number =>
-  typeof value === "number" &&
-  Number.isSafeInteger(value) &&
-  value >= 1 &&
-  value <= MAX_SCOUT_TIMEOUT_MS;
-
-const isValidJevDigestMaxChars = (value: unknown): value is number =>
-  nonNegativeSafeInteger(value);
-
-const isValidJevPricePerMtok = (value: unknown): value is number =>
-  typeof value === "number" && Number.isFinite(value) && value > 0;
-
-const isValidJevSkipConfidence = (value: unknown): value is number =>
-  typeof value === "number" &&
-  Number.isFinite(value) &&
-  value >= 0.5 &&
-  value <= 1;
-
-const isValidJevNoulMargin = (value: unknown): value is number =>
-  typeof value === "number" &&
-  Number.isFinite(value) &&
-  value >= 0 &&
-  value <= 0.5;
-
-const JEV_TRANSPORT_NAMES = new Set<string>(JEV_TRANSPORTS);
-
-const isValidJevTransport = (value: unknown): value is JevTransport =>
-  isString(value) && JEV_TRANSPORT_NAMES.has(value);
-
-/** An empty value clears the endpoint; anything else must be a usable Base URL. */
-const isValidJevBaseUrl = (value: unknown): value is string =>
-  isString(value) &&
-  (value.trim() === "" || normalizeJevBaseUrl(value).baseUrl !== undefined);
-
-const isValidJevKeyProvider = (value: unknown): value is string =>
-  isString(value) && (value.trim() === "" || !/\s/u.test(value.trim()));
 
 /** One declarative entry per AdvisorConfig key: JSON type, persistence, and
  * the live runtime value behind it. Validation and storage derive from this
@@ -260,7 +193,7 @@ export const CONFIG_SCHEMA = {
     current: () => advisorGitContextMaxCharsRef,
     persisted: true,
     type: "number",
-    validate: nonNegativeSafeInteger,
+    validate: isValidNonNegativeSafeInteger,
   },
   advisorHerdrIntegration: {
     accepted: "true or false",
@@ -310,7 +243,7 @@ export const CONFIG_SCHEMA = {
     current: () => advisorJevFilterOverrideWindowRef,
     persisted: true,
     type: "number",
-    validate: nonNegativeSafeInteger,
+    validate: isValidNonNegativeSafeInteger,
   },
   advisorJevFilterSkipConfidence: {
     accepted: "a number between 0.5 and 1 inclusive",
@@ -358,7 +291,7 @@ export const CONFIG_SCHEMA = {
     current: () => advisorJevTurnGateEveryTurnsRef,
     persisted: true,
     type: "number",
-    validate: nonNegativeSafeInteger,
+    validate: isValidNonNegativeSafeInteger,
   },
   advisorJevTurnGateNoulThreshold: {
     accepted: "a number between 0.5 and 1 inclusive",

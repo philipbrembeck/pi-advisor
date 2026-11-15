@@ -1,5 +1,3 @@
-import { createHash } from "node:crypto";
-
 import type { AdvisorToolPolicies } from "./config/types.ts";
 import {
   byteLength,
@@ -9,13 +7,14 @@ import {
 } from "./content-utils.ts";
 import type { RecordValue } from "./content-utils.ts";
 import { conversationEntry } from "./conversation.ts";
+import { createScoutContextGroup as createGroup } from "./scout-group-serialization.ts";
 import { invalid, toolCallId, toolCalls } from "./scout-protocol.ts";
-import { SCOUT_LABEL_MAX_CHARS } from "./scout-types.ts";
 import type {
   InvalidProtocolResult,
   ScoutContextGroup,
-  ScoutGroupKind,
 } from "./scout-types.ts";
+
+export { groupWire, groupWireBytes } from "./scout-group-serialization.ts";
 
 export interface GroupPass {
   groups: ScoutContextGroup[];
@@ -23,68 +22,6 @@ export interface GroupPass {
   protocolOmittedBytes: number;
   protocolOmittedCount: number;
 }
-
-const SPEAKER_PREFIX = /^(?<speaker>User|Executor):\s*/u;
-
-const boundedLabel = (value: string) =>
-  [...value.replaceAll(/\s+/gu, " ").trim()]
-    .slice(0, SCOUT_LABEL_MAX_CHARS)
-    .join("");
-
-const labelFor = (kind: ScoutGroupKind, content: string) => {
-  const preview = boundedLabel(content.replace(SPEAKER_PREFIX, ""));
-
-  const prefix: Record<ScoutGroupKind, string> = {
-    assistant: "Executor",
-    compaction: "Compaction summary",
-    "pending-invocation": "Current Advisor invocation",
-    "tool-exchange": "Tool exchange",
-    user: "User request",
-  };
-
-  return boundedLabel(`${prefix[kind]}: ${preview || "(no text)"}`);
-};
-
-const stableId = (
-  index: number,
-  entryIds: string[],
-  kind: ScoutGroupKind,
-  content: string
-) =>
-  `g_${createHash("sha256")
-    .update(JSON.stringify([index, entryIds, kind, content]))
-    .digest("hex")
-    .slice(0, 16)}`;
-
-/** The wire projection shared by manifest transport and size accounting. */
-export const groupWire = (group: ScoutContextGroup) => ({
-  bytes: group.bytes,
-  content: group.content,
-  id: group.id,
-  kind: group.kind,
-  label: group.label,
-  required: group.required,
-});
-
-export const groupWireBytes = (group: ScoutContextGroup) =>
-  byteLength(JSON.stringify(groupWire(group)));
-
-const createGroup = (
-  originalIndex: number,
-  entryIds: string[],
-  kind: ScoutGroupKind,
-  content: string,
-  required: boolean
-): ScoutContextGroup => ({
-  bytes: byteLength(content),
-  content,
-  entryIds,
-  id: stableId(originalIndex, entryIds, kind, content),
-  kind,
-  label: labelFor(kind, content),
-  originalIndex,
-  required,
-});
 
 const pendingAdvisorArguments = (part: RecordValue): RecordValue => {
   const value = isRecord(part.arguments) ? part.arguments : {};
