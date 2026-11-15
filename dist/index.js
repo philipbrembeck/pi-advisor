@@ -3578,6 +3578,55 @@ var buildScoutManifest = (ctx, options = {}) => {
   return fitToBudget(built, caps);
 };
 
+// src/scout-selection.ts
+var byteLength2 = (value) => Buffer.byteLength(value, "utf-8");
+var isStringArray = (value) => Array.isArray(value) && value.every(isString);
+var parseScoutSelection = (text, manifest) => {
+  if (!text.trim()) {
+    throw new Error("Scout returned an empty response.");
+  }
+  let value;
+  try {
+    value = JSON.parse(text);
+  } catch (error) {
+    throw new Error("Scout response is not a JSON object.", { cause: error });
+  }
+  if (!isRecord(value)) {
+    throw new Error("Scout response must be a JSON object.");
+  }
+  const keys = Object.keys(value).toSorted();
+  if (keys.length !== 2 || keys[0] !== "selectedIds" || keys[1] !== "synthesis") {
+    throw new Error("Scout response must contain only selectedIds and synthesis.");
+  }
+  if (!isStringArray(value.selectedIds)) {
+    throw new Error("Scout selectedIds must be an array of strings.");
+  }
+  const { selectedIds } = value;
+  if (new Set(selectedIds).size !== selectedIds.length) {
+    throw new Error("Scout selected duplicate group IDs.");
+  }
+  const known = new Set(manifest.groups.map((group) => group.id));
+  const knownSelectedIds = selectedIds.filter((id) => known.has(id));
+  const requiredIds = manifest.groups.filter((group) => group.required).map((group) => group.id);
+  if (requiredIds.length > SCOUT_SELECTION_MAX_IDS) {
+    throw new Error(`Manifest contains more than ${SCOUT_SELECTION_MAX_IDS} required groups.`);
+  }
+  const required = new Set(requiredIds);
+  const optionalIds = knownSelectedIds.filter((id) => !required.has(id)).slice(0, SCOUT_SELECTION_MAX_IDS - requiredIds.length);
+  const retained = new Set([...requiredIds, ...optionalIds]);
+  const normalizedIds = manifest.groups.filter((group) => retained.has(group.id)).map((group) => group.id);
+  if (!isString(value.synthesis)) {
+    throw new TypeError("Scout synthesis must be a string.");
+  }
+  if (byteLength2(value.synthesis) > SCOUT_SYNTHESIS_MAX_BYTES) {
+    throw new Error(`Scout synthesis exceeds ${SCOUT_SYNTHESIS_MAX_BYTES} UTF-8 bytes.`);
+  }
+  return {
+    selectedIds: normalizedIds,
+    synthesis: knownSelectedIds.length > 0 ? value.synthesis : ""
+  };
+};
+
 // src/usage.ts
 var finite = (value) => isNumber(value) && Number.isFinite(value) && value >= 0 ? value : undefined;
 var add = (left, right) => left === undefined || right === undefined ? left ?? right : left + right;
@@ -3779,7 +3828,6 @@ var defaultDependencies = {
   collect: collectTextStream,
   resolve: resolveConfiguredModel
 };
-var byteLength2 = (value) => Buffer.byteLength(value, "utf-8");
 var AUTH_ERROR_PATTERN = /api key|auth|login|credential/iu;
 var manifestMessage = (manifest) => ({
   content: [
@@ -3797,52 +3845,6 @@ var manifestMessage = (manifest) => ({
   role: "user",
   timestamp: Date.now()
 });
-var isStringArray = (value) => Array.isArray(value) && value.every(isString);
-var parseScoutSelection = (text, manifest) => {
-  if (!text.trim()) {
-    throw new Error("Scout returned an empty response.");
-  }
-  let value;
-  try {
-    value = JSON.parse(text);
-  } catch (error) {
-    throw new Error("Scout response is not a JSON object.", { cause: error });
-  }
-  if (!isRecord(value)) {
-    throw new Error("Scout response must be a JSON object.");
-  }
-  const keys = Object.keys(value).toSorted();
-  if (keys.length !== 2 || keys[0] !== "selectedIds" || keys[1] !== "synthesis") {
-    throw new Error("Scout response must contain only selectedIds and synthesis.");
-  }
-  if (!isStringArray(value.selectedIds)) {
-    throw new Error("Scout selectedIds must be an array of strings.");
-  }
-  const { selectedIds } = value;
-  if (new Set(selectedIds).size !== selectedIds.length) {
-    throw new Error("Scout selected duplicate group IDs.");
-  }
-  const known = new Set(manifest.groups.map((group) => group.id));
-  const knownSelectedIds = selectedIds.filter((id) => known.has(id));
-  const requiredIds = manifest.groups.filter((group) => group.required).map((group) => group.id);
-  if (requiredIds.length > SCOUT_SELECTION_MAX_IDS) {
-    throw new Error(`Manifest contains more than ${SCOUT_SELECTION_MAX_IDS} required groups.`);
-  }
-  const required = new Set(requiredIds);
-  const optionalIds = knownSelectedIds.filter((id) => !required.has(id)).slice(0, SCOUT_SELECTION_MAX_IDS - requiredIds.length);
-  const retained = new Set([...requiredIds, ...optionalIds]);
-  const normalizedIds = manifest.groups.filter((group) => retained.has(group.id)).map((group) => group.id);
-  if (!isString(value.synthesis)) {
-    throw new TypeError("Scout synthesis must be a string.");
-  }
-  if (byteLength2(value.synthesis) > SCOUT_SYNTHESIS_MAX_BYTES) {
-    throw new Error(`Scout synthesis exceeds ${SCOUT_SYNTHESIS_MAX_BYTES} UTF-8 bytes.`);
-  }
-  return {
-    selectedIds: normalizedIds,
-    synthesis: knownSelectedIds.length > 0 ? value.synthesis : ""
-  };
-};
 var baseMetrics = (manifest, startedAt) => ({
   availableCount: manifest.availableCount,
   inputBytes: manifest.availableBytes,
@@ -5099,7 +5101,7 @@ class AdvisorJevLedgerState {
   }
 }
 
-// src/session-state.ts
+// src/tool-input-normalization.ts
 var WHITESPACE = /\s/u;
 var TIMESTAMP_KEYS = new Set([
   "createdat",
@@ -5167,6 +5169,8 @@ var normalizeToolInput = (toolName, input) => {
   return visit(input);
 };
 var normalizedToolSignature = (toolName, input) => `${toolName}:${JSON.stringify(normalizeToolInput(toolName, input))}`;
+
+// src/session-state.ts
 var freshRepetition = () => ({
   count: 0,
   interventions: 0
