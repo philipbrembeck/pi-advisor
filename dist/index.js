@@ -9403,6 +9403,16 @@ var registerCommands = (pi, dependencies = {}) => {
   registerAdvisorConfigurationTool(runtime);
 };
 
+// src/i18n.ts
+var I18N_NAMESPACE = "pi-advisor-flow";
+var scopeImpl;
+try {
+  const sdk = await import("@juicesharp/rpiv-i18n");
+  scopeImpl = sdk.scope(I18N_NAMESPACE);
+} catch {
+  scopeImpl = (_key, fallback) => fallback;
+}
+
 // src/tools/budget-feedback.ts
 var advisorBudgetMessage = (session) => {
   const simple = isSimpleMode();
@@ -10524,6 +10534,10 @@ var registerAdvisorTool = (pi, session = sessionStateFor(pi), dependencies = {})
 var consultAdvisor2 = (...args) => consultAdvisor(...args);
 var parseAutomaticDecision2 = (...args) => parseAutomaticDecision(...args);
 var runAdvisorGate2 = (...args) => runAdvisorGate(...args);
+try {
+  const loader = await import("@juicesharp/rpiv-i18n/loader");
+  loader.registerLocalesFromDir(I18N_NAMESPACE, new URL("../", import.meta.url).href, { label: "pi-advisor" });
+} catch {}
 function registerPiAdvisor(pi) {
   const sessionState = new AdvisorSessionState;
   const scoutStatus = new ScoutStatusManager;

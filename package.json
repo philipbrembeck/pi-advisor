@@ -27,6 +27,7 @@
     "docs/privacy.md",
     "docs/README.md",
     "extensions",
+    "locales",
     "skills",
     "src",
     "scripts/check-bun-version.mjs",
@@ -43,7 +44,7 @@
     "bench:evaluate": "bun bench/src/cli.ts evaluate",
     "bench:replay": "bun bench/src/cli.ts replay",
     "bench:screen": "bun bench/src/cli.ts screen",
-    "build": "bun build ./extensions/index.ts --outfile dist/index.js --target node --format esm --external @earendil-works/pi-ai --external @earendil-works/pi-coding-agent --external @earendil-works/pi-tui --external typebox",
+    "build": "bun build ./extensions/index.ts --outfile dist/index.js --target node --format esm --external @earendil-works/pi-ai --external @earendil-works/pi-coding-agent --external @earendil-works/pi-tui --external @juicesharp/rpiv-i18n --external @juicesharp/rpiv-i18n/loader --external typebox",
     "check:boundaries": "node scripts/check-module-boundaries.mjs",
     "format": "bun fmt --no-script --print-width 80 --trailing-comma es5 --sort-imports --bracket-same-line --ignore-pattern 'bench/tasks/**/traps.toml' --ignore-pattern 'dist/**'",
     "knip": "knip",
@@ -64,6 +65,7 @@
     "@earendil-works/pi-ai": "1.5.2",
     "@earendil-works/pi-coding-agent": "1.5.2",
     "@earendil-works/pi-tui": "1.5.2",
+    "@juicesharp/rpiv-i18n": "2.15.0",
     "@oxlint/plugins": "1.93.0",
     "@types/node": "^26.6.6",
     "@typesafe-ai/sdk": "^0.7.0",
@@ -80,6 +82,7 @@
     "@earendil-works/pi-ai": "^1.0.0",
     "@earendil-works/pi-coding-agent": "^1.0.0",
     "@earendil-works/pi-tui": "^1.0.0",
+    "@juicesharp/rpiv-i18n": "*",
     "typebox": "^1.1.38"
   },
   "peerDependenciesMeta": {

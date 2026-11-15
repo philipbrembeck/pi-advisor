@@ -1,0 +1,4 @@
+{
+  "_meta.notes": "English baseline. Any new key MUST land here first; other locales fall back to it.",
+  "_meta.status": "Skeleton — keys are added together with the t() call sites."
+}

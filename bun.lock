@@ -8,6 +8,7 @@
         "@earendil-works/pi-ai": "1.5.2",
         "@earendil-works/pi-coding-agent": "1.5.2",
         "@earendil-works/pi-tui": "1.5.2",
+        "@juicesharp/rpiv-i18n": "2.15.0",
         "@oxlint/plugins": "1.93.0",
         "@types/node": "^26.6.6",
         "@typesafe-ai/sdk": "^0.7.0",
@@ -24,6 +25,7 @@
         "@earendil-works/pi-ai": "^1.0.0",
         "@earendil-works/pi-coding-agent": "^1.0.0",
         "@earendil-works/pi-tui": "^1.0.0",
+        "@juicesharp/rpiv-i18n": "*",
         "typebox": "^1.1.38",
       },
       "optionalPeers": [
@@ -121,6 +123,10 @@
     "@google/genai": ["@google/genai@2.21.0", "", { "dependencies": { "google-auth-library": "^10.3.0", "p-retry": "^4.6.2", "protobufjs": "^7.5.4", "ws": "^8.18.0" }, "peerDependencies": { "@modelcontextprotocol/sdk": "^1.25.2" }, "optionalPeers": ["@modelcontextprotocol/sdk"] }, "sha512-+PDtco2/Z0ONdzCGekCoCT+O1VJS9xJQNN4XzQpXG/t3El/SWWMkCWlFRO1KmivOHPa4Q0VjUYu1HBKCZ/v33Q=="],
 
     "@isaacs/nonrecursive-glob-match": ["@isaacs/nonrecursive-glob-match@1.0.3", "", {}, "sha512-SI7kyKHq4XXDRozw+r9GlRZkia1ZkFrpLW98r2IC2Bpr8YkFGE3fvjzmxCG0x78A++69HmDNrDvSMYBZmHGpKA=="],
+
+    "@juicesharp/rpiv-config": ["@juicesharp/rpiv-config@2.15.0", "", { "peerDependencies": { "typebox": "*" } }, "sha512-S2BAGX4dJjQ2AyNYOEjC6ha04p9f6CdEfmtxpdxzSKrfDMwqIvOjjO9HiHc1IPY7jDY1q2Q8cGCtpIZWV6Y8NQ=="],
+
+    "@juicesharp/rpiv-i18n": ["@juicesharp/rpiv-i18n@2.15.0", "", { "dependencies": { "@juicesharp/rpiv-config": "^2.15.0" }, "peerDependencies": { "@earendil-works/pi-coding-agent": "*", "@earendil-works/pi-tui": "*" } }, "sha512-YpC8nN2dO/oi3slxMPvF2TQsitVY4IWdoLoT0C7EV7jxPVrySXx7Iucx9oeaP5zlO4pu2Mei5q3UFy3Ni2xwWw=="],
 
     "@napi-rs/wasm-runtime": ["@napi-rs/wasm-runtime@1.2.5", "", { "dependencies": { "@tybys/wasm-util": "^0.10.3" }, "peerDependencies": { "@emnapi/core": "^1.7.1 || ^2.0.0-alpha.4", "@emnapi/runtime": "^1.7.1 || ^2.0.0-alpha.4" } }, "sha512-HshSvXzmBxNzqejd3k/KemgQ3hdREUYFRRrgxOZ+gPljDIsO2SDZrVZMd4Z/HsxudQbE62OVyVFE8z9BCurfjA=="],
 

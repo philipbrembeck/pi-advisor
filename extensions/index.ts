@@ -3,6 +3,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { registerCommands } from "../src/commands/registration.ts";
 import { getAdvisorSettings } from "../src/config/state.ts";
 import { herdrAdvisorActivity, HerdrAdvisorBlock } from "../src/herdr.ts";
+import { I18N_NAMESPACE } from "../src/i18n.ts";
 import { AdvisorSessionState } from "../src/session-state.ts";
 import {
   consultAdvisor as consultAdvisorImplementation,
@@ -35,6 +36,28 @@ export const parseAutomaticDecision = (
 export const runAdvisorGate = (
   ...args: Parameters<typeof runAdvisorGateImplementation>
 ) => runAdvisorGateImplementation(...args);
+
+interface I18nLoader {
+  registerLocalesFromDir: (
+    namespace: string,
+    packageUrl: string,
+    options?: { label?: string }
+  ) => void;
+}
+
+try {
+  // SAFETY: the loader subpath exports registerLocalesFromDir per the soft-peer contract; older versions resolve undefined and throw into this catch.
+  const loader = (await import("@juicesharp/rpiv-i18n/loader")) as I18nLoader;
+  // Both entry files (dist/index.js, extensions/index.ts) sit one level below
+  // the package root, so ../ anchors locale lookup at <root>/locales/.
+  loader.registerLocalesFromDir(
+    I18N_NAMESPACE,
+    new URL("../", import.meta.url).href,
+    { label: "pi-advisor" }
+  );
+} catch {
+  // SDK absent — extension still loads with English-only UI.
+}
 
 export default function registerPiAdvisor(pi: ExtensionAPI) {
   const sessionState = new AdvisorSessionState();

@@ -19,6 +19,7 @@ on:
       - docs/privacy.md
       - docs/README.md
       - "extensions/**"
+      - "locales/**"
       - "skills/**"
       - "src/**"
       - "scripts/check-bun-version.mjs"
