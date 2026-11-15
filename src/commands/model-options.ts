@@ -36,9 +36,6 @@ export const selectedEffort = (choice: string): string | undefined => {
   return effort === DEFAULT_EFFORT_LEVEL ? undefined : effort;
 };
 
-export const ADVISOR_ACTIVATION_EXPLANATION =
-  "The Advisor is a second-opinion model that reviews the Executor's context and returns risks, alternatives, and verification steps without changing files or running tools.";
-
 const ARGUMENT_WHITESPACE = /\s+/u;
 
 const hasModelOverride = (args: string, key: "advisor" | "executor") =>
