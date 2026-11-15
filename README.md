@@ -156,6 +156,20 @@ In the interactive TUI, `/advisor-manual [focus]` opens a centered overlay with 
 
 Advisor Scout is off by default. When enabled in `/advisor-settings` or via `"advisorScoutEnabled": true`, the Executor model first selects relevant conversation history before the Advisor sees it. Scout runs in a separate model call, which adds cost and latency up front but can shrink the Advisor call. A bounded result shows the model, selection counts, and usage; on any failure it falls back to sending the original conversation unchanged. This experiment adapts the context-boundary idea from Zhang et al., ["FastContext: Training Efficient Repository Explorer for Coding Agents"](https://arxiv.org/html/2606.14066v1) — it curates conversation history only and is not a reproduction of FastContext. See the [configuration guide](https://github.com/philipbrembeck/pi-advisor/blob/main/docs/configuration.md) for details.
 
+## Localization
+
+pi-advisor localizes its human-facing interface through [`@juicesharp/rpiv-i18n`](https://www.npmjs.com/package/@juicesharp/rpiv-i18n). German and French ship complete (`locales/de.json`, `locales/fr.json`); other Pi locales fall back to English until contributed. Strings sent to the model — tool descriptions, prompts, and validation envelopes — intentionally stay English so behavior is identical in every language.
+
+To use a localized interface:
+
+```sh
+pi install npm:@juicesharp/rpiv-i18n
+```
+
+Then pick a language with `/languages` in the session. Without the SDK installed, pi-advisor runs unchanged in English — it is an optional peer dependency, never required.
+
+Contributing or improving a locale: mirror the exact keys from [`locales/en.json`](https://github.com/philipbrembeck/pi-advisor/blob/main/locales/en.json) into `locales/<code>.json` (a `test/i18n-locale-consistency.test.ts` guards key drift), and leave reserved labels like toggle values untranslated. The initial `de` and `fr` translations were machine-assisted — native review is welcome.
+
 ## Privacy
 
 Advisor requests can include user messages, tool calls, tool results, targeted questions, trusted project and global `AGENTS.md` rules, and repository information. `advisorAgentsMdContext` is on by default and can be disabled in `/advisor-settings`; rules are sent as origin-labelled, capped, redacted, untrusted review guidance only. Untrusted projects withhold both rule files and tell the Advisor that rules were withheld. Repository context is configurable from no access through changed-file summaries to a capped patch; when it is disabled, the Advisor is told so rather than shown an apparently clean tree. Images from disclosed conversation and full-policy tool results can be sent as pixels only to image-capable Advisor models; Scout sees markers, not pixels. Exact tracked and untracked image files can be attached using `includeTrackedFiles` and `includeUntracked` under their existing separate global consent rules. Images are limited to four and 8 MiB total, with a 4 MiB per-image cap; unsupported, missing, or oversized images are reported as withheld, not reviewed. Explicit tracked and untracked file contents require separate global opt-ins and are sent as untrusted data. Secret redaction is off by default; when enabled, credential-shaped values in targeted questions are redacted before the provider request. Tools without an explicit policy use full context. Settings are global, so a project cannot silently change them.
