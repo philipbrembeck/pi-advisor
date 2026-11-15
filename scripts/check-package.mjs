@@ -37,6 +37,7 @@ const expectedFiles = [
   "src/commands/configuration-tool-policy.ts",
   "src/commands/configuration-tool-preview.ts",
   "src/commands/configuration-tool-runtime.ts",
+  "src/commands/configuration-tool-transaction.ts",
   "src/commands/configuration-tool-update.ts",
   "src/commands/configuration-tool.ts",
   "src/commands/lifecycle.ts",

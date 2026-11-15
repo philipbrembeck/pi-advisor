@@ -5843,9 +5843,6 @@ var addAdvisorConfigDependencies = (changes) => {
   return normalized;
 };
 
-// src/commands/configuration-tool-update.ts
-import { withFileMutationQueue } from "@earendil-works/pi-coding-agent";
-
 // src/commands/configuration-tool-preview.ts
 var sameConfigValue2 = (left, right) => JSON.stringify(left) === JSON.stringify(right);
 var orderedPatchEntries = (patch) => configKeys.filter((key) => Object.hasOwn(patch, key)).map((key) => [key, patch[key]]);
@@ -6048,38 +6045,8 @@ var unchangedAdvisorConfigResult = (message) => ({
   details: { action: "update", applied: false, unchanged: true }
 });
 
-// src/commands/configuration-tool-update.ts
-var prepareAdvisorConfigUpdate = async (ctx, input, selectModels) => {
-  const existing = readGlobalAdvisorConfig();
-  const before = getAdvisorConfigSnapshot();
-  const beforeSettings = getAdvisorSettings();
-  const [, configPath] = configPaths(ctx);
-  if (!configPath) {
-    throw new Error("Could not resolve the global Advisor configuration path.");
-  }
-  if (input === undefined) {
-    throw new TypeError("Provide Advisor settings changes for action=update.");
-  }
-  if (!validateAdvisorConfigPatch(input, Boolean(existing.advisorJevClassifier))) {
-    throw new TypeError("Advisor settings changes must be a JSON object.");
-  }
-  const initialChanges = input;
-  if (Object.hasOwn(initialChanges, "advisorOutcomeLogging") && Object.keys(initialChanges).length > 1) {
-    throw new Error("Update advisorOutcomeLogging by itself so its separate consent path remains clear.");
-  }
-  const changesWithModels = await resolveModelChanges(ctx, initialChanges, before, existing, selectModels);
-  if (!changesWithModels) {
-    return;
-  }
-  const changes = addAdvisorConfigDependencies(changesWithModels);
-  return {
-    before,
-    beforeSettings,
-    configPath,
-    existing,
-    proposed: effectiveChanges(changes, existing)
-  };
-};
+// src/commands/configuration-tool-transaction.ts
+import { withFileMutationQueue } from "@earendil-works/pi-coding-agent";
 var confirmAdvisorConfigUpdate = async (ctx, prepared, signal) => {
   const preview = summarizeAdvisorConfigPatch(prepared.proposed, prepared.before, prepared.existing);
   const risks = advisorConfigRiskNotes(prepared.proposed, prepared.before, prepared.existing);
@@ -6115,6 +6082,39 @@ var persistAdvisorConfigUpdate = (prepared, signal) => {
     }
     return prepared.configPath;
   }));
+};
+
+// src/commands/configuration-tool-update.ts
+var prepareAdvisorConfigUpdate = async (ctx, input, selectModels) => {
+  const existing = readGlobalAdvisorConfig();
+  const before = getAdvisorConfigSnapshot();
+  const beforeSettings = getAdvisorSettings();
+  const [, configPath] = configPaths(ctx);
+  if (!configPath) {
+    throw new Error("Could not resolve the global Advisor configuration path.");
+  }
+  if (input === undefined) {
+    throw new TypeError("Provide Advisor settings changes for action=update.");
+  }
+  if (!validateAdvisorConfigPatch(input, Boolean(existing.advisorJevClassifier))) {
+    throw new TypeError("Advisor settings changes must be a JSON object.");
+  }
+  const initialChanges = input;
+  if (Object.hasOwn(initialChanges, "advisorOutcomeLogging") && Object.keys(initialChanges).length > 1) {
+    throw new Error("Update advisorOutcomeLogging by itself so its separate consent path remains clear.");
+  }
+  const changesWithModels = await resolveModelChanges(ctx, initialChanges, before, existing, selectModels);
+  if (!changesWithModels) {
+    return;
+  }
+  const changes = addAdvisorConfigDependencies(changesWithModels);
+  return {
+    before,
+    beforeSettings,
+    configPath,
+    existing,
+    proposed: effectiveChanges(changes, existing)
+  };
 };
 var appliedAdvisorConfigResult = (prepared, savedPath) => {
   const notices = [];

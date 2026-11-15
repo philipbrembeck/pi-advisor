@@ -2,90 +2,14 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-
 import { registerCommands } from "../src/commands.ts";
-import { registerAdvisorConfigurationTool } from "../src/commands/configuration-tool.ts";
-import type {
-  AdvisorModelPickerOptions,
-  AdvisorModelSelection,
-} from "../src/commands/model-picker.ts";
-import { createCommandRuntime } from "../src/commands/runtime.ts";
+import type { AdvisorModelSelection } from "../src/commands/model-picker.ts";
 import { getAdvisorSettings, resetConfigCache } from "../src/config.ts";
 import { setContextMaxCharsRef } from "../src/config/state.ts";
 import { loadConfig } from "../src/config/storage.ts";
 import { savedConfig, withAgentDir } from "./helpers/config-fixture.ts";
-import { asExtensionContext } from "./helpers/extension-context.ts";
+import { makeUiContext, registerTool } from "./helpers/configuration-tool.ts";
 import { mockPi } from "./helpers/mock-pi.ts";
-
-const makeUiContext = (
-  agentDir: string,
-  options: {
-    confirm?: (title: string, body: string) => Promise<boolean>;
-    hasUI?: boolean;
-    mode?: "tui" | "rpc" | "print";
-    models?: { id: string; provider: string }[];
-    notify?: (message: string) => void;
-  } = {}
-) => {
-  const notifications: string[] = [];
-  const confirmations: { body: string; title: string }[] = [];
-  const models = options.models ?? [];
-
-  const ctx = {
-    cwd: agentDir,
-    hasUI: options.hasUI ?? true,
-    isProjectTrusted: () => false,
-    mode: options.mode ?? "tui",
-    modelRegistry: {
-      find: (provider: string, id: string) =>
-        models.find((model) => model.provider === provider && model.id === id),
-      getAvailable: () => models,
-    },
-    ui: {
-      confirm: async (title: string, body: string) => {
-        confirmations.push({ body, title });
-
-        return options.confirm ? options.confirm(title, body) : true;
-      },
-      custom: async () => undefined,
-      notify: (message: string) => {
-        notifications.push(message);
-        options.notify?.(message);
-      },
-      setStatus: () => {},
-    },
-  };
-
-  return { confirmations, ctx: asExtensionContext(ctx), notifications };
-};
-
-const registerTool = (
-  options: {
-    activeTools?: string[];
-    selectModels?: (
-      ctx: ExtensionContext,
-      params: AdvisorModelPickerOptions
-    ) => Promise<AdvisorModelSelection | undefined>;
-  } = {}
-) => {
-  const tools = new Map<string, any>();
-
-  const pi = mockPi(
-    { activeTools: options.activeTools ?? ["bash"], tools },
-    {
-      setModel: () => Promise.resolve(true),
-      setThinkingLevel: () => {},
-    }
-  );
-
-  const runtime = createCommandRuntime(pi);
-  registerAdvisorConfigurationTool(runtime, {
-    selectModels: options.selectModels,
-  });
-
-  return { runtime, tool: tools.get("advisor_config") };
-};
 
 describe("model-callable Advisor configuration", () => {
   afterEach(() => resetConfigCache());
