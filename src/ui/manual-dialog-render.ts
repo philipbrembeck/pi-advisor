@@ -5,15 +5,40 @@ import {
 } from "@earendil-works/pi-tui";
 
 import type { GitContextLevel } from "../git.ts";
+import { t } from "../i18n.ts";
 import type { ManualAdvisorDialogView } from "./types.ts";
 
-const MANUAL_GIT_CONTEXT_COPY: Record<
-  GitContextLevel,
-  { description: string; label: string }
-> = {
-  full: { description: "summary plus patch", label: "Full" },
-  off: { description: "no Git data", label: "None" },
-  summary: { description: "changed paths and status", label: "Summary" },
+interface GitContextCopy {
+  description: string;
+  label: string;
+}
+
+const gitContextCopy = (level: GitContextLevel): GitContextCopy => {
+  switch (level) {
+    case "full": {
+      return {
+        description: t("manualDialog.git.full.desc", "summary plus patch"),
+        label: t("manualDialog.git.full.label", "Full"),
+      };
+    }
+
+    case "off": {
+      return {
+        description: t("manualDialog.git.off.desc", "no Git data"),
+        label: t("manualDialog.git.off.label", "None"),
+      };
+    }
+
+    default: {
+      return {
+        description: t(
+          "manualDialog.git.summary.desc",
+          "changed paths and status"
+        ),
+        label: t("manualDialog.git.summary.label", "Summary"),
+      };
+    }
+  }
 };
 
 export const renderManualAdvisorDialog = (
@@ -68,7 +93,7 @@ export const renderManualAdvisorDialog = (
 
   if (renderWidth >= 2) {
     const title = truncateToWidth(
-      " Ask Advisor ",
+      ` ${t("manualDialog.title", "Ask Advisor")} `,
       Math.max(0, innerWidth),
       "",
       false
@@ -87,7 +112,9 @@ export const renderManualAdvisorDialog = (
   }
 
   addLine(
-    `${focusMarker("editor")}${theme.bold("Message for Advisor (optional)")}`
+    `${focusMarker("editor")}${theme.bold(
+      t("manualDialog.messageLabel", "Message for Advisor (optional)")
+    )}`
   );
 
   for (const editorLine of editorLines) {
@@ -96,28 +123,41 @@ export const renderManualAdvisorDialog = (
 
   addLine("");
   addWrapped(
-    "Automatic context follows your settings: conversation history, tool disclosure, project preferences, redaction, and configured limits remain unchanged.",
+    t(
+      "manualDialog.contextNote",
+      "Automatic context follows your settings: conversation history, tool disclosure, project preferences, redaction, and configured limits remain unchanged."
+    ),
     "muted"
   );
   addWrapped(
-    "This dialog does not expose drafts or explicit file handoff controls.",
+    t(
+      "manualDialog.noDraftsNote",
+      "This dialog does not expose drafts or explicit file handoff controls."
+    ),
     "dim"
   );
   addWrapped(
-    "Git None only withholds repository data; it does not remove configured conversation history.",
+    t(
+      "manualDialog.gitNoneNote",
+      "Git None only withholds repository data; it does not remove configured conversation history."
+    ),
     "dim"
   );
   addLine("");
-  const gitCeiling = MANUAL_GIT_CONTEXT_COPY[gitContext].label;
+
+  const gitCeiling = gitContextCopy(gitContext).label;
+
   addLine(
     `${focusMarker("git")}${theme.bold(
-      `Git repository context (max: ${gitCeiling}; ↑/↓ or Space to choose)`
+      `${t("manualDialog.gitTitle", "Git repository context (max:")} ${
+        gitCeiling
+      }; ${t("manualDialog.gitChoose", "↑/↓ or Space to choose)")}`
     )}`
   );
 
   for (let index = 0; index < gitLevels.length; index += 1) {
     const level = gitLevels[index];
-    const copy = MANUAL_GIT_CONTEXT_COPY[level];
+    const copy = gitContextCopy(level);
     const selected = index === gitIndex;
     const marker = selected ? "●" : "○";
     const optionFocus = focusTarget === "git" && selected ? "▸ " : "  ";
@@ -130,28 +170,34 @@ export const renderManualAdvisorDialog = (
 
   addLine("");
 
-  let interactionHint =
-    "Enter submit · Shift+Enter newline · Tab/Shift+Tab focus · Esc cancel";
+  let interactionHint = t(
+    "manualDialog.hint.editor",
+    "Enter submit · Shift+Enter newline · Tab/Shift+Tab focus · Esc cancel"
+  );
 
   if (focusTarget === "git") {
-    interactionHint =
-      "↑/↓ or Space choose · Enter next · Tab/Shift+Tab focus · Esc cancel";
+    interactionHint = t(
+      "manualDialog.hint.git",
+      "↑/↓ or Space choose · Enter next · Tab/Shift+Tab focus · Esc cancel"
+    );
   } else if (focusTarget === "actions") {
-    interactionHint =
-      "←/→ choose · Enter/Space activate · Tab/Shift+Tab focus · Esc cancel";
+    interactionHint = t(
+      "manualDialog.hint.actions",
+      "←/→ choose · Enter/Space activate · Tab/Shift+Tab focus · Esc cancel"
+    );
   }
 
   const submit = focusTarget === "actions" && actionIndex === 0;
 
   const submitLabel = submit
-    ? theme.fg("accent", "[Submit]")
-    : theme.fg("text", "[Submit]");
+    ? theme.fg("accent", t("manualDialog.submit", "[Submit]"))
+    : theme.fg("text", t("manualDialog.submit", "[Submit]"));
 
   const cancel = focusTarget === "actions" && actionIndex === 1;
 
   const cancelLabel = cancel
-    ? theme.fg("accent", "[Cancel]")
-    : theme.fg("text", "[Cancel]");
+    ? theme.fg("accent", t("manualDialog.cancel", "[Cancel]"))
+    : theme.fg("text", t("manualDialog.cancel", "[Cancel]"));
 
   const actionButtons = `${submitLabel}  ${cancelLabel}`;
 

@@ -14,6 +14,7 @@ import {
   setExecutorRef,
 } from "../config/state.ts";
 import { loadConfig } from "../config/storage.ts";
+import { t } from "../i18n.ts";
 import {
   getAvailableModelRefs,
   getExplicitModelError,
@@ -37,7 +38,10 @@ export const loadCommandConfig = (ctx: ExtensionContext) => {
     const message = error instanceof Error ? error.message : String(error);
     notify(
       ctx,
-      `Advisor command could not load configuration: ${message} Fix advisor.json and retry.`,
+      `${t(
+        "notify.configLoadFailed.prefix",
+        "Advisor command could not load configuration:"
+      )} ${message} ${t("notify.configLoadFailed.suffix", "Fix advisor.json and retry.")}`,
       "error"
     );
 
@@ -100,7 +104,10 @@ export const prepareActivationModels = async (
   if (!announce) {
     notify(
       ctx,
-      "Advisor models are not configured or available. Run /advisor to choose them.",
+      t(
+        "notify.modelsNotConfigured.message",
+        "Advisor models are not configured or available. Run /advisor to choose them."
+      ),
       "error"
     );
 

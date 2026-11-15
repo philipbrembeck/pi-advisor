@@ -17,6 +17,7 @@ import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 import { isRecord, isString } from "../content-utils.ts";
 import type { JsonValue, RecordValue } from "../content-utils.ts";
+import { t } from "../i18n.ts";
 import { applyConfig, resetDefaults } from "./defaults.ts";
 import {
   CONFIG_SCHEMA,
@@ -231,7 +232,10 @@ export const loadConfig = (_ctx: ExtensionContext) => {
     ) {
       warnedFilterWithoutClassifierIdentities.add(warningIdentity);
       _ctx.ui.notify(
-        "The Jev consultation filter is enabled but no Jev classifier is selected; consultations are not screened until you pick one in /advisor-settings.",
+        t(
+          "notify.jevFilterNoClassifier.message",
+          "The Jev consultation filter is enabled but no Jev classifier is selected; consultations are not screened until you pick one in /advisor-settings."
+        ),
         "warning"
       );
     }
@@ -246,7 +250,7 @@ export const loadConfig = (_ctx: ExtensionContext) => {
       !warnedUnknownConfigIdentities.has(warningIdentity)
     ) {
       _ctx.ui.notify(
-        `Advisor configuration at ${global} contains unrecognized key(s) ${unknownKeys.map((key) => JSON.stringify(key)).join(", ")}. They were preserved but ignored; check for typos or upgrade pi-advisor.`,
+        `${t("notify.unknownConfigKeys.at", "Advisor configuration at")} ${global} ${t("notify.unknownConfigKeys.contains", "contains unrecognized key(s)")} ${unknownKeys.map((key) => JSON.stringify(key)).join(", ")}. ${t("notify.unknownConfigKeys.preserved", "They were preserved but ignored; check for typos or upgrade pi-advisor.")}`,
         "warning"
       );
       warnedUnknownConfigIdentities.add(warningIdentity);

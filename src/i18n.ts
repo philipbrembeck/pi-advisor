@@ -11,7 +11,9 @@ const I18N_NAMESPACE = "pi-advisor-flow";
 
 type ScopeFn = (key: string, fallback: string) => string;
 
-interface I18nSDK { scope: (namespace: string) => ScopeFn }
+interface I18nSDK {
+  scope: (namespace: string) => ScopeFn;
+}
 
 let scopeImpl: ScopeFn;
 

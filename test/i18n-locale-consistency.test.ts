@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { readdirSync, readFileSync } from 'node:fs';
-import type { Dirent } from 'node:fs';
+import { readdirSync, readFileSync } from "node:fs";
+import type { Dirent } from "node:fs";
 import { join } from "node:path";
 
 const repositoryRoot = join(import.meta.dirname, "..");
@@ -39,9 +39,9 @@ const unquote = (literal: string, quote: string): string => {
   }
 
   return literal
-    .replaceAll('\\n', "\n")
-    .replaceAll('\\t', "\t")
-    .replaceAll('\\\'', "'");
+    .replaceAll("\\n", "\n")
+    .replaceAll("\\t", "\t")
+    .replaceAll("\\'", "'");
 };
 
 interface CallSite {

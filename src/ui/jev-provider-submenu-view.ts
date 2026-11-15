@@ -1,5 +1,6 @@
 import { truncateToWidth } from "@earendil-works/pi-tui";
 
+import { t } from "../i18n.ts";
 import {
   canClearCredential,
   providerName,
@@ -47,19 +48,21 @@ export const setupActions = (
 const setupLabels = (state: JevProviderViewState): string[] =>
   setupActions(state).map((action) => {
     if (action === "clear-stored-key") {
-      return "Clear stored key";
+      return t("jevSetup.clearStoredKey", "Clear stored key");
     }
 
     if (action === "done") {
-      return "Done";
+      return t("jevSetup.done", "Done");
     }
 
     if (action === "enter-key") {
-      return `Enter an API key for ${providerName(state.selectedTransport ?? "typesafe")}`;
+      return `${t("jevSetup.enterKeyFor", "Enter an API key for")} ${providerName(
+        state.selectedTransport ?? "typesafe"
+      )}`;
     }
 
     if (action === "reuse-provider-login") {
-      return "Reuse a Pi provider login";
+      return t("jevSetup.reuseProviderLogin", "Reuse a Pi provider login");
     }
 
     if (action === "typesafe-compatible") {
@@ -79,18 +82,32 @@ const inputLines = (
 
   const titles = {
     "base-url": [
-      "Base URL of a System One–compatible endpoint",
-      "Origin, for example https://api.codiv.ai. /v1/systemone is appended; plain http works on localhost.",
+      t(
+        "jevSetup.baseUrlTitle",
+        "Base URL of a System One–compatible endpoint"
+      ),
+      t(
+        "jevSetup.baseUrlDesc",
+        "Origin, for example https://api.codiv.ai. /v1/systemone is appended; plain http works on localhost."
+      ),
     ],
     "key-entry": [
       providerName(state.selectedTransport ?? "typesafe"),
       state.selectedTransport === "openai-decisions"
-        ? "No OpenAI Platform API key found. ChatGPT subscription OAuth is not accepted."
-        : `No API key found for ${providerName(state.selectedTransport ?? "typesafe")}.`,
+        ? t(
+            "jevSetup.keyEntryNoOpenAiKey",
+            "No OpenAI Platform API key found. ChatGPT subscription OAuth is not accepted."
+          )
+        : `${t("jevSetup.keyEntryNoApiKeyFor", "No API key found for")} ${providerName(
+            state.selectedTransport ?? "typesafe"
+          )}.`,
     ],
     "provider-id": [
-      "Pi provider id",
-      "The Pi provider whose stored login supplies this endpoint's key, for example openrouter.",
+      t("jevSetup.providerIdTitle", "Pi provider id"),
+      t(
+        "jevSetup.providerIdDesc",
+        "The Pi provider whose stored login supplies this endpoint's key, for example openrouter."
+      ),
     ],
   } as const;
 
@@ -106,22 +123,40 @@ export const renderJevProvider = (
   width: number
 ): string[] => {
   const { theme } = options;
-  const lines = [theme.fg("accent", theme.bold("  Jev provider")), ""];
+
+  const lines = [
+    theme.fg("accent", theme.bold(`  ${t("jevSetup.title", "Jev provider")}`)),
+    "",
+  ];
 
   if (state.credentials) {
-    lines.push(`  Credential: ${transportLabel(state.credentials)}`);
+    lines.push(
+      `  ${t("jevSetup.credentialLabel", "Credential:")} ${transportLabel(
+        state.credentials
+      )}`
+    );
   } else if (state.selectedTransport) {
-    lines.push(`  Selected provider: ${providerName(state.selectedTransport)}`);
+    lines.push(
+      `  ${t("jevSetup.selectedProviderLabel", "Selected provider:")} ${providerName(
+        state.selectedTransport
+      )}`
+    );
   } else {
-    lines.push(`  Saved transport: ${options.currentTransport}`);
+    lines.push(
+      `  ${t("jevSetup.savedTransportLabel", "Saved transport:")} ${
+        options.currentTransport
+      }`
+    );
   }
 
   if (state.baseUrl) {
-    lines.push(`  Base URL: ${state.baseUrl}`);
+    lines.push(`  ${t("jevSetup.baseUrlLabel", "Base URL:")} ${state.baseUrl}`);
   }
 
   if (state.providerId) {
-    lines.push(`  Pi provider: ${state.providerId}`);
+    lines.push(
+      `  ${t("jevSetup.piProviderLabel", "Pi provider:")} ${state.providerId}`
+    );
   }
 
   if (state.notice) {
@@ -131,11 +166,23 @@ export const renderJevProvider = (
   lines.push("");
 
   if (state.mode === "resolving") {
-    lines.push("  Checking the selected provider credentials…");
+    lines.push(
+      `  ${t(
+        "jevSetup.checkingCredentials",
+        "Checking the selected provider credentials…"
+      )}`
+    );
   } else if (state.mode === "verifying") {
-    lines.push("  Verifying with a live Jev call…");
+    lines.push(
+      `  ${t("jevSetup.verifyingLiveCall", "Verifying with a live Jev call…")}`
+    );
   } else if (state.mode === "clearing") {
-    lines.push("  Clearing the selected provider's stored key…");
+    lines.push(
+      `  ${t(
+        "jevSetup.clearingKey",
+        "Clearing the selected provider's stored key…"
+      )}`
+    );
   } else if (
     state.mode === "base-url" ||
     state.mode === "key-entry" ||
@@ -147,7 +194,12 @@ export const renderJevProvider = (
       lines.push(theme.fg("error", `  ${state.inputError}`));
     }
 
-    lines.push(theme.fg("dim", "  Enter: continue · Esc: return"));
+    lines.push(
+      theme.fg(
+        "dim",
+        `  ${t("jevSetup.inputHint", "Enter: continue · Esc: return")}`
+      )
+    );
   } else {
     for (const [index, label] of setupLabels(state).entries()) {
       const prefix = index === state.selectedIndex ? "→ " : "  ";

@@ -8,6 +8,7 @@ import type {
 } from "@earendil-works/pi-tui";
 
 import { JEV_API_KEY_CLASSIFIER } from "../config/types.ts";
+import { t } from "../i18n.ts";
 import {
   disableJevClassifierKeyForRuntime,
   enableJevClassifierKeyForRuntime,
@@ -81,14 +82,21 @@ export class JevClassifierSubmenu implements Component, Focusable {
     if (this.mode === "key") {
       return [
         border,
-        theme.fg("accent", theme.bold("Jev API Key")),
+        theme.fg(
+          "accent",
+          theme.bold(t("jevSubmenu.apiKeyTitle", "Jev API Key"))
+        ),
         "",
-        this.notice ?? "Enter a new TypeSafe Jev API key:",
+        this.notice ??
+          t("jevSubmenu.enterNewKey", "Enter a new TypeSafe Jev API key:"),
         `  ${this.keyInput?.render(Math.max(1, width - 4))[0] ?? ""}`,
         "",
         this.failClosedKeyMode
-          ? "Key restore failed. Re-enter and verify a valid Jev key."
-          : "Enter to verify · Esc to cancel",
+          ? t(
+              "jevSubmenu.keyRestoreFailed",
+              "Key restore failed. Re-enter and verify a valid Jev key."
+            )
+          : t("jevSubmenu.keyEntryHint", "Enter to verify · Esc to cancel"),
         border,
       ];
     }
@@ -108,15 +116,20 @@ export class JevClassifierSubmenu implements Component, Focusable {
 
     return [
       border,
-      theme.fg("accent", theme.bold("Jev classifier")),
+      theme.fg(
+        "accent",
+        theme.bold(t("jevSubmenu.classifierTitle", "Jev classifier"))
+      ),
       "",
       this.mode === "loading"
-        ? "Loading Pi classifier catalog…"
-        : `Search: ${this.search.render(Math.max(1, width - 10))[0]}`,
+        ? t("jevSubmenu.loading", "Loading Pi classifier catalog…")
+        : `${t("jevSubmenu.searchLabel", "Search:")} ${
+            this.search.render(Math.max(1, width - 10))[0]
+          }`,
       ...(this.notice ? [this.notice] : []),
       ...rows.slice(0, 10),
       "",
-      "↑/↓ move · Enter select · Esc cancel",
+      t("jevSubmenu.listHint", "↑/↓ move · Enter select · Esc cancel"),
       border,
     ];
   }
@@ -161,7 +174,12 @@ export class JevClassifierSubmenu implements Component, Focusable {
   private async loadChoices() {
     try {
       if (!this.options.modelRegistry) {
-        throw new Error("Pi classifier registry is unavailable.");
+        throw new Error(
+          t(
+            "jevSubmenu.registryUnavailable",
+            "Pi classifier registry is unavailable."
+          )
+        );
       }
 
       const models =
@@ -182,19 +200,22 @@ export class JevClassifierSubmenu implements Component, Focusable {
         this.choices.push(
           {
             action: "use-key",
-            label: "Jev API Key (use stored key)",
+            label: t("jevSubmenu.useStoredKey", "Jev API Key (use stored key)"),
             ref: JEV_API_KEY_CLASSIFIER,
           },
           {
             action: "replace-key",
-            label: "Replace Jev API Key…",
+            label: t("jevSubmenu.replaceKey", "Replace Jev API Key…"),
             ref: JEV_API_KEY_CLASSIFIER,
           }
         );
       } else {
         this.choices.push({
           action: "replace-key",
-          label: "Jev API Key… (enter TypeSafe key)",
+          label: t(
+            "jevSubmenu.enterKeyChoice",
+            "Jev API Key… (enter TypeSafe key)"
+          ),
           ref: JEV_API_KEY_CLASSIFIER,
         });
       }
@@ -204,12 +225,21 @@ export class JevClassifierSubmenu implements Component, Focusable {
       this.notice =
         this.options.currentValue &&
         this.options.currentValue !== "Choose classifier"
-          ? `Current: ${this.options.currentValue}`
+          ? `${t("jevSubmenu.currentPrefix", "Current:")} ${
+              this.options.currentValue
+            }`
           : undefined;
     } catch (error) {
       this.mode = "list";
       this.loaded.resolve(false);
-      this.notice = `Could not load classifiers: ${error instanceof Error ? error.message : "unknown error"}. Retry /advisor-settings.`;
+      this.notice = `${t(
+        "jevSubmenu.loadFailedPrefix",
+        "Could not load classifiers:"
+      )} ${
+        error instanceof Error
+          ? error.message
+          : t("jevSetup.unknownError", "unknown error")
+      }${t("jevSubmenu.loadFailedSuffix", ". Retry /advisor-settings.")}`;
     }
 
     this.options.tui.requestRender();
@@ -223,8 +253,11 @@ export class JevClassifierSubmenu implements Component, Focusable {
     const rates = model.cost;
 
     return rates.input === 0 && rates.output === 0
-      ? "$0/M tokens"
-      : `$${rates.input}/$${rates.output} per Mtok`;
+      ? t("jevSubmenu.ratesFree", "$0/M tokens")
+      : `$${rates.input}/$${rates.output} ${t(
+          "jevSubmenu.perMtok",
+          "per Mtok"
+        )}`;
   }
 
   private async choose(choice: Choice) {
@@ -253,7 +286,7 @@ export class JevClassifierSubmenu implements Component, Focusable {
     }
 
     this.mode = "verifying";
-    this.notice = `Verifying ${choice.ref}…`;
+    this.notice = `${t("jevSubmenu.verifying", "Verifying")} ${choice.ref}…`;
     this.options.tui.requestRender();
 
     try {
@@ -262,10 +295,20 @@ export class JevClassifierSubmenu implements Component, Focusable {
 
       if (!saved) {
         this.mode = "list";
-        this.notice = "Verified, but settings could not be saved.";
+        this.notice = t(
+          "jevSubmenu.verifiedNotSaved",
+          "Verified, but settings could not be saved."
+        );
       }
     } catch (error) {
-      this.notice = `Verification failed for ${choice.ref}: ${error instanceof Error ? error.message : "provider error"}`;
+      this.notice = `${t(
+        "jevSubmenu.verifyFailedFor",
+        "Verification failed for"
+      )} ${choice.ref}: ${
+        error instanceof Error
+          ? error.message
+          : t("jevSubmenu.providerError", "provider error")
+      }`;
       this.mode = "list";
     }
 
@@ -274,7 +317,12 @@ export class JevClassifierSubmenu implements Component, Focusable {
 
   private async verify(model: ClassifierModel<string>, apiKey?: string) {
     if (!this.options.modelRegistry) {
-      throw new Error("Pi classifier registry is unavailable.");
+      throw new Error(
+        t(
+          "jevSubmenu.registryUnavailable",
+          "Pi classifier registry is unavailable."
+        )
+      );
     }
 
     const state = {
@@ -291,7 +339,12 @@ export class JevClassifierSubmenu implements Component, Focusable {
     );
 
     if (!result.answers.self_answerable || !result.answers.stakes) {
-      throw new Error("Classifier returned an incomplete verification result.");
+      throw new Error(
+        t(
+          "jevSubmenu.incompleteResult",
+          "Classifier returned an incomplete verification result."
+        )
+      );
     }
   }
 
@@ -300,7 +353,7 @@ export class JevClassifierSubmenu implements Component, Focusable {
     this.keyInput?.setValue("");
 
     if (!candidate) {
-      this.notice = "Enter a non-empty Jev API key.";
+      this.notice = t("jevSubmenu.emptyKey", "Enter a non-empty Jev API key.");
       this.options.tui.requestRender();
 
       return;
@@ -313,7 +366,10 @@ export class JevClassifierSubmenu implements Component, Focusable {
     );
 
     if (!model) {
-      this.notice = "TypeSafe Jev classifier is not present in Pi's catalog.";
+      this.notice = t(
+        "jevSubmenu.classifierMissing",
+        "TypeSafe Jev classifier is not present in Pi's catalog."
+      );
       this.options.tui.requestRender();
 
       return;
@@ -325,15 +381,17 @@ export class JevClassifierSubmenu implements Component, Focusable {
 
     if (previous.failed) {
       this.mode = "list";
-      this.notice =
-        "Could not read the stored Jev API Key state; nothing was changed. Try again later.";
+      this.notice = t(
+        "jevSubmenu.keyStateUnreadable",
+        "Could not read the stored Jev API Key state; nothing was changed. Try again later."
+      );
       this.options.tui.requestRender();
 
       return;
     }
 
     this.mode = "verifying";
-    this.notice = "Verifying Jev API Key…";
+    this.notice = t("jevSubmenu.verifyingKey", "Verifying Jev API Key…");
     this.options.tui.requestRender();
 
     try {
@@ -356,20 +414,36 @@ export class JevClassifierSubmenu implements Component, Focusable {
           this.failClosedKeyMode = true;
           disableJevClassifierKeyForRuntime();
           throw new Error(
-            "Settings save failed and the previous key could not be restored. Re-enter and verify a valid Jev key before continuing."
+            t(
+              "jevSubmenu.saveFailedNoRestore",
+              "Settings save failed and the previous key could not be restored. Re-enter and verify a valid Jev key before continuing."
+            )
           );
         }
 
         throw new Error(
-          "Could not save Jev classifier settings; existing key was restored."
+          t(
+            "jevSubmenu.saveFailedRestored",
+            "Could not save Jev classifier settings; existing key was restored."
+          )
         );
       }
 
       this.mode = "list";
-      this.notice = "Jev API Key verified and saved securely.";
+      this.notice = t(
+        "jevSubmenu.keyVerifiedSaved",
+        "Jev API Key verified and saved securely."
+      );
     } catch (error) {
       this.mode = "key";
-      this.notice = `Verification failed: ${error instanceof Error ? error.message : "provider error"}`;
+      this.notice = `${t(
+        "jevSubmenu.verificationFailedPrefix",
+        "Verification failed:"
+      )} ${
+        error instanceof Error
+          ? error.message
+          : t("jevSubmenu.providerError", "provider error")
+      }`;
     }
 
     this.options.tui.requestRender();
@@ -384,7 +458,7 @@ export class JevClassifierSubmenu implements Component, Focusable {
         this.options.tui.requestRender();
       },
       onSubmit: () => this.handleKeySubmit(),
-      placeholder: "TypeSafe Jev API key",
+      placeholder: t("jevSubmenu.keyPlaceholder", "TypeSafe Jev API key"),
     });
   }
 
@@ -406,14 +480,20 @@ export class JevClassifierSubmenu implements Component, Focusable {
     );
 
     if (!model) {
-      this.notice = "TypeSafe Jev classifier is not present in Pi's catalog.";
+      this.notice = t(
+        "jevSubmenu.classifierMissing",
+        "TypeSafe Jev classifier is not present in Pi's catalog."
+      );
       this.options.tui.requestRender();
 
       return;
     }
 
     this.mode = "verifying";
-    this.notice = "Verifying stored Jev API Key…";
+    this.notice = t(
+      "jevSubmenu.verifyingStoredKey",
+      "Verifying stored Jev API Key…"
+    );
     this.options.tui.requestRender();
 
     try {
@@ -422,13 +502,28 @@ export class JevClassifierSubmenu implements Component, Focusable {
       if (
         !this.save({ classifier: JEV_API_KEY_CLASSIFIER, transport: "auto" })
       ) {
-        throw new Error("Could not save the Jev classifier selection.");
+        throw new Error(
+          t(
+            "jevSubmenu.selectionNotSaved",
+            "Could not save the Jev classifier selection."
+          )
+        );
       }
 
-      this.notice = "Stored Jev API Key verified.";
+      this.notice = t(
+        "jevSubmenu.storedKeyVerified",
+        "Stored Jev API Key verified."
+      );
     } catch (error) {
       this.mode = "list";
-      this.notice = `Verification failed: ${error instanceof Error ? error.message : "provider error"}`;
+      this.notice = `${t(
+        "jevSubmenu.verificationFailedPrefix",
+        "Verification failed:"
+      )} ${
+        error instanceof Error
+          ? error.message
+          : t("jevSubmenu.providerError", "provider error")
+      }`;
     }
 
     this.options.tui.requestRender();
@@ -438,7 +533,14 @@ export class JevClassifierSubmenu implements Component, Focusable {
     try {
       await this.verifyKey();
     } catch (error) {
-      this.notice = `Verification failed: ${error instanceof Error ? error.message : "provider error"}`;
+      this.notice = `${t(
+        "jevSubmenu.verificationFailedPrefix",
+        "Verification failed:"
+      )} ${
+        error instanceof Error
+          ? error.message
+          : t("jevSubmenu.providerError", "provider error")
+      }`;
       this.mode = "key";
       this.options.tui.requestRender();
     }
@@ -451,7 +553,10 @@ export class JevClassifierSubmenu implements Component, Focusable {
       this.options.done(selection.classifier);
     } else {
       this.mode = "list";
-      this.notice = "Verified, but settings could not be saved.";
+      this.notice = t(
+        "jevSubmenu.verifiedNotSaved",
+        "Verified, but settings could not be saved."
+      );
     }
 
     return saved;

@@ -4,6 +4,7 @@ import { Type } from "typebox";
 import { advisorOutcomeLoggingRef } from "../config/state.ts";
 import { loadConfig } from "../config/storage.ts";
 import { textFrom } from "../conversation.ts";
+import { t } from "../i18n.ts";
 import { ADOPTIONS, VALIDATIONS } from "../outcomes.ts";
 import type { ToolRegistrationContext } from "./types.ts";
 
@@ -55,7 +56,10 @@ export const registerOutcomeTool = ({
 
         if (ctx.hasUI) {
           ctx.ui.notify(
-            "Advisor outcome could not be recorded locally.",
+            t(
+              "notify.outcomeRecordFailed.message",
+              "Advisor outcome could not be recorded locally."
+            ),
             "warning"
           );
         }

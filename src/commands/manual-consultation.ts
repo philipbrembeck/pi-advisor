@@ -4,6 +4,7 @@ import { advisorRef } from "../config/state.ts";
 import { isString } from "../content-utils.ts";
 import type { GitContextLevel } from "../git.ts";
 import { notifyHerdrAdvisorFailure } from "../herdr.ts";
+import { t } from "../i18n.ts";
 import { normalizeScreeningQuestion } from "../tools/jev-filter.ts";
 import { appendScoutLifecycleEntry } from "../tools/scout-status.ts";
 import type { ScoutToolDetails } from "../tools/types.ts";
@@ -186,7 +187,11 @@ export const startManualConsultation = async (
       },
       { deliverAs: "steer", triggerTurn: !isPrintMode }
     );
-    notify(ctx, `Advisor consultation failed: ${message}`, "error");
+    notify(
+      ctx,
+      `${t("manualCmd.consultFailed.prefix", "Advisor consultation failed:")} ${message}`,
+      "error"
+    );
     notifyHerdrAdvisorFailure("Advisor consultation failed", message);
   } finally {
     finishHerdrActivity();

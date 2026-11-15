@@ -1,6 +1,7 @@
 import { Input, truncateToWidth } from "@earendil-works/pi-tui";
 import type { Component, Focusable } from "@earendil-works/pi-tui";
 
+import { t } from "../i18n.ts";
 import type { TextSettingSubmenuOptions } from "./types.ts";
 
 /** Small inline editor used by SettingsList for the two free-form settings. */
@@ -60,7 +61,13 @@ export class TextSettingSubmenu implements Component, Focusable {
       lines.push(theme.fg("error", `  ${this.error}`));
     }
 
-    lines.push("", theme.fg("dim", "  Enter: apply · Esc: cancel"));
+    lines.push(
+      "",
+      theme.fg(
+        "dim",
+        `  ${t("textSetting.hint", "Enter: apply · Esc: cancel")}`
+      )
+    );
 
     return lines.map((line) => truncateToWidth(line, width));
   }

@@ -1,6 +1,7 @@
 import { Input, Key, matchesKey } from "@earendil-works/pi-tui";
 import type { Component, Focusable } from "@earendil-works/pi-tui";
 
+import { t } from "../i18n.ts";
 import { normalizeJevBaseUrl } from "../jev/base-url.ts";
 import type { JevCredentials, JevTransportKind } from "../jev/transport.ts";
 import {
@@ -196,7 +197,9 @@ export class JevProviderSubmenu implements Component, Focusable {
 
   private reportBackgroundError = (message: string): void => {
     this.mode = "menu";
-    this.notice = `Setup failed: ${message}`;
+    this.notice = `${t("jevSetup.setupFailedPrefix", "Setup failed:")} ${
+      message
+    }`;
     this.options.tui.requestRender();
   };
 
@@ -324,15 +327,17 @@ export class JevProviderSubmenu implements Component, Focusable {
     const providerId = value.trim();
 
     if (!providerId || /\s/u.test(providerId)) {
-      this.inputError =
-        "Enter a single Pi provider id, for example openrouter.";
+      this.inputError = t(
+        "jevSetup.providerIdInvalid",
+        "Enter a single Pi provider id, for example openrouter."
+      );
       this.options.tui.requestRender();
 
       return;
     }
 
     if (!this.baseUrl) {
-      this.inputError = "Enter the Base URL first.";
+      this.inputError = t("jevSetup.baseUrlFirst", "Enter the Base URL first.");
       this.options.tui.requestRender();
 
       return;
@@ -351,7 +356,13 @@ export class JevProviderSubmenu implements Component, Focusable {
 
     if (!credentials) {
       this.mode = "menu";
-      this.notice = `No stored login for Pi provider "${providerId}". Add one in Pi and retry.`;
+      this.notice = `${t(
+        "jevSetup.noStoredLoginPrefix",
+        "No stored login for Pi provider"
+      )} "${providerId}"${t(
+        "jevSetup.noStoredLoginSuffix",
+        ". Add one in Pi and retry."
+      )}`;
       this.options.tui.requestRender();
 
       return;
@@ -372,7 +383,10 @@ export class JevProviderSubmenu implements Component, Focusable {
       credentials = await this.deps.resolveTransport(transport);
     } catch (error) {
       this.mode = "menu";
-      this.notice = `Credential lookup failed: ${error instanceof Error ? error.message : String(error)}`;
+      this.notice = `${t(
+        "jevSetup.credentialLookupFailedPrefix",
+        "Credential lookup failed:"
+      )} ${error instanceof Error ? error.message : String(error)}`;
       this.options.tui.requestRender();
 
       return;
@@ -386,7 +400,10 @@ export class JevProviderSubmenu implements Component, Focusable {
         this.notice = undefined;
         this.openKeyEntry(transport);
       } else {
-        this.notice = "No OpenRouter Pi login found. Add one in Pi and retry.";
+        this.notice = t(
+          "jevSetup.noOpenRouterLogin",
+          "No OpenRouter Pi login found. Add one in Pi and retry."
+        );
       }
 
       this.options.tui.requestRender();
@@ -395,8 +412,10 @@ export class JevProviderSubmenu implements Component, Focusable {
     }
 
     if (credentials.transport !== transport) {
-      this.notice =
-        "The selected provider did not resolve matching credentials.";
+      this.notice = t(
+        "jevSetup.transportMismatch",
+        "The selected provider did not resolve matching credentials."
+      );
       this.options.tui.requestRender();
 
       return;
@@ -433,7 +452,10 @@ export class JevProviderSubmenu implements Component, Focusable {
     const outcome = await this.deps.verify(credentials);
 
     if (!outcome.ok) {
-      this.notice = `Verification failed: ${outcome.message ?? "unknown error"}`;
+      this.notice = `${t(
+        "jevSetup.verificationFailedPrefix",
+        "Verification failed:"
+      )} ${outcome.message ?? t("jevSetup.unknownError", "unknown error")}`;
       this.mode = enteredKey ? "key-entry" : "menu";
       this.canEnterKey = !enteredKey && canReplaceWithEnteredKey(credentials);
       this.options.tui.requestRender();
@@ -456,7 +478,10 @@ export class JevProviderSubmenu implements Component, Focusable {
         return;
       }
 
-      this.notice = `${stored.message} Verification succeeded.`;
+      this.notice = `${stored.message} ${t(
+        "jevSetup.verificationSucceeded",
+        "Verification succeeded."
+      )}`;
 
       // An entered key is the more explicit choice, so it clears a reused login.
       if (credentials.transport === "typesafe-compatible") {
@@ -474,7 +499,10 @@ export class JevProviderSubmenu implements Component, Focusable {
 
     this.mode = "menu";
     this.canEnterKey = false;
-    this.notice = "Provider verified, but settings could not be saved.";
+    this.notice = t(
+      "jevSetup.providerVerifiedNotSaved",
+      "Provider verified, but settings could not be saved."
+    );
     this.options.tui.requestRender();
   }
 

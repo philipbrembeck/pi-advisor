@@ -11,6 +11,7 @@ import {
   isSimpleMode,
 } from "../config/state.ts";
 import { capUtf8Bytes } from "../content-utils.ts";
+import { t } from "../i18n.ts";
 import { consumeJevClassifierKey } from "../jev/classifier-key-store.ts";
 import { classifyScreening } from "../jev/classifier.ts";
 import { JevFailure } from "../jev/failure.ts";
@@ -65,7 +66,7 @@ const repeatSkipText = (advice: string) =>
 
 const outageNotifier = createOutageNotifier(
   (category, message) =>
-    `Advisor Jev classifier failed (${category}); allowing consultations. ${message}`
+    `${t("notify.jevFilterOutage.prefix", "Advisor Jev classifier failed")} (${category}); ${t("notify.jevFilterOutage.allowing", "allowing consultations.")} ${message}`
 );
 
 const notifyOutageOnce = outageNotifier.notify;

@@ -9,6 +9,7 @@ import {
   setExecutorRef,
 } from "../config/state.ts";
 import { loadConfig, saveConfig } from "../config/storage.ts";
+import { t } from "../i18n.ts";
 import { setAdvisorToolsActive } from "./advisor-tools.ts";
 import { notify } from "./runtime.ts";
 import type { CommandRuntime } from "./types.ts";
@@ -48,7 +49,11 @@ export const registerCommandLifecycle = (
     } catch (error) {
       setAdvisorToolsActive(runtime.pi, false);
       const message = error instanceof Error ? error.message : String(error);
-      notify(ctx, `Advisor activation failed: ${message}`, "error");
+      notify(
+        ctx,
+        `${t("notify.activationFailed.prefix", "Advisor activation failed:")} ${message}`,
+        "error"
+      );
     }
   });
 

@@ -7,6 +7,7 @@ import type {
   KeybindingsManager,
 } from "@earendil-works/pi-tui";
 
+import { t } from "../i18n.ts";
 import type { RenderRequester } from "./types.ts";
 
 interface SearchableModelListOptions {
@@ -98,7 +99,9 @@ export class SearchableModelList implements Component, Focusable {
     lines.push(`  ${this.theme.fg("accent", this.theme.bold(this.title))}`);
     const inputLines = this.searchInput.render(Math.max(1, width - 10));
     lines.push(
-      `  ${this.theme.fg("accent", "Search: ")}${inputLines[0] || ""}`,
+      `  ${this.theme.fg("accent", t("modelPicker.searchLabel", "Search:"))} ${
+        inputLines[0] || ""
+      }`,
       ""
     );
 
@@ -115,7 +118,12 @@ export class SearchableModelList implements Component, Focusable {
     const total = this.filteredOptions.length;
 
     if (total === 0) {
-      lines.push(`  ${this.theme.fg("muted", "No matching models found.")}`);
+      lines.push(
+        `  ${this.theme.fg(
+          "muted",
+          t("modelPicker.noMatches", "No matching models found.")
+        )}`
+      );
     } else {
       const startIndex = Math.max(
         0,
@@ -211,8 +219,14 @@ export class SearchableModelList implements Component, Focusable {
 
   private interactionHint(): string {
     return this.multiSelect
-      ? "Type to search · ↑↓: navigate · Space: toggle · Enter: apply · Esc: cancel"
-      : "Type to search · ↑↓: navigate · Enter: select · Esc: cancel";
+      ? t(
+          "modelPicker.hintMulti",
+          "Type to search · ↑↓: navigate · Space: toggle · Enter: apply · Esc: cancel"
+        )
+      : t(
+          "modelPicker.hintSingle",
+          "Type to search · ↑↓: navigate · Enter: select · Esc: cancel"
+        );
   }
 
   private renderOption(item: string, index: number): string {

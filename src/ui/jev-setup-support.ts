@@ -2,6 +2,7 @@ import type { Theme } from "@earendil-works/pi-coding-agent";
 import { noul } from "@typesafe-ai/sdk";
 
 import type { JevTransport } from "../config/types.ts";
+import { t } from "../i18n.ts";
 import { jevClientFromCredentials } from "../jev/client.ts";
 import { OPENAI_DECISIONS_MODEL } from "../jev/decisions-client.ts";
 import {
@@ -86,24 +87,29 @@ export const fireAndForget = async (
 
 export const providerName = (transport: JevTransportKind): string => {
   if (transport === "typesafe") {
-    return "TypeSafe Jev";
+    return t("jevSetup.provider.typesafe", "TypeSafe Jev");
   }
 
   if (transport === "openrouter") {
-    return "OpenRouter (Pi login)";
+    return t("jevSetup.provider.openrouter", "OpenRouter (Pi login)");
   }
 
   if (transport === "typesafe-compatible") {
-    return "System One–compatible endpoint";
+    return t(
+      "jevSetup.provider.typesafeCompatible",
+      "System One–compatible endpoint"
+    );
   }
 
-  return `OpenAI Decisions (${OPENAI_DECISIONS_MODEL})`;
+  return `${t("jevSetup.provider.openaiDecisions", "OpenAI Decisions")} (${
+    OPENAI_DECISIONS_MODEL
+  })`;
 };
 
 const endpointSourceLabel = (source: JevCredentials["source"]): string => {
   switch (source) {
     case "provider-credential": {
-      return "Pi provider login";
+      return t("jevSetup.source.providerLogin", "Pi provider login");
     }
 
     case "jev-bun-secrets": {
@@ -111,7 +117,7 @@ const endpointSourceLabel = (source: JevCredentials["source"]): string => {
     }
 
     case "jev-file": {
-      return "stored file, mode 0600";
+      return t("jevSetup.source.storedFile", "stored file, mode 0600");
     }
 
     default: {
@@ -122,15 +128,24 @@ const endpointSourceLabel = (source: JevCredentials["source"]): string => {
 
 export const transportLabel = (credentials: JevCredentials): string => {
   if (credentials.transport === "openrouter") {
-    return "OpenRouter (reusing Pi login)";
+    return t(
+      "jevSetup.credential.openrouterReused",
+      "OpenRouter (reusing Pi login)"
+    );
   }
 
   if (credentials.transport === "typesafe-compatible") {
-    return `System One–compatible (${credentials.baseUrl ?? "no Base URL"}; key: ${endpointSourceLabel(credentials.source)})`;
+    return `${t(
+      "jevSetup.credential.systemOneCompatible",
+      "System One–compatible"
+    )} (${credentials.baseUrl ?? t("jevSetup.noBaseUrl", "no Base URL")}; ${t(
+      "jevSetup.keyLabel",
+      "key:"
+    )} ${endpointSourceLabel(credentials.source)})`;
   }
 
   if (credentials.transport === "openai-decisions") {
-    let source = "verified API key";
+    let source = t("jevSetup.source.verifiedApiKey", "verified API key");
 
     switch (credentials.source) {
       case "openai-bun-secrets": {
@@ -144,12 +159,12 @@ export const transportLabel = (credentials: JevCredentials): string => {
       }
 
       case "openai-file": {
-        source = "stored file, mode 0600";
+        source = t("jevSetup.source.storedFile", "stored file, mode 0600");
         break;
       }
 
       case "openai-provider-credential": {
-        source = "Pi stored API key";
+        source = t("jevSetup.source.piStoredKey", "Pi stored API key");
         break;
       }
 
@@ -158,24 +173,38 @@ export const transportLabel = (credentials: JevCredentials): string => {
       }
     }
 
-    return `OpenAI Decisions (${OPENAI_DECISIONS_MODEL}; key: ${source})`;
+    return `${t("jevSetup.provider.openaiDecisions", "OpenAI Decisions")} (${
+      OPENAI_DECISIONS_MODEL
+    }; ${t("jevSetup.keyLabel", "key:")} ${source})`;
   }
 
   switch (credentials.source) {
     case "advisor-json": {
-      return "TypeSafe (key: advisor.json — plaintext, not recommended)";
+      return t(
+        "jevSetup.credential.typesafeAdvisorJson",
+        "TypeSafe (key: advisor.json — plaintext, not recommended)"
+      );
     }
 
     case "bun-secrets": {
-      return "TypeSafe (key: Bun.secrets)";
+      return t(
+        "jevSetup.credential.typesafeBunSecrets",
+        "TypeSafe (key: Bun.secrets)"
+      );
     }
 
     case "file": {
-      return "TypeSafe (key: stored file, mode 0600)";
+      return t(
+        "jevSetup.credential.typesafeFile",
+        "TypeSafe (key: stored file, mode 0600)"
+      );
     }
 
     default: {
-      return "TypeSafe (key: TYPESAFE_API_KEY)";
+      return t(
+        "jevSetup.credential.typesafeEnv",
+        "TypeSafe (key: TYPESAFE_API_KEY)"
+      );
     }
   }
 };
@@ -197,14 +226,14 @@ export const canReplaceWithEnteredKey = (credentials: JevCredentials) =>
 
 export const keyEntryPrompt = (transport: JevTransportKind): string => {
   if (transport === "openai-decisions") {
-    return "Paste an OpenAI Platform API key";
+    return t("jevSetup.keyPrompt.openai", "Paste an OpenAI Platform API key");
   }
 
   if (transport === "typesafe-compatible") {
-    return "Paste the endpoint API key";
+    return t("jevSetup.keyPrompt.endpoint", "Paste the endpoint API key");
   }
 
-  return "Paste a TypeSafe API key";
+  return t("jevSetup.keyPrompt.typesafe", "Paste a TypeSafe API key");
 };
 
 const defaultVerify = async (credentials: JevCredentials) => {

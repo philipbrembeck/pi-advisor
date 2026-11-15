@@ -6,6 +6,7 @@ import {
   isSimpleMode,
 } from "../config/state.ts";
 import { loadConfig } from "../config/storage.ts";
+import { t } from "../i18n.ts";
 import { advisorBudgetMessage } from "./budget-feedback.ts";
 import { reserveAdvisorCall } from "./gate-policy.ts";
 import { handleAutomaticGate } from "./loop-gate.ts";
@@ -62,7 +63,10 @@ export const registerToolLifecycle = ({
 
         if (ctx.hasUI) {
           ctx.ui.notify(
-            `Advisor gating skipped; configuration is invalid. ${message} Fix advisor.json.`,
+            `${t(
+              "notify.gatingSkipped.prefix",
+              "Advisor gating skipped; configuration is invalid."
+            )} ${message} ${t("notify.gatingSkipped.suffix", "Fix advisor.json.")}`,
             "error"
           );
         }

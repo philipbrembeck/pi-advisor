@@ -13,6 +13,7 @@ import {
 } from "../config/state.ts";
 import { herdrAdvisorActivity } from "../herdr.ts";
 import type { HerdrAdvisorActivityScope } from "../herdr.ts";
+import { t } from "../i18n.ts";
 import { consumeJevClassifierKey } from "../jev/classifier-key-store.ts";
 import { classifyTurnGate } from "../jev/classifier.ts";
 import { JevFailure } from "../jev/failure.ts";
@@ -60,7 +61,7 @@ export interface JevTurnGateRegistration {
 
 const outageNotifier = createOutageNotifier(
   (category, message) =>
-    `Advisor Jev classifier turn gate failed (${category}); continuing without a proactive consultation. ${message}`
+    `${t("notify.jevTurnGateOutage.prefix", "Advisor Jev classifier turn gate failed")} (${category}); ${t("notify.jevTurnGateOutage.continuing", "continuing without a proactive consultation.")} ${message}`
 );
 
 const notifyFailureOnce = outageNotifier.notify;

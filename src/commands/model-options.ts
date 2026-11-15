@@ -2,6 +2,7 @@ import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 import { splitRef } from "../config/state.ts";
 import type { getPersistedModelRefs } from "../config/state.ts";
+import { t } from "../i18n.ts";
 import type { ContextPreset } from "../ui/types.ts";
 
 export const DEFAULT_EFFORT_LEVEL = "Default (Model Default)";
@@ -153,15 +154,15 @@ export const getExplicitModelError = (
 ) => {
   if (overridden) {
     if (!ref) {
-      return `${label} model not configured`;
+      return `${label} ${t("activation.modelNotConfigured", "model not configured")}`;
     }
 
     if (!findConfiguredModel(ctx, ref)) {
-      return `${label} model not found: ${ref}`;
+      return `${label} ${t("activation.modelNotFound.prefix", "model not found:")} ${ref}`;
     }
 
     if (availableRefs && !isSelectableModel(ctx, ref, availableRefs)) {
-      return `${label} model unavailable: ${ref}`;
+      return `${label} ${t("activation.modelUnavailable.prefix", "model unavailable:")} ${ref}`;
     }
   }
 };

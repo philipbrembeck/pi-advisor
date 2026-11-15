@@ -22,6 +22,7 @@ import {
   setExecutorRef,
 } from "../config/state.ts";
 import { saveConfig } from "../config/storage.ts";
+import { t } from "../i18n.ts";
 import { hasUsableModelAuth } from "../model-auth.ts";
 import { sameModelAdvisorDisabled } from "../tools/model-access.ts";
 import {
@@ -30,7 +31,6 @@ import {
 } from "./activation-preparation.ts";
 import { setAdvisorToolsActive } from "./advisor-tools.ts";
 import {
-  ADVISOR_ACTIVATION_EXPLANATION,
   findConfiguredModel,
   hasAdvisorOverride,
   hasExecutorOverride,
@@ -52,7 +52,9 @@ const resolveActivationModels = async (
     : undefined;
 
   if (executorRef && !executor) {
-    return { error: `Executor model not found: ${executorRef}` };
+    return {
+      error: `${t("activation.executorNotFound.prefix", "Executor model not found:")} ${executorRef}`,
+    };
   }
 
   const advisor = findConfiguredModel(ctx, advisorRef);
@@ -60,8 +62,8 @@ const resolveActivationModels = async (
   if (!advisor) {
     return {
       error: advisorRef
-        ? `Advisor model not found: ${advisorRef}`
-        : "Advisor model not configured",
+        ? `${t("activation.advisorNotFound.prefix", "Advisor model not found:")} ${advisorRef}`
+        : t("activation.advisorNotConfigured", "Advisor model not configured"),
     };
   }
 
@@ -73,7 +75,9 @@ const resolveActivationModels = async (
     }
 
     if (!(advisorAuth.ok && hasUsableModelAuth(advisorAuth))) {
-      return { error: `No API key for Advisor ${advisorRef}` };
+      return {
+        error: `${t("activation.noAdvisorApiKey.prefix", "No API key for Advisor")} ${advisorRef}`,
+      };
     }
   }
 
@@ -82,7 +86,9 @@ const resolveActivationModels = async (
     !isMarkedSubagent() &&
     !(await runtime.setExecutorModel(executor))
   ) {
-    return { error: `No API key for Executor ${executorRef}` };
+    return {
+      error: `${t("activation.noExecutorApiKey.prefix", "No API key for Executor")} ${executorRef}`,
+    };
   }
 
   return {};
@@ -128,7 +134,14 @@ const persistSuccessfulActivation = (
     const message =
       saveError instanceof Error ? saveError.message : String(saveError);
 
-    notify(ctx, `Could not save Advisor activation: ${message}`, "error");
+    notify(
+      ctx,
+      `${t(
+        "activation.saveFailed.prefix",
+        "Could not save Advisor activation:"
+      )} ${message}`,
+      "error"
+    );
 
     return false;
   }
@@ -277,7 +290,14 @@ export const activateAdvisor = async (
     const activeExecutorEffort = effectiveExecutorEffort(ctx);
     notify(
       ctx,
-      `${ADVISOR_ACTIVATION_EXPLANATION}\n\nAdvisor flow ${sameModelAdvisorDisabled(ctx, activeModel) ? "configured" : "ready"} — Executor: ${activeExecutorRef} (thinking: ${activeExecutorEffort || "default"}) · Advisor: ${advisorRef} (thinking: ${advisorEffortRef || "default"})`,
+      `${t(
+        "activation.explanation",
+        "The Advisor is a second-opinion model that reviews the Executor's context and returns risks, alternatives, and verification steps without changing files or running tools."
+      )}\n\n${t("activation.flow", "Advisor flow")} ${
+        sameModelAdvisorDisabled(ctx, activeModel)
+          ? t("activation.flowConfigured", "configured")
+          : t("activation.flowReady", "ready")
+      } — Executor: ${activeExecutorRef} (thinking: ${activeExecutorEffort || "default"}) · Advisor: ${advisorRef} (thinking: ${advisorEffortRef || "default"})`,
       "info"
     );
   }

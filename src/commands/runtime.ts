@@ -5,6 +5,7 @@ import type {
 
 import { getAdvisorSettings } from "../config/state.ts";
 import { herdrAdvisorActivity, notifyHerdrAdvisorFailure } from "../herdr.ts";
+import { t } from "../i18n.ts";
 import type { AdvisorSessionState } from "../session-state.ts";
 import { consultAdvisor } from "../tools/consultation.ts";
 import {
@@ -30,9 +31,18 @@ export const notify = (
 };
 
 const reportManualBudgetExhausted = (ctx: ExtensionContext) => {
-  const message = "Advisor call budget exhausted for this session.";
-  notify(ctx, message, "warning");
-  notifyHerdrAdvisorFailure("Advisor budget exhausted", message);
+  notify(
+    ctx,
+    t(
+      "notify.budgetExhausted.message",
+      "Advisor call budget exhausted for this session."
+    ),
+    "warning"
+  );
+  notifyHerdrAdvisorFailure(
+    "Advisor budget exhausted",
+    "Advisor call budget exhausted for this session."
+  );
 };
 
 const requestManualRender = (ctx: ExtensionContext) => {
@@ -117,7 +127,10 @@ class CommandRuntime implements CommandRuntimeContract {
     } else if (!disabled && this.lastSameModelDisabled === true) {
       notify(
         ctx,
-        "Advisor re-enabled: executor and advisor models differ.",
+        t(
+          "notify.sameModelReenabled.message",
+          "Advisor re-enabled: executor and advisor models differ."
+        ),
         "info"
       );
     }

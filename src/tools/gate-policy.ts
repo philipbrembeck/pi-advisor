@@ -13,6 +13,7 @@ import {
 import type { GateFailureMode } from "../config/types.ts";
 import type { HerdrAdvisorBlock } from "../herdr-block.ts";
 import { herdrAdvisorBlock, notifyHerdrAdvisorFailure } from "../herdr.ts";
+import { t } from "../i18n.ts";
 import type { AdvisorSessionState } from "../session-state.ts";
 import type { AdvisorGateResult, GateFailureCategory } from "./types.ts";
 
@@ -34,10 +35,14 @@ export const notifyLocalFailure = (
   sessionBlocked = false
 ) => {
   if (ctx.hasUI) {
-    ctx.ui.notify(
-      `Advisor ${sessionBlocked ? "gate failure; session blocked" : "consultation failed"}: ${message}`,
-      "error"
-    );
+    const prefix = sessionBlocked
+      ? t(
+          "notify.localFailure.blockedPrefix",
+          "Advisor gate failure; session blocked:"
+        )
+      : t("notify.localFailure.failedPrefix", "Advisor consultation failed:");
+
+    ctx.ui.notify(`${prefix} ${message}`, "error");
   }
 };
 
@@ -104,7 +109,10 @@ export const blockedDecisionEffect = (
   if (failureMode === "warn-and-continue") {
     if (ctx.hasUI) {
       ctx.ui.notify(
-        "Advisor gate returned blocked; continuing by configuration.",
+        t(
+          "notify.gateBlockedContinued.message",
+          "Advisor gate returned blocked; continuing by configuration."
+        ),
         "warning"
       );
     }

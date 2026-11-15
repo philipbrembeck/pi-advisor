@@ -973,6 +973,17 @@ import {
 import { join } from "node:path";
 import { CONFIG_DIR_NAME, getAgentDir } from "@earendil-works/pi-coding-agent";
 
+// src/i18n.ts
+var I18N_NAMESPACE = "pi-advisor-flow";
+var scopeImpl;
+try {
+  const sdk = await import("@juicesharp/rpiv-i18n");
+  scopeImpl = sdk.scope(I18N_NAMESPACE);
+} catch {
+  scopeImpl = (_key, fallback) => fallback;
+}
+var t = scopeImpl;
+
 // src/config/defaults.ts
 var resetDefaults = () => {
   setExecutorRef("");
@@ -1190,11 +1201,11 @@ var loadConfig = (_ctx) => {
     const warningIdentity = `${global}:${configIdentity(global)}`;
     if (advisorJevFilterEnabledRef && !advisorJevClassifierRef && _ctx.hasUI && !warnedFilterWithoutClassifierIdentities.has(warningIdentity)) {
       warnedFilterWithoutClassifierIdentities.add(warningIdentity);
-      _ctx.ui.notify("The Jev consultation filter is enabled but no Jev classifier is selected; consultations are not screened until you pick one in /advisor-settings.", "warning");
+      _ctx.ui.notify(t("notify.jevFilterNoClassifier.message", "The Jev consultation filter is enabled but no Jev classifier is selected; consultations are not screened until you pick one in /advisor-settings."), "warning");
     }
     const unknownKeys = unknownConfigKeys(globalConfig).filter((key) => !RESERVED_ADVISOR_JSON_KEYS.has(key));
     if (unknownKeys.length > 0 && _ctx.hasUI && !warnedUnknownConfigIdentities.has(warningIdentity)) {
-      _ctx.ui.notify(`Advisor configuration at ${global} contains unrecognized key(s) ${unknownKeys.map((key) => JSON.stringify(key)).join(", ")}. They were preserved but ignored; check for typos or upgrade pi-advisor.`, "warning");
+      _ctx.ui.notify(`${t("notify.unknownConfigKeys.at", "Advisor configuration at")} ${global} ${t("notify.unknownConfigKeys.contains", "contains unrecognized key(s)")} ${unknownKeys.map((key) => JSON.stringify(key)).join(", ")}. ${t("notify.unknownConfigKeys.preserved", "They were preserved but ignored; check for typos or upgrade pi-advisor.")}`, "warning");
       warnedUnknownConfigIdentities.add(warningIdentity);
     }
   }
@@ -1373,7 +1384,6 @@ var selectedEffort = (choice) => {
   const effort = choice.startsWith(SELECTED_PREFIX) ? choice.slice(SELECTED_PREFIX.length) : choice;
   return effort === DEFAULT_EFFORT_LEVEL ? undefined : effort;
 };
-var ADVISOR_ACTIVATION_EXPLANATION = "The Advisor is a second-opinion model that reviews the Executor's context and returns risks, alternatives, and verification steps without changing files or running tools.";
 var ARGUMENT_WHITESPACE2 = /\s+/u;
 var hasModelOverride = (args, key) => args.trim().split(ARGUMENT_WHITESPACE2).some((token) => {
   const [tokenKey, value] = token.split("=");
@@ -1446,13 +1456,13 @@ var isSelectableModel = (ctx, ref, availableRefs) => {
 var getExplicitModelError = (ctx, ref, label, overridden, availableRefs) => {
   if (overridden) {
     if (!ref) {
-      return `${label} model not configured`;
+      return `${label} ${t("activation.modelNotConfigured", "model not configured")}`;
     }
     if (!findConfiguredModel(ctx, ref)) {
-      return `${label} model not found: ${ref}`;
+      return `${label} ${t("activation.modelNotFound.prefix", "model not found:")} ${ref}`;
     }
     if (availableRefs && !isSelectableModel(ctx, ref, availableRefs)) {
-      return `${label} model unavailable: ${ref}`;
+      return `${label} ${t("activation.modelUnavailable.prefix", "model unavailable:")} ${ref}`;
     }
   }
 };
@@ -1492,7 +1502,6 @@ class ModelSelectorAdapter {
 
 // src/ui/searchable-model-list.ts
 import { fuzzyFilter, Input, truncateToWidth } from "@earendil-works/pi-tui";
-
 class SearchableModelList {
   tui;
   searchInput;
@@ -1554,14 +1563,14 @@ class SearchableModelList {
     const lines = [this.theme.fg("border", "─".repeat(width))];
     lines.push(`  ${this.theme.fg("accent", this.theme.bold(this.title))}`);
     const inputLines = this.searchInput.render(Math.max(1, width - 10));
-    lines.push(`  ${this.theme.fg("accent", "Search: ")}${inputLines[0] || ""}`, "");
+    lines.push(`  ${this.theme.fg("accent", t("modelPicker.searchLabel", "Search:"))} ${inputLines[0] || ""}`, "");
     const query = this.searchInput.getValue().trim();
     this.filteredOptions = query ? fuzzyFilter(this.allOptions, query, (item) => item) : this.allOptions;
     this.selectedIndex = Math.min(this.selectedIndex, Math.max(0, this.filteredOptions.length - 1));
     const maxVisible = 10;
     const total = this.filteredOptions.length;
     if (total === 0) {
-      lines.push(`  ${this.theme.fg("muted", "No matching models found.")}`);
+      lines.push(`  ${this.theme.fg("muted", t("modelPicker.noMatches", "No matching models found."))}`);
     } else {
       const startIndex = Math.max(0, Math.min(this.selectedIndex - Math.floor(maxVisible / 2), total - maxVisible));
       const endIndex = Math.min(startIndex + maxVisible, total);
@@ -1617,7 +1626,7 @@ class SearchableModelList {
     this.tui.requestRender();
   }
   interactionHint() {
-    return this.multiSelect ? "Type to search · ↑↓: navigate · Space: toggle · Enter: apply · Esc: cancel" : "Type to search · ↑↓: navigate · Enter: select · Esc: cancel";
+    return this.multiSelect ? t("modelPicker.hintMulti", "Type to search · ↑↓: navigate · Space: toggle · Enter: apply · Esc: cancel") : t("modelPicker.hintSingle", "Type to search · ↑↓: navigate · Enter: select · Esc: cancel");
   }
   renderOption(item, index) {
     let tick = "  ";
@@ -1675,7 +1684,7 @@ var selectAdvisorModels = async (ctx, options) => {
   }
   const refs = getAvailableModelRefs(ctx);
   if (refs && refs.length === 0) {
-    ctx.ui.notify("No selectable models are available. Configure a provider with /login or models.json, then retry.", "error");
+    ctx.ui.notify(t("notify.noSelectableModels.message", "No selectable models are available. Configure a provider with /login or models.json, then retry."), "error");
     return;
   }
   const allOptions = [
@@ -1696,13 +1705,13 @@ var selectAdvisorModels = async (ctx, options) => {
       onCancel: () => done(undefined),
       onSelect: done,
       theme,
-      title: "Select Executor Model",
+      title: t("modelPicker.selectExecutor", "Select Executor Model"),
       tui
     }));
     if (!selectedExecutor) {
       return;
     }
-    const selectedExecutorEffort = await ctx.ui.select("Select Executor Reasoning/Thinking Level", effortChoices(executorEffort));
+    const selectedExecutorEffort = await ctx.ui.select(t("modelPicker.executorEffort", "Select Executor Reasoning/Thinking Level"), effortChoices(executorEffort));
     if (!selectedExecutorEffort) {
       return;
     }
@@ -1717,13 +1726,13 @@ var selectAdvisorModels = async (ctx, options) => {
       onCancel: () => done(undefined),
       onSelect: done,
       theme,
-      title: "Select Advisor Model",
+      title: t("modelPicker.selectAdvisor", "Select Advisor Model"),
       tui
     }));
     if (!selectedAdvisor) {
       return;
     }
-    const selectedAdvisorEffort = await ctx.ui.select("Select Advisor Reasoning/Thinking Level", effortChoices(advisorEffort));
+    const selectedAdvisorEffort = await ctx.ui.select(t("modelPicker.advisorEffort", "Select Advisor Reasoning/Thinking Level"), effortChoices(advisorEffort));
     if (!selectedAdvisorEffort) {
       return;
     }
@@ -1743,7 +1752,7 @@ var selectAdvisorModels = async (ctx, options) => {
     onCancel: () => done(undefined),
     onSelect: done,
     theme,
-    title: "Select Fallback Advisor Model (optional)",
+    title: t("modelPicker.selectFallbackAdvisor", "Select Fallback Advisor Model (optional)"),
     tui
   }));
   if (selectedFallback === undefined) {
@@ -4814,7 +4823,7 @@ class ScoutStatusManager {
     if (event.type === "call" || event.type === "chunk") {
       this.#active.add(token);
       if (this.showStatus) {
-        uiAction(ctx, (ui) => ui.setStatus("advisor-scout", "Scout curating…"));
+        uiAction(ctx, (ui) => ui.setStatus("advisor-scout", t("status.scoutCurating", "Scout curating…")));
       }
       return;
     }
@@ -4827,7 +4836,7 @@ class ScoutStatusManager {
     if (!(uiAvailable(ctx) && this.showStatus)) {
       return;
     }
-    uiAction(ctx, (ui) => ui.setStatus("advisor-scout", this.#active.size > 0 ? "Scout curating…" : undefined));
+    uiAction(ctx, (ui) => ui.setStatus("advisor-scout", this.#active.size > 0 ? t("status.scoutCurating", "Scout curating…") : undefined));
   }
   clear(ctx) {
     for (const token of this.#known) {
@@ -5386,7 +5395,7 @@ class AdvisorSessionState {
         parts.push(`${count} ${decision}`);
       }
     }
-    return parts.join(", ") || "none";
+    return parts.join(", ") || t("sessionSummary.none", "none");
   }
   #countTrigger(trigger) {
     return this.#usage.invocations.filter((item) => item.trigger === trigger).length;
@@ -5399,7 +5408,7 @@ class AdvisorSessionState {
       "repeated-tool-call",
       "completion-review",
       "custom-rule"
-    ].filter((trigger) => this.#countTrigger(trigger) > 0).join(", ") || "none";
+    ].filter((trigger) => this.#countTrigger(trigger) > 0).join(", ") || t("sessionSummary.none", "none");
   }
   recordJevFilterAllowed() {
     this.#jev.recordFilterAllowed();
@@ -5438,22 +5447,22 @@ class AdvisorSessionState {
     const gates = invocations.filter((item) => item.kind === "gate");
     const effects = (effect) => invocations.filter((item) => item.executionEffect === effect).length;
     const failures = invocations.filter((item) => item.failure).map((item) => item.failure);
-    const models = [...new Set(invocations.map((item) => item.model).filter(Boolean))].join(", ") || "unknown";
-    const budget = limit === undefined ? `${this.#consumedCalls} used; unlimited remaining` : `${this.#consumedCalls} / ${limit} used; ${Math.max(0, limit - this.#consumedCalls)} remaining`;
+    const models = [...new Set(invocations.map((item) => item.model).filter(Boolean))].join(", ") || t("sessionSummary.models.unknown", "unknown");
+    const budget = limit === undefined ? `${this.#consumedCalls} ${t("sessionSummary.budget.used", "used")}; ${t("sessionSummary.budget.unlimitedRemaining", "unlimited remaining")}` : `${this.#consumedCalls} / ${limit} ${t("sessionSummary.budget.used", "used")}; ${Math.max(0, limit - this.#consumedCalls)} ${t("sessionSummary.budget.remaining", "remaining")}`;
     return [
-      "[Session Advisor Summary]",
-      `Consultations: ${markdown.length} Markdown (${this.#countTrigger("manual")} manual, ${this.#countTrigger("executor-requested")} executor-requested), automatic gates: ${gates.length}`,
-      `Triggers: ${this.#triggersLine()}`,
-      `Models: ${models}`,
-      `Budget: ${budget}`,
-      `Usage: ${formatAdvisorUsageTotals(totals)}`,
-      `Markdown advice: ${markdown.length} responses (${this.#ledger.draftConsultations} with drafts)`,
-      `Follow-ups: ${markdown.filter((item) => item.followUp).length}`,
-      `Outcome reports: ${this.#ledger.outcomes}`,
-      `Gate decisions: ${this.#decisionsLine()}`,
-      `Loop matching: normalized tool signatures; ${this.#repetition.interventions} gate intervention${this.#repetition.interventions === 1 ? "" : "s"}`,
-      `Execution effects: ${effects("tool-blocked")} tool blocked, ${effects("session-blocked")} sessions blocked, ${effects("continued")} continued`,
-      `Failures: ${failures.length ? failures.join(", ") : "none"}`,
+      t("sessionSummary.title", "[Session Advisor Summary]"),
+      `${t("sessionSummary.consultations.label", "Consultations:")} ${markdown.length} ${t("sessionSummary.consultations.markdown", "Markdown")} (${this.#countTrigger("manual")} ${t("sessionSummary.consultations.manual", "manual")}, ${this.#countTrigger("executor-requested")} ${t("sessionSummary.consultations.executorRequested", "executor-requested")}), ${t("sessionSummary.consultations.automaticGates", "automatic gates:")} ${gates.length}`,
+      `${t("sessionSummary.triggers.label", "Triggers:")} ${this.#triggersLine()}`,
+      `${t("sessionSummary.models.label", "Models:")} ${models}`,
+      `${t("sessionSummary.budget.label", "Budget:")} ${budget}`,
+      `${t("sessionSummary.usage.label", "Usage:")} ${formatAdvisorUsageTotals(totals)}`,
+      `${t("sessionSummary.markdownAdvice.label", "Markdown advice:")} ${markdown.length} ${t("sessionSummary.markdownAdvice.responses", "responses")} (${this.#ledger.draftConsultations} ${t("sessionSummary.markdownAdvice.withDrafts", "with drafts")})`,
+      `${t("sessionSummary.followUps.label", "Follow-ups:")} ${markdown.filter((item) => item.followUp).length}`,
+      `${t("sessionSummary.outcomeReports.label", "Outcome reports:")} ${this.#ledger.outcomes}`,
+      `${t("sessionSummary.gateDecisions.label", "Gate decisions:")} ${this.#decisionsLine()}`,
+      `${t("sessionSummary.loopMatching.label", "Loop matching: normalized tool signatures;")} ${this.#repetition.interventions} ${t("sessionSummary.loopMatching.gateIntervention", "gate intervention")}${this.#repetition.interventions === 1 ? "" : "s"}`,
+      `${t("sessionSummary.executionEffects.label", "Execution effects:")} ${effects("tool-blocked")} ${t("sessionSummary.executionEffects.toolBlocked", "tool blocked")}, ${effects("session-blocked")} ${t("sessionSummary.executionEffects.sessionsBlocked", "sessions blocked")}, ${effects("continued")} ${t("sessionSummary.executionEffects.continued", "continued")}`,
+      `${t("sessionSummary.failures.label", "Failures:")} ${failures.length ? failures.join(", ") : t("sessionSummary.none", "none")}`,
       ...jevLines
     ].join(`
 `);
@@ -5478,9 +5487,8 @@ var notify = (ctx, message, level) => {
   uiAction(ctx, (ui) => ui.notify(message, level));
 };
 var reportManualBudgetExhausted = (ctx) => {
-  const message = "Advisor call budget exhausted for this session.";
-  notify(ctx, message, "warning");
-  notifyHerdrAdvisorFailure("Advisor budget exhausted", message);
+  notify(ctx, t("notify.budgetExhausted.message", "Advisor call budget exhausted for this session."), "warning");
+  notifyHerdrAdvisorFailure("Advisor budget exhausted", "Advisor call budget exhausted for this session.");
 };
 var requestManualRender = (ctx) => {
   uiAction(ctx, (ui) => ui.setStatus("advisor-manual", undefined));
@@ -5526,7 +5534,7 @@ class CommandRuntime {
     if (disabled && this.lastSameModelDisabled !== true) {
       notify(ctx, sameModelAdvisorNotice, "info");
     } else if (!disabled && this.lastSameModelDisabled === true) {
-      notify(ctx, "Advisor re-enabled: executor and advisor models differ.", "info");
+      notify(ctx, t("notify.sameModelReenabled.message", "Advisor re-enabled: executor and advisor models differ."), "info");
     }
     this.lastSameModelDisabled = disabled;
   }
@@ -5555,7 +5563,7 @@ var loadCommandConfig = (ctx) => {
     return true;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    notify(ctx, `Advisor command could not load configuration: ${message} Fix advisor.json and retry.`, "error");
+    notify(ctx, `${t("notify.configLoadFailed.prefix", "Advisor command could not load configuration:")} ${message} ${t("notify.configLoadFailed.suffix", "Fix advisor.json and retry.")}`, "error");
     return false;
   }
 };
@@ -5574,7 +5582,7 @@ var prepareActivationModels = async (runtime, ctx, announce, executorOverride, a
     return { pendingExecutor: plan.pendingExecutor, pickedModels: false };
   }
   if (!announce) {
-    notify(ctx, "Advisor models are not configured or available. Run /advisor to choose them.", "error");
+    notify(ctx, t("notify.modelsNotConfigured.message", "Advisor models are not configured or available. Run /advisor to choose them."), "error");
     return;
   }
   const selection = await selectAdvisorModels(ctx, {
@@ -5621,12 +5629,14 @@ var resolveActivationModels = async (runtime, ctx, canContinue) => {
   }
   const executor = executorRef ? findConfiguredModel(ctx, executorRef) : undefined;
   if (executorRef && !executor) {
-    return { error: `Executor model not found: ${executorRef}` };
+    return {
+      error: `${t("activation.executorNotFound.prefix", "Executor model not found:")} ${executorRef}`
+    };
   }
   const advisor = findConfiguredModel(ctx, advisorRef);
   if (!advisor) {
     return {
-      error: advisorRef ? `Advisor model not found: ${advisorRef}` : "Advisor model not configured"
+      error: advisorRef ? `${t("activation.advisorNotFound.prefix", "Advisor model not found:")} ${advisorRef}` : t("activation.advisorNotConfigured", "Advisor model not configured")
     };
   }
   if (advisor.api !== "pi-virtual") {
@@ -5635,11 +5645,15 @@ var resolveActivationModels = async (runtime, ctx, canContinue) => {
       return { cancelled: true };
     }
     if (!(advisorAuth.ok && hasUsableModelAuth(advisorAuth))) {
-      return { error: `No API key for Advisor ${advisorRef}` };
+      return {
+        error: `${t("activation.noAdvisorApiKey.prefix", "No API key for Advisor")} ${advisorRef}`
+      };
     }
   }
   if (executor && !isMarkedSubagent() && !await runtime.setExecutorModel(executor)) {
-    return { error: `No API key for Executor ${executorRef}` };
+    return {
+      error: `${t("activation.noExecutorApiKey.prefix", "No API key for Executor")} ${executorRef}`
+    };
   }
   return {};
 };
@@ -5668,7 +5682,7 @@ var persistSuccessfulActivation = (ctx, shouldSave, reenableTools, restoreRefs) 
     setAdvisorToolsEnabledRef(false);
     restoreRefs();
     const message = saveError instanceof Error ? saveError.message : String(saveError);
-    notify(ctx, `Could not save Advisor activation: ${message}`, "error");
+    notify(ctx, `${t("activation.saveFailed.prefix", "Could not save Advisor activation:")} ${message}`, "error");
     return false;
   }
   return true;
@@ -5747,9 +5761,9 @@ var activateAdvisor = async (runtime, args, ctx, announce = true) => {
   if (announce) {
     const activeExecutorRef = effectiveExecutorRef(ctx);
     const activeExecutorEffort = effectiveExecutorEffort(ctx);
-    notify(ctx, `${ADVISOR_ACTIVATION_EXPLANATION}
+    notify(ctx, `${t("activation.explanation", "The Advisor is a second-opinion model that reviews the Executor's context and returns risks, alternatives, and verification steps without changing files or running tools.")}
 
-Advisor flow ${sameModelAdvisorDisabled(ctx, activeModel) ? "configured" : "ready"} — Executor: ${activeExecutorRef} (thinking: ${activeExecutorEffort || "default"}) · Advisor: ${advisorRef} (thinking: ${advisorEffortRef || "default"})`, "info");
+${t("activation.flow", "Advisor flow")} ${sameModelAdvisorDisabled(ctx, activeModel) ? t("activation.flowConfigured", "configured") : t("activation.flowReady", "ready")} — Executor: ${activeExecutorRef} (thinking: ${activeExecutorEffort || "default"}) · Advisor: ${advisorRef} (thinking: ${advisorEffortRef || "default"})`, "info");
   }
 };
 
@@ -6280,7 +6294,7 @@ var registerCommandLifecycle = (runtime, activateAdvisor) => {
     } catch (error) {
       setAdvisorToolsActive(runtime.pi, false);
       const message = error instanceof Error ? error.message : String(error);
-      notify(ctx, `Advisor activation failed: ${message}`, "error");
+      notify(ctx, `${t("notify.activationFailed.prefix", "Advisor activation failed:")} ${message}`, "error");
     }
   });
   runtime.pi.on("model_select", (event, ctx) => {
@@ -6339,10 +6353,27 @@ import {
   visibleWidth as visibleWidth2,
   wrapTextWithAnsi
 } from "@earendil-works/pi-tui";
-var MANUAL_GIT_CONTEXT_COPY = {
-  full: { description: "summary plus patch", label: "Full" },
-  off: { description: "no Git data", label: "None" },
-  summary: { description: "changed paths and status", label: "Summary" }
+var gitContextCopy = (level) => {
+  switch (level) {
+    case "full": {
+      return {
+        description: t("manualDialog.git.full.desc", "summary plus patch"),
+        label: t("manualDialog.git.full.label", "Full")
+      };
+    }
+    case "off": {
+      return {
+        description: t("manualDialog.git.off.desc", "no Git data"),
+        label: t("manualDialog.git.off.label", "None")
+      };
+    }
+    default: {
+      return {
+        description: t("manualDialog.git.summary.desc", "changed paths and status"),
+        label: t("manualDialog.git.summary.label", "Summary")
+      };
+    }
+  }
 };
 var renderManualAdvisorDialog = (view) => {
   const {
@@ -6375,7 +6406,7 @@ var renderManualAdvisorDialog = (view) => {
     }
   };
   if (renderWidth >= 2) {
-    const title = truncateToWidth3(" Ask Advisor ", Math.max(0, innerWidth), "", false);
+    const title = truncateToWidth3(` ${t("manualDialog.title", "Ask Advisor")} `, Math.max(0, innerWidth), "", false);
     const titleWidth = visibleWidth2(title);
     const remaining = Math.max(0, innerWidth - titleWidth);
     const left = Math.floor(remaining / 2);
@@ -6383,20 +6414,20 @@ var renderManualAdvisorDialog = (view) => {
     lines.push(theme.fg("border", `╭${"─".repeat(left)}`) + theme.fg("accent", title) + theme.fg("border", `${"─".repeat(right)}╮`));
     addLine("");
   }
-  addLine(`${focusMarker("editor")}${theme.bold("Message for Advisor (optional)")}`);
+  addLine(`${focusMarker("editor")}${theme.bold(t("manualDialog.messageLabel", "Message for Advisor (optional)"))}`);
   for (const editorLine of editorLines) {
     addLine(editorLine);
   }
   addLine("");
-  addWrapped("Automatic context follows your settings: conversation history, tool disclosure, project preferences, redaction, and configured limits remain unchanged.", "muted");
-  addWrapped("This dialog does not expose drafts or explicit file handoff controls.", "dim");
-  addWrapped("Git None only withholds repository data; it does not remove configured conversation history.", "dim");
+  addWrapped(t("manualDialog.contextNote", "Automatic context follows your settings: conversation history, tool disclosure, project preferences, redaction, and configured limits remain unchanged."), "muted");
+  addWrapped(t("manualDialog.noDraftsNote", "This dialog does not expose drafts or explicit file handoff controls."), "dim");
+  addWrapped(t("manualDialog.gitNoneNote", "Git None only withholds repository data; it does not remove configured conversation history."), "dim");
   addLine("");
-  const gitCeiling = MANUAL_GIT_CONTEXT_COPY[gitContext].label;
-  addLine(`${focusMarker("git")}${theme.bold(`Git repository context (max: ${gitCeiling}; ↑/↓ or Space to choose)`)}`);
+  const gitCeiling = gitContextCopy(gitContext).label;
+  addLine(`${focusMarker("git")}${theme.bold(`${t("manualDialog.gitTitle", "Git repository context (max:")} ${gitCeiling}; ${t("manualDialog.gitChoose", "↑/↓ or Space to choose)")}`)}`);
   for (let index = 0;index < gitLevels.length; index += 1) {
     const level = gitLevels[index];
-    const copy = MANUAL_GIT_CONTEXT_COPY[level];
+    const copy = gitContextCopy(level);
     const selected = index === gitIndex;
     const marker = selected ? "●" : "○";
     const optionFocus = focusTarget === "git" && selected ? "▸ " : "  ";
@@ -6404,16 +6435,16 @@ var renderManualAdvisorDialog = (view) => {
     addWrapped(`${optionFocus}${marker} ${copy.label} — ${copy.description}`, color);
   }
   addLine("");
-  let interactionHint = "Enter submit · Shift+Enter newline · Tab/Shift+Tab focus · Esc cancel";
+  let interactionHint = t("manualDialog.hint.editor", "Enter submit · Shift+Enter newline · Tab/Shift+Tab focus · Esc cancel");
   if (focusTarget === "git") {
-    interactionHint = "↑/↓ or Space choose · Enter next · Tab/Shift+Tab focus · Esc cancel";
+    interactionHint = t("manualDialog.hint.git", "↑/↓ or Space choose · Enter next · Tab/Shift+Tab focus · Esc cancel");
   } else if (focusTarget === "actions") {
-    interactionHint = "←/→ choose · Enter/Space activate · Tab/Shift+Tab focus · Esc cancel";
+    interactionHint = t("manualDialog.hint.actions", "←/→ choose · Enter/Space activate · Tab/Shift+Tab focus · Esc cancel");
   }
   const submit = focusTarget === "actions" && actionIndex === 0;
-  const submitLabel = submit ? theme.fg("accent", "[Submit]") : theme.fg("text", "[Submit]");
+  const submitLabel = submit ? theme.fg("accent", t("manualDialog.submit", "[Submit]")) : theme.fg("text", t("manualDialog.submit", "[Submit]"));
   const cancel = focusTarget === "actions" && actionIndex === 1;
-  const cancelLabel = cancel ? theme.fg("accent", "[Cancel]") : theme.fg("text", "[Cancel]");
+  const cancelLabel = cancel ? theme.fg("accent", t("manualDialog.cancel", "[Cancel]")) : theme.fg("text", t("manualDialog.cancel", "[Cancel]"));
   const actionButtons = `${submitLabel}  ${cancelLabel}`;
   const buttonOffset = Math.max(0, Math.floor((contentWidth - visibleWidth2(actionButtons)) / 2) - 2);
   addLine(`${focusMarker("actions")}${" ".repeat(buttonOffset)}${actionButtons}`);
@@ -7081,7 +7112,7 @@ var SCREENED_SKIP_TEXT = "Advisor consultation skipped (screened out): the stake
 var repeatSkipText = (advice) => `Advisor consultation skipped (already answered): this question was answered earlier in this session; the earlier advice is reattached below. Consult again only if the situation has materially changed.
 
 ${advice}`;
-var outageNotifier = createOutageNotifier((category, message) => `Advisor Jev classifier failed (${category}); allowing consultations. ${message}`);
+var outageNotifier = createOutageNotifier((category, message) => `${t("notify.jevFilterOutage.prefix", "Advisor Jev classifier failed")} (${category}); ${t("notify.jevFilterOutage.allowing", "allowing consultations.")} ${message}`);
 var notifyOutageOnce = outageNotifier.notify;
 var resetJevOutageNotification = outageNotifier.reset;
 var allow = () => ({ decision: "allow" });
@@ -7285,7 +7316,7 @@ ${markdown}`,
       },
       display: true
     }, { deliverAs: "steer", triggerTurn: !isPrintMode });
-    notify(ctx, `Advisor consultation failed: ${message}`, "error");
+    notify(ctx, `${t("manualCmd.consultFailed.prefix", "Advisor consultation failed:")} ${message}`, "error");
     notifyHerdrAdvisorFailure("Advisor consultation failed", message);
   } finally {
     finishHerdrActivity();
@@ -7427,7 +7458,7 @@ var registerModelCommands = (runtime) => {
       });
       runtime.pendingExecutorModelRef = undefined;
       runtime.updateSameModelNotice(ctx);
-      ctx.ui.notify(`Saved Executor + Advisor configurations to ${path}`, "info");
+      ctx.ui.notify(`${t("notify.modelsSaved.prefix", "Saved Executor + Advisor configurations to")} ${path}`, "info");
     }
   });
 };
@@ -7851,19 +7882,6 @@ import { SettingsList, truncateToWidth as truncateToWidth7 } from "@earendil-wor
 
 // src/ui/settings-formatting.ts
 import { visibleWidth as visibleWidth3 } from "@earendil-works/pi-tui";
-
-// src/i18n.ts
-var I18N_NAMESPACE = "pi-advisor-flow";
-var scopeImpl;
-try {
-  const sdk = await import("@juicesharp/rpiv-i18n");
-  scopeImpl = sdk.scope(I18N_NAMESPACE);
-} catch {
-  scopeImpl = (_key, fallback) => fallback;
-}
-var t = scopeImpl;
-
-// src/ui/settings-formatting.ts
 var TOGGLE_VALUES = ["On", "Off"];
 var SIMPLE_MODE_GRADIENT_INTERVAL_MS = 100;
 var SIMPLE_MODE_GRADIENT_COLORS = [
@@ -8041,12 +8059,12 @@ class JevClassifierSubmenu {
     if (this.mode === "key") {
       return [
         border,
-        theme.fg("accent", theme.bold("Jev API Key")),
+        theme.fg("accent", theme.bold(t("jevSubmenu.apiKeyTitle", "Jev API Key"))),
         "",
-        this.notice ?? "Enter a new TypeSafe Jev API key:",
+        this.notice ?? t("jevSubmenu.enterNewKey", "Enter a new TypeSafe Jev API key:"),
         `  ${this.keyInput?.render(Math.max(1, width - 4))[0] ?? ""}`,
         "",
-        this.failClosedKeyMode ? "Key restore failed. Re-enter and verify a valid Jev key." : "Enter to verify · Esc to cancel",
+        this.failClosedKeyMode ? t("jevSubmenu.keyRestoreFailed", "Key restore failed. Re-enter and verify a valid Jev key.") : t("jevSubmenu.keyEntryHint", "Enter to verify · Esc to cancel"),
         border
       ];
     }
@@ -8056,13 +8074,13 @@ class JevClassifierSubmenu {
     const rows = this.filtered.map((choice, index) => `${index === this.selectedIndex ? "›" : " "} ${choice.label}`);
     return [
       border,
-      theme.fg("accent", theme.bold("Jev classifier")),
+      theme.fg("accent", theme.bold(t("jevSubmenu.classifierTitle", "Jev classifier"))),
       "",
-      this.mode === "loading" ? "Loading Pi classifier catalog…" : `Search: ${this.search.render(Math.max(1, width - 10))[0]}`,
+      this.mode === "loading" ? t("jevSubmenu.loading", "Loading Pi classifier catalog…") : `${t("jevSubmenu.searchLabel", "Search:")} ${this.search.render(Math.max(1, width - 10))[0]}`,
       ...this.notice ? [this.notice] : [],
       ...rows.slice(0, 10),
       "",
-      "↑/↓ move · Enter select · Esc cancel",
+      t("jevSubmenu.listHint", "↑/↓ move · Enter select · Esc cancel"),
       border
     ];
   }
@@ -8098,7 +8116,7 @@ class JevClassifierSubmenu {
   async loadChoices() {
     try {
       if (!this.options.modelRegistry) {
-        throw new Error("Pi classifier registry is unavailable.");
+        throw new Error(t("jevSubmenu.registryUnavailable", "Pi classifier registry is unavailable."));
       }
       const models = await this.options.modelRegistry.getAvailableOfType("classifier");
       this.choices = (models ?? []).map((model) => ({
@@ -8111,27 +8129,27 @@ class JevClassifierSubmenu {
       if (stored.key) {
         this.choices.push({
           action: "use-key",
-          label: "Jev API Key (use stored key)",
+          label: t("jevSubmenu.useStoredKey", "Jev API Key (use stored key)"),
           ref: JEV_API_KEY_CLASSIFIER
         }, {
           action: "replace-key",
-          label: "Replace Jev API Key…",
+          label: t("jevSubmenu.replaceKey", "Replace Jev API Key…"),
           ref: JEV_API_KEY_CLASSIFIER
         });
       } else {
         this.choices.push({
           action: "replace-key",
-          label: "Jev API Key… (enter TypeSafe key)",
+          label: t("jevSubmenu.enterKeyChoice", "Jev API Key… (enter TypeSafe key)"),
           ref: JEV_API_KEY_CLASSIFIER
         });
       }
       this.mode = "list";
       this.loaded.resolve(true);
-      this.notice = this.options.currentValue && this.options.currentValue !== "Choose classifier" ? `Current: ${this.options.currentValue}` : undefined;
+      this.notice = this.options.currentValue && this.options.currentValue !== "Choose classifier" ? `${t("jevSubmenu.currentPrefix", "Current:")} ${this.options.currentValue}` : undefined;
     } catch (error) {
       this.mode = "list";
       this.loaded.resolve(false);
-      this.notice = `Could not load classifiers: ${error instanceof Error ? error.message : "unknown error"}. Retry /advisor-settings.`;
+      this.notice = `${t("jevSubmenu.loadFailedPrefix", "Could not load classifiers:")} ${error instanceof Error ? error.message : t("jevSetup.unknownError", "unknown error")}${t("jevSubmenu.loadFailedSuffix", ". Retry /advisor-settings.")}`;
     }
     this.options.tui.requestRender();
   }
@@ -8140,7 +8158,7 @@ class JevClassifierSubmenu {
   }
   static rates(model) {
     const rates = model.cost;
-    return rates.input === 0 && rates.output === 0 ? "$0/M tokens" : `$${rates.input}/$${rates.output} per Mtok`;
+    return rates.input === 0 && rates.output === 0 ? t("jevSubmenu.ratesFree", "$0/M tokens") : `$${rates.input}/$${rates.output} ${t("jevSubmenu.perMtok", "per Mtok")}`;
   }
   async choose(choice) {
     if (choice.action === "use-key") {
@@ -8160,24 +8178,24 @@ class JevClassifierSubmenu {
       return;
     }
     this.mode = "verifying";
-    this.notice = `Verifying ${choice.ref}…`;
+    this.notice = `${t("jevSubmenu.verifying", "Verifying")} ${choice.ref}…`;
     this.options.tui.requestRender();
     try {
       await this.verify(choice.model);
       const saved = this.save({ classifier: choice.ref, transport: "auto" });
       if (!saved) {
         this.mode = "list";
-        this.notice = "Verified, but settings could not be saved.";
+        this.notice = t("jevSubmenu.verifiedNotSaved", "Verified, but settings could not be saved.");
       }
     } catch (error) {
-      this.notice = `Verification failed for ${choice.ref}: ${error instanceof Error ? error.message : "provider error"}`;
+      this.notice = `${t("jevSubmenu.verifyFailedFor", "Verification failed for")} ${choice.ref}: ${error instanceof Error ? error.message : t("jevSubmenu.providerError", "provider error")}`;
       this.mode = "list";
     }
     this.options.tui.requestRender();
   }
   async verify(model, apiKey) {
     if (!this.options.modelRegistry) {
-      throw new Error("Pi classifier registry is unavailable.");
+      throw new Error(t("jevSubmenu.registryUnavailable", "Pi classifier registry is unavailable."));
     }
     const state = {
       recent_conversation: "Classifier verification check.",
@@ -8185,32 +8203,32 @@ class JevClassifierSubmenu {
     };
     const result = await classifyWithJev({ modelRegistry: this.options.modelRegistry, signal: undefined }, `${model.provider}/${model.id}`, state, nativeScreeningQuestions, { apiKey });
     if (!result.answers.self_answerable || !result.answers.stakes) {
-      throw new Error("Classifier returned an incomplete verification result.");
+      throw new Error(t("jevSubmenu.incompleteResult", "Classifier returned an incomplete verification result."));
     }
   }
   async verifyKey() {
     const candidate = this.keyInput?.getValue().trim() ?? "";
     this.keyInput?.setValue("");
     if (!candidate) {
-      this.notice = "Enter a non-empty Jev API key.";
+      this.notice = t("jevSubmenu.emptyKey", "Enter a non-empty Jev API key.");
       this.options.tui.requestRender();
       return;
     }
     const model = this.options.modelRegistry?.findOfType("classifier", "typesafe", "jev-latest");
     if (!model) {
-      this.notice = "TypeSafe Jev classifier is not present in Pi's catalog.";
+      this.notice = t("jevSubmenu.classifierMissing", "TypeSafe Jev classifier is not present in Pi's catalog.");
       this.options.tui.requestRender();
       return;
     }
     const previous = await (this.options.resolveStoredKey ?? readJevClassifierKey)();
     if (previous.failed) {
       this.mode = "list";
-      this.notice = "Could not read the stored Jev API Key state; nothing was changed. Try again later.";
+      this.notice = t("jevSubmenu.keyStateUnreadable", "Could not read the stored Jev API Key state; nothing was changed. Try again later.");
       this.options.tui.requestRender();
       return;
     }
     this.mode = "verifying";
-    this.notice = "Verifying Jev API Key…";
+    this.notice = t("jevSubmenu.verifyingKey", "Verifying Jev API Key…");
     this.options.tui.requestRender();
     try {
       await this.verify(model, candidate);
@@ -8223,15 +8241,15 @@ class JevClassifierSubmenu {
         if (!await this.restorePreviousKey(previous)) {
           this.failClosedKeyMode = true;
           disableJevClassifierKeyForRuntime();
-          throw new Error("Settings save failed and the previous key could not be restored. Re-enter and verify a valid Jev key before continuing.");
+          throw new Error(t("jevSubmenu.saveFailedNoRestore", "Settings save failed and the previous key could not be restored. Re-enter and verify a valid Jev key before continuing."));
         }
-        throw new Error("Could not save Jev classifier settings; existing key was restored.");
+        throw new Error(t("jevSubmenu.saveFailedRestored", "Could not save Jev classifier settings; existing key was restored."));
       }
       this.mode = "list";
-      this.notice = "Jev API Key verified and saved securely.";
+      this.notice = t("jevSubmenu.keyVerifiedSaved", "Jev API Key verified and saved securely.");
     } catch (error) {
       this.mode = "key";
-      this.notice = `Verification failed: ${error instanceof Error ? error.message : "provider error"}`;
+      this.notice = `${t("jevSubmenu.verificationFailedPrefix", "Verification failed:")} ${error instanceof Error ? error.message : t("jevSubmenu.providerError", "provider error")}`;
     }
     this.options.tui.requestRender();
   }
@@ -8244,7 +8262,7 @@ class JevClassifierSubmenu {
         this.options.tui.requestRender();
       },
       onSubmit: () => this.handleKeySubmit(),
-      placeholder: "TypeSafe Jev API key"
+      placeholder: t("jevSubmenu.keyPlaceholder", "TypeSafe Jev API key")
     });
   }
   restorePreviousKey(previous) {
@@ -8256,22 +8274,22 @@ class JevClassifierSubmenu {
   async verifyStoredKey(key) {
     const model = this.options.modelRegistry?.findOfType("classifier", "typesafe", "jev-latest");
     if (!model) {
-      this.notice = "TypeSafe Jev classifier is not present in Pi's catalog.";
+      this.notice = t("jevSubmenu.classifierMissing", "TypeSafe Jev classifier is not present in Pi's catalog.");
       this.options.tui.requestRender();
       return;
     }
     this.mode = "verifying";
-    this.notice = "Verifying stored Jev API Key…";
+    this.notice = t("jevSubmenu.verifyingStoredKey", "Verifying stored Jev API Key…");
     this.options.tui.requestRender();
     try {
       await this.verify(model, key);
       if (!this.save({ classifier: JEV_API_KEY_CLASSIFIER, transport: "auto" })) {
-        throw new Error("Could not save the Jev classifier selection.");
+        throw new Error(t("jevSubmenu.selectionNotSaved", "Could not save the Jev classifier selection."));
       }
-      this.notice = "Stored Jev API Key verified.";
+      this.notice = t("jevSubmenu.storedKeyVerified", "Stored Jev API Key verified.");
     } catch (error) {
       this.mode = "list";
-      this.notice = `Verification failed: ${error instanceof Error ? error.message : "provider error"}`;
+      this.notice = `${t("jevSubmenu.verificationFailedPrefix", "Verification failed:")} ${error instanceof Error ? error.message : t("jevSubmenu.providerError", "provider error")}`;
     }
     this.options.tui.requestRender();
   }
@@ -8279,7 +8297,7 @@ class JevClassifierSubmenu {
     try {
       await this.verifyKey();
     } catch (error) {
-      this.notice = `Verification failed: ${error instanceof Error ? error.message : "provider error"}`;
+      this.notice = `${t("jevSubmenu.verificationFailedPrefix", "Verification failed:")} ${error instanceof Error ? error.message : t("jevSubmenu.providerError", "provider error")}`;
       this.mode = "key";
       this.options.tui.requestRender();
     }
@@ -8290,7 +8308,7 @@ class JevClassifierSubmenu {
       this.options.done(selection.classifier);
     } else {
       this.mode = "list";
-      this.notice = "Verified, but settings could not be saved.";
+      this.notice = t("jevSubmenu.verifiedNotSaved", "Verified, but settings could not be saved.");
     }
     return saved;
   }
@@ -8301,9 +8319,9 @@ import { Key as Key3, matchesKey as matchesKey3, truncateToWidth as truncateToWi
 var actionsFor = (enabled) => enabled ? ["disable", "done"] : ["enable", "done"];
 var labelFor2 = (action) => {
   if (action === "enable") {
-    return "Enable the filter";
+    return t("jevSubmenu.filter.enable", "Enable the filter");
   }
-  return action === "disable" ? "Disable the filter" : "Done";
+  return action === "disable" ? t("jevSubmenu.filter.disable", "Disable the filter") : t("jevSubmenu.filter.done", "Done");
 };
 
 class JevFilterSubmenu {
@@ -8333,13 +8351,13 @@ class JevFilterSubmenu {
   render(width) {
     const { theme } = this.options;
     const lines = [
-      theme.fg("accent", theme.bold("  Jev classifier consultation filter")),
+      theme.fg("accent", theme.bold(`  ${t("jevSubmenu.filter.title", "Jev classifier consultation filter")}`)),
       "",
-      `  Filter: ${this.enabled ? "On" : "Off"}`,
-      `  Classifier: ${this.options.currentClassifier ?? "not selected"}`
+      `  ${t("jevSubmenu.filter.filterLabel", "Filter:")} ${this.enabled ? "On" : "Off"}`,
+      `  ${t("jevSubmenu.filter.classifierLabel", "Classifier:")} ${this.options.currentClassifier ?? t("jevSubmenu.filter.notSelected", "not selected")}`
     ];
     if (this.mode === "resolving") {
-      lines.push("", "  Checking selected classifier availability…");
+      lines.push("", `  ${t("jevSubmenu.filter.checking", "Checking selected classifier availability…")}`);
     } else if (this.notice) {
       lines.push("", theme.fg("warning", `  ${this.notice}`));
     }
@@ -8374,9 +8392,9 @@ class JevFilterSubmenu {
         const stored = await (this.resolveClassifierKey ?? readJevClassifierKey)();
         this.classifierAvailable = Boolean(stored.key);
         if (stored.failed) {
-          this.notice = "Could not read the stored Jev API Key state; try again later.";
+          this.notice = t("jevSubmenu.filter.keyStateUnreadable", "Could not read the stored Jev API Key state; try again later.");
         } else if (!this.classifierAvailable) {
-          this.notice = "No Jev API Key is stored. Choose Jev API Key in Jev classifier settings.";
+          this.notice = t("jevSubmenu.filter.noStoredKey", "No Jev API Key is stored. Choose Jev API Key in Jev classifier settings.");
         }
       } else {
         const parsed = selected ? parseJevClassifierRef(selected) : undefined;
@@ -8386,11 +8404,11 @@ class JevFilterSubmenu {
           this.classifierAvailable = available.some((model) => model.id === parsed.modelId);
         }
         if (!this.classifierAvailable) {
-          this.notice = "Select an available authenticated classifier in Jev classifier settings first.";
+          this.notice = t("jevSubmenu.filter.selectClassifierFirst", "Select an available authenticated classifier in Jev classifier settings first.");
         }
       }
     } catch (error) {
-      this.notice = `Classifier lookup failed: ${error instanceof Error ? error.message : "Pi error"}`;
+      this.notice = `${t("jevSubmenu.filter.lookupFailedPrefix", "Classifier lookup failed:")} ${error instanceof Error ? error.message : t("jevSubmenu.filter.piError", "Pi error")}`;
     }
     this.mode = "menu";
     this.options.tui.requestRender();
@@ -8406,7 +8424,7 @@ class JevFilterSubmenu {
       return;
     }
     if (this.options.onSelection?.({ enabled }) === false) {
-      this.notice = "The filter state could not be saved.";
+      this.notice = t("jevSubmenu.filter.stateNotSaved", "The filter state could not be saved.");
       this.options.tui.requestRender();
       return;
     }
@@ -8522,7 +8540,6 @@ var jevItems = (settings, theme, tui, {
 
 // src/ui/text-setting-submenu.ts
 import { Input as Input4, truncateToWidth as truncateToWidth6 } from "@earendil-works/pi-tui";
-
 class TextSettingSubmenu {
   input = new Input4;
   options;
@@ -8567,7 +8584,7 @@ class TextSettingSubmenu {
     if (this.error) {
       lines.push(theme.fg("error", `  ${this.error}`));
     }
-    lines.push("", theme.fg("dim", "  Enter: apply · Esc: cancel"));
+    lines.push("", theme.fg("dim", `  ${t("textSetting.hint", "Enter: apply · Esc: cancel")}`));
     return lines.map((line) => truncateToWidth6(line, width));
   }
   handleInput(keyData) {
@@ -9068,7 +9085,7 @@ class AdvisorSettingsSelector {
     this.presets = options.presets.some((preset) => preset.value === configuredContext) ? [...options.presets] : [
       ...options.presets,
       {
-        description: "Current custom context limit",
+        description: t("settingsSubmenu.customContextLimit", "Current custom context limit"),
         label: String(configuredContext),
         value: configuredContext
       }
@@ -9099,7 +9116,7 @@ class AdvisorSettingsSelector {
     const defaultLabel = listTheme.label;
     listTheme.label = (text, selected) => {
       if (this.settings.simpleMode && text.startsWith("Simple mode")) {
-        return `${rainbowGradient("Simple mode", this.simpleModeGradientStartedAt ?? 0)}${text.slice("Simple mode".length)}`;
+        return `${rainbowGradient(t("settings.simpleMode.label", "Simple mode"), this.simpleModeGradientStartedAt ?? 0)}${text.slice("Simple mode".length)}`;
       }
       return defaultLabel(text, selected);
     };
@@ -9303,7 +9320,7 @@ var persistJevSettings = (ctx, settings, runtime) => {
     saveAdvisorSettings(ctx, settings, { skipOutcomeLogging: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    ctx.ui.notify(`Could not save Advisor settings: ${message}`, "error");
+    ctx.ui.notify(`${t("settingsCmd.saveFailed.prefix", "Could not save Advisor settings:")} ${message}`, "error");
     return false;
   }
   try {
@@ -9312,7 +9329,7 @@ var persistJevSettings = (ctx, settings, runtime) => {
     runtime.updateAdvisorUsageStatus(ctx);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    ctx.ui.notify(`Advisor settings were saved, but the status refresh failed: ${message}`, "warning");
+    ctx.ui.notify(`${t("settingsCmd.refreshFailed.prefix", "Advisor settings were saved, but the status refresh failed:")} ${message}`, "warning");
   }
   return true;
 };
@@ -9357,7 +9374,7 @@ var registerSettingsCommands = (runtime) => {
               runtime.resetSameModelNotice();
             }
             const message = error instanceof Error ? error.message : String(error);
-            ctx.ui.notify(toolsDisabled ? `Could not save Advisor settings; tools remain disabled for this session. ${message}` : `Could not save Advisor settings: ${message}`, "error");
+            ctx.ui.notify(toolsDisabled ? `${t("settingsCmd.saveFailedToolsDisabled.prefix", "Could not save Advisor settings; tools remain disabled for this session.")} ${message}` : `${t("settingsCmd.saveFailed.prefix", "Could not save Advisor settings:")} ${message}`, "error");
           }
         },
         onJevFilter: (_selection, settings) => persistJevSettings(ctx, settings, runtime),
@@ -9380,7 +9397,7 @@ var registerSettingsCommands = (runtime) => {
         setAdvisorToolsEnabledRef(false);
         setAlwaysOnRef(false);
         const message = error instanceof Error ? error.message : String(error);
-        notify(ctx, `Advisor tools disabled for this session, but configuration could not be reloaded: ${message}`, "error");
+        notify(ctx, `${t("settingsCmd.offReloadFailed.prefix", "Advisor tools disabled for this session, but configuration could not be reloaded:")} ${message}`, "error");
         return Promise.resolve();
       }
       const wasAlwaysOn = alwaysOnRef;
@@ -9396,10 +9413,10 @@ var registerSettingsCommands = (runtime) => {
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        notify(ctx, `Advisor tools disabled for this session, but the setting could not be saved: ${message}`, "error");
+        notify(ctx, `${t("settingsCmd.offSaveFailed.prefix", "Advisor tools disabled for this session, but the setting could not be saved:")} ${message}`, "error");
         return Promise.resolve();
       }
-      notify(ctx, `Advisor tools disabled. Current model unchanged.${wasAlwaysOn ? " Always on turned off." : ""}`, "info");
+      notify(ctx, `${t("settingsCmd.off.message", "Advisor tools disabled. Current model unchanged.")}${wasAlwaysOn ? ` ${t("settingsCmd.off.alwaysOnTurnedOff", "Always on turned off.")}` : ""}`, "info");
       return Promise.resolve();
     }
   });
@@ -9463,7 +9480,8 @@ var updateAdvisorUsageStatus = (ctx, session) => {
 };
 var notifyLocalFailure = (ctx, message, sessionBlocked = false) => {
   if (ctx.hasUI) {
-    ctx.ui.notify(`Advisor ${sessionBlocked ? "gate failure; session blocked" : "consultation failed"}: ${message}`, "error");
+    const prefix = sessionBlocked ? t("notify.localFailure.blockedPrefix", "Advisor gate failure; session blocked:") : t("notify.localFailure.failedPrefix", "Advisor consultation failed:");
+    ctx.ui.notify(`${prefix} ${message}`, "error");
   }
 };
 var gateFailureEffectForMode = (mode) => {
@@ -9498,7 +9516,7 @@ var failureEffect = (category, message, ctx, session, failureMode, herdrBlock = 
 var blockedDecisionEffect = (reason, ctx, session, failureMode, herdrBlock = herdrAdvisorBlock) => {
   if (failureMode === "warn-and-continue") {
     if (ctx.hasUI) {
-      ctx.ui.notify("Advisor gate returned blocked; continuing by configuration.", "warning");
+      ctx.ui.notify(t("notify.gateBlockedContinued.message", "Advisor gate returned blocked; continuing by configuration."), "warning");
     }
     return { block: false, effect: "continued", reason };
   }
@@ -9529,7 +9547,7 @@ var reserveAdvisorCall = (event, ctx, session, reservedCalls) => {
 };
 
 // src/tools/jev-turn-gate.ts
-var outageNotifier2 = createOutageNotifier((category, message) => `Advisor Jev classifier turn gate failed (${category}); continuing without a proactive consultation. ${message}`);
+var outageNotifier2 = createOutageNotifier((category, message) => `${t("notify.jevTurnGateOutage.prefix", "Advisor Jev classifier turn gate failed")} (${category}); ${t("notify.jevTurnGateOutage.continuing", "continuing without a proactive consultation.")} ${message}`);
 var notifyFailureOnce = outageNotifier2.notify;
 var shouldRunTurnGate = (registration, ctx, session) => {
   const interval = advisorJevTurnGateEveryTurnsRef;
@@ -10249,7 +10267,7 @@ var registerToolLifecycle = ({
       if (message !== lastConfigErrorNotified) {
         lastConfigErrorNotified = message;
         if (ctx.hasUI) {
-          ctx.ui.notify(`Advisor gating skipped; configuration is invalid. ${message} Fix advisor.json.`, "error");
+          ctx.ui.notify(`${t("notify.gatingSkipped.prefix", "Advisor gating skipped; configuration is invalid.")} ${message} ${t("notify.gatingSkipped.suffix", "Fix advisor.json.")}`, "error");
         }
       }
       return false;
@@ -10403,7 +10421,7 @@ var registerOutcomeTool = ({
       } catch {
         session.releaseAdvice(params.adviceId);
         if (ctx.hasUI) {
-          ctx.ui.notify("Advisor outcome could not be recorded locally.", "warning");
+          ctx.ui.notify(t("notify.outcomeRecordFailed.message", "Advisor outcome could not be recorded locally."), "warning");
         }
         return {
           content: [

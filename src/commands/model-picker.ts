@@ -1,5 +1,6 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
+import { t } from "../i18n.ts";
 import { SearchableModelSelector } from "../ui/model-selector.ts";
 import {
   EXECUTOR_FOLLOWS_SESSION_MODEL,
@@ -41,7 +42,10 @@ export const selectAdvisorModels = async (
 
   if (refs && refs.length === 0) {
     ctx.ui.notify(
-      "No selectable models are available. Configure a provider with /login or models.json, then retry.",
+      t(
+        "notify.noSelectableModels.message",
+        "No selectable models are available. Configure a provider with /login or models.json, then retry."
+      ),
       "error"
     );
 
@@ -75,7 +79,7 @@ export const selectAdvisorModels = async (
           onCancel: () => done(undefined),
           onSelect: done,
           theme,
-          title: "Select Executor Model",
+          title: t("modelPicker.selectExecutor", "Select Executor Model"),
           tui,
         })
     );
@@ -85,7 +89,10 @@ export const selectAdvisorModels = async (
     }
 
     const selectedExecutorEffort = await ctx.ui.select(
-      "Select Executor Reasoning/Thinking Level",
+      t(
+        "modelPicker.executorEffort",
+        "Select Executor Reasoning/Thinking Level"
+      ),
       effortChoices(executorEffort)
     );
 
@@ -110,7 +117,7 @@ export const selectAdvisorModels = async (
           onCancel: () => done(undefined),
           onSelect: done,
           theme,
-          title: "Select Advisor Model",
+          title: t("modelPicker.selectAdvisor", "Select Advisor Model"),
           tui,
         })
     );
@@ -120,7 +127,7 @@ export const selectAdvisorModels = async (
     }
 
     const selectedAdvisorEffort = await ctx.ui.select(
-      "Select Advisor Reasoning/Thinking Level",
+      t("modelPicker.advisorEffort", "Select Advisor Reasoning/Thinking Level"),
       effortChoices(advisorEffort)
     );
 
@@ -147,7 +154,10 @@ export const selectAdvisorModels = async (
         onCancel: () => done(undefined),
         onSelect: done,
         theme,
-        title: "Select Fallback Advisor Model (optional)",
+        title: t(
+          "modelPicker.selectFallbackAdvisor",
+          "Select Fallback Advisor Model (optional)"
+        ),
         tui,
       })
   );

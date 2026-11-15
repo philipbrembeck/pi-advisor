@@ -4,6 +4,7 @@ import { Key, matchesKey, truncateToWidth } from "@earendil-works/pi-tui";
 import type { Component, Focusable } from "@earendil-works/pi-tui";
 
 import { JEV_API_KEY_CLASSIFIER } from "../config/types.ts";
+import { t } from "../i18n.ts";
 import { readJevClassifierKey } from "../jev/classifier-key-store.ts";
 import type { JevClassifierKeySnapshot } from "../jev/classifier-key-store.ts";
 import { parseJevClassifierRef } from "../jev/classifier.ts";
@@ -31,10 +32,12 @@ const actionsFor = (enabled: boolean): FilterAction[] =>
 
 const labelFor = (action: FilterAction) => {
   if (action === "enable") {
-    return "Enable the filter";
+    return t("jevSubmenu.filter.enable", "Enable the filter");
   }
 
-  return action === "disable" ? "Disable the filter" : "Done";
+  return action === "disable"
+    ? t("jevSubmenu.filter.disable", "Disable the filter")
+    : t("jevSubmenu.filter.done", "Done");
 };
 
 export class JevFilterSubmenu implements Component, Focusable {
@@ -70,14 +73,33 @@ export class JevFilterSubmenu implements Component, Focusable {
     const { theme } = this.options;
 
     const lines = [
-      theme.fg("accent", theme.bold("  Jev classifier consultation filter")),
+      theme.fg(
+        "accent",
+        theme.bold(
+          `  ${t(
+            "jevSubmenu.filter.title",
+            "Jev classifier consultation filter"
+          )}`
+        )
+      ),
       "",
-      `  Filter: ${this.enabled ? "On" : "Off"}`,
-      `  Classifier: ${this.options.currentClassifier ?? "not selected"}`,
+      `  ${t("jevSubmenu.filter.filterLabel", "Filter:")} ${
+        this.enabled ? "On" : "Off"
+      }`,
+      `  ${t("jevSubmenu.filter.classifierLabel", "Classifier:")} ${
+        this.options.currentClassifier ??
+        t("jevSubmenu.filter.notSelected", "not selected")
+      }`,
     ];
 
     if (this.mode === "resolving") {
-      lines.push("", "  Checking selected classifier availability…");
+      lines.push(
+        "",
+        `  ${t(
+          "jevSubmenu.filter.checking",
+          "Checking selected classifier availability…"
+        )}`
+      );
     } else if (this.notice) {
       lines.push("", theme.fg("warning", `  ${this.notice}`));
     }
@@ -136,11 +158,15 @@ export class JevFilterSubmenu implements Component, Focusable {
         this.classifierAvailable = Boolean(stored.key);
 
         if (stored.failed) {
-          this.notice =
-            "Could not read the stored Jev API Key state; try again later.";
+          this.notice = t(
+            "jevSubmenu.filter.keyStateUnreadable",
+            "Could not read the stored Jev API Key state; try again later."
+          );
         } else if (!this.classifierAvailable) {
-          this.notice =
-            "No Jev API Key is stored. Choose Jev API Key in Jev classifier settings.";
+          this.notice = t(
+            "jevSubmenu.filter.noStoredKey",
+            "No Jev API Key is stored. Choose Jev API Key in Jev classifier settings."
+          );
         }
       } else {
         const parsed = selected ? parseJevClassifierRef(selected) : undefined;
@@ -158,12 +184,21 @@ export class JevFilterSubmenu implements Component, Focusable {
         }
 
         if (!this.classifierAvailable) {
-          this.notice =
-            "Select an available authenticated classifier in Jev classifier settings first.";
+          this.notice = t(
+            "jevSubmenu.filter.selectClassifierFirst",
+            "Select an available authenticated classifier in Jev classifier settings first."
+          );
         }
       }
     } catch (error) {
-      this.notice = `Classifier lookup failed: ${error instanceof Error ? error.message : "Pi error"}`;
+      this.notice = `${t(
+        "jevSubmenu.filter.lookupFailedPrefix",
+        "Classifier lookup failed:"
+      )} ${
+        error instanceof Error
+          ? error.message
+          : t("jevSubmenu.filter.piError", "Pi error")
+      }`;
     }
 
     this.mode = "menu";
@@ -186,7 +221,10 @@ export class JevFilterSubmenu implements Component, Focusable {
     }
 
     if (this.options.onSelection?.({ enabled }) === false) {
-      this.notice = "The filter state could not be saved.";
+      this.notice = t(
+        "jevSubmenu.filter.stateNotSaved",
+        "The filter state could not be saved."
+      );
       this.options.tui.requestRender();
 
       return;

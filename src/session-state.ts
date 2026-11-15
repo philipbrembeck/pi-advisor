@@ -3,6 +3,7 @@ import type {
   AdvisorFollowUpLookup,
   AdvisorFollowUpPayload,
 } from "./follow-up.ts";
+import { t } from "./i18n.ts";
 import { AdvisorJevLedgerState } from "./jev/ledger.ts";
 import type { AdvisorJevUsage } from "./jev/ledger.ts";
 import { normalizedToolSignature } from "./tool-input-normalization.ts";
@@ -376,7 +377,7 @@ export class AdvisorSessionState {
       }
     }
 
-    return parts.join(", ") || "none";
+    return parts.join(", ") || t("sessionSummary.none", "none");
   }
 
   #countTrigger(trigger: AdvisorTrigger) {
@@ -397,7 +398,7 @@ export class AdvisorSessionState {
         ] as const
       )
         .filter((trigger) => this.#countTrigger(trigger) > 0)
-        .join(", ") || "none"
+        .join(", ") || t("sessionSummary.none", "none")
     );
   }
 
@@ -459,27 +460,27 @@ export class AdvisorSessionState {
     const models =
       [...new Set(invocations.map((item) => item.model).filter(Boolean))].join(
         ", "
-      ) || "unknown";
+      ) || t("sessionSummary.models.unknown", "unknown");
 
     const budget =
       limit === undefined
-        ? `${this.#consumedCalls} used; unlimited remaining`
-        : `${this.#consumedCalls} / ${limit} used; ${Math.max(0, limit - this.#consumedCalls)} remaining`;
+        ? `${this.#consumedCalls} ${t("sessionSummary.budget.used", "used")}; ${t("sessionSummary.budget.unlimitedRemaining", "unlimited remaining")}`
+        : `${this.#consumedCalls} / ${limit} ${t("sessionSummary.budget.used", "used")}; ${Math.max(0, limit - this.#consumedCalls)} ${t("sessionSummary.budget.remaining", "remaining")}`;
 
     return [
-      "[Session Advisor Summary]",
-      `Consultations: ${markdown.length} Markdown (${this.#countTrigger("manual")} manual, ${this.#countTrigger("executor-requested")} executor-requested), automatic gates: ${gates.length}`,
-      `Triggers: ${this.#triggersLine()}`,
-      `Models: ${models}`,
-      `Budget: ${budget}`,
-      `Usage: ${formatAdvisorUsageTotals(totals)}`,
-      `Markdown advice: ${markdown.length} responses (${this.#ledger.draftConsultations} with drafts)`,
-      `Follow-ups: ${markdown.filter((item) => item.followUp).length}`,
-      `Outcome reports: ${this.#ledger.outcomes}`,
-      `Gate decisions: ${this.#decisionsLine()}`,
-      `Loop matching: normalized tool signatures; ${this.#repetition.interventions} gate intervention${this.#repetition.interventions === 1 ? "" : "s"}`,
-      `Execution effects: ${effects("tool-blocked")} tool blocked, ${effects("session-blocked")} sessions blocked, ${effects("continued")} continued`,
-      `Failures: ${failures.length ? failures.join(", ") : "none"}`,
+      t("sessionSummary.title", "[Session Advisor Summary]"),
+      `${t("sessionSummary.consultations.label", "Consultations:")} ${markdown.length} ${t("sessionSummary.consultations.markdown", "Markdown")} (${this.#countTrigger("manual")} ${t("sessionSummary.consultations.manual", "manual")}, ${this.#countTrigger("executor-requested")} ${t("sessionSummary.consultations.executorRequested", "executor-requested")}), ${t("sessionSummary.consultations.automaticGates", "automatic gates:")} ${gates.length}`,
+      `${t("sessionSummary.triggers.label", "Triggers:")} ${this.#triggersLine()}`,
+      `${t("sessionSummary.models.label", "Models:")} ${models}`,
+      `${t("sessionSummary.budget.label", "Budget:")} ${budget}`,
+      `${t("sessionSummary.usage.label", "Usage:")} ${formatAdvisorUsageTotals(totals)}`,
+      `${t("sessionSummary.markdownAdvice.label", "Markdown advice:")} ${markdown.length} ${t("sessionSummary.markdownAdvice.responses", "responses")} (${this.#ledger.draftConsultations} ${t("sessionSummary.markdownAdvice.withDrafts", "with drafts")})`,
+      `${t("sessionSummary.followUps.label", "Follow-ups:")} ${markdown.filter((item) => item.followUp).length}`,
+      `${t("sessionSummary.outcomeReports.label", "Outcome reports:")} ${this.#ledger.outcomes}`,
+      `${t("sessionSummary.gateDecisions.label", "Gate decisions:")} ${this.#decisionsLine()}`,
+      `${t("sessionSummary.loopMatching.label", "Loop matching: normalized tool signatures;")} ${this.#repetition.interventions} ${t("sessionSummary.loopMatching.gateIntervention", "gate intervention")}${this.#repetition.interventions === 1 ? "" : "s"}`,
+      `${t("sessionSummary.executionEffects.label", "Execution effects:")} ${effects("tool-blocked")} ${t("sessionSummary.executionEffects.toolBlocked", "tool blocked")}, ${effects("session-blocked")} ${t("sessionSummary.executionEffects.sessionsBlocked", "sessions blocked")}, ${effects("continued")} ${t("sessionSummary.executionEffects.continued", "continued")}`,
+      `${t("sessionSummary.failures.label", "Failures:")} ${failures.length ? failures.join(", ") : t("sessionSummary.none", "none")}`,
       ...jevLines,
     ].join("\n");
   }

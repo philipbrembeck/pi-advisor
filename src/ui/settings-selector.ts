@@ -2,6 +2,7 @@ import { getSettingsListTheme } from "@earendil-works/pi-coding-agent";
 import { SettingsList, truncateToWidth } from "@earendil-works/pi-tui";
 import type { Component, Focusable } from "@earendil-works/pi-tui";
 
+import { t } from "../i18n.ts";
 import {
   rainbowGradient,
   SIMPLE_MODE_GRADIENT_INTERVAL_MS,
@@ -50,7 +51,10 @@ export class AdvisorSettingsSelector implements Component, Focusable {
       : [
           ...options.presets,
           {
-            description: "Current custom context limit",
+            description: t(
+              "settingsSubmenu.customContextLimit",
+              "Current custom context limit"
+            ),
             label: String(configuredContext),
             value: configuredContext,
           },
@@ -99,7 +103,10 @@ export class AdvisorSettingsSelector implements Component, Focusable {
     const defaultLabel = listTheme.label;
     listTheme.label = (text, selected) => {
       if (this.settings.simpleMode && text.startsWith("Simple mode")) {
-        return `${rainbowGradient("Simple mode", this.simpleModeGradientStartedAt ?? 0)}${text.slice("Simple mode".length)}`;
+        return `${rainbowGradient(
+          t("settings.simpleMode.label", "Simple mode"),
+          this.simpleModeGradientStartedAt ?? 0
+        )}${text.slice("Simple mode".length)}`;
       }
 
       return defaultLabel(text, selected);

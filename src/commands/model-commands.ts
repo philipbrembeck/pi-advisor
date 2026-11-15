@@ -12,6 +12,7 @@ import {
   setExecutorRef,
 } from "../config/state.ts";
 import { saveConfig } from "../config/storage.ts";
+import { t } from "../i18n.ts";
 import { loadCommandConfig } from "./activation-preparation.ts";
 import { activateAdvisor } from "./activation.ts";
 import { selectAdvisorModels } from "./model-picker.ts";
@@ -67,7 +68,7 @@ export const registerModelCommands = (runtime: CommandRuntime) => {
       runtime.pendingExecutorModelRef = undefined;
       runtime.updateSameModelNotice(ctx);
       ctx.ui.notify(
-        `Saved Executor + Advisor configurations to ${path}`,
+        `${t("notify.modelsSaved.prefix", "Saved Executor + Advisor configurations to")} ${path}`,
         "info"
       );
     },

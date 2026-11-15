@@ -11,6 +11,7 @@ import {
   executorRef,
   getAdvisorSettings,
 } from "../config/state.ts";
+import { t } from "../i18n.ts";
 import type { ScoutLifecycleEvent } from "../scout.ts";
 import { uiAction, uiAvailable } from "../ui-guard.ts";
 import { formatAdvisorUsage, snapshotAdvisorUsage } from "../usage.ts";
@@ -113,7 +114,12 @@ export class ScoutStatusManager {
       this.#active.add(token);
 
       if (this.showStatus) {
-        uiAction(ctx, (ui) => ui.setStatus("advisor-scout", "Scout curating…"));
+        uiAction(ctx, (ui) =>
+          ui.setStatus(
+            "advisor-scout",
+            t("status.scoutCurating", "Scout curating…")
+          )
+        );
       }
 
       return;
@@ -134,7 +140,9 @@ export class ScoutStatusManager {
     uiAction(ctx, (ui) =>
       ui.setStatus(
         "advisor-scout",
-        this.#active.size > 0 ? "Scout curating…" : undefined
+        this.#active.size > 0
+          ? t("status.scoutCurating", "Scout curating…")
+          : undefined
       )
     );
   }

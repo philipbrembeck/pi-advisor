@@ -8,6 +8,7 @@ import {
   setAlwaysOnRef,
 } from "../config/state.ts";
 import { loadConfig, saveConfig } from "../config/storage.ts";
+import { t } from "../i18n.ts";
 import {
   readJevClassifierKey,
   restoreJevClassifierKey,
@@ -35,7 +36,10 @@ const persistJevSettings = (
     saveAdvisorSettings(ctx, settings, { skipOutcomeLogging: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    ctx.ui.notify(`Could not save Advisor settings: ${message}`, "error");
+    ctx.ui.notify(
+      `${t("settingsCmd.saveFailed.prefix", "Could not save Advisor settings:")} ${message}`,
+      "error"
+    );
 
     return false;
   }
@@ -47,7 +51,10 @@ const persistJevSettings = (
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     ctx.ui.notify(
-      `Advisor settings were saved, but the status refresh failed: ${message}`,
+      `${t(
+        "settingsCmd.refreshFailed.prefix",
+        "Advisor settings were saved, but the status refresh failed:"
+      )} ${message}`,
       "warning"
     );
   }
@@ -111,8 +118,11 @@ export const registerSettingsCommands = (runtime: CommandRuntime) => {
 
                 ctx.ui.notify(
                   toolsDisabled
-                    ? `Could not save Advisor settings; tools remain disabled for this session. ${message}`
-                    : `Could not save Advisor settings: ${message}`,
+                    ? `${t(
+                        "settingsCmd.saveFailedToolsDisabled.prefix",
+                        "Could not save Advisor settings; tools remain disabled for this session."
+                      )} ${message}`
+                    : `${t("settingsCmd.saveFailed.prefix", "Could not save Advisor settings:")} ${message}`,
                   "error"
                 );
               }
@@ -145,7 +155,10 @@ export const registerSettingsCommands = (runtime: CommandRuntime) => {
         const message = error instanceof Error ? error.message : String(error);
         notify(
           ctx,
-          `Advisor tools disabled for this session, but configuration could not be reloaded: ${message}`,
+          `${t(
+            "settingsCmd.offReloadFailed.prefix",
+            "Advisor tools disabled for this session, but configuration could not be reloaded:"
+          )} ${message}`,
           "error"
         );
 
@@ -169,7 +182,10 @@ export const registerSettingsCommands = (runtime: CommandRuntime) => {
         const message = error instanceof Error ? error.message : String(error);
         notify(
           ctx,
-          `Advisor tools disabled for this session, but the setting could not be saved: ${message}`,
+          `${t(
+            "settingsCmd.offSaveFailed.prefix",
+            "Advisor tools disabled for this session, but the setting could not be saved:"
+          )} ${message}`,
           "error"
         );
 
@@ -178,7 +194,14 @@ export const registerSettingsCommands = (runtime: CommandRuntime) => {
 
       notify(
         ctx,
-        `Advisor tools disabled. Current model unchanged.${wasAlwaysOn ? " Always on turned off." : ""}`,
+        `${t(
+          "settingsCmd.off.message",
+          "Advisor tools disabled. Current model unchanged."
+        )}${
+          wasAlwaysOn
+            ? ` ${t("settingsCmd.off.alwaysOnTurnedOff", "Always on turned off.")}`
+            : ""
+        }`,
         "info"
       );
 
