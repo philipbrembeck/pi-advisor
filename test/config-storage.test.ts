@@ -23,8 +23,11 @@ import {
 } from "../src/config/state.ts";
 import {
   loadConfig,
+  readGlobalAdvisorConfig,
   resetConfigCache,
   saveConfig,
+  saveGlobalAdvisorConfigPatch,
+  saveGlobalOutcomeLogging,
 } from "../src/config/storage.ts";
 import { savedConfig, withAgentDir } from "./helpers/config-fixture.ts";
 import { mockPi } from "./helpers/mock-pi.ts";
@@ -65,6 +68,122 @@ describe("Advisor config persistence", () => {
     } else {
       process.env.PI_CODING_AGENT_DIR = originalAgentDir;
     }
+  });
+
+  test("saves sparse global patches while preserving unknown fields and secrets", () => {
+    const original = {
+      advisor: "openai-codex/advisor",
+      futureSetting: { keep: true },
+      simpleMode: false,
+      typesafe_api_key: "keep-private",
+    };
+
+    writeFileSync(configPath(), JSON.stringify(original));
+    loadConfig(context);
+
+    saveGlobalAdvisorConfigPatch({ contextMaxChars: 25_000, simpleMode: true });
+
+    expect(readSavedConfig()).toEqual({
+      ...original,
+      contextMaxChars: 25_000,
+      simpleMode: true,
+    });
+    loadConfig(context);
+    expect(getAdvisorSettings().simpleMode).toBe(true);
+    expect(getAdvisorSettings().contextMaxChars).toBe(25_000);
+  });
+
+  test("null removes an override and invalid patches leave the file unchanged", () => {
+    writeFileSync(
+      configPath(),
+      JSON.stringify({ advisorLoopThreshold: 3, contextMaxChars: 30_000 })
+    );
+    loadConfig(context);
+
+    saveGlobalAdvisorConfigPatch({ contextMaxChars: null });
+    expect(readSavedConfig()).not.toHaveProperty("contextMaxChars");
+
+    const beforeInvalidPatch = readFileSync(configPath(), "utf-8");
+    expect(() =>
+      saveGlobalAdvisorConfigPatch({ advisorLoopThreshold: 1 })
+    ).toThrow("advisorLoopThreshold");
+    expect(() =>
+      saveGlobalAdvisorConfigPatch({ futureModelSetting: true })
+    ).toThrow("unsupported key");
+    expect(readFileSync(configPath(), "utf-8")).toBe(beforeInvalidPatch);
+  });
+
+  test("rejects a config patch if a targeted value changed after confirmation", () => {
+    writeFileSync(
+      configPath(),
+      JSON.stringify({ externallyEdited: true, simpleMode: false })
+    );
+    const expected = readGlobalAdvisorConfig();
+    const concurrent = { externallyEdited: true, simpleMode: true };
+    writeFileSync(configPath(), JSON.stringify(concurrent));
+
+    expect(() =>
+      saveGlobalAdvisorConfigPatch({ simpleMode: false }, expected)
+    ).toThrow("changed during confirmation");
+    expect(readSavedConfig()).toEqual(concurrent);
+  });
+
+  test("rejects a dependent value changed between stale check and patch persistence", () => {
+    writeFileSync(
+      configPath(),
+      JSON.stringify({ advisorToolsEnabled: false, alwaysOn: false })
+    );
+    const expected = readGlobalAdvisorConfig();
+    const concurrent = { advisorToolsEnabled: false, alwaysOn: true };
+    writeFileSync(configPath(), JSON.stringify(concurrent));
+
+    expect(() =>
+      saveGlobalAdvisorConfigPatch({ advisorToolsEnabled: true }, expected, [
+        "advisorToolsEnabled",
+        "alwaysOn",
+      ])
+    ).toThrow("changed during confirmation");
+    expect(readSavedConfig()).toEqual(concurrent);
+  });
+
+  test("checks dependent read-set values for the separate outcome writer", () => {
+    writeFileSync(
+      configPath(),
+      JSON.stringify({
+        advisorOutcomeLogging: false,
+        advisorToolsEnabled: true,
+        alwaysOn: false,
+      })
+    );
+
+    const expected = readGlobalAdvisorConfig();
+
+    const concurrent = {
+      advisorOutcomeLogging: false,
+      advisorToolsEnabled: false,
+      alwaysOn: false,
+    };
+
+    writeFileSync(configPath(), JSON.stringify(concurrent));
+
+    expect(() =>
+      saveGlobalOutcomeLogging(true, expected, [
+        "advisorOutcomeLogging",
+        "advisorToolsEnabled",
+        "alwaysOn",
+      ])
+    ).toThrow("changed during confirmation");
+    expect(readSavedConfig()).toEqual(concurrent);
+  });
+
+  test("does not replace malformed JSON during a configuration patch", () => {
+    const malformed = '{"simpleMode":true,\n';
+    writeFileSync(configPath(), malformed);
+
+    expect(() => saveGlobalAdvisorConfigPatch({ simpleMode: false })).toThrow(
+      "malformed"
+    );
+    expect(readFileSync(configPath(), "utf-8")).toBe(malformed);
   });
 
   test("persists the Advisor tools opt-out and defaults it on for old configs", () => {

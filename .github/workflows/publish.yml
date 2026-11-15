@@ -12,7 +12,14 @@ on:
       - LICENSE
       - README.md
       - "dist/**"
+      - docs/benchmark.md
+      - docs/configuration.md
+      - docs/development.md
+      - docs/herdr.md
+      - docs/privacy.md
+      - docs/README.md
       - "extensions/**"
+      - "skills/**"
       - "src/**"
       - "scripts/check-bun-version.mjs"
   workflow_dispatch:

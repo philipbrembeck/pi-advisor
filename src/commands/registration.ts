@@ -4,6 +4,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 
 import { activateAdvisor } from "./activation.ts";
+import { registerAdvisorConfigurationTool } from "./configuration-tool.ts";
 import { registerCommandLifecycle } from "./lifecycle.ts";
 import { registerManualCommand } from "./manual-command.ts";
 import { registerModelCommands } from "./model-commands.ts";
@@ -28,4 +29,5 @@ export const registerCommands = (
   registerModelCommands(runtime);
   registerOutcomeStatsCommand(runtime);
   registerSettingsCommands(runtime);
+  registerAdvisorConfigurationTool(runtime);
 };

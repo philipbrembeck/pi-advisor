@@ -956,7 +956,18 @@ var parseArgs = (args) => {
 };
 
 // src/config/storage.ts
-import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import {
+  closeSync,
+  existsSync,
+  fsyncSync,
+  openSync,
+  readFileSync,
+  renameSync,
+  statSync,
+  unlinkSync,
+  writeFileSync
+} from "node:fs";
 import { join } from "node:path";
 import { CONFIG_DIR_NAME, getAgentDir } from "@earendil-works/pi-coding-agent";
 
@@ -1083,8 +1094,13 @@ var applyConfig = (config) => {
 };
 
 // src/config/storage.ts
+var configPaths = (ctx) => [
+  ctx.isProjectTrusted() ? join(ctx.cwd, CONFIG_DIR_NAME, "advisor.json") : null,
+  join(getAgentDir(), "advisor.json")
+];
 var currentConfigState = () => Object.fromEntries(SAVED_CONFIG_KEYS.map((key) => [key, CONFIG_SCHEMA[key].current()]));
 var sameConfigValue = (left, right) => JSON.stringify(left) === JSON.stringify(right);
+var CONFIG_KEY_SET = new Set(Object.keys(CONFIG_SCHEMA));
 var RESERVED_ADVISOR_JSON_KEYS = new Set(["typesafe_api_key"]);
 var readConfigForSave = (path) => {
   if (!existsSync(path)) {
@@ -1151,6 +1167,7 @@ var configIdentity = (path) => {
     return `unstattable:${process.hrtime.bigint()}`;
   }
 };
+var configFileIdentity = (path) => existsSync(path) ? configIdentity(path) : null;
 var readConfigCached = (path) => {
   const identity = configIdentity(path);
   const cached = configCache.get(path);
@@ -1184,6 +1201,10 @@ var loadConfig = (_ctx) => {
   loadedConfigPath = global;
   return existsSync(global) ? global : null;
 };
+var rebaseConfigBaseline = () => {
+  loadedConfigState = currentConfigState();
+  loadedConfigPath = join(getAgentDir(), "advisor.json");
+};
 var saveConfig = (_ctx, options = {}) => {
   const path = join(getAgentDir(), "advisor.json");
   const persistAdvisor = options.persistAdvisor ?? true;
@@ -1211,11 +1232,75 @@ var saveConfig = (_ctx, options = {}) => {
   setPersistedModelRefs(configuredModelRef(nextLoadedState.advisor), configuredModelRef(nextLoadedState.executor));
   return path;
 };
-var saveGlobalOutcomeLogging = (enabled) => {
+var writeConfigAtomically = (path, contents, expectedIdentity) => {
+  const mode = existsSync(path) ? statSync(path).mode % 512 : 384;
+  const temporaryPath = `${path}.${process.pid}.${randomUUID()}.tmp`;
+  let fileDescriptor;
+  try {
+    fileDescriptor = openSync(temporaryPath, "wx", mode);
+    writeFileSync(fileDescriptor, contents, "utf-8");
+    fsyncSync(fileDescriptor);
+    closeSync(fileDescriptor);
+    fileDescriptor = undefined;
+    if (expectedIdentity !== undefined && configFileIdentity(path) !== expectedIdentity) {
+      throw new Error("Advisor configuration changed during the update; retry so unrelated edits are preserved.");
+    }
+    renameSync(temporaryPath, path);
+  } catch (error) {
+    if (fileDescriptor !== undefined) {
+      closeSync(fileDescriptor);
+    }
+    try {
+      unlinkSync(temporaryPath);
+    } catch {}
+    throw error;
+  }
+};
+var saveGlobalOutcomeLogging = (enabled, expected, expectedKeys = ["advisorOutcomeLogging"]) => {
   const path = join(getAgentDir(), "advisor.json");
+  const identity = configFileIdentity(path);
   const existing = readConfigForSave(path);
-  writeFileSync(path, `${JSON.stringify({ ...existing, advisorOutcomeLogging: enabled }, null, 2)}
-`);
+  if (expected && expectedKeys.some((key) => Object.hasOwn(existing, key) !== Object.hasOwn(expected, key) || !sameConfigValue(existing[key], expected[key]))) {
+    throw new Error("Advisor settings changed during confirmation; read the settings again and retry.");
+  }
+  if (enabled === null) {
+    Reflect.deleteProperty(existing, "advisorOutcomeLogging");
+  } else {
+    existing.advisorOutcomeLogging = enabled;
+  }
+  writeConfigAtomically(path, `${JSON.stringify(existing, null, 2)}
+`, identity);
+  resetConfigCache();
+  return path;
+};
+var readGlobalAdvisorConfig = () => {
+  const path = join(getAgentDir(), "advisor.json");
+  const config = readConfigForSave(path);
+  validateConfig(config, path);
+  return config;
+};
+var saveGlobalAdvisorConfigPatch = (patch, expected, expectedKeys) => {
+  const path = join(getAgentDir(), "advisor.json");
+  const unknownKeys = Object.keys(patch).filter((key) => !CONFIG_KEY_SET.has(key));
+  if (unknownKeys.length > 0) {
+    throw new Error(`Cannot update Advisor configuration: unsupported key(s) ${unknownKeys.map((key) => JSON.stringify(key)).join(", ")}.`);
+  }
+  const identity = configFileIdentity(path);
+  const next = readConfigForSave(path);
+  const checkedKeys = expectedKeys ?? Object.keys(patch);
+  if (expected && checkedKeys.some((key) => Object.hasOwn(next, key) !== Object.hasOwn(expected, key) || !sameConfigValue(next[key], expected[key]))) {
+    throw new Error("Advisor settings changed during confirmation; read the settings again and retry.");
+  }
+  for (const [key, value] of Object.entries(patch)) {
+    if (value === null) {
+      Reflect.deleteProperty(next, key);
+    } else {
+      next[key] = value;
+    }
+  }
+  validateConfig(next, path);
+  writeConfigAtomically(path, `${JSON.stringify(next, null, 2)}
+`, identity);
   resetConfigCache();
   return path;
 };
@@ -2036,7 +2121,7 @@ var herdrAdvisorActivity = new HerdrAdvisorActivity(sendToHerdr, () => getAdviso
 var herdrAdvisorBlock = new HerdrAdvisorBlock(sendToHerdr, () => getAdvisorSettings().herdrIntegration);
 
 // src/tools/consultation.ts
-import { randomUUID as randomUUID2 } from "node:crypto";
+import { randomUUID as randomUUID3 } from "node:crypto";
 
 // src/model-stream.ts
 import { stream } from "@earendil-works/pi-ai/compat";
@@ -2253,7 +2338,7 @@ var sessionContextEntries = (ctx) => {
 };
 
 // src/tools/consult-context.ts
-import { randomUUID } from "node:crypto";
+import { randomUUID as randomUUID2 } from "node:crypto";
 
 // src/attachments.ts
 import { execFileSync as execFileSync2 } from "node:child_process";
@@ -4080,7 +4165,7 @@ var assembleConsultationContext = async (options) => {
   const changes = collectGitContext(ctx.cwd, level, gitBudget, advisorRedactSecretsRef ? redactSecrets : undefined);
   const changeText = advisorRepositoryContext(changes, options.gitContext ?? allowed, level, gitBudget);
   const conversationBudget = Math.max(0, contextMaxCharsRef - changeText.length);
-  const imageNonce = randomUUID();
+  const imageNonce = randomUUID2();
   const legacyConversation = advisorRequestConversation(ctx, conversationBudget, true, imageNonce);
   const curated = await curateAdvisorConversation(ctx, legacyConversation, options.signal, options.onScout, advisorScoutEnabledRef, runAdvisorScout, options.currentInvocationId, conversationBudget, imageNonce);
   const preferences = await readProjectPreferences(ctx, ATTACHMENT_TEXT_MAX_BYTES, advisorRedactSecretsRef);
@@ -4461,7 +4546,7 @@ var consultAdvisor = async (ctx, question, signal, onChunk, trigger = "executor-
     signal,
     systemPrompt: ADVISOR_SYSTEM
   });
-  const adviceId = randomUUID2();
+  const adviceId = randomUUID3();
   const { followUpPayload, ...publicResult } = result;
   onFollowUpPayload?.(adviceId, followUpPayload, followUp?.adviceId);
   return { ...publicResult, adviceId, trigger };
@@ -5658,6 +5743,512 @@ var activateAdvisor = async (runtime, args, ctx, announce = true) => {
 
 Advisor flow ${sameModelAdvisorDisabled(ctx, activeModel) ? "configured" : "ready"} — Executor: ${activeExecutorRef} (thinking: ${activeExecutorEffort || "default"}) · Advisor: ${advisorRef} (thinking: ${advisorEffortRef || "default"})`, "info");
   }
+};
+
+// src/commands/configuration-tool.ts
+import { Text as Text3 } from "@earendil-works/pi-tui";
+import { Type } from "typebox";
+
+// src/commands/configuration-tool-policy.ts
+var UI_ONLY_KEYS = new Set([
+  "advisorJevBaseUrl",
+  "advisorJevClassifier",
+  "advisorJevKeyProvider",
+  "advisorJevModel",
+  "advisorJevPricePerMtok",
+  "advisorJevTransport"
+]);
+var WRITABLE_KEYS = new Set(configKeys.filter((key) => !UI_ONLY_KEYS.has(key)));
+var ADVISOR_CONFIG_EFFORT_LEVELS = [
+  "off",
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max"
+];
+var ADVISOR_CONFIG_WRITABLE_KEYS = configKeys.filter((key) => !UI_ONLY_KEYS.has(key));
+var getAdvisorConfigSnapshot = () => {
+  const snapshot = Object.fromEntries(configKeys.map((key) => [key, CONFIG_SCHEMA[key].current()]));
+  return snapshot;
+};
+var getAdvisorConfigForAgent = (persisted) => {
+  const snapshot = getAdvisorConfigSnapshot();
+  const keys = configKeys.filter((key) => !UI_ONLY_KEYS.has(key));
+  const effectiveSettings = Object.fromEntries(keys.map((key) => [key, snapshot[key] ?? null]));
+  const globalOverrides = Object.fromEntries(keys.filter((key) => Object.hasOwn(persisted, key)).map((key) => [key, persisted[key]]));
+  return {
+    effectiveSettings,
+    globalOverrides,
+    jevClassifierConfigured: Boolean(persisted.advisorJevClassifier),
+    readOnlyKeys: [...UI_ONLY_KEYS].toSorted(),
+    writableKeys: [...ADVISOR_CONFIG_WRITABLE_KEYS].toSorted()
+  };
+};
+var validateAdvisorConfigPatch = (value, jevClassifierConfigured) => {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const keys = Object.keys(value);
+  if (keys.length === 0) {
+    throw new TypeError("Provide at least one Advisor setting to update.");
+  }
+  if (keys.length > 16) {
+    throw new TypeError("Update at most 16 Advisor settings at a time.");
+  }
+  const unsupported = keys.filter((key) => !WRITABLE_KEYS.has(key));
+  if (unsupported.length > 0) {
+    throw new TypeError(`These Advisor settings require their dedicated UI flow: ${unsupported.map((key) => JSON.stringify(key)).join(", ")}. Use /advisor-settings for classifier and credential setup.`);
+  }
+  const setValues = {};
+  for (const [key, setting] of Object.entries(value)) {
+    if (setting !== null) {
+      setValues[key] = setting;
+    }
+  }
+  if (!validateConfig(setValues, "advisor_config changes")) {
+    return false;
+  }
+  const effortLevels = ADVISOR_CONFIG_EFFORT_LEVELS;
+  for (const key of ["advisorEffort", "executorEffort"]) {
+    const effort = setValues[key];
+    if (isString(effort) && !effortLevels.includes(effort)) {
+      throw new TypeError(`${key} must be one of ${ADVISOR_CONFIG_EFFORT_LEVELS.join(", ")}; use null for the model default.`);
+    }
+  }
+  if (value.advisor === null) {
+    throw new TypeError("The Advisor model cannot be cleared from chat. Choose another model with the picker or use /advisor-models.");
+  }
+  const turnGateEveryTurns = isNumber(setValues.advisorJevTurnGateEveryTurns) ? setValues.advisorJevTurnGateEveryTurns : 0;
+  if ((setValues.advisorJevFilterEnabled === true || turnGateEveryTurns > 0) && !jevClassifierConfigured) {
+    throw new TypeError("Select and verify a Jev classifier in /advisor-settings before enabling Jev screening or the turn gate. No settings were changed.");
+  }
+  return true;
+};
+var addAdvisorConfigDependencies = (changes) => {
+  const normalized = { ...changes };
+  if (changes.advisorToolsEnabled === false) {
+    if (changes.alwaysOn === true) {
+      throw new TypeError("Advisor tools cannot be disabled while Always on is enabled in the same update. Set both to false.");
+    }
+    normalized.alwaysOn = false;
+  }
+  if (changes.alwaysOn === true) {
+    if (changes.advisorToolsEnabled === false) {
+      throw new TypeError("Always on requires Advisor tools. Enable both or keep Always on off.");
+    }
+    normalized.advisorToolsEnabled = true;
+  }
+  return normalized;
+};
+
+// src/commands/configuration-tool-update.ts
+import { withFileMutationQueue } from "@earendil-works/pi-coding-agent";
+
+// src/commands/configuration-tool-preview.ts
+var sameConfigValue2 = (left, right) => JSON.stringify(left) === JSON.stringify(right);
+var orderedPatchEntries = (patch) => configKeys.filter((key) => Object.hasOwn(patch, key)).map((key) => [key, patch[key]]);
+var sameConfigPatch = (left, right) => JSON.stringify(orderedPatchEntries(left)) === JSON.stringify(orderedPatchEntries(right));
+var effectiveChanges = (changes, persisted) => {
+  const entries = [];
+  for (const key of configKeys) {
+    const value = changes[key];
+    if (value === undefined) {
+      continue;
+    }
+    if (value === null) {
+      if (Object.hasOwn(persisted, key)) {
+        entries.push([key, null]);
+      }
+      continue;
+    }
+    if (!sameConfigValue2(value, persisted[key] ?? null)) {
+      entries.push([key, value]);
+    }
+  }
+  return Object.fromEntries(entries);
+};
+var staleCheckKeys = (changes) => {
+  const keys = new Set(configKeys.filter((key) => Object.hasOwn(changes, key)));
+  if (keys.has("advisorToolsEnabled") || keys.has("alwaysOn")) {
+    keys.add("advisorToolsEnabled");
+    keys.add("alwaysOn");
+  }
+  if (keys.has("advisorJevFilterEnabled") || keys.has("advisorJevTurnGateEveryTurns")) {
+    keys.add("advisorJevClassifier");
+  }
+  return [...keys];
+};
+var summarizeAdvisorConfigPatch = (changes, before, persisted) => configKeys.filter((key) => Object.hasOwn(changes, key)).map((key) => {
+  const value = changes[key];
+  const previous = Object.hasOwn(persisted, key) ? JSON.stringify(persisted[key]) : `unset (extension default; current session ${JSON.stringify(before[key] ?? null)})`;
+  const next = value === null ? "reset to extension default" : JSON.stringify(value);
+  return `- ${key}: ${previous} → ${next}`;
+}).join(`
+`);
+var automationRiskNotes = (changes, before) => {
+  const notes = [];
+  if (changes.simpleMode === true) {
+    notes.push("Simple mode disables automatic gates, gate blocking, and configured call budgets; voluntary Advisor calls remain available.");
+  }
+  if (changes.advisorToolsEnabled === false) {
+    notes.push("Advisor tools will be disabled immediately. advisor_config remains available to re-enable them.");
+  }
+  if (changes.alwaysOn === true) {
+    notes.push("Always on enables automatic activation for future sessions.");
+  }
+  if (changes.advisorPlanGate === true || changes.advisorFailureGate === true || changes.advisorCompletionGate === true || changes.advisorAutoLoopGate === true) {
+    notes.push("Automatic gates may request extra Advisor calls; loop-gate failures can block a tool or session under the selected failure policy.");
+  }
+  if (changes.gateFailureMode === "block-session" || changes.advisorBlockOnBlocked === true) {
+    notes.push("A blocked gate may stop the current session.");
+  }
+  if (changes.advisorToolsEnabled === true) {
+    notes.push(before.alwaysOn === true || changes.alwaysOn === true ? "Advisor tools become available, and saved Always on will activate the flow in future sessions." : "Advisor tools become available; this does not activate Always on.");
+  }
+  return notes;
+};
+var disclosureRiskNotes = (changes) => {
+  const notes = [];
+  if (changes.advisorGitContext === "full") {
+    notes.push("Future Advisor requests may include repository patch contents.");
+  }
+  if (changes.advisorTrackedFileContent === true) {
+    notes.push("This enables explicitly requested tracked file contents to be sent to the Advisor.");
+  }
+  if (changes.advisorUntrackedContent === true) {
+    notes.push("This enables explicitly requested untracked file contents to be sent to the Advisor.");
+  }
+  if (changes.advisorAgentsMdContext === true) {
+    notes.push("Trusted AGENTS.md instructions may be included in Advisor requests.");
+  }
+  if (changes.advisorToolPolicies && Object.values(changes.advisorToolPolicies).includes("full")) {
+    notes.push("Tools set to full may send their arguments and result content to the Advisor.");
+  }
+  if (changes.advisorRedactSecrets === false) {
+    notes.push("Credential-pattern redaction will be off for Advisor requests.");
+  }
+  return notes;
+};
+var costRiskNotes = (changes) => {
+  const notes = [];
+  if (changes.advisorOutcomeLogging === true) {
+    notes.push("Outcome logging stores bounded adoption and validation metadata in the local ledger.");
+  }
+  if (changes.advisorMaxCallsPerSession === null) {
+    notes.push("This removes the per-session Advisor call limit; calls may be unlimited.");
+  }
+  if ((changes.advisorJevTurnGateEveryTurns ?? 0) > 0) {
+    notes.push("The Jev turn gate can initiate proactive Advisor calls and add cost.");
+  }
+  return notes;
+};
+var advisorConfigRiskNotes = (changes, before, persisted) => [
+  ...automationRiskNotes(changes, {
+    ...before,
+    alwaysOn: Object.hasOwn(persisted, "alwaysOn") ? persisted.alwaysOn === true : before.alwaysOn
+  }),
+  ...disclosureRiskNotes(changes),
+  ...costRiskNotes(changes)
+];
+
+// src/commands/configuration-tool-models.ts
+var MODEL_KEYS = [
+  "advisor",
+  "advisorEffort",
+  "advisorFallbackModel",
+  "executor",
+  "executorEffort"
+];
+var MODEL_REF_KEYS = [
+  "advisor",
+  "advisorFallbackModel",
+  "executor"
+];
+var isModelChange = (changes) => MODEL_KEYS.some((key) => Object.hasOwn(changes, key));
+var validateRequestedModels = (changes, modelRefs) => {
+  for (const key of MODEL_REF_KEYS) {
+    const requested = changes[key];
+    if (requested !== null && requested !== undefined && !modelRefs.includes(requested)) {
+      throw new Error(`${key} must name an available provider/model. Choose it from /advisor-models or use the model picker opened by advisor_config.`);
+    }
+  }
+};
+var pickerOptions = (changes, before) => ({
+  advisor: changes.advisor ?? before.advisor,
+  advisorEffort: changes.advisorEffort === null ? undefined : changes.advisorEffort ?? before.advisorEffort,
+  advisorFallbackModel: changes.advisorFallbackModel === null ? undefined : changes.advisorFallbackModel ?? before.advisorFallbackModel,
+  executor: changes.executor === null ? "" : changes.executor ?? before.executor,
+  executorEffort: changes.executorEffort === null ? undefined : changes.executorEffort ?? before.executorEffort,
+  selectAdvisor: Object.hasOwn(changes, "advisor") || Object.hasOwn(changes, "advisorEffort") || !before.advisor,
+  selectExecutor: Object.hasOwn(changes, "executor") || Object.hasOwn(changes, "executorEffort")
+});
+var selectedModelChanges = (changes, selection, persisted) => {
+  const selected = {
+    advisor: selection.advisor,
+    advisorEffort: selection.advisorEffort ?? null,
+    advisorFallbackModel: selection.advisorFallbackModel ?? null,
+    executor: selection.executor || null,
+    executorEffort: selection.executorEffort ?? null
+  };
+  const resolved = {};
+  for (const key of MODEL_KEYS) {
+    const persistedValue = persisted[key] ?? null;
+    if (!sameConfigValue2(selected[key], persistedValue)) {
+      resolved[key] = selected[key];
+    }
+  }
+  const {
+    advisor: _requestedAdvisor,
+    advisorEffort: _requestedAdvisorEffort,
+    advisorFallbackModel: _requestedFallback,
+    executor: _requestedExecutor,
+    executorEffort: _requestedExecutorEffort,
+    ...otherChanges
+  } = changes;
+  return { ...otherChanges, ...resolved };
+};
+var resolveModelChanges = async (ctx, changes, before, persisted, selectModels = selectAdvisorModels) => {
+  if (!isModelChange(changes)) {
+    return changes;
+  }
+  if (ctx.mode !== "tui") {
+    throw new Error("Model changes require Pi's interactive TUI so you can choose from the existing model picker. No settings were changed.");
+  }
+  validateRequestedModels(changes, getConfiguredModelRefs(ctx));
+  const selection = await selectModels(ctx, pickerOptions(changes, before));
+  if (!selection) {
+    return;
+  }
+  return selectedModelChanges(changes, selection, persisted);
+};
+
+// src/commands/configuration-tool-runtime.ts
+var applyAdvisorConfigRuntimeSettings = (runtime, ctx, previous) => {
+  const next = getAdvisorSettings();
+  const shouldEnable = next.advisorToolsEnabled ?? true;
+  const toolsAreActive = runtime.pi.getActiveTools().includes("ask_advisor");
+  if (previous.advisorToolsEnabled !== next.advisorToolsEnabled || toolsAreActive !== shouldEnable) {
+    runtime.noteAdvisorToolsStateChange();
+    setAdvisorToolsActive(runtime.pi, shouldEnable);
+    if (!shouldEnable) {
+      runtime.resetSameModelNotice();
+    }
+  }
+  runtime.updateSameModelNotice(ctx);
+  runtime.updateAdvisorUsageStatus(ctx);
+};
+var cancelledAdvisorConfigResult = (message) => ({
+  content: [{ text: message, type: "text" }],
+  details: { action: "update", applied: false, cancelled: true }
+});
+var unchangedAdvisorConfigResult = (message) => ({
+  content: [{ text: message, type: "text" }],
+  details: { action: "update", applied: false, unchanged: true }
+});
+
+// src/commands/configuration-tool-update.ts
+var prepareAdvisorConfigUpdate = async (ctx, input, selectModels) => {
+  const existing = readGlobalAdvisorConfig();
+  const before = getAdvisorConfigSnapshot();
+  const beforeSettings = getAdvisorSettings();
+  const [, configPath] = configPaths(ctx);
+  if (!configPath) {
+    throw new Error("Could not resolve the global Advisor configuration path.");
+  }
+  if (input === undefined) {
+    throw new TypeError("Provide Advisor settings changes for action=update.");
+  }
+  if (!validateAdvisorConfigPatch(input, Boolean(existing.advisorJevClassifier))) {
+    throw new TypeError("Advisor settings changes must be a JSON object.");
+  }
+  const initialChanges = input;
+  if (Object.hasOwn(initialChanges, "advisorOutcomeLogging") && Object.keys(initialChanges).length > 1) {
+    throw new Error("Update advisorOutcomeLogging by itself so its separate consent path remains clear.");
+  }
+  const changesWithModels = await resolveModelChanges(ctx, initialChanges, before, existing, selectModels);
+  if (!changesWithModels) {
+    return;
+  }
+  const changes = addAdvisorConfigDependencies(changesWithModels);
+  return {
+    before,
+    beforeSettings,
+    configPath,
+    existing,
+    proposed: effectiveChanges(changes, existing)
+  };
+};
+var confirmAdvisorConfigUpdate = async (ctx, prepared, signal) => {
+  const preview = summarizeAdvisorConfigPatch(prepared.proposed, prepared.before, prepared.existing);
+  const risks = advisorConfigRiskNotes(prepared.proposed, prepared.before, prepared.existing);
+  const confirmation = [
+    "These changes apply to global Advisor settings, not a project config:",
+    preview,
+    ...risks.map((risk) => `
+Risk: ${risk}`)
+  ].join(`
+`);
+  const confirmed = await ctx.ui.confirm("Apply Advisor settings?", confirmation, { signal });
+  return confirmed && !signal?.aborted;
+};
+var persistAdvisorConfigUpdate = (prepared, signal) => {
+  const touched = staleCheckKeys(prepared.proposed);
+  return withFileMutationQueue(prepared.configPath, () => Promise.resolve().then(() => {
+    if (signal?.aborted) {
+      throw new Error("Update cancelled before writing; no settings changed.");
+    }
+    const latest = readGlobalAdvisorConfig();
+    const stale = touched.filter((key) => Object.hasOwn(latest, key) !== Object.hasOwn(prepared.existing, key) || !sameConfigValue2(latest[key] ?? null, prepared.existing[key] ?? null));
+    if (stale.length > 0) {
+      throw new Error(`Advisor settings changed while confirmation was open (${stale.join(", ")}). Read the settings again and retry; nothing was written.`);
+    }
+    const refreshed = effectiveChanges(addAdvisorConfigDependencies(prepared.proposed), latest);
+    if (!sameConfigPatch(refreshed, prepared.proposed)) {
+      throw new Error("Advisor setting dependencies changed while confirmation was open. Read the settings again and retry; nothing was written.");
+    }
+    if (Object.hasOwn(refreshed, "advisorOutcomeLogging")) {
+      saveGlobalOutcomeLogging(refreshed.advisorOutcomeLogging === null ? null : refreshed.advisorOutcomeLogging === true, prepared.existing, touched);
+    } else {
+      saveGlobalAdvisorConfigPatch(refreshed, prepared.existing, touched);
+    }
+    return prepared.configPath;
+  }));
+};
+var appliedAdvisorConfigResult = (prepared, savedPath) => {
+  const notices = [];
+  if (Object.hasOwn(prepared.proposed, "alwaysOn") && prepared.proposed.alwaysOn === true) {
+    notices.push("Always on applies to future sessions; this did not start an Advisor call.");
+  }
+  if (Object.hasOwn(prepared.proposed, "executor")) {
+    notices.push(prepared.proposed.executor === null ? "The Executor pin was removed; it now follows the current Pi session model." : "Executor model selection is saved; run /advisor to activate it in this session.");
+  }
+  return {
+    content: [
+      {
+        text: [
+          `Saved Advisor settings to ${savedPath}.`,
+          summarizeAdvisorConfigPatch(prepared.proposed, prepared.before, prepared.existing),
+          ...notices
+        ].join(`
+`),
+        type: "text"
+      }
+    ],
+    details: {
+      action: "update",
+      applied: true,
+      changes: prepared.proposed,
+      saved: true
+    }
+  };
+};
+var savedButNotAppliedResult = (prepared, savedPath, message) => ({
+  content: [
+    {
+      text: `Advisor settings were saved to ${savedPath}, but could not be fully applied to the current session: ${message}`,
+      type: "text"
+    }
+  ],
+  details: {
+    action: "update",
+    applied: false,
+    changes: prepared.proposed,
+    saved: true
+  }
+});
+var applyAdvisorConfigUpdate = (runtime, ctx, prepared, savedPath) => {
+  try {
+    loadConfig(ctx);
+    if (!Object.hasOwn(prepared.proposed, "contextMaxChars") && prepared.before.contextMaxChars !== undefined) {
+      setContextMaxCharsRef(prepared.before.contextMaxChars);
+      rebaseConfigBaseline();
+    }
+    applyAdvisorConfigRuntimeSettings(runtime, ctx, prepared.beforeSettings);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return savedButNotAppliedResult(prepared, savedPath, message);
+  }
+  return appliedAdvisorConfigResult(prepared, savedPath);
+};
+var executeAdvisorConfigUpdate = async (runtime, ctx, input, signal, selectModels) => {
+  if (!ctx.hasUI) {
+    throw new Error("Advisor setting updates require an interactive confirmation. Use Pi's TUI or RPC UI; no settings were changed.");
+  }
+  const prepared = await prepareAdvisorConfigUpdate(ctx, input, selectModels);
+  if (!prepared) {
+    return cancelledAdvisorConfigResult("Model selection cancelled; no settings changed.");
+  }
+  if (Object.keys(prepared.proposed).length === 0) {
+    return unchangedAdvisorConfigResult("Advisor settings already match the request.");
+  }
+  if (!await confirmAdvisorConfigUpdate(ctx, prepared, signal)) {
+    return cancelledAdvisorConfigResult("Update cancelled; no settings changed.");
+  }
+  let savedPath;
+  try {
+    savedPath = await persistAdvisorConfigUpdate(prepared, signal);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Advisor settings were not saved: ${message}`, {
+      cause: error
+    });
+  }
+  return applyAdvisorConfigUpdate(runtime, ctx, prepared, savedPath);
+};
+
+// src/commands/configuration-tool.ts
+var CONFIGURATION_VALUE = Type.Union([
+  Type.String(),
+  Type.Number(),
+  Type.Boolean(),
+  Type.Null(),
+  Type.Array(Type.String()),
+  Type.Record(Type.String(), Type.String())
+]);
+var CONFIGURATION_TOOL_PARAMETERS = Type.Object({
+  action: Type.String({ enum: ["read", "update"] }),
+  changes: Type.Optional(Type.Record(Type.String(), CONFIGURATION_VALUE))
+}, { additionalProperties: false });
+var readCurrentConfig = (ctx) => {
+  const config = getAdvisorConfigForAgent(readGlobalAdvisorConfig());
+  const currentSessionModel = ctx.model ? `${ctx.model.provider}/${ctx.model.id}` : null;
+  return {
+    ...config,
+    currentSessionModel,
+    scope: "global"
+  };
+};
+var registerAdvisorConfigurationTool = (runtime, dependencies = {}) => {
+  runtime.pi.registerTool({
+    description: "Read or update pi-advisor settings at the user's request. Start with action=read to inspect current effective settings, persisted global overrides, and writable keys. For action=update, pass a sparse changes object using exact keys from writableKeys; use null to remove a saved override and restore the extension default. Every changing update previews global old-to-new values and requires user confirmation. Model settings open the existing interactive model picker; supplied model strings are proposed selections, not approval. Jev classifier/credential setup must use /advisor-settings, and outcome logging must be changed by itself through its dedicated consent path.",
+    async execute(_id, params, signal, _onUpdate, ctx) {
+      if (params.action === "read") {
+        if (params.changes) {
+          throw new Error("Do not pass changes with action=read.");
+        }
+        const settings = readCurrentConfig(ctx);
+        return {
+          content: [{ text: JSON.stringify(settings, null, 2), type: "text" }],
+          details: { action: "read", applied: false, settings }
+        };
+      }
+      return await executeAdvisorConfigUpdate(runtime, ctx, params.changes, signal, dependencies.selectModels);
+    },
+    executionMode: "sequential",
+    label: "Configure Advisor",
+    name: "advisor_config",
+    parameters: CONFIGURATION_TOOL_PARAMETERS,
+    promptGuidelines: [
+      "Use advisor_config when the user asks to inspect or change pi-advisor settings. Read before updates when the current value affects the requested outcome.",
+      "Send only settings the user asked to change. advisor_config asks for confirmation before writing and preserves unrelated settings; do not edit advisor.json directly.",
+      "Wait for advisor_config to report a successful update before saying a setting changed. Use /advisor-settings for Jev classifier/credential setup."
+    ],
+    promptSnippet: "Read or change the user's pi-advisor configuration",
+    renderCall: () => new Text3("[advisor] Configure settings", 0, 0),
+    renderResult: (result) => new Text3(textFrom(result.content), 0, 0)
+  });
 };
 
 // src/commands/lifecycle.ts
@@ -7142,11 +7733,11 @@ var registerOutcomeStatsCommand = (runtime) => {
 
 // src/commands/renderers.ts
 import { getMarkdownTheme as getMarkdownTheme3 } from "@earendil-works/pi-coding-agent";
-import { Box as Box2, Markdown as Markdown3, Text as Text4 } from "@earendil-works/pi-tui";
+import { Box as Box2, Markdown as Markdown3, Text as Text5 } from "@earendil-works/pi-tui";
 
 // src/commands/manual-progress.ts
 import { getMarkdownTheme as getMarkdownTheme2 } from "@earendil-works/pi-coding-agent";
-import { Markdown as Markdown2, Text as Text3 } from "@earendil-works/pi-tui";
+import { Markdown as Markdown2, Text as Text4 } from "@earendil-works/pi-tui";
 class ManualAdvisorProgressComponent {
   question;
   state;
@@ -7173,7 +7764,7 @@ class ManualAdvisorProgressComponent {
       return box.render(width);
     }
     if (this.state.phase === "error") {
-      box.addChild(new Text3(this.theme.fg("error", this.theme.bold("◆ ADVISOR · FAILED")), 0, 0));
+      box.addChild(new Text4(this.theme.fg("error", this.theme.bold("◆ ADVISOR · FAILED")), 0, 0));
       return box.render(width);
     }
     const frame = SPINNER_FRAMES[Math.floor(Date.now() / 80) % SPINNER_FRAMES.length];
@@ -7183,7 +7774,7 @@ class ManualAdvisorProgressComponent {
     } else if (this.state.text?.trim()) {
       status = "Responding…";
     }
-    box.addChild(new Text3(`${this.theme.fg("warning", this.theme.bold(`◆ ADVISOR ${frame}`))} ${this.theme.fg("dim", `· ${status}`)}`, 0, 0));
+    box.addChild(new Text4(`${this.theme.fg("warning", this.theme.bold(`◆ ADVISOR ${frame}`))} ${this.theme.fg("dim", `· ${status}`)}`, 0, 0));
     if (this.state.thinking?.trim()) {
       box.addChild(renderThinkingMarkdown(this.state.thinking.slice(-200), this.theme));
     }
@@ -7214,14 +7805,14 @@ var manualResultRenderer = (message, { expanded }, theme) => {
   const { details } = message;
   const box = new Box2(1, 1, (text) => theme.bg("customMessageBg", text));
   const advice = details?.text ?? (isString(message.content) ? message.content : "(Advisor returned no advice.)");
-  box.addChild(new Text4(renderAdvisorResponseHeader(hasSoundVerdict(advice), theme), 0, 0));
+  box.addChild(new Text5(renderAdvisorResponseHeader(hasSoundVerdict(advice), theme), 0, 0));
   if (details?.advisor) {
-    box.addChild(new Text4(theme.fg("dim", `  ${details.advisor}`), 0, 0));
+    box.addChild(new Text5(theme.fg("dim", `  ${details.advisor}`), 0, 0));
   }
   if (getAdvisorSettings().showUsageDetails) {
     const usage = formatAdvisorUsage(details?.usage);
     if (usage) {
-      box.addChild(new Text4(theme.fg("dim", `  Usage: ${usage}`), 0, 0));
+      box.addChild(new Text5(theme.fg("dim", `  Usage: ${usage}`), 0, 0));
     }
   }
   const attachments = [
@@ -7229,14 +7820,14 @@ var manualResultRenderer = (message, { expanded }, theme) => {
     details?.preferenceBytes ? `Project preferences attached · ${formatByteSize(details.preferenceBytes)}` : undefined
   ].filter((value) => value !== undefined);
   if (attachments.length) {
-    box.addChild(new Text4(theme.fg("dim", `  ${attachments.join(" · ")}`), 0, 0));
+    box.addChild(new Text5(theme.fg("dim", `  ${attachments.join(" · ")}`), 0, 0));
   }
   box.addChild(new Markdown3(adviceForDisplay(advice, expanded), 0, 0, getMarkdownTheme3()));
   return box;
 };
 var outcomeStatsRenderer = (message, _options, theme) => {
   const box = new Box2(1, 1, (text) => theme.bg("customMessageBg", text));
-  box.addChild(new Text4(theme.fg("accent", theme.bold("◆ ADVISOR · OUTCOME STATS")), 0, 0));
+  box.addChild(new Text5(theme.fg("accent", theme.bold("◆ ADVISOR · OUTCOME STATS")), 0, 0));
   box.addChild(new Markdown3(formatAdvisorStats(message.details ?? { malformedLines: 0 }), 0, 0, getMarkdownTheme3()));
   return box;
 };
@@ -8786,6 +9377,7 @@ var registerCommands = (pi, dependencies = {}) => {
   registerModelCommands(runtime);
   registerOutcomeStatsCommand(runtime);
   registerSettingsCommands(runtime);
+  registerAdvisorConfigurationTool(runtime);
 };
 
 // src/tools/budget-feedback.ts
@@ -9000,36 +9592,36 @@ var registerJevTurnGate = (on, registration) => {
 };
 
 // src/tools/register-ask-advisor.ts
-import { Type as Type2 } from "typebox";
+import { Type as Type3 } from "typebox";
 
 // src/tools/advisor-output.ts
-import { Type } from "typebox";
-var advisorOutputSchema = Type.Object({
-  adviceId: Type.Optional(Type.String()),
-  advisor: Type.Optional(Type.String()),
-  followUp: Type.Optional(Type.Boolean()),
-  jev: Type.Optional(Type.Object({
-    kind: Type.Union([Type.Literal("screened"), Type.Literal("repeat")]),
-    reason: Type.String(),
-    skipped: Type.Boolean()
+import { Type as Type2 } from "typebox";
+var advisorOutputSchema = Type2.Object({
+  adviceId: Type2.Optional(Type2.String()),
+  advisor: Type2.Optional(Type2.String()),
+  followUp: Type2.Optional(Type2.Boolean()),
+  jev: Type2.Optional(Type2.Object({
+    kind: Type2.Union([Type2.Literal("screened"), Type2.Literal("repeat")]),
+    reason: Type2.String(),
+    skipped: Type2.Boolean()
   })),
-  skipReason: Type.Optional(Type.String()),
-  text: Type.String({
+  skipReason: Type2.Optional(Type2.String()),
+  text: Type2.String({
     description: "Advisor Markdown or consultation skip notice."
   }),
-  usage: Type.Optional(Type.Object({
-    cacheRead: Type.Optional(Type.Number()),
-    cacheWrite: Type.Optional(Type.Number()),
-    cost: Type.Optional(Type.Number()),
-    input: Type.Optional(Type.Number()),
-    output: Type.Optional(Type.Number()),
-    totalTokens: Type.Optional(Type.Number())
+  usage: Type2.Optional(Type2.Object({
+    cacheRead: Type2.Optional(Type2.Number()),
+    cacheWrite: Type2.Optional(Type2.Number()),
+    cost: Type2.Optional(Type2.Number()),
+    input: Type2.Optional(Type2.Number()),
+    output: Type2.Optional(Type2.Number()),
+    totalTokens: Type2.Optional(Type2.Number())
   }))
 });
 
 // src/tools/render-advisor-result.ts
 import { getMarkdownTheme as getMarkdownTheme4 } from "@earendil-works/pi-coding-agent";
-import { Box as Box3, Markdown as Markdown4, Spacer, Text as Text5 } from "@earendil-works/pi-tui";
+import { Box as Box3, Markdown as Markdown4, Spacer, Text as Text6 } from "@earendil-works/pi-tui";
 var advisorResultDetails = (result) => result.details;
 var syncRenderPhase = (context, phase) => {
   if (context.state.phase !== phase && context.state.timerId) {
@@ -9076,7 +9668,7 @@ var renderSkipBox = (box, result, expanded, theme) => {
     theme.fg("dim", theme.bold("◆ ADVISOR · SKIPPED")),
     theme.fg("dim", `  ${details?.skipReason ?? details?.jev?.reason ?? ""}`)
   ];
-  box.addChild(new Text5(lines.join(`
+  box.addChild(new Text6(lines.join(`
 `), 0, 0));
   box.addChild(new Markdown4(adviceForDisplay(textFrom(result.content), expanded), 0, 0, getMarkdownTheme4()));
 };
@@ -9101,7 +9693,7 @@ var renderPartialAdvisorResult = (box, result, expanded, theme, context) => {
   const lines = [
     `${theme.fg("warning", theme.bold(`◆ ADVISOR ${frame}`))} ${theme.fg("dim", "· Working…")}`
   ];
-  box.addChild(new Text5(lines.join(`
+  box.addChild(new Text6(lines.join(`
 `), 0, 0));
   if (details?.thinking?.trim()) {
     const thought = details.thinking.length > 200 ? details.thinking.slice(-200) : details.thinking;
@@ -9157,7 +9749,7 @@ var renderFinalAdvisorResult = (box, result, expanded, theme, context) => {
   const thinking = thinkingPreview(details);
   const lines = finalResultLines(details, advice, theme);
   const displayAdvice = advice || "(Advisor returned no advice.)";
-  box.addChild(new Text5(lines.join(`
+  box.addChild(new Text6(lines.join(`
 `), 0, 0));
   if (thinking) {
     box.addChild(renderThinkingMarkdown(thinking, theme));
@@ -9430,26 +10022,26 @@ ${result.markdown}`,
     label: "Ask Advisor",
     name: "ask_advisor",
     outputSchema: advisorOutputSchema,
-    parameters: Type2.Object({
-      draft: Type2.Optional(Type2.String({
+    parameters: Type3.Object({
+      draft: Type3.Optional(Type3.String({
         description: "Concise untrusted draft for plan or completion review; claims are not verification evidence."
       })),
-      followUpTo: Type2.Optional(Type2.String({
+      followUpTo: Type3.Optional(Type3.String({
         description: "Opaque adviceId from a prior successful consultation. Requires a new non-empty question and reuses that consultation's redacted payload; do not combine with draft, Git context, or file attachments."
       })),
-      force: Type2.Optional(Type2.Boolean({
+      force: Type3.Optional(Type3.Boolean({
         description: "Set true only when you judge a decision genuinely material after a consultation was screened out; bypasses screening."
       })),
-      gitContext: Type2.Optional(Type2.Union([Type2.Literal("none"), Type2.Literal("summary"), Type2.Literal("full")], {
+      gitContext: Type3.Optional(Type3.Union([Type3.Literal("none"), Type3.Literal("summary"), Type3.Literal("full")], {
         description: "How much of the working tree to include. Use full when the review depends on the exact code changes, such as a completion review. Use summary for changed file names only, or none when the question is not about the current changes. The user's configured allowance is the ceiling and a larger request is narrowed to it."
       })),
-      includeTrackedFiles: Type2.Optional(Type2.Array(Type2.String({
+      includeTrackedFiles: Type3.Optional(Type3.Array(Type3.String({
         description: "Exact tracked repository-relative files to attach after the Advisor explicitly names a file it cannot review. Requires global advisorTrackedFileContent consent; current working-tree contents are sent as untrusted data."
       }))),
-      includeUntracked: Type2.Optional(Type2.Array(Type2.String({
+      includeUntracked: Type3.Optional(Type3.Array(Type3.String({
         description: "Exact new repository-relative files to include only when user configuration allows it."
       }))),
-      question: Type2.Optional(Type2.String({
+      question: Type3.Optional(Type3.String({
         description: "The specific question or decision to get advice on. Omit this for normal reviews: the Advisor already has the conversation context."
       }))
     }),
@@ -9733,8 +10325,8 @@ ${guidelines.map((rule) => `- ${rule}`).join(`
 };
 
 // src/tools/register-outcome.ts
-import { Text as Text6 } from "@earendil-works/pi-tui";
-import { Type as Type3 } from "typebox";
+import { Text as Text7 } from "@earendil-works/pi-tui";
+import { Type as Type4 } from "typebox";
 var registerOutcomeTool = ({
   appendOutcome: appendAdvisorOutcome,
   pi,
@@ -9788,19 +10380,19 @@ var registerOutcomeTool = ({
     },
     label: "Record Advisor Outcome",
     name: "record_advisor_outcome",
-    parameters: Type3.Object({
-      adoption: Type3.String({ enum: ADOPTIONS }),
-      adviceId: Type3.String(),
-      validationStatus: Type3.String({ enum: VALIDATIONS })
+    parameters: Type4.Object({
+      adoption: Type4.String({ enum: ADOPTIONS }),
+      adviceId: Type4.String(),
+      validationStatus: Type4.String({ enum: VALIDATIONS })
     }),
-    renderCall: () => new Text6("[advisor] Record outcome", 0, 0),
-    renderResult: (result) => new Text6(textFrom(result.content), 0, 0)
+    renderCall: () => new Text7("[advisor] Record outcome", 0, 0),
+    renderResult: (result) => new Text7(textFrom(result.content), 0, 0)
   });
 };
 
 // src/tools/register-renderers.ts
 import { getMarkdownTheme as getMarkdownTheme5 } from "@earendil-works/pi-coding-agent";
-import { Box as Box4, Markdown as Markdown5, Text as Text7 } from "@earendil-works/pi-tui";
+import { Box as Box4, Markdown as Markdown5, Text as Text8 } from "@earendil-works/pi-tui";
 var formatByteSize3 = (bytes) => {
   if (bytes >= 1024 ** 3) {
     return `${(bytes / 1024 ** 3).toFixed(1)} GiB`;
@@ -9815,14 +10407,14 @@ var formatByteSize3 = (bytes) => {
 };
 var addAttachmentLine = (box, details, theme) => {
   if (details?.agentRulesBytes) {
-    box.addChild(new Text7(theme.fg("dim", `  AGENTS.md rules attached · ${formatByteSize3(details.agentRulesBytes)}`), 0, 0));
+    box.addChild(new Text8(theme.fg("dim", `  AGENTS.md rules attached · ${formatByteSize3(details.agentRulesBytes)}`), 0, 0));
   }
 };
 var addUsageLine = (box, details, theme) => {
   if (getAdvisorSettings().showUsageDetails) {
     const usageText = formatAdvisorUsage(details?.usage);
     if (usageText) {
-      box.addChild(new Text7(theme.fg("dim", `  Usage: ${usageText}`), 0, 0));
+      box.addChild(new Text8(theme.fg("dim", `  Usage: ${usageText}`), 0, 0));
     }
   }
   addAttachmentLine(box, details, theme);
@@ -9836,30 +10428,30 @@ var scoutResultRenderer = (entry, { expanded }, theme) => {
 var turnGateResultRenderer = (message, { expanded }, theme) => {
   const { details } = message;
   const box = new Box4(1, 1, (text) => theme.bg("customMessageBg", text));
-  box.addChild(new Text7(theme.fg("warning", theme.bold("◆ ADVISOR · TURN REVIEW")), 0, 0));
+  box.addChild(new Text8(theme.fg("warning", theme.bold("◆ ADVISOR · TURN REVIEW")), 0, 0));
   if (details?.advisor) {
-    box.addChild(new Text7(theme.fg("dim", `  ${details.advisor}`), 0, 0));
+    box.addChild(new Text8(theme.fg("dim", `  ${details.advisor}`), 0, 0));
   }
   addUsageLine(box, details, theme);
   if (details?.text) {
     box.addChild(new Markdown5(adviceForDisplay(details.text, Boolean(expanded)), 0, 0, getMarkdownTheme5()));
   } else {
-    box.addChild(new Text7(theme.fg("error", isString(message.content) ? message.content : "Advisor turn review failed."), 0, 0));
+    box.addChild(new Text8(theme.fg("error", isString(message.content) ? message.content : "Advisor turn review failed."), 0, 0));
   }
   return box;
 };
 var loopResultRenderer = (message, { expanded }, theme) => {
   const { details } = message;
   const box = new Box4(1, 1, (text) => theme.bg("customMessageBg", text));
-  box.addChild(new Text7(theme.fg("warning", theme.bold(`◆ ADVISOR GATE: ${details?.decision ?? "failure"}`)), 0, 0));
+  box.addChild(new Text8(theme.fg("warning", theme.bold(`◆ ADVISOR GATE: ${details?.decision ?? "failure"}`)), 0, 0));
   if (details?.advisor) {
-    box.addChild(new Text7(theme.fg("dim", `  ${details.advisor}`), 0, 0));
+    box.addChild(new Text8(theme.fg("dim", `  ${details.advisor}`), 0, 0));
   }
   addUsageLine(box, details, theme);
   if (details?.text) {
     box.addChild(new Markdown5(adviceForDisplay(details.text, Boolean(expanded)), 0, 0, getMarkdownTheme5()));
   } else {
-    box.addChild(new Text7(theme.fg("error", isString(message.content) ? message.content : "Advisor gate failed."), 0, 0));
+    box.addChild(new Text8(theme.fg("error", isString(message.content) ? message.content : "Advisor gate failed."), 0, 0));
   }
   return box;
 };

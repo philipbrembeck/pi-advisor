@@ -31,6 +31,7 @@ Keep implementation on a fast model and borrow frontier reasoning only when deci
 - **Compact searchable `/advisor-settings`** that matches Pi's settings list and saves changes immediately.
 - **Experimental Advisor Scout** that uses the configured Executor model to curate conversation evidence before every Advisor call.
 - **Optional Jev classifier screening and proactive turn gate**: typed Pi classifiers can skip low-stakes, self-answerable consultations or proactively pull in the Advisor. `/advisor-settings` offers available Pi-authenticated classifiers plus an explicit **Jev API Key** option. The API-key option is independently masked, live-verified, and stored only in a Jev-classifier-specific secure store; legacy keys are not migrated. Custom classifiers must be registered by a Pi provider extension. Both features remain off by default.
+- **Bundled `pi-advisor-flow` skill and `advisor_config` tool** so the agent can explain the workflow, inspect settings, and apply requested changes after confirmation.
 
 ## How it works
 
@@ -66,7 +67,7 @@ You can also install from GitHub:
 pi install git:github.com/philipbrembeck/pi-advisor.git
 ```
 
-Reload Pi after installing.
+Reload Pi after installing. The package also installs the `pi-advisor-flow` skill; ask the agent how Advisor Flow works or run `/skill:pi-advisor-flow` to load its guide directly. To change settings through chat, ask the agent; it uses `advisor_config` to inspect settings and apply requested changes after an interactive confirmation. Model choices use the existing picker, and Jev classifier/credential setup stays in `/advisor-settings`.
 
 ## Quick start
 

@@ -1,11 +1,22 @@
-import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import {
+  closeSync,
+  existsSync,
+  fsyncSync,
+  openSync,
+  readFileSync,
+  renameSync,
+  statSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 
 import { CONFIG_DIR_NAME, getAgentDir } from "@earendil-works/pi-coding-agent";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 import { isRecord, isString } from "../content-utils.ts";
-import type { RecordValue } from "../content-utils.ts";
+import type { JsonValue, RecordValue } from "../content-utils.ts";
 import { applyConfig, resetDefaults } from "./defaults.ts";
 import {
   CONFIG_SCHEMA,
@@ -43,6 +54,8 @@ const currentConfigState = (): ConfigState =>
 
 const sameConfigValue = <Value>(left: Value, right: Value) =>
   JSON.stringify(left) === JSON.stringify(right);
+
+const CONFIG_KEY_SET = new Set<string>(Object.keys(CONFIG_SCHEMA));
 
 /** Keys advisor.json may hold that are not AdvisorConfig settings but are
  * still legitimate (hand-placed secrets). They stay out of CONFIG_SCHEMA, are
@@ -175,6 +188,9 @@ const configIdentity = (path: string): string => {
   }
 };
 
+const configFileIdentity = (path: string) =>
+  existsSync(path) ? configIdentity(path) : null;
+
 const readConfigCached = (path: string): AdvisorConfig => {
   const identity = configIdentity(path);
   const cached = configCache.get(path);
@@ -258,6 +274,12 @@ export interface SaveConfigOptions {
   persistExecutor?: boolean;
 }
 
+/** Marks the current live state as the new diff baseline without writing it. */
+export const rebaseConfigBaseline = () => {
+  loadedConfigState = currentConfigState();
+  loadedConfigPath = join(getAgentDir(), "advisor.json");
+};
+
 export const saveConfig = (
   _ctx: ExtensionContext,
   options: SaveConfigOptions = {}
@@ -318,14 +340,141 @@ export const saveConfig = (
   return path;
 };
 
+const writeConfigAtomically = (
+  path: string,
+  contents: string,
+  expectedIdentity?: string | null
+) => {
+  const mode = existsSync(path) ? statSync(path).mode % 0o1000 : 0o600;
+  const temporaryPath = `${path}.${process.pid}.${randomUUID()}.tmp`;
+  let fileDescriptor: number | undefined;
+
+  try {
+    fileDescriptor = openSync(temporaryPath, "wx", mode);
+    writeFileSync(fileDescriptor, contents, "utf-8");
+    fsyncSync(fileDescriptor);
+    closeSync(fileDescriptor);
+    fileDescriptor = undefined;
+
+    if (
+      expectedIdentity !== undefined &&
+      configFileIdentity(path) !== expectedIdentity
+    ) {
+      throw new Error(
+        "Advisor configuration changed during the update; retry so unrelated edits are preserved."
+      );
+    }
+
+    renameSync(temporaryPath, path);
+  } catch (error) {
+    if (fileDescriptor !== undefined) {
+      closeSync(fileDescriptor);
+    }
+
+    try {
+      unlinkSync(temporaryPath);
+    } catch {
+      // The temporary file may not have been created.
+    }
+
+    throw error;
+  }
+};
+
 /** Outcome logging is deliberately written only to the global Pi configuration. */
-export const saveGlobalOutcomeLogging = (enabled: boolean) => {
+export const saveGlobalOutcomeLogging = (
+  enabled: boolean | null,
+  expected?: Readonly<Record<string, JsonValue>>,
+  expectedKeys: readonly string[] = ["advisorOutcomeLogging"]
+) => {
   const path = join(getAgentDir(), "advisor.json");
+  const identity = configFileIdentity(path);
   const existing = readConfigForSave(path);
-  writeFileSync(
+
+  if (
+    expected &&
+    expectedKeys.some(
+      (key) =>
+        Object.hasOwn(existing, key) !== Object.hasOwn(expected, key) ||
+        !sameConfigValue(existing[key], expected[key])
+    )
+  ) {
+    throw new Error(
+      "Advisor settings changed during confirmation; read the settings again and retry."
+    );
+  }
+
+  if (enabled === null) {
+    Reflect.deleteProperty(existing, "advisorOutcomeLogging");
+  } else {
+    existing.advisorOutcomeLogging = enabled;
+  }
+
+  writeConfigAtomically(
     path,
-    `${JSON.stringify({ ...existing, advisorOutcomeLogging: enabled }, null, 2)}\n`
+    `${JSON.stringify(existing, null, 2)}\n`,
+    identity
   );
+  resetConfigCache();
+
+  return path;
+};
+
+/** Applies a validated sparse patch to global advisor.json while preserving
+ * unrelated and unknown fields. A null value removes that setting override. */
+export const readGlobalAdvisorConfig = () => {
+  const path = join(getAgentDir(), "advisor.json");
+  const config = readConfigForSave(path);
+  validateConfig(config, path);
+
+  return config;
+};
+
+export const saveGlobalAdvisorConfigPatch = (
+  patch: Readonly<Record<string, JsonValue | null>>,
+  expected?: Readonly<Record<string, JsonValue>>,
+  expectedKeys?: readonly string[]
+) => {
+  const path = join(getAgentDir(), "advisor.json");
+
+  const unknownKeys = Object.keys(patch).filter(
+    (key) => !CONFIG_KEY_SET.has(key)
+  );
+
+  if (unknownKeys.length > 0) {
+    throw new Error(
+      `Cannot update Advisor configuration: unsupported key(s) ${unknownKeys.map((key) => JSON.stringify(key)).join(", ")}.`
+    );
+  }
+
+  const identity = configFileIdentity(path);
+  const next = readConfigForSave(path);
+
+  const checkedKeys = expectedKeys ?? Object.keys(patch);
+
+  if (
+    expected &&
+    checkedKeys.some(
+      (key) =>
+        Object.hasOwn(next, key) !== Object.hasOwn(expected, key) ||
+        !sameConfigValue(next[key], expected[key])
+    )
+  ) {
+    throw new Error(
+      "Advisor settings changed during confirmation; read the settings again and retry."
+    );
+  }
+
+  for (const [key, value] of Object.entries(patch)) {
+    if (value === null) {
+      Reflect.deleteProperty(next, key);
+    } else {
+      next[key] = value;
+    }
+  }
+
+  validateConfig(next, path);
+  writeConfigAtomically(path, `${JSON.stringify(next, null, 2)}\n`, identity);
   resetConfigCache();
 
   return path;

@@ -20,7 +20,14 @@
   },
   "files": [
     "dist",
+    "docs/benchmark.md",
+    "docs/configuration.md",
+    "docs/development.md",
+    "docs/herdr.md",
+    "docs/privacy.md",
+    "docs/README.md",
     "extensions",
+    "skills",
     "src",
     "scripts/check-bun-version.mjs",
     "CHANGELOG.md",
@@ -104,6 +111,9 @@
   "pi": {
     "extensions": [
       "./dist/index.js"
+    ],
+    "skills": [
+      "./skills"
     ],
     "image": "https://raw.githubusercontent.com/philipbrembeck/pi-advisor/refs/heads/main/assets/hero.png"
   },

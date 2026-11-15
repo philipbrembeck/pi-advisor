@@ -17,15 +17,28 @@ const expectedFiles = [
   "LICENSE",
   "README.md",
   "dist/index.js",
+  "docs/README.md",
+  "docs/benchmark.md",
+  "docs/configuration.md",
+  "docs/development.md",
+  "docs/herdr.md",
+  "docs/privacy.md",
   "extensions/index.ts",
   "package.json",
   "scripts/check-bun-version.mjs",
+  "skills/pi-advisor-flow/SKILL.md",
   "src/attachments.ts",
   "src/child-session.ts",
   "src/commands.ts",
   "src/commands/activation-preparation.ts",
   "src/commands/activation.ts",
   "src/commands/advisor-tools.ts",
+  "src/commands/configuration-tool-models.ts",
+  "src/commands/configuration-tool-policy.ts",
+  "src/commands/configuration-tool-preview.ts",
+  "src/commands/configuration-tool-runtime.ts",
+  "src/commands/configuration-tool-update.ts",
+  "src/commands/configuration-tool.ts",
   "src/commands/lifecycle.ts",
   "src/commands/manual-command.ts",
   "src/commands/manual-consultation.ts",
@@ -157,6 +170,10 @@ if (
   throw new Error(
     `Packed metadata mismatch: ${result.name}@${result.version} (expected ${packageJson.name}@${packageJson.version})`
   );
+}
+
+if (!packageJson.pi?.skills?.includes("./skills")) {
+  throw new Error('Pi package must declare the bundled "./skills" directory.');
 }
 
 if (JSON.stringify(actualFiles) !== JSON.stringify(expectedFiles)) {

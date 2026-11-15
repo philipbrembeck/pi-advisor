@@ -4,6 +4,12 @@ Use `/advisor-models` and `/advisor-settings` to configure pi-advisor. Both comm
 
 Repository-controlled project `advisor.json` files are not applied. Models, prompts, gates, budgets, disclosure, redaction, integrations, and consent remain under the user's global configuration.
 
+## Configure from chat
+
+When the user asks the Executor to configure pi-advisor, it can call `advisor_config` with `action: "read"` to inspect current effective settings and persisted global overrides, or `action: "update"` with a sparse `changes` object. Updates use the exact keys returned as `writableKeys`; `null` removes a saved override and restores the extension default. The tool validates the merged config, preserves unknown fields, displays the old-to-new changes, and requires interactive confirmation before writing. It remains available even when model-facing Advisor tools are disabled.
+
+Model changes open the existing interactive picker rather than accepting a model-generated ref as approval. Saving an Executor model only pins it; run `/advisor` to activate that model in the current session. Jev classifier and credential provisioning stays in `/advisor-settings`. `advisorOutcomeLogging` is supported only as a separate update through its existing consent path. Always on changes apply to future sessions and do not start an Advisor call immediately.
+
 `/advisor` also accepts `executor=`, `advisor=`, and `contextMaxChars=` overrides for the current activation. For example, `/advisor contextMaxChars=30000` sets the reconstructed-history limit; use `0` for no history. The `ALL` option in settings represents the complete current branch and remains subject to the Advisor model's context limit. When `executor` is unset, the Executor is the current Pi session model and thinking level (unless `executorEffort` is set); `/advisor` does not switch models. On first use, or when the saved Advisor ref is missing from the configuration or Pi's available model list, `/advisor` opens the available-model picker instead of silently choosing an unconfigured model. An explicit `executor` that is no longer available is picked again; choose **Current session model** to clear it. Selected refs are persisted only after the models pass activation checks.
 
 All fields are optional. The model refs below are explicit examples of models available through your configured providers; omit them to choose models interactively with `/advisor`. Disclosure and redaction fields are explained in [Privacy and data handling](privacy.md).

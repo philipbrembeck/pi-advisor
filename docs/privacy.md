@@ -4,6 +4,10 @@ Advisor context can contain user messages, tool calls, tool results, and reposit
 
 Redaction and output limits reduce accidental disclosure; they are not a data-classification system and cannot guarantee every secret is found. Use tool policies for content that must not be sent to the Advisor.
 
+## Chat-based configuration
+
+The `advisor_config` tool reads recognized effective settings and persisted global overrides, while omitting Jev endpoint and credential-provisioning fields. Updates are global, validated, and shown in an interactive confirmation before saving. Enabling full Git context, tracked/untracked file handoff, automatic gates, or Always on shows the relevant disclosure, blocking, or cost warning. Classifier credentials remain in the masked `/advisor-settings` flow; unknown `advisor.json` fields are preserved but never returned to the model.
+
 ## Repository context
 
 - `advisorGitContext` defaults to `summary` and controls how much of the working tree reaches the Advisor:

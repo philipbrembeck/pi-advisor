@@ -1,6 +1,6 @@
 # Benchmarking pi-advisor
 
-The repository-only benchmark lives in [`../bench/`](../bench/). It is not part of the npm package.
+The repository-only benchmark lives in the [source repository](https://github.com/philipbrembeck/pi-advisor/tree/main/bench). It is not part of the npm package.
 
 ## Tiers
 
