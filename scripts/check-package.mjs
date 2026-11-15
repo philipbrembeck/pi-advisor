@@ -145,6 +145,7 @@ const expectedFiles = [
   "src/ui/model-selector.ts",
   "src/ui/searchable-model-list.ts",
   "src/ui/settings-formatting.ts",
+  "src/ui/settings-items-jev.ts",
   "src/ui/settings-items.ts",
   "src/ui/settings-list-adapter.ts",
   "src/ui/settings-mutations.ts",

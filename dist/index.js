@@ -7937,6 +7937,16 @@ var rainbowGradient = (text, startedAt) => {
 };
 
 // src/ui/settings-items.ts
+import { getKeybindings as getKeybindings2 } from "@earendil-works/pi-tui";
+
+// src/ui/model-multi-selector.ts
+class SearchableModelMultiSelector extends ModelSelectorAdapter {
+  constructor(options) {
+    super(new SearchableModelList(options));
+  }
+}
+
+// src/ui/settings-items-jev.ts
 import { getKeybindings } from "@earendil-works/pi-tui";
 
 // src/ui/jev-classifier-submenu.ts
@@ -8393,97 +8403,19 @@ class JevFilterSubmenu {
   }
 }
 
-// src/ui/model-multi-selector.ts
-class SearchableModelMultiSelector extends ModelSelectorAdapter {
-  constructor(options) {
-    super(new SearchableModelList(options));
-  }
-}
-
-// src/ui/text-setting-submenu.ts
-import { Input as Input4, truncateToWidth as truncateToWidth6 } from "@earendil-works/pi-tui";
-
-class TextSettingSubmenu {
-  input = new Input4;
-  options;
-  _focused = true;
-  error;
-  get focused() {
-    return this._focused;
-  }
-  set focused(value) {
-    this._focused = value;
-    this.input.focused = value;
-  }
-  constructor(options) {
-    this.options = options;
-    this.input.setValue(options.initial);
-    this.input.focused = true;
-    this.input.onSubmit = (value) => {
-      const result = options.onSubmit(value);
-      if (result.error) {
-        this.error = result.error;
-        options.tui.requestRender();
-        return;
-      }
-      this.error = undefined;
-      options.onCancel(result.value);
-    };
-    this.input.onEscape = () => options.onCancel();
-  }
-  invalidate() {
-    this.input.invalidate();
-  }
-  render(width) {
-    const { theme } = this.options;
-    const input = this.input.render(Math.max(10, width - 4))[0] || "";
-    const lines = [
-      theme.fg("accent", theme.bold(`  ${this.options.title}`)),
-      "",
-      theme.fg("muted", `  ${this.options.description}`),
-      "",
-      `  ${input}`
-    ];
-    if (this.error) {
-      lines.push(theme.fg("error", `  ${this.error}`));
-    }
-    lines.push("", theme.fg("dim", "  Enter: apply · Esc: cancel"));
-    return lines.map((line) => truncateToWidth6(line, width));
-  }
-  handleInput(keyData) {
-    const before = this.input.getValue();
-    this.input.handleInput(keyData);
-    if (this.error && this.input.getValue() !== before) {
-      this.error = undefined;
-    }
-  }
-}
-
-// src/ui/settings-items.ts
-var toggle = (id, label, description, value, defaultValue) => ({
-  currentValue: settingValue(value, defaultValue),
-  description,
-  id,
-  label,
-  values: TOGGLE_VALUES
-});
-var scoutTimeoutItem = (settings) => {
-  const timeoutMs = settings.scoutTimeoutMs ?? DEFAULT_SCOUT_TIMEOUT_MS;
-  return {
-    currentValue: String(timeoutMs),
-    description: "Maximum time for Scout's response stream; model and auth resolution happen before this timeout starts.",
-    id: "scoutTimeoutMs",
-    label: "Scout timeout ms",
-    values: numericValues(timeoutMs, [5000, 1e4, 15000, 30000, 45000, 60000, 90000, 120000])
-  };
-};
+// src/ui/settings-items-jev.ts
 var jevFilterRowValue = (settings) => {
   if (!settings.jevFilterEnabled) {
     return "Off";
   }
   return settings.jevClassifier ? "On" : "On (unavailable: no classifier)";
 };
-var jevItems = (settings, theme, tui, jevClassifierRegistry, jevKeyDeps, onJevFilter, onJevProvider) => [
+var jevItems = (settings, theme, tui, {
+  jevClassifierRegistry,
+  jevKeyDeps,
+  onJevFilter,
+  onJevProvider
+}) => [
   {
     currentValue: settings.jevClassifier ?? "Choose classifier",
     description: "Select a Pi-authenticated classifier or explicitly configure the separate Jev API Key option.",
@@ -8574,6 +8506,84 @@ var jevItems = (settings, theme, tui, jevClassifierRegistry, jevKeyDeps, onJevFi
     values: numericValues(settings.jevTurnGateNoulThreshold ?? DEFAULT_JEV_TURN_GATE_NOUL_THRESHOLD, [0.6, 0.7, 0.8, 0.85, 0.9, 0.95])
   }
 ];
+
+// src/ui/text-setting-submenu.ts
+import { Input as Input4, truncateToWidth as truncateToWidth6 } from "@earendil-works/pi-tui";
+
+class TextSettingSubmenu {
+  input = new Input4;
+  options;
+  _focused = true;
+  error;
+  get focused() {
+    return this._focused;
+  }
+  set focused(value) {
+    this._focused = value;
+    this.input.focused = value;
+  }
+  constructor(options) {
+    this.options = options;
+    this.input.setValue(options.initial);
+    this.input.focused = true;
+    this.input.onSubmit = (value) => {
+      const result = options.onSubmit(value);
+      if (result.error) {
+        this.error = result.error;
+        options.tui.requestRender();
+        return;
+      }
+      this.error = undefined;
+      options.onCancel(result.value);
+    };
+    this.input.onEscape = () => options.onCancel();
+  }
+  invalidate() {
+    this.input.invalidate();
+  }
+  render(width) {
+    const { theme } = this.options;
+    const input = this.input.render(Math.max(10, width - 4))[0] || "";
+    const lines = [
+      theme.fg("accent", theme.bold(`  ${this.options.title}`)),
+      "",
+      theme.fg("muted", `  ${this.options.description}`),
+      "",
+      `  ${input}`
+    ];
+    if (this.error) {
+      lines.push(theme.fg("error", `  ${this.error}`));
+    }
+    lines.push("", theme.fg("dim", "  Enter: apply · Esc: cancel"));
+    return lines.map((line) => truncateToWidth6(line, width));
+  }
+  handleInput(keyData) {
+    const before = this.input.getValue();
+    this.input.handleInput(keyData);
+    if (this.error && this.input.getValue() !== before) {
+      this.error = undefined;
+    }
+  }
+}
+
+// src/ui/settings-items.ts
+var toggle = (id, label, description, value, defaultValue) => ({
+  currentValue: settingValue(value, defaultValue),
+  description,
+  id,
+  label,
+  values: TOGGLE_VALUES
+});
+var scoutTimeoutItem = (settings) => {
+  const timeoutMs = settings.scoutTimeoutMs ?? DEFAULT_SCOUT_TIMEOUT_MS;
+  return {
+    currentValue: String(timeoutMs),
+    description: "Maximum time for Scout's response stream; model and auth resolution happen before this timeout starts.",
+    id: "scoutTimeoutMs",
+    label: "Scout timeout ms",
+    values: numericValues(timeoutMs, [5000, 1e4, 15000, 30000, 45000, 60000, 90000, 120000])
+  };
+};
 var advisorFallbackModelItem = (settings, modelRefs, keybindings, theme, tui) => ({
   currentValue: settings.fallbackModel ?? FALLBACK_ADVISOR_MODEL_DISABLED,
   description: "Retry a failed Advisor request once with this optional model; the primary model remains unchanged.",
@@ -8585,7 +8595,7 @@ var advisorFallbackModelItem = (settings, modelRefs, keybindings, theme, tui) =>
       ...new Set(modelRefs ?? (settings.fallbackModel ? [settings.fallbackModel] : []))
     ],
     currentOption: settings.fallbackModel ?? FALLBACK_ADVISOR_MODEL_DISABLED,
-    keybindings: keybindings ?? getKeybindings(),
+    keybindings: keybindings ?? getKeybindings2(),
     onCancel: done,
     onSelect: (value) => done(value === FALLBACK_ADVISOR_MODEL_DISABLED ? "" : value),
     theme,
@@ -8603,7 +8613,7 @@ var advisorModelWhitelistItem = (settings, modelRefs, keybindings, theme, tui) =
       ...new Set([...modelRefs ?? [], ...settings.modelWhitelist ?? []])
     ],
     currentOptions: settings.modelWhitelist ?? [],
-    keybindings: keybindings ?? getKeybindings(),
+    keybindings: keybindings ?? getKeybindings2(),
     multiSelect: true,
     onCancel: done,
     onSelect: (values) => done(values.join(",")),
@@ -8763,7 +8773,12 @@ var createSettingsItems = ({
       title: "Tool disclosure policies",
       tui
     })
-  }, toggle("trackedFileContent", "Tracked file content", "Allow tracked file contents to be sent with Advisor context.", settings.trackedFileContent, false), toggle("untrackedContent", "Untracked file content", "Allow untracked file contents to be sent with Advisor context.", settings.untrackedContent, false), toggle("outcomeLogging", "Outcome logging (global)", "Allow anonymized Advisor outcomes to be logged globally.", settings.outcomeLogging, false), ...jevItems(settings, theme, tui, jevClassifierRegistry, jevKeyDeps, onJevFilter, onJevProvider));
+  }, toggle("trackedFileContent", "Tracked file content", "Allow tracked file contents to be sent with Advisor context.", settings.trackedFileContent, false), toggle("untrackedContent", "Untracked file content", "Allow untracked file contents to be sent with Advisor context.", settings.untrackedContent, false), toggle("outcomeLogging", "Outcome logging (global)", "Allow anonymized Advisor outcomes to be logged globally.", settings.outcomeLogging, false), ...jevItems(settings, theme, tui, {
+    jevClassifierRegistry,
+    jevKeyDeps,
+    onJevFilter,
+    onJevProvider
+  }));
   return items;
 };
 
