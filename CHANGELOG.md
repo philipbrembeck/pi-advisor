@@ -11,6 +11,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Bundled the `pi-advisor-flow` Pi skill and added the `advisor_config` tool so agents can inspect and update settings after confirmation.
 - Localized the human-facing interface via the optional `@juicesharp/rpiv-i18n` peer dependency: settings, dialogs, submenus, notifications, and transcript renderers resolve through `t()` with complete `de` and `fr` locale files; every other locale falls back to English. Model-facing strings (tool descriptions, prompts, tool-result envelopes) intentionally remain English. A key-consistency test guards locale drift and an integration test verifies live locale switching.
 
+### Fixed
+
+- Prevented catastrophic backtracking in quoted credential redaction, fail closed on ambiguous assignments and private-key blocks, and omit oversized redaction inputs rather than scanning or truncating them.
+
 ## 0.15.1 - 2026-11-14
 
 ### Fixed

@@ -1,4 +1,9 @@
 import { describe, expect, test } from "bun:test";
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { recentConversation, textFrom } from "../src/conversation.ts";
 import { redactSecrets } from "../src/redaction.ts";
@@ -257,6 +262,187 @@ describe("Conversation Module", () => {
     expect(
       redactSecrets('password="first line\nsecond secret"\nKeep this context.')
     ).toBe("[REDACTED SECRET]\nKeep this context.");
+    expect(redactSecrets('password="secret\nKeep "context')).toBe(
+      "[REDACTED SECRET]context"
+    );
+    expect(redactSecrets('password="trailing\\\nKeep this context.')).toBe(
+      "[REDACTED SECRET]\nKeep this context."
+    );
+    expect(redactSecrets("password='trailing\\\nKeep this context.")).toBe(
+      "[REDACTED SECRET]\nKeep this context."
+    );
+    expect(redactSecrets('password="escaped \\" quote"')).toBe(
+      "[REDACTED SECRET]"
+    );
+    expect(redactSecrets("password='escaped \\' quote'")).toBe(
+      "[REDACTED SECRET]"
+    );
+    expect(redactSecrets('password="first\\\nsecond"')).toBe(
+      "[REDACTED SECRET]"
+    );
+    expect(redactSecrets("password='first\\\u2028second'")).toBe(
+      "[REDACTED SECRET]"
+    );
+    expect(redactSecrets('password="secret\rKeep context')).toBe(
+      "[REDACTED SECRET]\rKeep context"
+    );
+    expect(redactSecrets("password='secret\\\rKeep context")).toBe(
+      "[REDACTED SECRET]\rKeep context"
+    );
+    expect(redactSecrets('password="secret\r\nKeep context')).toBe(
+      "[REDACTED SECRET]\r\nKeep context"
+    );
+    expect(redactSecrets('password="secret\u2028Keep context')).toBe(
+      "[REDACTED SECRET]"
+    );
+    expect(redactSecrets("password='secret\\\u2029Keep context")).toBe(
+      "[REDACTED SECRET]"
+    );
+    expect(redactSecrets('password="first\\\u2029second"')).toBe(
+      "[REDACTED SECRET]"
+    );
+    expect(redactSecrets('password="trailing\\')).toBe("[REDACTED SECRET]");
+    expect(redactSecrets("password='trailing\\")).toBe("[REDACTED SECRET]");
+  });
+
+  test("redacts unterminated quoted secrets without catastrophic backtracking", async () => {
+    const moduleUrl = new URL("../src/redaction.ts", import.meta.url).href;
+
+    const cases = [
+      {
+        input: `token = "${"\\".repeat(40)}\nKeep this context.`,
+        expected: "[REDACTED SECRET]\nKeep this context.",
+      },
+      {
+        input: `token = "${"\\".repeat(40_000)}\nKeep this context.`,
+        expected: "[REDACTED SECRET]\nKeep this context.",
+      },
+      {
+        input: `password='${"\\'".repeat(10_000)}\nKeep this context.`,
+        expected: "[REDACTED SECRET]\nKeep this context.",
+      },
+      {
+        input: 'token="value"\n'.repeat(4000),
+        expected: "[REDACTED SECRET]\n".repeat(4000),
+      },
+      {
+        input: "token x ".repeat(8000),
+        expected: "token x ".repeat(8000),
+      },
+      {
+        input: "-----BEGIN PRIVATE KEY-----\n".repeat(1000),
+        expected: "[REDACTED SECRET]",
+      },
+      {
+        input: `${"a".repeat(60_000)}:/not-a-url`,
+        expected: `${"a".repeat(60_000)}:/not-a-url`,
+      },
+    ];
+
+    const outdir = mkdtempSync(join(tmpdir(), "pi-advisor-redaction-"));
+
+    try {
+      const built = await Bun.build({
+        entrypoints: [
+          fileURLToPath(new URL("../src/redaction.ts", import.meta.url)),
+        ],
+        target: "node",
+        format: "esm",
+        outdir,
+      });
+
+      expect(built.success).toBe(true);
+
+      const builtModule = pathToFileURL(built.outputs[0].path).href;
+
+      const runtimes = [
+        { executable: process.execPath, moduleUrl },
+        { executable: "node", moduleUrl: builtModule },
+      ];
+
+      for (const runtime of runtimes) {
+        for (const { input, expected } of cases) {
+          const script = `import { redactSecrets } from ${JSON.stringify(runtime.moduleUrl)}; let input = ""; for await (const chunk of process.stdin) input += chunk; console.log(redactSecrets(JSON.parse(input)));`;
+
+          const result = spawnSync(runtime.executable, ["-e", script], {
+            encoding: "utf-8",
+            input: JSON.stringify(input),
+            timeout: 3000,
+          });
+
+          expect(result.error).toBeUndefined();
+          expect(result.status).toBe(0);
+          expect(result.stdout.slice(0, -1)).toBe(expected);
+        }
+      }
+    } finally {
+      rmSync(outdir, { recursive: true, force: true });
+    }
+  }, 30_000);
+
+  test("fails closed for ambiguous assignments and PEM blocks", () => {
+    for (const separator of ["\u2028", "\u2029"]) {
+      for (const quote of ['"', "'"]) {
+        expect(
+          redactSecrets(`password=${quote}first${separator}secret-suffix`)
+        ).toBe("[REDACTED SECRET]");
+      }
+    }
+
+    expect(redactSecrets('password="unterminated\napi_key="REAL_SECRET"')).toBe(
+      "[REDACTED SECRET]"
+    );
+
+    for (const input of [
+      "token=Bearer abcdefghijkl",
+      'password="Bearer abcdefghijkl"',
+    ]) {
+      expect(redactSecrets(input)).not.toContain("abcdefghijkl");
+    }
+
+    expect(
+      redactSecrets(
+        "before -----BEGIN PRIVATE KEY-----\nfirst-secret\n-----BEGIN PRIVATE KEY-----\nsecond-secret"
+      )
+    ).toBe("before [REDACTED SECRET]");
+    expect(
+      redactSecrets(
+        "before -----BEGIN RSA PRIVATE KEY-----\nsecret\n-----END EC PRIVATE KEY-----\nafter"
+      )
+    ).toBe("before [REDACTED SECRET]");
+    expect(
+      redactSecrets(
+        "before -----BEGIN PRIVATE KEY-----\nouter\n-----BEGIN PRIVATE KEY-----\ninner\n-----END PRIVATE KEY-----\nouter\n-----END PRIVATE KEY----- after"
+      )
+    ).toBe("before [REDACTED SECRET] after");
+  });
+
+  test("omits oversized inputs before redaction or truncation", () => {
+    expect(redactSecrets("x".repeat(65_536))).toBe("x".repeat(65_536));
+    expect(redactSecrets(`password=${"x".repeat(65_536)}`)).toBe(
+      "[Redaction omitted: input exceeds 65536 characters]"
+    );
+
+    const ctx = asExtensionContext({
+      sessionManager: {
+        getBranch: () => [
+          {
+            message: {
+              content: `password=${"secret".repeat(11_000)}`,
+              role: "toolResult",
+              toolName: "bash",
+            },
+            type: "message",
+          },
+        ],
+      },
+    });
+
+    const result = recentConversation(ctx, 100_000, 200, 100_000, {}, true);
+    expect(result).toContain(
+      "[Redaction omitted: input exceeds 65536 characters]"
+    );
+    expect(result).not.toContain("secretsecret");
   });
 
   test("redacts every documented secret pattern without retaining the match", () => {

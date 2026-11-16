@@ -30,7 +30,7 @@ The `advisor_config` tool reads recognized effective settings and persisted glob
 
 ## Secret redaction and tool policies
 
-- `advisorRedactSecrets` defaults to `false`. When enabled, pi-advisor locally redacts common credential patterns before including context or targeted questions in an Advisor request. The raw targeted question remains available to local UI displays but is not sent to the provider.
+- `advisorRedactSecrets` defaults to `false`. When enabled, pi-advisor locally redacts common credential patterns before including context or targeted questions in an Advisor request. Individual text inputs over 65,536 UTF-16 code units are omitted entirely before scanning; ambiguous credential or private-key blocks may also cause surrounding text to be omitted. The raw targeted question remains available to local UI displays but is not sent to the provider.
 - `advisorToolPolicies` matches an **exact tool name**. Each tool may use `full`, `summary`, or `exclude`:
   - `full` includes call arguments and capped result output.
   - `summary` omits call arguments and result output but includes result status and size metadata.
