@@ -5,7 +5,7 @@ import { savedConfig, withAgentDir } from "./helpers/config-fixture.ts";
 import { activationContext, activationHarness } from "./helpers/harness.ts";
 
 describe("Executor model adoption", () => {
-  test("only an explicit model selection redefines the persisted Executor", async () => {
+  test("model selections never redefine the persisted Executor", async () => {
     await withAgentDir(
       { executor: "configured/executor" },
       async (agentDir) => {
@@ -26,12 +26,20 @@ describe("Executor model adoption", () => {
           { model: { id: "chosen", provider: "vendor" }, source: "set" },
           ctx
         );
-        expect(savedConfig(agentDir).executor).toBe("vendor/chosen");
+        expect(savedConfig(agentDir).executor).toBe("configured/executor");
+
+        // The active Advisor flow must not turn `/model` into a config write.
+        pi.setActiveTools(["ask_advisor"]);
+        events.get("model_select")?.(
+          { model: { id: "astra", provider: "vendor" }, source: "set" },
+          ctx
+        );
+        expect(savedConfig(agentDir).executor).toBe("configured/executor");
       }
     );
   });
 
-  test("adopts an explicit model selection made before activation", async () => {
+  test("does not adopt a /model selection made before activation", async () => {
     await withAgentDir(
       { advisor: "provider/advisor", executor: "configured/executor" },
       async (agentDir) => {
@@ -53,7 +61,7 @@ describe("Executor model adoption", () => {
 
         expect(savedConfig(agentDir)).toMatchObject({
           advisor: "provider/advisor",
-          executor: "provider/luna",
+          executor: "configured/executor",
         });
         expect(pi.getActiveTools()).toContain("ask_advisor");
       }

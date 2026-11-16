@@ -42,9 +42,7 @@ export const registerModelCommands = (runtime: CommandRuntime) => {
         advisor: persisted.advisor ? advisorRef : "",
         advisorEffort: advisorEffortRef,
         advisorFallbackModel: advisorFallbackModelRef,
-        executor:
-          runtime.pendingExecutorModelRef ??
-          (persisted.executor ? executorRef : ""),
+        executor: persisted.executor ? executorRef : "",
         executorEffort: executorEffortRef,
         selectAdvisor: true,
         selectExecutor: true,
@@ -65,7 +63,6 @@ export const registerModelCommands = (runtime: CommandRuntime) => {
         persistExecutor: true,
       });
 
-      runtime.pendingExecutorModelRef = undefined;
       runtime.updateSameModelNotice(ctx);
       ctx.ui.notify(
         `${t("notify.modelsSaved.prefix", "Saved Executor + Advisor configurations to")} ${path}`,

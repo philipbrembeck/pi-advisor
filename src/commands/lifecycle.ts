@@ -1,14 +1,7 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
-import { isMarkedSubagent } from "../child-session.ts";
-import {
-  advisorToolsEnabledRef,
-  alwaysOnRef,
-  executorRef,
-  getPersistedModelRefs,
-  setExecutorRef,
-} from "../config/state.ts";
-import { loadConfig, saveConfig } from "../config/storage.ts";
+import { advisorToolsEnabledRef, alwaysOnRef } from "../config/state.ts";
+import { loadConfig } from "../config/storage.ts";
 import { t } from "../i18n.ts";
 import { setAdvisorToolsActive } from "./advisor-tools.ts";
 import { notify } from "./runtime.ts";
@@ -25,7 +18,6 @@ export const registerCommandLifecycle = (
   activateAdvisor: ActivateAdvisor
 ) => {
   runtime.pi.on("session_start", async (_event, ctx) => {
-    runtime.pendingExecutorModelRef = undefined;
     runtime.resetSameModelNotice();
 
     // A malformed advisor.json or a provider auth failure must not reject a
@@ -62,43 +54,8 @@ export const registerCommandLifecycle = (
       runtime.updateSameModelNotice(ctx, event.model);
     }
 
-    // "restore" replays a stored session model and "cycle" changes the active
-    // model without an explicit `/model` choice. Neither should redefine the
-    // configured Executor.
-    if (
-      event.source !== "set" ||
-      runtime.suppressModelSelectionSync ||
-      isMarkedSubagent()
-    ) {
-      return;
-    }
-
-    const selected = `${event.model.provider}/${event.model.id}`;
-
-    if (!getPersistedModelRefs().executor) {
-      return;
-    }
-
-    if (!runtime.flowEnabled()) {
-      // Defer persistence until `/advisor` succeeds. This keeps ordinary model
-      // selection global defaults untouched when the flow is not enabled.
-      runtime.pendingExecutorModelRef = selected;
-
-      return;
-    }
-
-    runtime.pendingExecutorModelRef = undefined;
-
-    if (selected === executorRef) {
-      return;
-    }
-
-    const persisted = getPersistedModelRefs();
-    setExecutorRef(selected);
-    saveConfig(ctx, {
-      persistAdvisor: Boolean(persisted.advisor),
-      persistExecutor: true,
-    });
+    // Model selection changes the active Pi session model only. Persisted
+    // Executor settings are changed explicitly through `/advisor-models`.
   });
 
   runtime.pi.on("session_shutdown", (_event, ctx) => {

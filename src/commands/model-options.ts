@@ -165,7 +165,6 @@ export const getExplicitModelError = (
 };
 
 export interface ActivationModelPlan {
-  pendingExecutor: string | undefined;
   selectAdvisor: boolean;
   selectExecutor: boolean;
 }
@@ -174,23 +173,13 @@ export const planActivationModels = (
   ctx: ExtensionContext,
   executor: string | undefined,
   advisor: string | undefined,
-  pendingExecutorRef: string | undefined,
   persisted: ReturnType<typeof getPersistedModelRefs>,
   executorOverride: boolean,
   advisorOverride: boolean,
   availableRefs: Set<string> | undefined
 ): ActivationModelPlan => {
-  const pendingExecutor =
-    !executorOverride &&
-    persisted.executor &&
-    pendingExecutorRef &&
-    isSelectableModel(ctx, pendingExecutorRef, availableRefs)
-      ? pendingExecutorRef
-      : undefined;
-
   const executorConfigured =
     executorOverride ||
-    Boolean(pendingExecutor) ||
     !persisted.executor ||
     isSelectableModel(ctx, executor, availableRefs);
 
@@ -201,7 +190,6 @@ export const planActivationModels = (
     );
 
   return {
-    pendingExecutor,
     selectAdvisor: !advisorConfigured,
     selectExecutor: !executorConfigured,
   };

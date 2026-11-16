@@ -62,7 +62,6 @@ export interface CommandRuntime {
     ReturnType<typeof setInterval>
   >;
   nextManualProgressId: () => string;
-  pendingExecutorModelRef: string | undefined;
   readonly pi: ExtensionAPI;
   reportManualBudgetExhausted: (ctx: ExtensionContext) => void;
   readonly requestAdvisor: ManualConsult;

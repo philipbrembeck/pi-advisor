@@ -1466,12 +1466,10 @@ var getExplicitModelError = (ctx, ref, label, overridden, availableRefs) => {
     }
   }
 };
-var planActivationModels = (ctx, executor, advisor, pendingExecutorRef, persisted, executorOverride, advisorOverride, availableRefs) => {
-  const pendingExecutor = !executorOverride && persisted.executor && pendingExecutorRef && isSelectableModel(ctx, pendingExecutorRef, availableRefs) ? pendingExecutorRef : undefined;
-  const executorConfigured = executorOverride || Boolean(pendingExecutor) || !persisted.executor || isSelectableModel(ctx, executor, availableRefs);
+var planActivationModels = (ctx, executor, advisor, persisted, executorOverride, advisorOverride, availableRefs) => {
+  const executorConfigured = executorOverride || !persisted.executor || isSelectableModel(ctx, executor, availableRefs);
   const advisorConfigured = advisorOverride || Boolean(persisted.advisor && isSelectableModel(ctx, advisor, availableRefs));
   return {
-    pendingExecutor,
     selectAdvisor: !advisorConfigured,
     selectExecutor: !executorConfigured
   };
@@ -5542,7 +5540,6 @@ class CommandRuntime {
   requestManualRender = requestManualRender;
   scoutStatus;
   manualProgressSequence = 0;
-  pendingExecutorModelRef;
   suppressModelSelectionSync = false;
   toolAvailabilityRevision = 0;
   lastSameModelDisabled;
@@ -5612,10 +5609,9 @@ var prepareActivationModels = async (runtime, ctx, announce, executorOverride, a
     notify(ctx, explicitError, "error");
     return;
   }
-  const plan = planActivationModels(ctx, executorRef, advisorRef, runtime.pendingExecutorModelRef, persisted, executorOverride, advisorOverride, availableRefSet);
-  setExecutorRef(plan.pendingExecutor ?? executorRef);
+  const plan = planActivationModels(ctx, executorRef, advisorRef, persisted, executorOverride, advisorOverride, availableRefSet);
   if (!(plan.selectExecutor || plan.selectAdvisor)) {
-    return { pendingExecutor: plan.pendingExecutor, pickedModels: false };
+    return { pickedModels: false };
   }
   if (!announce) {
     notify(ctx, t("notify.modelsNotConfigured.message", "Advisor models are not configured or available. Run /advisor to choose them."), "error");
@@ -5625,7 +5621,7 @@ var prepareActivationModels = async (runtime, ctx, announce, executorOverride, a
     advisor: advisorOverride || persisted.advisor ? advisorRef : "",
     advisorEffort: advisorEffortRef,
     advisorFallbackModel: advisorFallbackModelRef,
-    executor: executorOverride || plan.pendingExecutor || persisted.executor ? executorRef : "",
+    executor: executorOverride || persisted.executor ? executorRef : "",
     executorEffort: executorEffortRef,
     selectAdvisor: plan.selectAdvisor,
     selectExecutor: plan.selectExecutor
@@ -5638,7 +5634,7 @@ var prepareActivationModels = async (runtime, ctx, announce, executorOverride, a
   setAdvisorEffortRef(selection.advisorEffort);
   setExecutorRef(selection.executor);
   setExecutorEffortRef(selection.executorEffort);
-  return { pendingExecutor: plan.pendingExecutor, pickedModels: true };
+  return { pickedModels: true };
 };
 
 // src/commands/advisor-tools.ts
@@ -5783,11 +5779,10 @@ var activateAdvisor = async (runtime, args, ctx, announce = true) => {
   if (reenableTools) {
     setAdvisorToolsEnabledRef(true);
   }
-  const shouldSave = Boolean(args.trim() || prepared.pickedModels || prepared.pendingExecutor || reenableTools);
+  const shouldSave = Boolean(args.trim() || prepared.pickedModels || reenableTools);
   if (!persistSuccessfulActivation(ctx, shouldSave, reenableTools, () => restoreRefs(liveRefSnapshot()))) {
     return;
   }
-  runtime.pendingExecutorModelRef = undefined;
   if (executorEffortRef && !isMarkedSubagent()) {
     runtime.pi.setThinkingLevel(executorEffortRef);
   }
@@ -6312,7 +6307,6 @@ var registerAdvisorConfigurationTool = (runtime, dependencies = {}) => {
 // src/commands/lifecycle.ts
 var registerCommandLifecycle = (runtime, activateAdvisor) => {
   runtime.pi.on("session_start", async (_event, ctx) => {
-    runtime.pendingExecutorModelRef = undefined;
     runtime.resetSameModelNotice();
     try {
       loadConfig(ctx);
@@ -6337,27 +6331,6 @@ var registerCommandLifecycle = (runtime, activateAdvisor) => {
     if (!runtime.suppressModelSelectionSync) {
       runtime.updateSameModelNotice(ctx, event.model);
     }
-    if (event.source !== "set" || runtime.suppressModelSelectionSync || isMarkedSubagent()) {
-      return;
-    }
-    const selected = `${event.model.provider}/${event.model.id}`;
-    if (!getPersistedModelRefs().executor) {
-      return;
-    }
-    if (!runtime.flowEnabled()) {
-      runtime.pendingExecutorModelRef = selected;
-      return;
-    }
-    runtime.pendingExecutorModelRef = undefined;
-    if (selected === executorRef) {
-      return;
-    }
-    const persisted = getPersistedModelRefs();
-    setExecutorRef(selected);
-    saveConfig(ctx, {
-      persistAdvisor: Boolean(persisted.advisor),
-      persistExecutor: true
-    });
   });
   runtime.pi.on("session_shutdown", (_event, ctx) => {
     if (ctx.hasUI) {
@@ -7475,7 +7448,7 @@ var registerModelCommands = (runtime) => {
         advisor: persisted.advisor ? advisorRef : "",
         advisorEffort: advisorEffortRef,
         advisorFallbackModel: advisorFallbackModelRef,
-        executor: runtime.pendingExecutorModelRef ?? (persisted.executor ? executorRef : ""),
+        executor: persisted.executor ? executorRef : "",
         executorEffort: executorEffortRef,
         selectAdvisor: true,
         selectExecutor: true
@@ -7492,7 +7465,6 @@ var registerModelCommands = (runtime) => {
         persistAdvisor: true,
         persistExecutor: true
       });
-      runtime.pendingExecutorModelRef = undefined;
       runtime.updateSameModelNotice(ctx);
       ctx.ui.notify(`${t("notify.modelsSaved.prefix", "Saved Executor + Advisor configurations to")} ${path}`, "info");
     }

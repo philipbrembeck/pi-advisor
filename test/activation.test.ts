@@ -440,7 +440,7 @@ describe("Advisor activation flow", () => {
     });
   });
 
-  test("preselects an inactive /model choice in advisor-models", async () => {
+  test("does not preselect an inactive /model choice in advisor-models", async () => {
     await withAgentDir(
       { advisor: "provider/sonnet", executor: "provider/sonnet" },
       async (agentDir) => {
@@ -485,13 +485,13 @@ describe("Advisor activation flow", () => {
         await commands.get("advisor").handler("", ctx);
 
         expect(selectedModels).toEqual([
-          "provider/luna",
+          "provider/sonnet",
           "provider/luna",
           "Disabled (no fallback)",
         ]);
         expect(savedConfig(agentDir)).toMatchObject({
           advisor: "provider/luna",
-          executor: "provider/luna",
+          executor: "provider/sonnet",
         });
       }
     );

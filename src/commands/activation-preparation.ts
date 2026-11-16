@@ -25,7 +25,6 @@ import { notify } from "./runtime.ts";
 import type { CommandRuntime } from "./types.ts";
 
 export interface PreparedActivationModels {
-  pendingExecutor?: string;
   pickedModels: boolean;
 }
 
@@ -86,17 +85,14 @@ export const prepareActivationModels = async (
     ctx,
     executorRef,
     advisorRef,
-    runtime.pendingExecutorModelRef,
     persisted,
     executorOverride,
     advisorOverride,
     availableRefSet
   );
 
-  setExecutorRef(plan.pendingExecutor ?? executorRef);
-
   if (!(plan.selectExecutor || plan.selectAdvisor)) {
-    return { pendingExecutor: plan.pendingExecutor, pickedModels: false };
+    return { pickedModels: false };
   }
 
   // Always-on startup cannot open an interactive picker, so it leaves the
@@ -118,10 +114,7 @@ export const prepareActivationModels = async (
     advisor: advisorOverride || persisted.advisor ? advisorRef : "",
     advisorEffort: advisorEffortRef,
     advisorFallbackModel: advisorFallbackModelRef,
-    executor:
-      executorOverride || plan.pendingExecutor || persisted.executor
-        ? executorRef
-        : "",
+    executor: executorOverride || persisted.executor ? executorRef : "",
     executorEffort: executorEffortRef,
     selectAdvisor: plan.selectAdvisor,
     selectExecutor: plan.selectExecutor,
@@ -137,5 +130,5 @@ export const prepareActivationModels = async (
   setExecutorRef(selection.executor);
   setExecutorEffortRef(selection.executorEffort);
 
-  return { pendingExecutor: plan.pendingExecutor, pickedModels: true };
+  return { pickedModels: true };
 };

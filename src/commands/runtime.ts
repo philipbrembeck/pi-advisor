@@ -64,7 +64,6 @@ class CommandRuntime implements CommandRuntimeContract {
   readonly requestManualRender = requestManualRender;
   readonly scoutStatus: ScoutStatusManager;
   manualProgressSequence = 0;
-  pendingExecutorModelRef: string | undefined;
   suppressModelSelectionSync = false;
   toolAvailabilityRevision = 0;
   private lastSameModelDisabled: boolean | undefined;

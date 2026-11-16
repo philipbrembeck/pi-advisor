@@ -253,10 +253,7 @@ export const activateAdvisor = async (
   }
 
   const shouldSave = Boolean(
-    args.trim() ||
-    prepared.pickedModels ||
-    prepared.pendingExecutor ||
-    reenableTools
+    args.trim() || prepared.pickedModels || reenableTools
   );
 
   if (
@@ -266,11 +263,6 @@ export const activateAdvisor = async (
   ) {
     return;
   }
-
-  // A successful activation has committed the effective Executor. Do not let
-  // an older inactive selection override an explicit activation argument on a
-  // later attempt.
-  runtime.pendingExecutorModelRef = undefined;
 
   if (executorEffortRef && !isMarkedSubagent()) {
     // SAFETY: executorEffortRef is operator-configured and trusted to name a ThinkingLevel.

@@ -176,7 +176,7 @@ describe("Executor pin transitions within one session", () => {
     );
   });
 
-  test("pinning via /advisor executor= makes later /model selections persist", async () => {
+  test("pinning via /advisor executor= survives later /model selections", async () => {
     await withAgentDir({ advisor: "provider/advisor" }, async (agentDir) => {
       const { commands, events, pi, setActiveTools } = activationHarness();
       registerCommands(pi);
@@ -189,7 +189,7 @@ describe("Executor pin transitions within one session", () => {
       expect(savedConfig(agentDir).executor).toBe("provider/pinned");
 
       select(events, ctx, "luna");
-      expect(savedConfig(agentDir).executor).toBe("provider/luna");
+      expect(savedConfig(agentDir).executor).toBe("provider/pinned");
     });
   });
 });
