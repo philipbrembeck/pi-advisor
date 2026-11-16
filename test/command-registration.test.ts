@@ -318,6 +318,164 @@ describe("Extension Registration", () => {
     });
   });
 
+  test("awaits a manual consultation inside the handler in one-shot runs", async () => {
+    for (const mode of ["json", "print"] as const) {
+      const commands = new Map<string, any>();
+      const sent: { message: any; options: any }[] = [];
+
+      let resolveConsult!: (value: {
+        markdown: string;
+        thinkingText: string;
+      }) => void;
+
+      const pendingConsult = new Promise<{
+        markdown: string;
+        thinkingText: string;
+      }>((resolve) => {
+        resolveConsult = resolve;
+      });
+
+      registerCommands(mockPi({ commands, sent }), {
+        consult: () => pendingConsult,
+      });
+
+      let handlerSettled = false;
+
+      const running = commands
+        .get("advisor-manual")
+        .handler("Check", {
+          cwd: tmpdir(),
+          hasUI: false,
+          isProjectTrusted: () => false,
+          mode,
+        })
+        .then(() => (handlerSettled = true));
+
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(handlerSettled).toBe(false);
+      expect(sent).toEqual([]);
+
+      resolveConsult({ markdown: "One-shot result.", thinkingText: "" });
+      await running;
+
+      expect(handlerSettled).toBe(true);
+      expect(sent).toEqual([
+        {
+          message: expect.objectContaining({
+            content: expect.stringContaining("One-shot result."),
+            customType: "advisor-manual-result",
+          }),
+          options: { deliverAs: "steer", triggerTurn: false },
+        },
+      ]);
+    }
+  });
+
+  test("emits the failure message before returning in one-shot runs", async () => {
+    const commands = new Map<string, any>();
+    const sent: { message: any; options: any }[] = [];
+    registerCommands(mockPi({ commands, sent }), {
+      consult: () => Promise.reject(new Error("provider offline")),
+    });
+
+    await commands.get("advisor-manual").handler("Check", {
+      cwd: tmpdir(),
+      hasUI: false,
+      isProjectTrusted: () => false,
+      mode: "json",
+    });
+
+    expect(sent).toEqual([
+      {
+        message: expect.objectContaining({
+          content: expect.stringContaining("provider offline"),
+          customType: "advisor-manual-result",
+        }),
+        options: { deliverAs: "steer", triggerTurn: false },
+      },
+    ]);
+  });
+
+  test("fire-and-forgets manual consultations in interactive and RPC runs", async () => {
+    // RPC: the handler must return while the consultation is still pending.
+    {
+      const commands = new Map<string, any>();
+      const sent: { message: any; options: any }[] = [];
+
+      let resolveConsult!: (value: {
+        markdown: string;
+        thinkingText: string;
+      }) => void;
+
+      const pendingConsult = new Promise<{
+        markdown: string;
+        thinkingText: string;
+      }>((resolve) => {
+        resolveConsult = resolve;
+      });
+
+      registerCommands(mockPi({ commands, sent }), {
+        consult: () => pendingConsult,
+      });
+
+      await commands.get("advisor-manual").handler("Check", {
+        cwd: tmpdir(),
+        hasUI: false,
+        isProjectTrusted: () => false,
+        mode: "rpc",
+      });
+
+      expect(sent).toEqual([]);
+
+      resolveConsult({ markdown: "Streamed result.", thinkingText: "" });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(sent).toEqual([
+        {
+          message: expect.objectContaining({
+            customType: "advisor-manual-result",
+          }),
+          options: { deliverAs: "steer", triggerTurn: true },
+        },
+      ]);
+    }
+
+    // TUI: the dialog path also streams after the handler returns.
+    {
+      const commands = new Map<string, any>();
+      const sent: { message: any; options: any }[] = [];
+      registerCommands(mockPi({ commands, sent }), {
+        consult: () =>
+          Promise.resolve({ markdown: "Streamed result.", thinkingText: "" }),
+      });
+
+      await commands.get("advisor-manual").handler(
+        "Check",
+        asExtensionContext({
+          cwd: tmpdir(),
+          hasUI: true,
+          isProjectTrusted: () => false,
+          mode: "tui",
+          ui: {
+            custom: async () => ({ gitContext: undefined, message: "Check" }),
+            setStatus: () => {},
+          },
+        })
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(sent).toEqual([
+        {
+          message: expect.objectContaining({
+            customType: "advisor-manual-result",
+          }),
+          options: { deliverAs: "steer", triggerTurn: true },
+        },
+      ]);
+    }
+  });
+
   test("cancels a manual consultation before its late response can fan out", async () => {
     const commands = new Map<string, any>();
     const events = new Map<string, SessionShutdownHandler>();

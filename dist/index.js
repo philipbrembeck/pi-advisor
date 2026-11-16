@@ -7218,7 +7218,7 @@ var screeningSkipText = (outcome) => outcome.kind === "repeat" && outcome.reatta
 
 // src/commands/manual-consultation.ts
 var startManualConsultation = async (runtime, ctx, question, controller, scoutStatusToken, progress, gitContext) => {
-  const isPrintMode = ctx.mode === "print";
+  const isOneShot = ctx.mode === "print" || ctx.mode === "json";
   progress.phase = "preparing";
   runtime.requestManualRender(ctx);
   if (uiAvailable(ctx)) {
@@ -7299,7 +7299,7 @@ ${markdown}`,
       display: true
     }, {
       deliverAs: "steer",
-      triggerTurn: !isPrintMode
+      triggerTurn: !isOneShot
     });
   } catch (error) {
     if (controller.signal.aborted) {
@@ -7324,7 +7324,7 @@ ${markdown}`,
         text: `**Advisor consultation failed:** ${message}`
       },
       display: true
-    }, { deliverAs: "steer", triggerTurn: !isPrintMode });
+    }, { deliverAs: "steer", triggerTurn: !isOneShot });
     notify(ctx, `${t("manualCmd.consultFailed.prefix", "Advisor consultation failed:")} ${message}`, "error");
     notifyHerdrAdvisorFailure("Advisor consultation failed", message);
   } finally {
@@ -7418,7 +7418,7 @@ var registerManualCommand = (runtime) => {
       runtime.scoutStatus.register(scoutStatusToken);
       runtime.manualConsultations.set(controller, scoutStatusToken);
       runtime.pi.appendEntry?.("advisor-manual-call", { progressId, question });
-      if (ctx.mode === "print") {
+      if (ctx.mode === "print" || ctx.mode === "json") {
         await startManualConsultation(runtime, ctx, question, controller, scoutStatusToken, progress, gitContext);
         return;
       }

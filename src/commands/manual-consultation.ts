@@ -34,7 +34,9 @@ export const startManualConsultation = async (
   progress: ManualAdvisorProgressState,
   gitContext?: GitContextLevel
 ) => {
-  const isPrintMode = ctx.mode === "print";
+  // One-shot runs (`pi -p`, `pi --mode json -p`) have no follow-up turn;
+  // triggering one trips pi's turn_end entry resolution during teardown.
+  const isOneShot = ctx.mode === "print" || ctx.mode === "json";
   progress.phase = "preparing";
   runtime.requestManualRender(ctx);
 
@@ -153,10 +155,8 @@ export const startManualConsultation = async (
       {
         // Steer lets the current turn finish its active work; the Executor sees
         // the result before its next model call rather than being interrupted.
-        // Print mode has no follow-up turn; triggering one trips pi's turn_end
-        // entry resolution during teardown.
         deliverAs: "steer",
-        triggerTurn: !isPrintMode,
+        triggerTurn: !isOneShot,
       }
     );
   } catch (error) {
@@ -185,7 +185,7 @@ export const startManualConsultation = async (
         },
         display: true,
       },
-      { deliverAs: "steer", triggerTurn: !isPrintMode }
+      { deliverAs: "steer", triggerTurn: !isOneShot }
     );
     notify(
       ctx,

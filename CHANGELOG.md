@@ -9,6 +9,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ### Fixed
 
 - Prevent `/model` and model cycling from changing the persisted Executor; update it only through `/advisor-models` or an explicit `/advisor executor=...` override.
+- `/advisor-manual` now waits for the consultation in `pi --mode json -p` one-shot runs, so the result (or failure) message is emitted before the process exits instead of being lost to teardown, and no Executor turn is triggered there.
 
 ## 0.16.0 - 2026-11-16
 

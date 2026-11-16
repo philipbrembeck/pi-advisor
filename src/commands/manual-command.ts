@@ -123,9 +123,10 @@ export const registerManualCommand = (runtime: CommandRuntime) => {
       runtime.manualConsultations.set(controller, scoutStatusToken);
       runtime.pi.appendEntry?.("advisor-manual-call", { progressId, question });
 
-      // Print mode tears the session down when the handler returns, so the
-      // consultation must complete inside the handler to keep its ctx valid.
-      if (ctx.mode === "print") {
+      // One-shot runs (`pi -p`, `pi --mode json -p`) tear the session down
+      // when the handler returns, so the consultation must complete inside
+      // the handler to keep its ctx valid.
+      if (ctx.mode === "print" || ctx.mode === "json") {
         await startManualConsultation(
           runtime,
           ctx,
