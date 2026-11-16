@@ -21,7 +21,11 @@ import {
   withAgentDir,
 } from "./helpers/config-fixture.ts";
 import { asExtensionContext } from "./helpers/extension-context.ts";
-import { changeSetting, plainScreen } from "./helpers/settings-navigation.ts";
+import {
+  changeSetting,
+  focusSettingsRow,
+  plainScreen,
+} from "./helpers/settings-navigation.ts";
 import { plainThemeMock } from "./helpers/theme.ts";
 
 initTheme();
@@ -76,6 +80,7 @@ describe("Advisor Scout timeout setting", () => {
       });
 
       try {
+        focusSettingsRow(selector, "Scout timeout ms");
         const screen = plainScreen(selector);
         expect(screen).toContain("Scout timeout ms");
         expect(screen).toContain("45000");

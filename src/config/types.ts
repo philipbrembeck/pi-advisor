@@ -68,8 +68,11 @@ export const GATE_FAILURE_MODES: GateFailureMode[] = [
   "warn-and-continue",
 ];
 
+export type AdvisorActivation = "persistent" | "session";
+
 export interface AdvisorConfig {
   advisor?: string;
+  advisorActivation?: AdvisorActivation;
   advisorFallbackModel?: string;
   advisorAgentsMdContext?: boolean;
   advisorAutoLoopGate?: boolean;

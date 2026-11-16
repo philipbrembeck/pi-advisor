@@ -21,6 +21,7 @@ export interface AdvisorModelSelection {
 }
 
 export interface AdvisorModelPickerOptions {
+  canContinue?: () => boolean;
   advisor: string | undefined;
   advisorEffort: string | undefined;
   advisorFallbackModel: string | undefined;
@@ -30,11 +31,18 @@ export interface AdvisorModelPickerOptions {
   selectExecutor: boolean;
 }
 
+const isCurrentChoice = (
+  choice: string | undefined,
+  canContinue: () => boolean
+): choice is string => Boolean(choice) && canContinue();
+
 export const selectAdvisorModels = async (
   ctx: ExtensionContext,
   options: AdvisorModelPickerOptions
 ): Promise<AdvisorModelSelection | undefined> => {
-  if (!ctx.hasUI) {
+  const canContinue = () => options.canContinue?.() ?? true;
+
+  if (!canContinue() || !ctx.hasUI) {
     return undefined;
   }
 
@@ -84,7 +92,7 @@ export const selectAdvisorModels = async (
         })
     );
 
-    if (!selectedExecutor) {
+    if (!isCurrentChoice(selectedExecutor, canContinue)) {
       return undefined;
     }
 
@@ -96,7 +104,7 @@ export const selectAdvisorModels = async (
       effortChoices(executorEffort)
     );
 
-    if (!selectedExecutorEffort) {
+    if (!isCurrentChoice(selectedExecutorEffort, canContinue)) {
       return undefined;
     }
 
@@ -122,7 +130,7 @@ export const selectAdvisorModels = async (
         })
     );
 
-    if (!selectedAdvisor) {
+    if (!isCurrentChoice(selectedAdvisor, canContinue)) {
       return undefined;
     }
 
@@ -131,7 +139,7 @@ export const selectAdvisorModels = async (
       effortChoices(advisorEffort)
     );
 
-    if (!selectedAdvisorEffort) {
+    if (!isCurrentChoice(selectedAdvisorEffort, canContinue)) {
       return undefined;
     }
 
@@ -162,7 +170,7 @@ export const selectAdvisorModels = async (
       })
   );
 
-  if (selectedFallback === undefined) {
+  if (selectedFallback === undefined || !canContinue()) {
     return undefined;
   }
 

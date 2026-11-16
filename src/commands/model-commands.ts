@@ -1,4 +1,6 @@
+import { clearSessionActivationOverrides } from "../config/session-overrides.ts";
 import {
+  advisorActivationRef,
   advisorEffortRef,
   advisorFallbackModelRef,
   advisorRef,
@@ -17,6 +19,14 @@ import { loadCommandConfig } from "./activation-preparation.ts";
 import { activateAdvisor } from "./activation.ts";
 import { selectAdvisorModels } from "./model-picker.ts";
 import type { CommandRuntime } from "./types.ts";
+
+const MODEL_SETTINGS = [
+  "advisor",
+  "advisorEffort",
+  "advisorFallbackModel",
+  "executor",
+  "executorEffort",
+] as const;
 
 export const registerModelCommands = (runtime: CommandRuntime) => {
   runtime.pi.registerCommand("advisor", {
@@ -58,10 +68,17 @@ export const registerModelCommands = (runtime: CommandRuntime) => {
       setExecutorEffortRef(selection.executorEffort);
       setAdvisorEffortRef(selection.advisorEffort);
 
+      const sessionScoped = advisorActivationRef === "session";
+
       const path = saveConfig(ctx, {
+        forceKeys: sessionScoped ? MODEL_SETTINGS : undefined,
         persistAdvisor: true,
         persistExecutor: true,
       });
+
+      if (sessionScoped) {
+        clearSessionActivationOverrides(ctx, MODEL_SETTINGS);
+      }
 
       runtime.updateSameModelNotice(ctx);
       ctx.ui.notify(

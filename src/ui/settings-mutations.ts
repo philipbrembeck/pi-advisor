@@ -41,6 +41,13 @@ const applyModeMutation = (
   value: string
 ): boolean => {
   switch (id) {
+    case "advisorActivation": {
+      settings.advisorActivation =
+        value === "session" ? "session" : "persistent";
+
+      return true;
+    }
+
     case "advisorToolsEnabled": {
       settings.advisorToolsEnabled = value === "On";
 

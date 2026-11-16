@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## Unreleased
 
+### Added
+
+- Added `advisorActivation: "session"` and an **Advisor activation** setting. Each session start, including `/reload`, leaves all three Advisor tools inactive; `/advisor` and `/advisor-off` toggle them without writing `advisor.json`. The default persistent behavior is unchanged.
+
 ### Fixed
 
 - Prevent `/model` and model cycling from changing the persisted Executor; update it only through `/advisor-models` or an explicit `/advisor executor=...` override.

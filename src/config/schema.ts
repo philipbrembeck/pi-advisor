@@ -22,6 +22,7 @@ import {
   isValidToolResultMaxLines,
 } from "./schema-validators.ts";
 import {
+  advisorActivationRef,
   advisorAgentsMdContextRef,
   advisorAutoLoopGateRef,
   advisorBlockOnBlockedRef,
@@ -75,7 +76,11 @@ import {
   showUsageFooterRef,
   simpleModeRef,
 } from "./state.ts";
-import type { AdvisorConfig, AdvisorConfigValue } from "./types.ts";
+import type {
+  AdvisorActivation,
+  AdvisorConfig,
+  AdvisorConfigValue,
+} from "./types.ts";
 import {
   GATE_FAILURE_MODES,
   JEV_TRANSPORTS,
@@ -120,6 +125,14 @@ export const CONFIG_SCHEMA = {
     current: () => configuredModelRef(advisorRef),
     persisted: true,
     type: "string",
+  },
+  advisorActivation: {
+    accepted: "persistent or session",
+    current: () => advisorActivationRef,
+    persisted: true,
+    type: "enum",
+    validate: (value: unknown): value is AdvisorActivation =>
+      value === "persistent" || value === "session",
   },
   advisorAgentsMdContext: {
     accepted: "true or false",

@@ -1,4 +1,5 @@
 import {
+  setAdvisorActivationRef,
   setAdvisorAgentsMdContextRef,
   setAdvisorAutoLoopGateRef,
   setAdvisorBlockOnBlockedRef,
@@ -95,6 +96,7 @@ export const resetDefaults = () => {
   setAdvisorSessionSummaryRef(false);
   setAdvisorLogFeedbackRef(false);
   setSimpleModeRef(false);
+  setAdvisorActivationRef("persistent");
   setAdvisorToolsEnabledRef(true);
   setAlwaysOnRef(false);
   setAdvisorFailureModeRef("block-session");
@@ -222,6 +224,7 @@ export const applyConfig = (config: AdvisorConfig) => {
   applyOptionalConfig(config, "showUsageDetails", setShowUsageDetailsRef);
   applyOptionalConfig(config, "showUsageFooter", setShowUsageFooterRef);
   applyOptionalConfig(config, "simpleMode", setSimpleModeRef);
+  applyOptionalConfig(config, "advisorActivation", setAdvisorActivationRef);
   applyOptionalConfig(config, "advisorToolsEnabled", setAdvisorToolsEnabledRef);
   applyOptionalConfig(config, "alwaysOn", setAlwaysOnRef);
   applyOptionalConfig(config, "gateFailureMode", setAdvisorFailureModeRef);

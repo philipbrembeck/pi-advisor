@@ -1,7 +1,7 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
-import { getAdvisorSettings } from "../config/state.ts";
-import { setAdvisorToolsActive } from "./advisor-tools.ts";
+import type { getAdvisorSettings } from "../config/state.ts";
+import { reconcileAdvisorToolsAfterSettings } from "./activation-settings.ts";
 import type { CommandRuntime } from "./types.ts";
 
 export const applyAdvisorConfigRuntimeSettings = (
@@ -9,24 +9,7 @@ export const applyAdvisorConfigRuntimeSettings = (
   ctx: ExtensionContext,
   previous: ReturnType<typeof getAdvisorSettings>
 ) => {
-  const next = getAdvisorSettings();
-  const shouldEnable = next.advisorToolsEnabled ?? true;
-  const toolsAreActive = runtime.pi.getActiveTools().includes("ask_advisor");
-
-  if (
-    previous.advisorToolsEnabled !== next.advisorToolsEnabled ||
-    toolsAreActive !== shouldEnable
-  ) {
-    runtime.noteAdvisorToolsStateChange();
-    setAdvisorToolsActive(runtime.pi, shouldEnable);
-
-    if (!shouldEnable) {
-      runtime.resetSameModelNotice();
-    }
-  }
-
-  runtime.updateSameModelNotice(ctx);
-  runtime.updateAdvisorUsageStatus(ctx);
+  reconcileAdvisorToolsAfterSettings(runtime, ctx, previous, false);
 };
 
 export const cancelledAdvisorConfigResult = (message: string) => ({

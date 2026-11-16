@@ -100,12 +100,14 @@ export class AdvisorSessionState {
   readonly #followUps: AdvisorFollowUpCache;
   #sessionTurnOrdinal = 0;
   #turnsSinceConsultation = 0;
+  sessionToolsEnabled = false;
 
   constructor(now?: () => number) {
     this.#followUps = new AdvisorFollowUpCache(now);
   }
 
   resetTask() {
+    this.sessionToolsEnabled = false;
     this.#repetition = freshRepetition();
     this.#blockedReason = undefined;
     this.#ledger = freshAdviceLedger();

@@ -1,5 +1,6 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
+import { advisorActivationRef } from "../config/state.ts";
 import { herdrAdvisorActivity, herdrAdvisorBlock } from "../herdr.ts";
 import { appendOutcome } from "../outcomes.ts";
 import type { AdvisorSessionState } from "../session-state.ts";
@@ -43,7 +44,13 @@ export const registerAdvisorTool = (
   registerOutcomeTool(registration);
 
   const turnGate: JevTurnGateRegistration = {
-    activeTools: () => pi.getActiveTools(),
+    activeTools: () => {
+      const active = pi.getActiveTools();
+
+      return advisorActivationRef === "session" && !session.sessionToolsEnabled
+        ? active.filter((name) => name !== "ask_advisor")
+        : active;
+    },
     consult: registration.consult,
     herdrActivity: registration.herdrActivity,
     send: (message) => pi.sendMessage(message, { deliverAs: "steer" }),

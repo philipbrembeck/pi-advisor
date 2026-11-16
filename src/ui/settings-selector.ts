@@ -296,6 +296,7 @@ export class AdvisorSettingsSelector implements Component, Focusable {
 
     if (
       id === "context" ||
+      id === "advisorActivation" ||
       id === "simpleMode" ||
       id === "customRule" ||
       id === "modelWhitelist" ||

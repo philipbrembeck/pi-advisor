@@ -1,5 +1,9 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
+import {
+  clearSessionActivationOverrides,
+  SESSION_ACTIVATION_KEYS,
+} from "../config/session-overrides.ts";
 import { getAdvisorSettings, setContextMaxCharsRef } from "../config/state.ts";
 import {
   configPaths,
@@ -95,12 +99,19 @@ const appliedAdvisorConfigResult = (
 ) => {
   const notices: string[] = [];
 
+  const sessionScoped =
+    prepared.proposed.advisorActivation === "session" ||
+    (prepared.proposed.advisorActivation === undefined &&
+      prepared.beforeSettings.advisorActivation === "session");
+
   if (
     Object.hasOwn(prepared.proposed, "alwaysOn") &&
     prepared.proposed.alwaysOn === true
   ) {
     notices.push(
-      "Always on applies to future sessions; this did not start an Advisor call."
+      sessionScoped
+        ? "Always on is saved but session activation starts inactive; this did not start an Advisor call."
+        : "Always on applies to future sessions; this did not start an Advisor call."
     );
   }
 
@@ -162,6 +173,17 @@ const applyAdvisorConfigUpdate = (
   savedPath: string
 ) => {
   try {
+    if (Object.hasOwn(prepared.proposed, "advisorActivation")) {
+      clearSessionActivationOverrides(ctx);
+    } else {
+      clearSessionActivationOverrides(
+        ctx,
+        SESSION_ACTIVATION_KEYS.filter((key) =>
+          Object.hasOwn(prepared.proposed, key)
+        )
+      );
+    }
+
     loadConfig(ctx);
 
     if (

@@ -1,6 +1,11 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
-import { advisorToolsEnabledRef, alwaysOnRef } from "../config/state.ts";
+import { clearSessionActivationOverrides } from "../config/session-overrides.ts";
+import {
+  advisorActivationRef,
+  advisorToolsEnabledRef,
+  alwaysOnRef,
+} from "../config/state.ts";
 import { loadConfig } from "../config/storage.ts";
 import { t } from "../i18n.ts";
 import { setAdvisorToolsActive } from "./advisor-tools.ts";
@@ -18,12 +23,21 @@ export const registerCommandLifecycle = (
   activateAdvisor: ActivateAdvisor
 ) => {
   runtime.pi.on("session_start", async (_event, ctx) => {
+    runtime.noteAdvisorToolsStateChange();
+    runtime.advisorSessionState.sessionToolsEnabled = false;
+    clearSessionActivationOverrides(ctx);
     runtime.resetSameModelNotice();
 
     // A malformed advisor.json or a provider auth failure must not reject a
     // lifecycle handler and break session startup.
     try {
       loadConfig(ctx);
+
+      if (advisorActivationRef === "session") {
+        setAdvisorToolsActive(runtime.pi, false, true);
+
+        return;
+      }
 
       if (!advisorToolsEnabledRef) {
         setAdvisorToolsActive(runtime.pi, false);
@@ -49,6 +63,18 @@ export const registerCommandLifecycle = (
     }
   });
 
+  runtime.pi.on("session_tree", (_event, ctx) => {
+    if (advisorActivationRef === "session") {
+      runtime.noteAdvisorToolsStateChange();
+      setAdvisorToolsActive(
+        runtime.pi,
+        runtime.advisorSessionState.sessionToolsEnabled,
+        true
+      );
+      runtime.updateSameModelNotice(ctx);
+    }
+  });
+
   runtime.pi.on("model_select", (event, ctx) => {
     if (!runtime.suppressModelSelectionSync) {
       runtime.updateSameModelNotice(ctx, event.model);
@@ -59,6 +85,9 @@ export const registerCommandLifecycle = (
   });
 
   runtime.pi.on("session_shutdown", (_event, ctx) => {
+    runtime.noteAdvisorToolsStateChange();
+    clearSessionActivationOverrides(ctx);
+
     if (ctx.hasUI) {
       ctx.ui.setStatus("advisor-usage", undefined);
     }

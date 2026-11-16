@@ -1,6 +1,7 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 import {
+  advisorActivationRef,
   alwaysOnRef,
   getAdvisorSettings,
   getPersistedModelRefs,
@@ -17,6 +18,7 @@ import {
 import { AdvisorSettingsSelector } from "../ui/settings-selector.ts";
 import type { AdvisorSettings } from "../ui/types.ts";
 import { loadCommandConfig } from "./activation-preparation.ts";
+import { reconcileAdvisorToolsAfterSettings } from "./activation-settings.ts";
 import { setAdvisorToolsActive } from "./advisor-tools.ts";
 import {
   CONTEXT_PRESETS,
@@ -32,6 +34,8 @@ const persistJevSettings = (
   settings: AdvisorSettings,
   runtime: CommandRuntime
 ): boolean => {
+  const previous = getAdvisorSettings();
+
   try {
     saveAdvisorSettings(ctx, settings, { skipOutcomeLogging: true });
   } catch (error) {
@@ -45,9 +49,7 @@ const persistJevSettings = (
   }
 
   try {
-    setAdvisorToolsActive(runtime.pi, settings.advisorToolsEnabled ?? true);
-    runtime.updateSameModelNotice(ctx);
-    runtime.updateAdvisorUsageStatus(ctx);
+    reconcileAdvisorToolsAfterSettings(runtime, ctx, previous);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     ctx.ui.notify(
@@ -86,30 +88,26 @@ export const registerSettingsCommands = (runtime: CommandRuntime) => {
             modelRefs: getConfiguredModelRefs(ctx),
             onCancel: () => done(undefined),
             onChange: (settings) => {
-              const toolsWereEnabled =
-                getAdvisorSettings().advisorToolsEnabled ?? true;
-
-              const toolsEnabled = settings.advisorToolsEnabled ?? true;
+              const previous = getAdvisorSettings();
 
               try {
                 saveAdvisorSettings(ctx, settings);
-
-                if (toolsWereEnabled !== toolsEnabled) {
-                  runtime.noteAdvisorToolsStateChange();
-                }
-
-                setAdvisorToolsActive(runtime.pi, toolsEnabled);
-                runtime.updateSameModelNotice(ctx);
-                runtime.updateAdvisorUsageStatus(ctx);
+                reconcileAdvisorToolsAfterSettings(runtime, ctx, previous);
               } catch (error) {
                 const toolsDisabled =
-                  toolsWereEnabled && settings.advisorToolsEnabled === false;
+                  previous.advisorToolsEnabled &&
+                  settings.advisorToolsEnabled === false;
 
                 if (toolsDisabled) {
                   runtime.noteAdvisorToolsStateChange();
                   setAdvisorToolsEnabledRef(false);
                   setAlwaysOnRef(false);
-                  setAdvisorToolsActive(runtime.pi, false);
+                  runtime.advisorSessionState.sessionToolsEnabled = false;
+                  setAdvisorToolsActive(
+                    runtime.pi,
+                    false,
+                    previous.advisorActivation === "session"
+                  );
                   runtime.resetSameModelNotice();
                 }
 
@@ -140,11 +138,15 @@ export const registerSettingsCommands = (runtime: CommandRuntime) => {
   });
 
   runtime.pi.registerCommand("advisor-off", {
-    description:
-      "Disable model-facing Advisor tools across sessions; keep the current model",
+    description: "Disable Advisor tools; keep the current model",
     handler: (_args, ctx) => {
       runtime.noteAdvisorToolsStateChange();
-      setAdvisorToolsActive(runtime.pi, false);
+      runtime.advisorSessionState.sessionToolsEnabled = false;
+      setAdvisorToolsActive(
+        runtime.pi,
+        false,
+        advisorActivationRef === "session"
+      );
       runtime.resetSameModelNotice();
 
       try {
@@ -160,6 +162,20 @@ export const registerSettingsCommands = (runtime: CommandRuntime) => {
             "Advisor tools disabled for this session, but configuration could not be reloaded:"
           )} ${message}`,
           "error"
+        );
+
+        return Promise.resolve();
+      }
+
+      if (advisorActivationRef === "session") {
+        setAdvisorToolsActive(runtime.pi, false, true);
+        notify(
+          ctx,
+          t(
+            "settingsCmd.off.session",
+            "Advisor tools disabled for this session. Current model unchanged."
+          ),
+          "info"
         );
 
         return Promise.resolve();

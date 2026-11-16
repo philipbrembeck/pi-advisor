@@ -92,26 +92,91 @@ export const summarizeAdvisorConfigPatch = (
     })
     .join("\n");
 
-const automationRiskNotes = (
+const enabledToolsRiskNote = (
+  sessionScoped: boolean,
+  alwaysOn: boolean,
+  enabledByAlwaysOn: boolean
+) => {
+  if (sessionScoped && enabledByAlwaysOn) {
+    return "The saved tool preference changes; enabling Always on does not activate this session.";
+  }
+
+  if (sessionScoped) {
+    return "Advisor tools become available in this session; later session starts remain inactive.";
+  }
+
+  if (alwaysOn) {
+    return "Advisor tools become available, and saved Always on will activate the flow in future sessions.";
+  }
+
+  return "Advisor tools become available; this does not activate Always on.";
+};
+
+const activationRiskNotes = (
   changes: AdvisorConfigPatch,
   before: AdvisorConfigSnapshot
 ) => {
   const notes: string[] = [];
 
-  if (changes.simpleMode === true) {
+  const sessionScoped =
+    changes.advisorActivation === "session" ||
+    (changes.advisorActivation === undefined &&
+      before.advisorActivation === "session");
+
+  if (changes.advisorActivation === "session") {
     notes.push(
-      "Simple mode disables automatic gates, gate blocking, and configured call budgets; voluntary Advisor calls remain available."
+      "The current Advisor on/off state is kept; advisor_config follows it. Every session start, including /reload, starts inactive even when Always on is saved."
+    );
+  }
+
+  if (
+    changes.advisorActivation === "persistent" ||
+    changes.advisorActivation === null
+  ) {
+    notes.push(
+      "Persistent mode applies the saved Advisor tools preference immediately and makes advisor_config available."
     );
   }
 
   if (changes.advisorToolsEnabled === false) {
     notes.push(
-      "Advisor tools will be disabled immediately. advisor_config remains available to re-enable them."
+      sessionScoped
+        ? "Advisor tools, including advisor_config, will be disabled immediately; use /advisor to enable them for this session."
+        : "Advisor tools will be disabled immediately. advisor_config remains available to re-enable them."
     );
   }
 
   if (changes.alwaysOn === true) {
-    notes.push("Always on enables automatic activation for future sessions.");
+    notes.push(
+      sessionScoped
+        ? "Always on is saved, but session activation starts inactive."
+        : "Always on enables automatic activation for future sessions."
+    );
+  }
+
+  if (changes.advisorToolsEnabled === true) {
+    notes.push(
+      enabledToolsRiskNote(
+        sessionScoped,
+        before.alwaysOn === true || changes.alwaysOn === true,
+        changes.alwaysOn === true && before.advisorToolsEnabled === false
+      )
+    );
+  }
+
+  return notes;
+};
+
+const automationRiskNotes = (
+  changes: AdvisorConfigPatch,
+  before: AdvisorConfigSnapshot
+) => {
+  const notes = activationRiskNotes(changes, before);
+
+  if (changes.simpleMode === true) {
+    notes.push(
+      "Simple mode disables automatic gates, gate blocking, and configured call budgets; voluntary Advisor calls remain available."
+    );
   }
 
   if (
@@ -130,14 +195,6 @@ const automationRiskNotes = (
     changes.advisorBlockOnBlocked === true
   ) {
     notes.push("A blocked gate may stop the current session.");
-  }
-
-  if (changes.advisorToolsEnabled === true) {
-    notes.push(
-      before.alwaysOn === true || changes.alwaysOn === true
-        ? "Advisor tools become available, and saved Always on will activate the flow in future sessions."
-        : "Advisor tools become available; this does not activate Always on."
-    );
   }
 
   return notes;

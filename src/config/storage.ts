@@ -26,6 +26,11 @@ import {
 } from "./schema.ts";
 import type { PersistedConfigKey } from "./schema.ts";
 import {
+  applySessionActivationOverrides,
+  clearSessionActivationOverrides,
+} from "./session-overrides.ts";
+import {
+  advisorActivationRef,
   advisorJevClassifierRef,
   advisorJevFilterEnabledRef,
   setAdvisorOutcomeLoggingRef,
@@ -260,6 +265,12 @@ export const loadConfig = (_ctx: ExtensionContext) => {
   // Repository-controlled project configuration is never applied. Models,
   // prompts, gates, budgets, disclosure, redaction, integrations, and consent
   // remain under the user's global Pi configuration.
+  if (advisorActivationRef === "session") {
+    applySessionActivationOverrides(_ctx);
+  } else {
+    clearSessionActivationOverrides(_ctx);
+  }
+
   setAdvisorOutcomeLoggingRef(globalConfig?.advisorOutcomeLogging === true);
   loadedConfigState = currentConfigState();
   loadedConfigPath = global;
@@ -274,6 +285,7 @@ export const loadConfig = (_ctx: ExtensionContext) => {
  * external edit to advisor.json coexist with a later settings or model save.
  */
 export interface SaveConfigOptions {
+  forceKeys?: readonly PersistedConfigKey[];
   persistAdvisor?: boolean;
   persistExecutor?: boolean;
 }
@@ -293,10 +305,12 @@ export const saveConfig = (
   const persistExecutor = options.persistExecutor ?? true;
   const current = currentConfigState();
   const baseline = loadedConfigPath === path ? loadedConfigState : undefined;
+  const forcedKeys = new Set(options.forceKeys);
 
   const changedKeys = baseline
     ? SAVED_CONFIG_KEYS.filter(
-        (key) => !sameConfigValue(current[key], baseline[key])
+        (key) =>
+          forcedKeys.has(key) || !sameConfigValue(current[key], baseline[key])
       )
     : [...SAVED_CONFIG_KEYS];
 

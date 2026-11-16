@@ -92,6 +92,14 @@ In the Settings, enable Simple Mode for a quick start.
 
 Unknown fields in `advisor.json` are preserved for forward compatibility and reported as non-blocking warnings. Invalid recognized values fail their own Advisor call with a clear message instead of blocking every tool call.
 
+### Session-only activation
+
+Set **Advisor activation** to `session` in `/advisor-settings`, or add `"advisorActivation": "session"` to the global `advisor.json`. Each session start, including `/reload`, starts with `ask_advisor`, `record_advisor_outcome`, and `advisor_config` inactive. `/advisor` enables them for the current session; `/advisor-off` disables them again. Neither command writes `advisor.json` in this mode.
+
+Session mode starts inactive even if `alwaysOn` was saved as `true`; it does not change that saved setting. Model choices and arguments supplied to `/advisor` stay in memory for the session. Use `/advisor-models` to save model choices explicitly. `/advisor-manual` and `/advisor-settings` remain available while the tools are off. This mode also frees Codemode's tool-declaration budget until Advisor is enabled.
+
+The default, `"advisorActivation": "persistent"`, keeps the existing cross-session behavior. Switching to session mode keeps the current Advisor on/off state until the next session start. Switching back to persistent mode immediately applies the saved tool preference.
+
 ## Pi Codemode
 
 With Pi Codemode enabled and the Advisor flow active, call the existing tool through `tools.ask_advisor`; no separate review tool or workflow is needed:
@@ -141,14 +149,14 @@ Successful calls return an opaque `adviceId`. If global outcome logging is enabl
 
 ## Commands
 
-| Command                   | What it does                                                                           |
-| ------------------------- | -------------------------------------------------------------------------------------- |
-| `/advisor`                | Enable the flow; choose available models when needed.                                  |
-| `/advisor-manual [focus]` | Ask for an immediate second opinion.                                                   |
-| `/advisor-models`         | Choose the Executor, Advisor, and optional fallback models.                            |
-| `/advisor-settings`       | Configure behavior, models, context, privacy, and limits.                              |
-| `/advisor-stats`          | Show retained outcome adoption and validation stats.                                   |
-| `/advisor-off`            | Disable model-facing Advisor tools across sessions and turn off persistent activation. |
+| Command                   | What it does                                                                                |
+| ------------------------- | ------------------------------------------------------------------------------------------- |
+| `/advisor`                | Enable the flow; choose available models when needed.                                       |
+| `/advisor-manual [focus]` | Ask for an immediate second opinion.                                                        |
+| `/advisor-models`         | Choose the Executor, Advisor, and optional fallback models.                                 |
+| `/advisor-settings`       | Configure behavior, models, context, privacy, and limits.                                   |
+| `/advisor-stats`          | Show retained outcome adoption and validation stats.                                        |
+| `/advisor-off`            | Disable Advisor tools across sessions by default, or only for this session in session mode. |
 
 In the interactive TUI, `/advisor-manual [focus]` opens a centered overlay with the focus text prefilled, a choice of permitted Git-context level, and live progress in the transcript. Canceling has no side effects.
 

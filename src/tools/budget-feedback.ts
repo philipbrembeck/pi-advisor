@@ -6,13 +6,13 @@ import type {
 
 import {
   advisorLogFeedbackRef,
-  advisorToolsEnabledRef,
   getAdvisorMaxCallsPerSession,
   isSimpleMode,
 } from "../config/state.ts";
 import { loadConfig } from "../config/storage.ts";
 import type { AdvisorSessionState } from "../session-state.ts";
 import { advisorModelIsAllowed } from "./model-access.ts";
+import { advisorToolsAllowed } from "./session-availability.ts";
 
 export const advisorBudgetMessage = (session: AdvisorSessionState) => {
   const simple = isSimpleMode();
@@ -50,7 +50,7 @@ export const advisorBudgetUpdate = (
     return;
   }
 
-  if (!advisorToolsEnabledRef || !advisorModelIsAllowed(ctx)) {
+  if (!advisorToolsAllowed(session) || !advisorModelIsAllowed(ctx)) {
     return;
   }
 

@@ -149,6 +149,26 @@ export const advisorModelWhitelistItem = (
     }),
 });
 
+const advisorToolsItem = (settings: AdvisorSettings): SettingItem => ({
+  currentValue: settingValue(settings.advisorToolsEnabled, true),
+  description:
+    settings.advisorActivation === "session"
+      ? t(
+          "settings.advisorToolsEnabled.sessionDesc",
+          "Saved preference for persistent mode. Changing it also toggles this session’s Advisor tools."
+        )
+      : t(
+          "settings.advisorToolsEnabled.desc",
+          "Allow the model to call the Advisor tools; activation scope determines how long they stay enabled."
+        ),
+  id: "advisorToolsEnabled",
+  label:
+    settings.advisorActivation === "session"
+      ? t("settings.advisorToolsEnabled.savedLabel", "Advisor tools (saved)")
+      : t("settings.advisorToolsEnabled.label", "Advisor tools"),
+  values: TOGGLE_VALUES,
+});
+
 export const createSettingsItems = ({
   effortLevels,
   fallbackModel,
@@ -171,15 +191,16 @@ export const createSettingsItems = ({
       values: presets.map((preset) => preset.label),
     },
     {
-      currentValue: settingValue(settings.advisorToolsEnabled, true),
+      currentValue: settings.advisorActivation ?? "persistent",
       description: t(
-        "settings.advisorToolsEnabled.desc",
-        "Allow the model to call the Advisor tools; /advisor-off disables them across sessions."
+        "settings.advisorActivation.desc",
+        "Choose persistent activation or start inactive at each session start, including /reload."
       ),
-      id: "advisorToolsEnabled",
-      label: t("settings.advisorToolsEnabled.label", "Advisor tools"),
-      values: TOGGLE_VALUES,
+      id: "advisorActivation",
+      label: t("settings.advisorActivation.label", "Advisor activation"),
+      values: ["persistent", "session"],
     },
+    advisorToolsItem(settings),
     {
       currentValue: settingValue(settings.simpleMode, false),
       description: t(

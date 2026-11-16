@@ -1,6 +1,8 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
+import { getSessionActivationOverrides } from "../config/session-overrides.ts";
 import {
+  advisorActivationRef,
   advisorEffortRef,
   advisorFallbackModelRef,
   advisorRef,
@@ -53,9 +55,27 @@ export const prepareActivationModels = async (
   ctx: ExtensionContext,
   announce: boolean,
   executorOverride: boolean,
-  advisorOverride: boolean
+  advisorOverride: boolean,
+  canContinue: () => boolean
 ): Promise<PreparedActivationModels | undefined> => {
-  const persisted = getPersistedModelRefs();
+  const saved = getPersistedModelRefs();
+
+  const overrides =
+    advisorActivationRef === "session"
+      ? getSessionActivationOverrides(ctx)
+      : undefined;
+
+  const persisted = {
+    advisor:
+      overrides && Object.hasOwn(overrides, "advisor")
+        ? advisorRef || undefined
+        : saved.advisor,
+    executor:
+      overrides && Object.hasOwn(overrides, "executor")
+        ? executorRef || undefined
+        : saved.executor,
+  };
+
   const availableRefs = getAvailableModelRefs(ctx);
   const availableRefSet = availableRefs ? new Set(availableRefs) : undefined;
 
@@ -111,6 +131,7 @@ export const prepareActivationModels = async (
   }
 
   const selection = await selectAdvisorModels(ctx, {
+    canContinue,
     advisor: advisorOverride || persisted.advisor ? advisorRef : "",
     advisorEffort: advisorEffortRef,
     advisorFallbackModel: advisorFallbackModelRef,
@@ -118,9 +139,15 @@ export const prepareActivationModels = async (
     executorEffort: executorEffortRef,
     selectAdvisor: plan.selectAdvisor,
     selectExecutor: plan.selectExecutor,
+  }).catch((error) => {
+    if (!canContinue()) {
+      return undefined;
+    }
+
+    throw error;
   });
 
-  if (!selection) {
+  if (!selection || !canContinue()) {
     return;
   }
 

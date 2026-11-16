@@ -17,6 +17,7 @@ import {
   DEFAULT_SCOUT_TIMEOUT_MS,
 } from "./types.ts";
 import type {
+  AdvisorActivation,
   AdvisorToolPolicies,
   GateFailureMode,
   JevTransport,
@@ -47,6 +48,7 @@ export let advisorSessionSummaryRef = false;
 export let advisorLogFeedbackRef = false;
 export let simpleModeRef = false;
 export let advisorToolsEnabledRef = true;
+export let advisorActivationRef: AdvisorActivation = "persistent";
 export let alwaysOnRef = false;
 export let advisorFailureModeRef: GateFailureMode = "block-session";
 export let advisorHerdrIntegrationRef = true;
@@ -199,6 +201,10 @@ export const setAdvisorToolsEnabledRef = (enabled: boolean) => {
   advisorToolsEnabledRef = enabled;
 };
 
+export const setAdvisorActivationRef = (activation: AdvisorActivation) => {
+  advisorActivationRef = activation;
+};
+
 export const setAlwaysOnRef = (enabled: boolean) => {
   alwaysOnRef = enabled;
 };
@@ -329,6 +335,7 @@ export const setShowUsageFooterRef = (enabled: boolean) => {
  * imported mutable bindings, which can be snapshotted by extension loaders.
  */
 export const getAdvisorSettings = () => ({
+  advisorActivation: advisorActivationRef,
   advisorToolsEnabled: advisorToolsEnabledRef,
   agentsMdContext: advisorAgentsMdContextRef,
   alwaysOn: alwaysOnRef,

@@ -1,8 +1,11 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
+import { clearSessionActivationOverrides } from "../config/session-overrides.ts";
+import type { SessionActivationValues } from "../config/session-overrides.ts";
 import {
   getAdvisorSettings,
   getPersistedModelRefs,
+  setAdvisorActivationRef,
   setAdvisorAgentsMdContextRef,
   setAdvisorAutoLoopGateRef,
   setAdvisorBlockOnBlockedRef,
@@ -48,7 +51,11 @@ import {
   setShowUsageFooterRef,
   setSimpleModeRef,
 } from "../config/state.ts";
-import { saveConfig, saveGlobalOutcomeLogging } from "../config/storage.ts";
+import {
+  loadConfig,
+  saveConfig,
+  saveGlobalOutcomeLogging,
+} from "../config/storage.ts";
 import {
   DEFAULT_JEV_DIGEST_MAX_CHARS,
   DEFAULT_JEV_FILTER_NOUL_MARGIN,
@@ -87,6 +94,7 @@ const applySessionSettings = (settings: AdvisorSettings) => {
   setShowUsageDetailsRef(settings.showUsageDetails ?? true);
   setShowUsageFooterRef(settings.showUsageFooter ?? false);
   setSimpleModeRef(settings.simpleMode ?? false);
+  setAdvisorActivationRef(settings.advisorActivation ?? "persistent");
   setAdvisorToolsEnabledRef(settings.advisorToolsEnabled ?? true);
   setAlwaysOnRef(settings.alwaysOn ?? false);
   setAdvisorFailureModeRef(settings.failureMode ?? "block-session");
@@ -157,6 +165,30 @@ export const saveAdvisorSettings = (
 
     if (!options.skipOutcomeLogging) {
       saveGlobalOutcomeLogging(settings.outcomeLogging ?? false);
+    }
+
+    if (previous.advisorActivation === "session") {
+      const next = getAdvisorSettings();
+      const changed: (keyof SessionActivationValues)[] = [];
+
+      if (previous.contextMaxChars !== next.contextMaxChars) {
+        changed.push("contextMaxChars");
+      }
+
+      if (previous.effort !== next.effort) {
+        changed.push("advisorEffort");
+      }
+
+      if (previous.fallbackModel !== next.fallbackModel) {
+        changed.push("advisorFallbackModel");
+      }
+
+      if (next.advisorActivation === "persistent") {
+        clearSessionActivationOverrides(ctx);
+        loadConfig(ctx);
+      } else {
+        clearSessionActivationOverrides(ctx, changed);
+      }
     }
   } catch (error) {
     applyAdvisorSettings(previous);

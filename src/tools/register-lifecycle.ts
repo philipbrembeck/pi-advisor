@@ -1,7 +1,7 @@
 import {
+  advisorActivationRef,
   advisorLogFeedbackRef,
   advisorSessionSummaryRef,
-  advisorToolsEnabledRef,
   getAdvisorMaxCallsPerSession,
   isSimpleMode,
 } from "../config/state.ts";
@@ -15,6 +15,7 @@ import {
   sameModelAdvisorDisabled,
 } from "./model-access.ts";
 import { advisorInvocationGuidelines } from "./prompts.ts";
+import { advisorToolsAllowed } from "./session-availability.ts";
 import type { ToolRegistrationContext } from "./types.ts";
 
 const modelAccessBlock = (
@@ -103,7 +104,7 @@ export const registerToolLifecycle = ({
     loadConfig(ctx);
 
     if (
-      !advisorToolsEnabledRef ||
+      !advisorToolsAllowed(session) ||
       !advisorModelAccess(ctx).allowed ||
       sameModelAdvisorDisabled(ctx)
     ) {
@@ -153,9 +154,11 @@ export const registerToolLifecycle = ({
 
     const isAdvisorTool =
       event.toolName === "ask_advisor" ||
-      event.toolName === "record_advisor_outcome";
+      event.toolName === "record_advisor_outcome" ||
+      (event.toolName === "advisor_config" &&
+        advisorActivationRef === "session");
 
-    if (isAdvisorTool && !advisorToolsEnabledRef) {
+    if (isAdvisorTool && !advisorToolsAllowed(session)) {
       return {
         block: true,
         reason:
@@ -163,7 +166,10 @@ export const registerToolLifecycle = ({
       };
     }
 
-    if (!pi.getActiveTools().includes("ask_advisor")) {
+    if (
+      !pi.getActiveTools().includes("ask_advisor") ||
+      (advisorActivationRef === "session" && !session.sessionToolsEnabled)
+    ) {
       return;
     }
 
@@ -173,7 +179,7 @@ export const registerToolLifecycle = ({
       return;
     }
 
-    if (isAdvisorTool && !advisorToolsEnabledRef) {
+    if (isAdvisorTool && !advisorToolsAllowed(session)) {
       return {
         block: true,
         reason:

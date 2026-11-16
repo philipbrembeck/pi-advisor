@@ -8,7 +8,11 @@ import type {
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import type { KeybindingsManager, TUI } from "@earendil-works/pi-tui";
 
-import type { GateFailureMode, JevTransport } from "../config/types.ts";
+import type {
+  AdvisorActivation,
+  GateFailureMode,
+  JevTransport,
+} from "../config/types.ts";
 import type { GitContextLevel } from "../git.ts";
 import type { JevClassifierKeySnapshot } from "../jev/classifier-key-store.ts";
 import type { JevKeyStoreResult } from "../jev/key-store.ts";
@@ -84,6 +88,7 @@ export const EXECUTOR_FOLLOWS_SESSION_MODEL =
   "Current session model (no override)";
 
 export interface AdvisorSettings {
+  advisorActivation?: AdvisorActivation;
   advisorToolsEnabled?: boolean;
   agentsMdContext?: boolean;
   fallbackModel?: string;

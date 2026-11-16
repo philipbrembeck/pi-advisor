@@ -7,21 +7,25 @@ import {
   isMarkedSubagent,
 } from "../child-session.ts";
 import { parseArgs } from "../config/args.ts";
+import { rememberSessionActivationOverrides } from "../config/session-overrides.ts";
 import {
+  advisorActivationRef,
   advisorEffortRef,
+  advisorFallbackModelRef,
   advisorRef,
   advisorToolsEnabledRef,
   contextMaxCharsRef,
   executorEffortRef,
   executorRef,
   setAdvisorEffortRef,
+  setAdvisorFallbackModelRef,
   setAdvisorRef,
   setAdvisorToolsEnabledRef,
   setContextMaxCharsRef,
   setExecutorEffortRef,
   setExecutorRef,
 } from "../config/state.ts";
-import { saveConfig } from "../config/storage.ts";
+import { rebaseConfigBaseline, saveConfig } from "../config/storage.ts";
 import { t } from "../i18n.ts";
 import { hasUsableModelAuth } from "../model-auth.ts";
 import { sameModelAdvisorDisabled } from "../tools/model-access.ts";
@@ -106,10 +110,40 @@ const restoreActivationRefsIfCurrent = (
 const liveRefSnapshot = () => ({
   advisor: advisorRef,
   advisorEffort: advisorEffortRef,
+  advisorFallbackModel: advisorFallbackModelRef,
   contextMaxChars: contextMaxCharsRef,
   executor: executorRef,
   executorEffort: executorEffortRef,
 });
+
+const restoreActivationRefs = (
+  previous: ReturnType<typeof liveRefSnapshot>,
+  attempted: ReturnType<typeof liveRefSnapshot>
+) => {
+  if (advisorRef === attempted.advisor) {
+    setAdvisorRef(previous.advisor);
+  }
+
+  if (advisorEffortRef === attempted.advisorEffort) {
+    setAdvisorEffortRef(previous.advisorEffort);
+  }
+
+  if (advisorFallbackModelRef === attempted.advisorFallbackModel) {
+    setAdvisorFallbackModelRef(previous.advisorFallbackModel);
+  }
+
+  if (contextMaxCharsRef === attempted.contextMaxChars) {
+    setContextMaxCharsRef(previous.contextMaxChars);
+  }
+
+  if (executorRef === attempted.executor) {
+    setExecutorRef(previous.executor);
+  }
+
+  if (executorEffortRef === attempted.executorEffort) {
+    setExecutorEffortRef(previous.executorEffort);
+  }
+};
 
 const persistSuccessfulActivation = (
   ctx: ExtensionContext,
@@ -149,6 +183,27 @@ const persistSuccessfulActivation = (
   return true;
 };
 
+const announceActivation = (
+  ctx: ExtensionContext,
+  activeModel: { id: string; provider: string } | undefined
+) => {
+  const activeExecutorRef = effectiveExecutorRef(ctx);
+  const activeExecutorEffort = effectiveExecutorEffort(ctx);
+
+  notify(
+    ctx,
+    `${t(
+      "activation.explanation",
+      "The Advisor is a second-opinion model that reviews the Executor's context and returns risks, alternatives, and verification steps without changing files or running tools."
+    )}\n\n${t("activation.flow", "Advisor flow")} ${
+      sameModelAdvisorDisabled(ctx, activeModel)
+        ? t("activation.flowConfigured", "configured")
+        : t("activation.flowReady", "ready")
+    } — Executor: ${activeExecutorRef} (thinking: ${activeExecutorEffort || "default"}) · Advisor: ${advisorRef} (thinking: ${advisorEffortRef || "default"})`,
+    "info"
+  );
+};
+
 export const activateAdvisor = async (
   runtime: CommandRuntime,
   args: string,
@@ -164,39 +219,10 @@ export const activateAdvisor = async (
   const canContinue = () =>
     runtime.toolAvailabilityRevision === toolAvailabilityRevision;
 
-  const previous = {
-    advisor: advisorRef,
-    advisorEffort: advisorEffortRef,
-    contextMaxChars: contextMaxCharsRef,
-    executor: executorRef,
-    executorEffort: executorEffortRef,
-  };
+  const previous = liveRefSnapshot();
 
-  const liveSnapshot = liveRefSnapshot;
-
-  // Restores only refs this activation still owns. A concurrent settings
-  // save that replaced a ref keeps its newer value.
-  const restoreRefs = (attempted: ReturnType<typeof liveSnapshot>) => {
-    if (advisorRef === attempted.advisor) {
-      setAdvisorRef(previous.advisor);
-    }
-
-    if (advisorEffortRef === attempted.advisorEffort) {
-      setAdvisorEffortRef(previous.advisorEffort);
-    }
-
-    if (contextMaxCharsRef === attempted.contextMaxChars) {
-      setContextMaxCharsRef(previous.contextMaxChars);
-    }
-
-    if (executorRef === attempted.executor) {
-      setExecutorRef(previous.executor);
-    }
-
-    if (executorEffortRef === attempted.executorEffort) {
-      setExecutorEffortRef(previous.executorEffort);
-    }
-  };
+  const restoreRefs = (attempted: ReturnType<typeof liveRefSnapshot>) =>
+    restoreActivationRefs(previous, attempted);
 
   let attempted = liveRefSnapshot();
   const executorOverride = hasExecutorOverride(args);
@@ -216,7 +242,8 @@ export const activateAdvisor = async (
     ctx,
     announce,
     executorOverride,
-    advisorOverride
+    advisorOverride,
+    canContinue
   );
 
   if (!prepared) {
@@ -243,18 +270,17 @@ export const activateAdvisor = async (
     return;
   }
 
-  // parseArgs, model picking, and an inactive `/model` selection only mutate
-  // in-memory refs. Persist them once both models are known and authenticated,
-  // so an unusable model reference is never written to the configuration.
-  const reenableTools = !advisorToolsEnabledRef;
+  // Persist model changes only after both models are known and authenticated.
+  const sessionScoped = advisorActivationRef === "session";
+  const reenableTools = !sessionScoped && !advisorToolsEnabledRef;
 
   if (reenableTools) {
     setAdvisorToolsEnabledRef(true);
   }
 
-  const shouldSave = Boolean(
-    args.trim() || prepared.pickedModels || reenableTools
-  );
+  const shouldSave =
+    !sessionScoped &&
+    Boolean(args.trim() || prepared.pickedModels || reenableTools);
 
   if (
     !persistSuccessfulActivation(ctx, shouldSave, reenableTools, () =>
@@ -269,7 +295,13 @@ export const activateAdvisor = async (
     runtime.pi.setThinkingLevel(executorEffortRef as ThinkingLevel);
   }
 
-  setAdvisorToolsActive(runtime.pi, true);
+  if (sessionScoped) {
+    rememberSessionActivationOverrides(ctx, previous, liveRefSnapshot());
+    rebaseConfigBaseline();
+    runtime.advisorSessionState.sessionToolsEnabled = true;
+  }
+
+  setAdvisorToolsActive(runtime.pi, true, sessionScoped);
 
   const activeModel = followsSessionExecutor()
     ? ctx.model
@@ -278,19 +310,6 @@ export const activateAdvisor = async (
   runtime.updateSameModelNotice(ctx, activeModel);
 
   if (announce) {
-    const activeExecutorRef = effectiveExecutorRef(ctx);
-    const activeExecutorEffort = effectiveExecutorEffort(ctx);
-    notify(
-      ctx,
-      `${t(
-        "activation.explanation",
-        "The Advisor is a second-opinion model that reviews the Executor's context and returns risks, alternatives, and verification steps without changing files or running tools."
-      )}\n\n${t("activation.flow", "Advisor flow")} ${
-        sameModelAdvisorDisabled(ctx, activeModel)
-          ? t("activation.flowConfigured", "configured")
-          : t("activation.flowReady", "ready")
-      } — Executor: ${activeExecutorRef} (thinking: ${activeExecutorEffort || "default"}) · Advisor: ${advisorRef} (thinking: ${advisorEffortRef || "default"})`,
-      "info"
-    );
+    announceActivation(ctx, activeModel);
   }
 };
