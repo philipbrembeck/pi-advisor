@@ -19,6 +19,7 @@ import {
   runAdvisorScout,
   SCOUT_SYSTEM,
 } from "../src/scout.ts";
+import type { ScoutSelection } from "../src/scout.ts";
 import { scoutDetailsFromEvent, ScoutStatusManager } from "../src/tools.ts";
 import { asExtensionContext } from "./helpers/extension-context.ts";
 
@@ -89,7 +90,7 @@ const successDependencies = (
 
 describe("Advisor Scout", () => {
   test("parses a valid selection and retains useful failures", () => {
-    const selection = parseScoutSelection(
+    const selection: ScoutSelection = parseScoutSelection(
       JSON.stringify({
         selectedIds: ["g_required", "g_failure"],
         synthesis: "Failure explains the remaining decision.",

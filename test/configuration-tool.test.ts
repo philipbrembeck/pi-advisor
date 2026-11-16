@@ -3,6 +3,11 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { registerCommands } from "../src/commands.ts";
+import {
+  ADVISOR_CONFIG_EFFORT_LEVELS,
+  ADVISOR_CONFIG_MODEL_KEYS,
+  ADVISOR_CONFIG_WRITABLE_KEYS,
+} from "../src/commands/configuration-tool-policy.ts";
 import type { AdvisorModelSelection } from "../src/commands/model-picker.ts";
 import { getAdvisorSettings, resetConfigCache } from "../src/config.ts";
 import { setContextMaxCharsRef } from "../src/config/state.ts";
@@ -20,6 +25,25 @@ describe("model-callable Advisor configuration", () => {
     registerCommands(mockPi({ tools }));
 
     expect(tools.has("advisor_config")).toBe(true);
+  });
+
+  test("exports the model keys and supported effort levels", () => {
+    expect(ADVISOR_CONFIG_MODEL_KEYS).toEqual([
+      "advisor",
+      "advisorEffort",
+      "advisorFallbackModel",
+      "executor",
+      "executorEffort",
+    ]);
+    expect(ADVISOR_CONFIG_EFFORT_LEVELS).toEqual([
+      "off",
+      "minimal",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max",
+    ]);
   });
 
   test("read returns effective settings without unknown fields or private JEV config", async () => {
@@ -52,6 +76,9 @@ describe("model-callable Advisor configuration", () => {
         expect(response.effectiveSettings.contextMaxChars).toBe(33_000);
         expect(getAdvisorSettings().contextMaxChars).toBe(33_000);
         expect(response.readOnlyKeys).toContain("advisorJevClassifier");
+        expect(response.writableKeys).toEqual(
+          [...ADVISOR_CONFIG_WRITABLE_KEYS].toSorted()
+        );
         expect(response.effectiveSettings).not.toHaveProperty(
           "advisorJevBaseUrl"
         );

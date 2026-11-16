@@ -5,6 +5,7 @@ import {
   normalizedToolSignature,
   normalizeToolInput,
 } from "../src/session-state.ts";
+import type { NormalizedToolInput } from "../src/session-state.ts";
 import { sessionStateFor } from "../src/tools/session.ts";
 
 describe("AdvisorSessionState", () => {
@@ -45,13 +46,13 @@ describe("AdvisorSessionState", () => {
   });
 
   test("removes only allowlisted volatile fields and preserves argument order", () => {
-    expect(
-      normalizeToolInput("http", {
-        args: ["a", "b"],
-        requestId: "abc",
-        timestamp: "2026-01-01",
-      })
-    ).toEqual({
+    const input: NormalizedToolInput = normalizeToolInput("http", {
+      args: ["a", "b"],
+      requestId: "abc",
+      timestamp: "2026-01-01",
+    });
+
+    expect(input).toEqual({
       args: ["a", "b"],
       requestId: "<request-id>",
       timestamp: "<timestamp>",
