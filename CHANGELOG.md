@@ -6,6 +6,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## Unreleased
 
+## 0.16.0 - 2026-11-16
+
 ### Added
 
 - Bundled the `pi-advisor-flow` Pi skill and added the `advisor_config` tool so agents can inspect and update settings after confirmation.
