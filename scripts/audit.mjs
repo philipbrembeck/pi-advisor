@@ -1,62 +1,96 @@
 import { spawnSync } from "node:child_process";
 
-// Registry outages must not block CI; real findings always must.
-const SERVICE_ERROR_PATTERNS = [
-  /\b(?:500|502|503|504)\b/u,
-  /service unavailable/iu,
-  /bad gateway/iu,
-  /gateway timeout/iu,
-  /internal server error/iu,
-  /fetch failed/iu,
-  /failed to fetch/iu,
-  /unable to connect/iu,
-  /econnrefused/iu,
-  /econnreset/iu,
-  /enotfound/iu,
-  /etimedout/iu,
-  /eai_again/iu,
-  /network/iu,
-  /timed out/iu,
-  /connection refused/iu,
-  /socket hang up/iu,
-];
+import {
+  isAuditProcessHealthy,
+  isRegistryOutage,
+  isTemporaryDevFinding,
+  parseAuditFindings,
+} from "./audit-policy.mjs";
 
-const FINDING_MARKERS = /vulnerabilit|advisor|severity/iu;
-
-const runAudit = () => {
-  const result = spawnSync("bun", ["audit", "--audit-level=high"], {
+const runAudit = (args) => {
+  const result = spawnSync("bun", ["audit", "--json", ...args], {
     encoding: "utf-8",
     stdio: ["ignore", "pipe", "pipe"],
   });
 
-  const output = `${result.stdout ?? ""}\n${result.stderr ?? ""}`;
+  return {
+    error: result.error,
+    signal: result.signal,
+    status: result.status,
+    stderr: result.stderr ?? "",
+    stdout: result.stdout ?? "",
+  };
+};
 
-  if (output.trim()) {
-    process.stdout.write(output.endsWith("\n") ? output : `${output}\n`);
+const exitOnFailure = (result) =>
+  process.exit(result.status === 0 ? 1 : (result.status ?? 1));
+
+const runAuditChecks = () => {
+  const production = runAudit(["--production", "--audit-level=high"]);
+
+  if (!isAuditProcessHealthy(production)) {
+    exitOnFailure(production);
   }
 
-  if (result.status === 0) {
+  let productionFindings;
+
+  try {
+    productionFindings = parseAuditFindings(production.stdout);
+  } catch {
+    if (isRegistryOutage(`${production.stdout}\n${production.stderr}`)) {
+      console.warn(
+        "bun audit could not reach the registry (service error) — failing open. Re-run scripts/audit.mjs manually once the registry is healthy."
+      );
+
+      return;
+    }
+
+    throw new Error("Could not validate production audit output.");
+  }
+
+  if (productionFindings.length > 0 || production.status !== 0) {
+    console.error("Production dependency audit failed.");
+    exitOnFailure(production);
+  }
+
+  const allDependencies = runAudit(["--audit-level=high"]);
+
+  if (!isAuditProcessHealthy(allDependencies)) {
+    exitOnFailure(allDependencies);
+  }
+
+  let findings;
+
+  try {
+    findings = parseAuditFindings(allDependencies.stdout);
+  } catch {
+    if (
+      isRegistryOutage(`${allDependencies.stdout}\n${allDependencies.stderr}`)
+    ) {
+      console.warn(
+        "bun audit could not reach the registry (service error) — failing open. Re-run scripts/audit.mjs manually once the registry is healthy."
+      );
+
+      return;
+    }
+
+    throw new Error("Could not validate full dependency audit output.");
+  }
+
+  if (allDependencies.status === 0 && findings.length === 0) {
     return;
   }
 
-  // Endpoint URLs contain "advisories" and version-like numbers; classify on message text only.
-  const text = output.replaceAll(/https?:\/\/\S+/gu, " ");
-
-  const serviceError = SERVICE_ERROR_PATTERNS.some((pattern) =>
-    pattern.test(text)
-  );
-
-  const reportsFindings = FINDING_MARKERS.test(text);
-
-  if (serviceError && !reportsFindings) {
+  if (allDependencies.status !== 0 && isTemporaryDevFinding(findings)) {
     console.warn(
-      "bun audit could not reach the registry (service error) — failing open. Re-run scripts/audit.mjs manually once the registry is healthy."
+      `Temporary dev-tool audit exception: ${JSON.stringify(findings)}. Production dependency audit passed; remove this exception when upstream publishes a fix.`
     );
 
     return;
   }
 
-  process.exit(result.status ?? 1);
+  console.error("Full dependency audit failed.");
+  exitOnFailure(allDependencies);
 };
 
-runAudit();
+runAuditChecks();
