@@ -215,6 +215,12 @@ const disclosureRiskNotes = (changes: AdvisorConfigPatch) => {
     );
   }
 
+  if (changes.advisorTrackedFileHandoff === "executor") {
+    notes.push(
+      "The Executor may attach tracked files to any Advisor consultation without waiting for the Advisor to name them; tracked file content consent is still required."
+    );
+  }
+
   if (changes.advisorUntrackedContent === true) {
     notes.push(
       "This enables explicitly requested untracked file contents to be sent to the Advisor."

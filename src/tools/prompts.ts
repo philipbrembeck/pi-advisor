@@ -5,6 +5,8 @@ import {
   advisorCustomInvocationRef,
   advisorFailureGateRef,
   advisorPlanGateRef,
+  advisorTrackedFileContentRef,
+  advisorTrackedFileHandoffRef,
   contextMaxCharsRef,
   isSimpleMode,
 } from "../config/state.ts";
@@ -148,10 +150,24 @@ export const advisorRequestConversation = (
     imageNonce
   );
 
+// Without tracked-file consent the Executor cannot attach files, so it is not told to.
+const trackedFileHandoffGuidelines = (): string[] => {
+  if (!advisorTrackedFileContentRef) {
+    return [];
+  }
+
+  return [
+    advisorTrackedFileHandoffRef === "executor"
+      ? "When your question or draft depends on specific repository documents, attach them with `includeTrackedFiles`. Prefer a few key files within the size limits."
+      : "Attach tracked files with `includeTrackedFiles` only after the Advisor names them.",
+  ];
+};
+
 export const advisorInvocationGuidelines = () => {
   if (isSimpleMode()) {
     return [
       "When uncertain and normal available tools cannot resolve it, call ask_advisor for a second opinion.",
+      ...trackedFileHandoffGuidelines(),
     ];
   }
 
@@ -184,6 +200,8 @@ export const advisorInvocationGuidelines = () => {
       "Call ask_advisor with an empty object by default. Do not invent a question merely to request a review: the Advisor already receives context. Include question only for a genuinely specific assumption or trade-off."
     );
   }
+
+  guidelines.push(...trackedFileHandoffGuidelines());
 
   return guidelines;
 };

@@ -12,6 +12,7 @@ import type {
   AdvisorActivation,
   GateFailureMode,
   JevTransport,
+  TrackedFileHandoffMode,
 } from "../config/types.ts";
 import type { GitContextLevel } from "../git.ts";
 import type { JevClassifierKeySnapshot } from "../jev/classifier-key-store.ts";
@@ -137,6 +138,7 @@ export interface AdvisorSettings {
   toolResultMaxBytes?: number;
   toolResultMaxLines?: number;
   trackedFileContent?: boolean;
+  trackedFileHandoff?: TrackedFileHandoffMode;
   untrackedContent?: boolean;
 }
 

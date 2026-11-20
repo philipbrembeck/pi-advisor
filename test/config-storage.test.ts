@@ -17,6 +17,7 @@ import {
   setAdvisorEffortRef,
   setAdvisorRef,
   setAdvisorToolsEnabledRef,
+  setAdvisorTrackedFileHandoffRef,
   setExecutorEffortRef,
   setExecutorRef,
   setShowUsageFooterRef,
@@ -207,6 +208,20 @@ describe("Advisor config persistence", () => {
     expect(getAdvisorSettings().logFeedback).toBe(true);
     saveConfig(context);
     expect(readSavedConfig().advisorLogFeedback).toBe(true);
+  });
+
+  test("loads and persists the tracked file handoff mode", () => {
+    writeFileSync(configPath(), JSON.stringify({ alwaysOn: false }));
+    loadConfig(context);
+    expect(getAdvisorSettings().trackedFileHandoff).toBe("advisor-named");
+
+    setAdvisorTrackedFileHandoffRef("executor");
+    saveConfig(context);
+    expect(readSavedConfig().advisorTrackedFileHandoff).toBe("executor");
+
+    resetConfigCache();
+    loadConfig(context);
+    expect(getAdvisorSettings().trackedFileHandoff).toBe("executor");
   });
 
   test("preserves external known and unknown edits during unrelated saves", () => {
@@ -559,6 +574,7 @@ describe("Config schema consistency", () => {
       "advisorToolResultMaxLines",
       "advisorToolsEnabled",
       "advisorTrackedFileContent",
+      "advisorTrackedFileHandoff",
       "advisorUntrackedContent",
       "alwaysOn",
       "contextMaxChars",
@@ -617,6 +633,7 @@ describe("Config schema consistency", () => {
       "advisorToolResultMaxLines",
       "advisorToolsEnabled",
       "advisorTrackedFileContent",
+      "advisorTrackedFileHandoff",
       "advisorUntrackedContent",
       "alwaysOn",
       "contextMaxChars",
@@ -627,7 +644,7 @@ describe("Config schema consistency", () => {
       "showUsageFooter",
       "simpleMode",
     ]);
-    expect(SAVED_CONFIG_KEYS).toHaveLength(52);
+    expect(SAVED_CONFIG_KEYS).toHaveLength(53);
     expect(CONFIG_SCHEMA.advisorOutcomeLogging.persisted).toBe(false);
   });
 });

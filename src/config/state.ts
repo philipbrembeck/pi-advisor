@@ -21,6 +21,7 @@ import type {
   AdvisorToolPolicies,
   GateFailureMode,
   JevTransport,
+  TrackedFileHandoffMode,
 } from "./types.ts";
 
 // An empty ref means no model has been selected yet.
@@ -85,6 +86,10 @@ export let advisorToolPoliciesRef: AdvisorToolPolicies = {};
 export let advisorOutcomeLoggingRef = false;
 export let advisorUntrackedContentRef = false;
 export let advisorTrackedFileContentRef = false;
+
+export let advisorTrackedFileHandoffRef: TrackedFileHandoffMode =
+  "advisor-named";
+
 export let advisorScoutEnabledRef = false;
 export let advisorScoutTimeoutMsRef = DEFAULT_SCOUT_TIMEOUT_MS;
 export let showUsageDetailsRef = true;
@@ -314,6 +319,12 @@ export const setAdvisorTrackedFileContentRef = (enabled: boolean) => {
   advisorTrackedFileContentRef = enabled;
 };
 
+export const setAdvisorTrackedFileHandoffRef = (
+  mode: TrackedFileHandoffMode
+) => {
+  advisorTrackedFileHandoffRef = mode;
+};
+
 export const setAdvisorScoutEnabledRef = (enabled: boolean) => {
   advisorScoutEnabledRef = enabled;
 };
@@ -384,6 +395,7 @@ export const getAdvisorSettings = () => ({
   toolResultMaxBytes: advisorToolResultMaxBytesRef,
   toolResultMaxLines: advisorToolResultMaxLinesRef,
   trackedFileContent: advisorTrackedFileContentRef,
+  trackedFileHandoff: advisorTrackedFileHandoffRef,
   untrackedContent: advisorUntrackedContentRef,
 });
 

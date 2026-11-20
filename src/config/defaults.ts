@@ -44,6 +44,7 @@ import {
   setAdvisorToolResultMaxLinesRef,
   setAdvisorToolsEnabledRef,
   setAdvisorTrackedFileContentRef,
+  setAdvisorTrackedFileHandoffRef,
   setAdvisorUntrackedContentRef,
   setAlwaysOnRef,
   setContextMaxCharsRef,
@@ -124,6 +125,7 @@ export const resetDefaults = () => {
   setAdvisorOutcomeLoggingRef(false);
   setAdvisorUntrackedContentRef(false);
   setAdvisorTrackedFileContentRef(false);
+  setAdvisorTrackedFileHandoffRef("advisor-named");
   setAdvisorScoutEnabledRef(false);
   setAdvisorScoutTimeoutMsRef(DEFAULT_SCOUT_TIMEOUT_MS);
   setShowUsageDetailsRef(true);
@@ -318,6 +320,11 @@ export const applyConfig = (config: AdvisorConfig) => {
     config,
     "advisorTrackedFileContent",
     setAdvisorTrackedFileContentRef
+  );
+  applyOptionalConfig(
+    config,
+    "advisorTrackedFileHandoff",
+    setAdvisorTrackedFileHandoffRef
   );
   applyOptionalConfig(
     config,

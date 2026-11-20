@@ -20,6 +20,7 @@ import {
   isValidScoutTimeoutMs,
   isValidToolResultMaxBytes,
   isValidToolResultMaxLines,
+  isValidTrackedFileHandoffMode,
 } from "./schema-validators.ts";
 import {
   advisorActivationRef,
@@ -67,6 +68,7 @@ import {
   advisorToolResultMaxLinesRef,
   advisorToolsEnabledRef,
   advisorTrackedFileContentRef,
+  advisorTrackedFileHandoffRef,
   advisorUntrackedContentRef,
   alwaysOnRef,
   contextMaxCharsRef,
@@ -86,6 +88,7 @@ import {
   JEV_TRANSPORTS,
   MAX_CONTEXT_MAX_CHARS,
   MAX_SCOUT_TIMEOUT_MS,
+  TRACKED_FILE_HANDOFF_MODES,
 } from "./types.ts";
 
 export {
@@ -410,6 +413,13 @@ export const CONFIG_SCHEMA = {
     current: () => advisorTrackedFileContentRef,
     persisted: true,
     type: "boolean",
+  },
+  advisorTrackedFileHandoff: {
+    accepted: TRACKED_FILE_HANDOFF_MODES.join(", "),
+    current: () => advisorTrackedFileHandoffRef,
+    persisted: true,
+    type: "enum",
+    validate: isValidTrackedFileHandoffMode,
   },
   advisorUntrackedContent: {
     accepted: "true or false",

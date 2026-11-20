@@ -6,6 +6,7 @@ import {
   JEV_TRANSPORTS,
   MAX_CONTEXT_MAX_CHARS,
   MAX_SCOUT_TIMEOUT_MS,
+  TRACKED_FILE_HANDOFF_MODES,
 } from "./types.ts";
 import type { JevTransport } from "./types.ts";
 
@@ -56,6 +57,15 @@ export const isValidGateFailureMode = (
   value: unknown
 ): value is (typeof GATE_FAILURE_MODES)[number] =>
   isString(value) && GATE_FAILURE_MODE_NAMES.has(value);
+
+const TRACKED_FILE_HANDOFF_MODE_NAMES = new Set<string>(
+  TRACKED_FILE_HANDOFF_MODES
+);
+
+export const isValidTrackedFileHandoffMode = (
+  value: unknown
+): value is (typeof TRACKED_FILE_HANDOFF_MODES)[number] =>
+  isString(value) && TRACKED_FILE_HANDOFF_MODE_NAMES.has(value);
 
 export const isValidToolResultMaxLines = (value: unknown): value is number =>
   isValidNonNegativeSafeInteger(value);

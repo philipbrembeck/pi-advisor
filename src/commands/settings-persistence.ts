@@ -44,6 +44,7 @@ import {
   setAdvisorToolResultMaxLinesRef,
   setAdvisorToolsEnabledRef,
   setAdvisorTrackedFileContentRef,
+  setAdvisorTrackedFileHandoffRef,
   setAdvisorUntrackedContentRef,
   setAlwaysOnRef,
   setContextMaxCharsRef,
@@ -134,6 +135,9 @@ const applyDisclosureSettings = (settings: AdvisorSettings) => {
   setAdvisorToolPoliciesRef(settings.toolPolicies ?? {});
   setAdvisorAgentsMdContextRef(settings.agentsMdContext ?? true);
   setAdvisorTrackedFileContentRef(settings.trackedFileContent ?? false);
+  setAdvisorTrackedFileHandoffRef(
+    settings.trackedFileHandoff ?? "advisor-named"
+  );
   setAdvisorUntrackedContentRef(settings.untrackedContent ?? false);
   setAdvisorOutcomeLoggingRef(settings.outcomeLogging ?? false);
 };
