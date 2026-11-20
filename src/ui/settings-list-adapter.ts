@@ -32,7 +32,7 @@ export class SettingsListAdapter {
   }
 
   render(width: number): string[] {
-    return this.list.render(width);
+    return [...this.list.render(width)];
   }
 
   handleInput(keyData: string): void {

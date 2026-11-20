@@ -7993,20 +7993,20 @@ class ManualAdvisorProgressComponent {
   render(width) {
     const box = renderAdvisorCallBox(this.question, this.theme);
     if (this.state.phase === "complete" || this.state.phase === "cancelled") {
-      return box.render(width);
+      return [...box.render(width)];
     }
     const { scout } = this.state;
     const scoutActive = scout?.status === "calling" || scout?.status === "streaming";
     if (scoutActive) {
       renderScoutDetails(box, scout, this.expanded, this.theme);
-      return box.render(width);
+      return [...box.render(width)];
     }
     if (scout?.status === "cancelled") {
-      return box.render(width);
+      return [...box.render(width)];
     }
     if (this.state.phase === "error") {
       box.addChild(new Text4(this.theme.fg("error", this.theme.bold("◆ ADVISOR · FAILED")), 0, 0));
-      return box.render(width);
+      return [...box.render(width)];
     }
     const frame = SPINNER_FRAMES[Math.floor(Date.now() / 80) % SPINNER_FRAMES.length];
     let status = t("manualProgress.working", "Working…");
@@ -8022,7 +8022,7 @@ class ManualAdvisorProgressComponent {
     if (this.state.text) {
       box.addChild(new Markdown2(adviceForDisplay(this.state.text, this.expanded), 0, 0, getMarkdownTheme2()));
     }
-    return box.render(width);
+    return [...box.render(width)];
   }
   invalidate = noop;
 }
@@ -9036,7 +9036,7 @@ class SettingsListAdapter {
     this.list.invalidate();
   }
   render(width) {
-    return this.list.render(width);
+    return [...this.list.render(width)];
   }
   handleInput(keyData) {
     this.list.handleInput(keyData);

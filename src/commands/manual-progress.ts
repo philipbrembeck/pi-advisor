@@ -36,7 +36,7 @@ export class ManualAdvisorProgressComponent implements Component {
     const box = renderAdvisorCallBox(this.question, this.theme);
 
     if (this.state.phase === "complete" || this.state.phase === "cancelled") {
-      return box.render(width);
+      return [...box.render(width)];
     }
 
     const { scout } = this.state;
@@ -47,11 +47,11 @@ export class ManualAdvisorProgressComponent implements Component {
     if (scoutActive) {
       renderScoutDetails(box, scout, this.expanded, this.theme);
 
-      return box.render(width);
+      return [...box.render(width)];
     }
 
     if (scout?.status === "cancelled") {
-      return box.render(width);
+      return [...box.render(width)];
     }
 
     if (this.state.phase === "error") {
@@ -63,7 +63,7 @@ export class ManualAdvisorProgressComponent implements Component {
         )
       );
 
-      return box.render(width);
+      return [...box.render(width)];
     }
 
     const frame =
@@ -102,7 +102,7 @@ export class ManualAdvisorProgressComponent implements Component {
       );
     }
 
-    return box.render(width);
+    return [...box.render(width)];
   }
 
   readonly invalidate = noop;

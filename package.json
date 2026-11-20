@@ -62,21 +62,21 @@
     "format:check": "bun fmt --no-script --print-width 80 --trailing-comma es5 --sort-imports --bracket-same-line --ignore-pattern 'bench/tasks/**/traps.toml' --ignore-pattern 'dist/**' --check"
   },
   "devDependencies": {
-    "@earendil-works/pi-ai": "1.5.2",
-    "@earendil-works/pi-coding-agent": "1.5.2",
-    "@earendil-works/pi-tui": "1.5.2",
+    "@earendil-works/pi-ai": "1.6.0",
+    "@earendil-works/pi-coding-agent": "1.6.0",
+    "@earendil-works/pi-tui": "1.6.0",
     "@juicesharp/rpiv-i18n": "2.15.0",
-    "@oxlint/plugins": "1.93.0",
+    "@oxlint/plugins": "1.94.0",
     "@types/node": "^26.6.6",
     "@typesafe-ai/sdk": "^0.7.0",
-    "bun-types": "1.4.4",
+    "bun-types": "1.4.5",
     "husky": "^9.1.7",
-    "knip": "6.45.1",
-    "lint-staged": "^17.6.0",
-    "oxlint": "1.93.0",
-    "typebox": "1.4.6",
+    "knip": "6.47.0",
+    "lint-staged": "^17.6.1",
+    "oxlint": "1.94.0",
+    "typebox": "1.4.7",
     "typescript": "^7.0.2",
-    "ultracite": "8.2.0"
+    "ultracite": "8.3.1"
   },
   "peerDependencies": {
     "@earendil-works/pi-ai": "^1.0.0",
