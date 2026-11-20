@@ -6,6 +6,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## Unreleased
 
+## 0.17.0 - 2026-11-20
+
 ### Added
 
 - Added `advisorActivation: "session"` and an **Advisor activation** setting. Each session start, including `/reload`, leaves all three Advisor tools inactive; `/advisor` and `/advisor-off` toggle them without writing `advisor.json`. The default persistent behavior is unchanged.
