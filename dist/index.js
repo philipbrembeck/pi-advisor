@@ -6138,7 +6138,8 @@ var disclosureRiskNotes = (changes, before) => {
   }
   const trackedFileContent = changes.advisorTrackedFileContent === undefined ? before.advisorTrackedFileContent : changes.advisorTrackedFileContent;
   const trackedFileHandoff = changes.advisorTrackedFileHandoff === undefined ? before.advisorTrackedFileHandoff : changes.advisorTrackedFileHandoff;
-  if (trackedFileHandoff === "executor" && trackedFileContent !== true) {
+  const touchesTrackedFiles = changes.advisorTrackedFileContent !== undefined || changes.advisorTrackedFileHandoff !== undefined;
+  if (touchesTrackedFiles && trackedFileHandoff === "executor" && trackedFileContent !== true) {
     notes.push("Executor tracked file handoff has no effect until Tracked file content is enabled.");
   }
   if (changes.advisorUntrackedContent === true) {

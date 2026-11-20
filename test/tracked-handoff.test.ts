@@ -551,22 +551,34 @@ describe("Tracked file handoff guidance", () => {
     );
   });
 
-  test("the configuration preview judges executor handoff by the resulting state", () => {
+  test("the configuration preview does not repeat the inert note on unrelated updates", () => {
     const before = {
       ...getAdvisorConfigSnapshot(),
       advisorTrackedFileContent: false,
       advisorTrackedFileHandoff: "executor" as const,
     };
 
-    expect(advisorConfigRiskNotes({}, before, {}).join("\n")).toContain(
-      "has no effect until Tracked file content is enabled"
-    );
     expect(
-      advisorConfigRiskNotes(
-        { advisorTrackedFileContent: true },
-        before,
-        {}
-      ).join("\n")
+      advisorConfigRiskNotes({ advisorRedactSecrets: true }, before, {}).join(
+        "\n"
+      )
     ).not.toContain("has no effect");
+  });
+
+  test("the configuration preview shows the inert note when consent is disabled or reset", () => {
+    const before = {
+      ...getAdvisorConfigSnapshot(),
+      advisorTrackedFileContent: true,
+      advisorTrackedFileHandoff: "executor" as const,
+    };
+
+    for (const patch of [
+      { advisorTrackedFileContent: false },
+      { advisorTrackedFileContent: null },
+    ]) {
+      expect(advisorConfigRiskNotes(patch, before, {}).join("\n")).toContain(
+        "has no effect until Tracked file content is enabled"
+      );
+    }
   });
 });

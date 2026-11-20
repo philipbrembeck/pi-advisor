@@ -235,7 +235,16 @@ const disclosureRiskNotes = (
       ? before.advisorTrackedFileHandoff
       : changes.advisorTrackedFileHandoff;
 
-  if (trackedFileHandoff === "executor" && trackedFileContent !== true) {
+  // Only a tracked-file change can create this state; unrelated updates must not repeat it.
+  const touchesTrackedFiles =
+    changes.advisorTrackedFileContent !== undefined ||
+    changes.advisorTrackedFileHandoff !== undefined;
+
+  if (
+    touchesTrackedFiles &&
+    trackedFileHandoff === "executor" &&
+    trackedFileContent !== true
+  ) {
     notes.push(
       "Executor tracked file handoff has no effect until Tracked file content is enabled."
     );
