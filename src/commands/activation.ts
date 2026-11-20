@@ -209,9 +209,9 @@ export const activateAdvisor = async (
   args: string,
   ctx: ExtensionContext,
   announce = true
-) => {
+): Promise<boolean> => {
   if (!loadCommandConfig(ctx)) {
-    return;
+    return false;
   }
 
   const { toolAvailabilityRevision } = runtime;
@@ -234,7 +234,7 @@ export const activateAdvisor = async (
     restoreRefs(attempted);
     notify(ctx, argumentError, "error");
 
-    return;
+    return false;
   }
 
   const prepared = await prepareActivationModels(
@@ -250,7 +250,7 @@ export const activateAdvisor = async (
     attempted = liveRefSnapshot();
     restoreActivationRefsIfCurrent(canContinue, () => restoreRefs(attempted));
 
-    return;
+    return false;
   }
 
   const { cancelled, error } = await resolveActivationModels(
@@ -260,14 +260,14 @@ export const activateAdvisor = async (
   );
 
   if (cancelled || !canContinue()) {
-    return;
+    return false;
   }
 
   if (error) {
     restoreRefs(attempted);
     notify(ctx, error, "error");
 
-    return;
+    return false;
   }
 
   // Persist model changes only after both models are known and authenticated.
@@ -287,7 +287,7 @@ export const activateAdvisor = async (
       restoreRefs(liveRefSnapshot())
     )
   ) {
-    return;
+    return false;
   }
 
   if (executorEffortRef && !isMarkedSubagent()) {
@@ -312,4 +312,6 @@ export const activateAdvisor = async (
   if (announce) {
     announceActivation(ctx, activeModel);
   }
+
+  return true;
 };

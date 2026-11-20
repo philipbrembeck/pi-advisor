@@ -16,7 +16,7 @@ export type ActivateAdvisor = (
   args: string,
   ctx: ExtensionContext,
   announce?: boolean
-) => Promise<void>;
+) => Promise<boolean>;
 
 export const registerCommandLifecycle = (
   runtime: CommandRuntime,
@@ -47,8 +47,15 @@ export const registerCommandLifecycle = (
       }
 
       if (alwaysOnRef) {
-        setAdvisorToolsActive(runtime.pi, false);
-        await activateAdvisor("", ctx, false);
+        const { toolAvailabilityRevision } = runtime;
+        const activated = await activateAdvisor("", ctx, false);
+
+        if (
+          !activated &&
+          runtime.toolAvailabilityRevision === toolAvailabilityRevision
+        ) {
+          setAdvisorToolsActive(runtime.pi, false);
+        }
       } else {
         runtime.updateSameModelNotice(ctx);
       }
