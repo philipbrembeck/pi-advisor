@@ -257,7 +257,7 @@ const NAMED_RULE_LINE =
   "- Attach tracked files with `includeTrackedFiles` only after the Advisor names them.";
 
 const EXECUTOR_RULE_LINE =
-  "- When your question or draft depends on specific repository documents, attach them with `includeTrackedFiles`. Prefer a few key files within the size limits.";
+  "- Tracked files may be attached before the Advisor names them. When your question or draft depends on specific repository documents, attach them with `includeTrackedFiles` on the first consultation. Prefer a few key files within the size limits.";
 
 /** Returns the advisor_invocation_settings section as before_agent_start builds it. */
 const invocationSection = (dir: string) => {
@@ -421,6 +421,9 @@ describe("Tracked file handoff guidance", () => {
         expect(invocationSection(dir).split("\n")).toContain(
           EXECUTOR_RULE_LINE
         );
+        expect(invocationSection(dir)).toContain(
+          "Tracked files may be attached before the Advisor names them"
+        );
       }
     );
   });
@@ -501,15 +504,69 @@ describe("Tracked file handoff guidance", () => {
     expect(texts).toContain("untrusted");
   });
 
+  test("the static ask_advisor texts state the Advisor-named default", () => {
+    const tools = new Map<string, any>();
+    registerAdvisorTool(mockPi({ tools }), new AdvisorSessionState());
+    const tool = tools.get("ask_advisor");
+
+    expect(tool.description).toContain(
+      "only after the Advisor names them, unless the Advisor invocation settings explicitly allow attaching them earlier"
+    );
+    expect(tool.promptGuidelines.join(" ")).toContain(
+      "only after the Advisor names them, unless the Advisor invocation settings explicitly allow"
+    );
+    expect(
+      tool.parameters.properties.includeTrackedFiles.items.description
+    ).toContain("By default only files the latest Advisor answer names");
+  });
+
   test("the configuration preview warns before enabling executor handoff", () => {
     const notes = advisorConfigRiskNotes(
-      { advisorTrackedFileHandoff: "executor" },
+      {
+        advisorTrackedFileContent: true,
+        advisorTrackedFileHandoff: "executor",
+      },
       getAdvisorConfigSnapshot(),
       {}
     );
 
     expect(notes.join("\n")).toContain(
-      "without waiting for the Advisor to name them"
+      "The Executor will choose which tracked files to attach, and their contents may be sent to the Advisor on any consultation without the Advisor naming them first. Tracked file content consent is still required."
     );
+    expect(notes.join("\n")).not.toContain("has no effect");
+  });
+
+  test("the configuration preview flags executor handoff that consent leaves inert", () => {
+    const notes = advisorConfigRiskNotes(
+      {
+        advisorTrackedFileContent: false,
+        advisorTrackedFileHandoff: "executor",
+      },
+      getAdvisorConfigSnapshot(),
+      {}
+    );
+
+    expect(notes.join("\n")).toContain(
+      "Executor tracked file handoff has no effect until Tracked file content is enabled."
+    );
+  });
+
+  test("the configuration preview judges executor handoff by the resulting state", () => {
+    const before = {
+      ...getAdvisorConfigSnapshot(),
+      advisorTrackedFileContent: false,
+      advisorTrackedFileHandoff: "executor" as const,
+    };
+
+    expect(advisorConfigRiskNotes({}, before, {}).join("\n")).toContain(
+      "has no effect until Tracked file content is enabled"
+    );
+    expect(
+      advisorConfigRiskNotes(
+        { advisorTrackedFileContent: true },
+        before,
+        {}
+      ).join("\n")
+    ).not.toContain("has no effect");
   });
 });

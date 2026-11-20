@@ -158,7 +158,7 @@ const trackedFileHandoffGuidelines = (): string[] => {
 
   return [
     advisorTrackedFileHandoffRef === "executor"
-      ? "When your question or draft depends on specific repository documents, attach them with `includeTrackedFiles`. Prefer a few key files within the size limits."
+      ? "Tracked files may be attached before the Advisor names them. When your question or draft depends on specific repository documents, attach them with `includeTrackedFiles` on the first consultation. Prefer a few key files within the size limits."
       : "Attach tracked files with `includeTrackedFiles` only after the Advisor names them.",
   ];
 };

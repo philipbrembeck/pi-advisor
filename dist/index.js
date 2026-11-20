@@ -4274,7 +4274,7 @@ var trackedFileHandoffGuidelines = () => {
     return [];
   }
   return [
-    advisorTrackedFileHandoffRef === "executor" ? "When your question or draft depends on specific repository documents, attach them with `includeTrackedFiles`. Prefer a few key files within the size limits." : "Attach tracked files with `includeTrackedFiles` only after the Advisor names them."
+    advisorTrackedFileHandoffRef === "executor" ? "Tracked files may be attached before the Advisor names them. When your question or draft depends on specific repository documents, attach them with `includeTrackedFiles` on the first consultation. Prefer a few key files within the size limits." : "Attach tracked files with `includeTrackedFiles` only after the Advisor names them."
   ];
 };
 var advisorInvocationGuidelines = () => {
@@ -6125,7 +6125,7 @@ var automationRiskNotes = (changes, before) => {
   }
   return notes;
 };
-var disclosureRiskNotes = (changes) => {
+var disclosureRiskNotes = (changes, before) => {
   const notes = [];
   if (changes.advisorGitContext === "full") {
     notes.push("Future Advisor requests may include repository patch contents.");
@@ -6134,7 +6134,12 @@ var disclosureRiskNotes = (changes) => {
     notes.push("This enables explicitly requested tracked file contents to be sent to the Advisor.");
   }
   if (changes.advisorTrackedFileHandoff === "executor") {
-    notes.push("The Executor may attach tracked files to any Advisor consultation without waiting for the Advisor to name them; tracked file content consent is still required.");
+    notes.push("The Executor will choose which tracked files to attach, and their contents may be sent to the Advisor on any consultation without the Advisor naming them first. Tracked file content consent is still required.");
+  }
+  const trackedFileContent = changes.advisorTrackedFileContent === undefined ? before.advisorTrackedFileContent : changes.advisorTrackedFileContent;
+  const trackedFileHandoff = changes.advisorTrackedFileHandoff === undefined ? before.advisorTrackedFileHandoff : changes.advisorTrackedFileHandoff;
+  if (trackedFileHandoff === "executor" && trackedFileContent !== true) {
+    notes.push("Executor tracked file handoff has no effect until Tracked file content is enabled.");
   }
   if (changes.advisorUntrackedContent === true) {
     notes.push("This enables explicitly requested untracked file contents to be sent to the Advisor.");
@@ -6168,7 +6173,7 @@ var advisorConfigRiskNotes = (changes, before, persisted) => [
     ...before,
     alwaysOn: Object.hasOwn(persisted, "alwaysOn") ? persisted.alwaysOn === true : before.alwaysOn
   }),
-  ...disclosureRiskNotes(changes),
+  ...disclosureRiskNotes(changes, before),
   ...costRiskNotes(changes)
 ];
 
@@ -10167,7 +10172,7 @@ var registerAskAdvisorTool = ({
   session
 }) => {
   pi.registerTool({
-    description: "Consult the on-demand Advisor model for strategic guidance. Call with an empty object for a contextual review; attach an optional draft for concrete plan or completion review. Use followUpTo with a new question to continue one cached consultation without rebuilding its redacted context. Use includeTrackedFiles only for exact tracked repository-relative files that are relevant; it requires global advisorTrackedFileContent consent and sends file contents as untrusted data. In Pi Codemode, gather and filter deterministic tool results first, then call tools.ask_advisor. Nested results are not automatically reconstructed: pass only permitted, concise summaries in draft (untrusted, capped at 8 KiB, not independently verified). Draft does not inherit source-tool disclosure policies; use gitContext for patches within the user's allowance.",
+    description: "Consult the on-demand Advisor model for strategic guidance. Call with an empty object for a contextual review; attach an optional draft for concrete plan or completion review. Use followUpTo with a new question to continue one cached consultation without rebuilding its redacted context. Attach tracked files with includeTrackedFiles only after the Advisor names them, unless the Advisor invocation settings explicitly allow attaching them earlier; it requires global advisorTrackedFileContent consent and sends file contents as untrusted data. In Pi Codemode, gather and filter deterministic tool results first, then call tools.ask_advisor. Nested results are not automatically reconstructed: pass only permitted, concise summaries in draft (untrusted, capped at 8 KiB, not independently verified). Draft does not inherit source-tool disclosure policies; use gitContext for patches within the user's allowance.",
     async execute(_id, params, signal, onUpdate, ctx) {
       let followUp;
       try {
@@ -10381,7 +10386,7 @@ ${result.markdown}`,
         description: "How much of the working tree to include. Use full when the review depends on the exact code changes, such as a completion review. Use summary for changed file names only, or none when the question is not about the current changes. The user's configured allowance is the ceiling and a larger request is narrowed to it."
       })),
       includeTrackedFiles: Type3.Optional(Type3.Array(Type3.String({
-        description: "Exact tracked repository-relative files to attach to this consultation. Requires global advisorTrackedFileContent consent; current working-tree contents are sent as untrusted data."
+        description: "Exact tracked repository-relative files to attach. By default only files the latest Advisor answer names are accepted, unless the Advisor invocation settings explicitly allow earlier attachment. Requires global advisorTrackedFileContent consent; current working-tree contents are sent as untrusted data."
       }))),
       includeUntracked: Type3.Optional(Type3.Array(Type3.String({
         description: "Exact new repository-relative files to include only when user configuration allows it."
@@ -10391,7 +10396,7 @@ ${result.markdown}`,
       }))
     }),
     promptGuidelines: [
-      "Call ask_advisor with an empty object for general consultation. For a plan or completion review, include a concise draft naming work, validation, and remaining risks; its claims are not evidence. To drill into an existing answer, pass its adviceId as followUpTo with a new question and no draft, Git context, or attachments. Attach tracked files with includeTrackedFiles only for exact repository-relative paths that are relevant, permitted, and worth the shared call budget; this requires global advisorTrackedFileContent consent, and file contents are sent as untrusted data. Do not infer paths or retry automatically."
+      "Call ask_advisor with an empty object for general consultation. For a plan or completion review, include a concise draft naming work, validation, and remaining risks; its claims are not evidence. To drill into an existing answer, pass its adviceId as followUpTo with a new question and no draft, Git context, or attachments. Attach tracked files with includeTrackedFiles only after the Advisor names them, unless the Advisor invocation settings explicitly allow attaching them earlier; use exact repository-relative paths that are relevant and permitted, and do not guess paths."
     ],
     promptSnippet: "Consult the Advisor using its existing context; attach a draft for plan or completion review",
     renderCall(args, theme) {
