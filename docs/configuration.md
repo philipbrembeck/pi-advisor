@@ -57,6 +57,7 @@ All fields are optional. The model refs below are explicit examples of models av
   "advisorRedactSecrets": false,
   "advisorAgentsMdContext": true,
   "advisorTrackedFileContent": false,
+  "advisorTrackedFileHandoff": "advisor-named",
   "advisorUntrackedContent": false,
   "advisorDisableSameModel": true,
   "advisorOutcomeLogging": false,
@@ -77,6 +78,15 @@ All fields are optional. The model refs below are explicit examples of models av
 ## Same-model consultations
 
 `advisorDisableSameModel` defaults to `true`. When the active Executor model is the same provider/model as the configured Advisor, `ask_advisor` returns a skipped result without calling the provider, screening with Jev, consuming a consultation, or using a tracked-file handoff. Manual calls and automatic gates are skipped too; they never create a tool or session block. The active model (including models selected by `/model`) is compared, not just the saved Executor setting. `/advisor`, `/advisor-models`, and model selection re-check the match and show a notice on transitions. Turn this setting off in `/advisor-settings` if you want a same-model consultation with a different reasoning level.
+
+## Tracked file handoff
+
+`advisorTrackedFileHandoff` controls when the Executor may pass `includeTrackedFiles` to `ask_advisor`. Both modes require `advisorTrackedFileContent` to be `true`, and both keep the same path, size, redaction, and untrusted-data rules.
+
+- `advisor-named` (default) allows `includeTrackedFiles` only after the latest Advisor answer names each requested path exactly. The attachment is a fresh consultation after that answer and spends one call from the shared budget.
+- `executor` allows `includeTrackedFiles` on any consultation, so the first answer can use the documents the Executor already cites. The Executor decides which files to send.
+
+Set it with **Tracked file handoff** in `/advisor-settings`, or with `"advisorTrackedFileHandoff": "executor"` in `advisor.json`. Enforcement applies to the next tool call; the Executor's guidance updates on its next turn.
 
 ## Follow-up consultations
 
@@ -134,7 +144,7 @@ An untrusted project sends neither rules file; the Advisor is told that rules we
 
 ## Consultation responses
 
-Normal consultations preserve the provider's final Markdown and never block execution. If the Advisor explicitly says it cannot review a specifically named file, the Executor may make a sequential follow-up call with `includeTrackedFiles` when global tracked-file consent is enabled; this is discretionary, not an automatic retry. When the Advisor has no material concern or recommendation, it may begin with the exact first line `Verdict: sound`. Pi renders that response with the static `◆ ADVISOR · SOUND` header for both `ask_advisor` results and `/advisor-manual`.
+Normal consultations preserve the provider's final Markdown and never block execution. Under the default `advisor-named` handoff, if the Advisor explicitly says it cannot review a specifically named file, the Executor may make a sequential follow-up call with `includeTrackedFiles` when global tracked-file consent is enabled; this is discretionary, not an automatic retry. The `executor` handoff lets the Executor attach tracked files without that step (see [Tracked file handoff](#tracked-file-handoff)). When the Advisor has no material concern or recommendation, it may begin with the exact first line `Verdict: sound`. Pi renders that response with the static `◆ ADVISOR · SOUND` header for both `ask_advisor` results and `/advisor-manual`.
 
 ## Jev/Decisions consultation filter
 
