@@ -4,6 +4,7 @@ import { registerCommands } from "../src/commands/registration.ts";
 import { getAdvisorSettings } from "../src/config/state.ts";
 import { herdrAdvisorActivity, HerdrAdvisorBlock } from "../src/herdr.ts";
 import { I18N_NAMESPACE } from "../src/i18n.ts";
+import { setLivePiSettings } from "../src/pi-settings.ts";
 import { AdvisorSessionState } from "../src/session-state.ts";
 import {
   consultAdvisor as consultAdvisorImplementation,
@@ -60,6 +61,7 @@ try {
 }
 
 export default function registerPiAdvisor(pi: ExtensionAPI) {
+  setLivePiSettings(() => pi.getSettings?.());
   const sessionState = new AdvisorSessionState();
   const scoutStatus = new ScoutStatusManager();
   const herdrActivity = herdrAdvisorActivity.createScope();

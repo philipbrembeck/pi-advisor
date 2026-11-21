@@ -4795,6 +4795,12 @@ import {
 import { existsSync as existsSync2, readFileSync as readFileSync2, statSync as statSync2 } from "node:fs";
 import { join as join3 } from "node:path";
 import { getAgentDir as getAgentDir3 } from "@earendil-works/pi-coding-agent";
+var liveSettingsReader;
+var liveCache;
+var setLivePiSettings = (reader) => {
+  liveSettingsReader = reader;
+  liveCache = undefined;
+};
 var SETTING_RECHECK_INTERVAL_MS = 2000;
 var cache = new Map;
 var settingsIdentity = (path) => {
@@ -4814,6 +4820,19 @@ var readHideThinking = (path) => {
   }
 };
 var piHideThinkingEnabled = () => {
+  if (liveSettingsReader) {
+    const now = Date.now();
+    if (!liveCache || now - liveCache.readAt >= SETTING_RECHECK_INTERVAL_MS) {
+      const effective = liveSettingsReader();
+      liveCache = {
+        hidden: effective?.hideThinkingBlock,
+        readAt: now
+      };
+    }
+    if (liveCache.hidden !== undefined) {
+      return liveCache.hidden;
+    }
+  }
   const path = join3(getAgentDir3(), "settings.json");
   if (!existsSync2(path)) {
     return false;
@@ -10898,6 +10917,7 @@ try {
   loader.registerLocalesFromDir(I18N_NAMESPACE, new URL("../", import.meta.url).href, { label: "pi-advisor" });
 } catch {}
 function registerPiAdvisor(pi) {
+  setLivePiSettings(() => pi.getSettings?.());
   const sessionState = new AdvisorSessionState;
   const scoutStatus = new ScoutStatusManager;
   const herdrActivity = herdrAdvisorActivity.createScope();

@@ -11,6 +11,20 @@ interface CachedSetting {
   readAt: number;
 }
 
+interface EffectivePiSettings {
+  hideThinkingBlock?: boolean;
+}
+
+let liveSettingsReader: (() => EffectivePiSettings | undefined) | undefined;
+let liveCache: { hidden: boolean | undefined; readAt: number } | undefined;
+
+export const setLivePiSettings = (
+  reader?: () => EffectivePiSettings | undefined
+) => {
+  liveSettingsReader = reader;
+  liveCache = undefined;
+};
+
 // Cached per file and re-read on identity change; stat calls are rate-limited because renderers run per frame.
 const SETTING_RECHECK_INTERVAL_MS = 2000;
 const cache = new Map<string, CachedSetting>();
@@ -37,6 +51,22 @@ const readHideThinking = (path: string): boolean => {
 
 /** Whether Pi's `hide_thinking` setting hides rendered thinking blocks. */
 export const piHideThinkingEnabled = (): boolean => {
+  if (liveSettingsReader) {
+    const now = Date.now();
+
+    if (!liveCache || now - liveCache.readAt >= SETTING_RECHECK_INTERVAL_MS) {
+      const effective = liveSettingsReader();
+      liveCache = {
+        hidden: effective?.hideThinkingBlock,
+        readAt: now,
+      };
+    }
+
+    if (liveCache.hidden !== undefined) {
+      return liveCache.hidden;
+    }
+  }
+
   const path = join(getAgentDir(), "settings.json");
 
   if (!existsSync(path)) {

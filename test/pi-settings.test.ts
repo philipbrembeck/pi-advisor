@@ -3,7 +3,10 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { piHideThinkingEnabled } from "../src/pi-settings.ts";
+import {
+  piHideThinkingEnabled,
+  setLivePiSettings,
+} from "../src/pi-settings.ts";
 import type { JsonValue } from "./helpers/extension-context.ts";
 
 const AGENT_DIR_ENV = "PI_CODING_AGENT_DIR";
@@ -56,6 +59,29 @@ describe("Pi global settings reader", () => {
   test("defaults to visible without a settings file", async () => {
     await withAgentSettings(null, () => {
       expect(piHideThinkingEnabled()).toBe(false);
+    });
+  });
+
+  test("prefers the effective live settings over the global file", async () => {
+    await withAgentSettings({ hideThinkingBlock: false }, () => {
+      setLivePiSettings(() => ({ hideThinkingBlock: true }));
+      expect(piHideThinkingEnabled()).toBe(true);
+
+      setLivePiSettings(() => ({ hideThinkingBlock: false }));
+      expect(piHideThinkingEnabled()).toBe(false);
+
+      setLivePiSettings(() => undefined);
+      expect(piHideThinkingEnabled()).toBe(false);
+    });
+  });
+
+  test("an unavailable live source falls back to the global file", async () => {
+    await withAgentSettings({ hideThinkingBlock: true }, () => {
+      setLivePiSettings(() => undefined);
+      expect(piHideThinkingEnabled()).toBe(true);
+
+      setLivePiSettings(undefined);
+      expect(piHideThinkingEnabled()).toBe(true);
     });
   });
 });
