@@ -96,6 +96,7 @@ const openSelector = (
 const INVALID_SETTINGS: [Record<string, JsonValue>, RegExp][] = [
   [{ advisorJevTimeoutMs: 0 }, /advisorJevTimeoutMs/u],
   [{ advisorJevTimeoutMs: 1.5 }, /advisorJevTimeoutMs/u],
+  [{ advisorJevTimeoutMs: 2_147_483_648 }, /advisorJevTimeoutMs/u],
   [{ advisorJevDigestMaxChars: -1 }, /advisorJevDigestMaxChars/u],
   [{ advisorJevPricePerMtok: 0 }, /advisorJevPricePerMtok/u],
   [{ advisorJevTransport: "vercel" }, /advisorJevTransport/u],

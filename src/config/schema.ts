@@ -87,6 +87,7 @@ import {
   GATE_FAILURE_MODES,
   JEV_TRANSPORTS,
   MAX_CONTEXT_MAX_CHARS,
+  MAX_JEV_TIMEOUT_MS,
   MAX_SCOUT_TIMEOUT_MS,
   TRACKED_FILE_HANDOFF_MODES,
 } from "./types.ts";
@@ -289,7 +290,7 @@ export const CONFIG_SCHEMA = {
     validate: isValidJevPricePerMtok,
   },
   advisorJevTimeoutMs: {
-    accepted: "a positive safe integer",
+    accepted: `a positive safe integer no greater than ${MAX_JEV_TIMEOUT_MS} milliseconds`,
     current: () => advisorJevTimeoutMsRef,
     persisted: true,
     type: "number",

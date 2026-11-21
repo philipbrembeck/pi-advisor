@@ -13,6 +13,7 @@ var JEV_API_KEY_CLASSIFIER = "jev-api-key";
 var DEFAULT_JEV_TIMEOUT_MS = 8000;
 var DEFAULT_SCOUT_TIMEOUT_MS = 30000;
 var MAX_SCOUT_TIMEOUT_MS = 2147483647;
+var MAX_JEV_TIMEOUT_MS = 2147483647;
 var DEFAULT_JEV_DIGEST_MAX_CHARS = 4000;
 var DEFAULT_JEV_PRICE_PER_MTOK = 0.042;
 var DEFAULT_JEV_FILTER_SKIP_CONFIDENCE = 0.85;
@@ -552,7 +553,7 @@ var TRACKED_FILE_HANDOFF_MODE_NAMES = new Set(TRACKED_FILE_HANDOFF_MODES);
 var isValidTrackedFileHandoffMode = (value) => isString(value) && TRACKED_FILE_HANDOFF_MODE_NAMES.has(value);
 var isValidToolResultMaxLines = (value) => isValidNonNegativeSafeInteger(value);
 var isValidToolResultMaxBytes = (value) => isValidNonNegativeSafeInteger(value);
-var isValidJevTimeoutMs = (value) => typeof value === "number" && Number.isSafeInteger(value) && value >= 1;
+var isValidJevTimeoutMs = (value) => typeof value === "number" && Number.isSafeInteger(value) && value >= 1 && value <= MAX_JEV_TIMEOUT_MS;
 var isValidScoutTimeoutMs = (value) => typeof value === "number" && Number.isSafeInteger(value) && value >= 1 && value <= MAX_SCOUT_TIMEOUT_MS;
 var isValidJevDigestMaxChars = (value) => isValidNonNegativeSafeInteger(value);
 var isValidJevPricePerMtok = (value) => typeof value === "number" && Number.isFinite(value) && value > 0;
@@ -728,7 +729,7 @@ var CONFIG_SCHEMA = {
     validate: isValidJevPricePerMtok
   },
   advisorJevTimeoutMs: {
-    accepted: "a positive safe integer",
+    accepted: `a positive safe integer no greater than ${MAX_JEV_TIMEOUT_MS} milliseconds`,
     current: () => advisorJevTimeoutMsRef,
     persisted: true,
     type: "number",

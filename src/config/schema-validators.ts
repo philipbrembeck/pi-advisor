@@ -5,6 +5,7 @@ import {
   GATE_FAILURE_MODES,
   JEV_TRANSPORTS,
   MAX_CONTEXT_MAX_CHARS,
+  MAX_JEV_TIMEOUT_MS,
   MAX_SCOUT_TIMEOUT_MS,
   TRACKED_FILE_HANDOFF_MODES,
 } from "./types.ts";
@@ -74,7 +75,10 @@ export const isValidToolResultMaxBytes = (value: unknown): value is number =>
   isValidNonNegativeSafeInteger(value);
 
 export const isValidJevTimeoutMs = (value: unknown): value is number =>
-  typeof value === "number" && Number.isSafeInteger(value) && value >= 1;
+  typeof value === "number" &&
+  Number.isSafeInteger(value) &&
+  value >= 1 &&
+  value <= MAX_JEV_TIMEOUT_MS;
 
 export const isValidScoutTimeoutMs = (value: unknown): value is number =>
   typeof value === "number" &&
