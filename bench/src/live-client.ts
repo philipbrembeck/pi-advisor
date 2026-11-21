@@ -84,6 +84,32 @@ export interface LiveTextResult {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === "object" && !Array.isArray(value);
 
+const isNumber = (value: unknown): value is number =>
+  typeof value === "number" && Number.isFinite(value);
+
+/** Sums per-attempt usage so a retried empty response still reports its spend. */
+const sumUsage = (left: unknown, right: unknown): unknown => {
+  if (!isRecord(left) || !isRecord(right)) {
+    return left ?? right;
+  }
+
+  const combined: Record<string, unknown> = { ...left };
+
+  for (const [key, value] of Object.entries(right)) {
+    const current = combined[key];
+
+    if (isNumber(current) && isNumber(value)) {
+      combined[key] = current + value;
+    } else if (isRecord(current) || isRecord(value)) {
+      combined[key] = sumUsage(current, value);
+    } else {
+      combined[key] = value ?? current;
+    }
+  }
+
+  return combined;
+};
+
 const textFromAssistant = (message: AssistantMessage) =>
   message.content
     .filter(
@@ -227,7 +253,7 @@ export class LiveModelClient {
       latencyMs: first.latencyMs + second.latencyMs,
       request: second.request,
       text: second.text,
-      usage: second.usage,
+      usage: sumUsage(first.usage, second.usage),
     } satisfies LiveTextResult;
   }
 }

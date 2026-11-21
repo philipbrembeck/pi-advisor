@@ -69,6 +69,14 @@ export const main = async (argv = process.argv.slice(2)) => {
     return;
   }
   const { config } = loadBenchmarkConfig(option(argv, "--config"));
+  const live = process.env.BENCH_LIVE === "1";
+
+  if (live && !option(argv, "--config")) {
+    throw new Error(
+      "Live benchmark runs require --config <path> so model pins and budget are explicit."
+    );
+  }
+
   if (command === "replay") {
     const report = await runReplay({
       config,
@@ -85,7 +93,7 @@ export const main = async (argv = process.argv.slice(2)) => {
     try {
       report = await runDecisionBenchmark({
         config,
-        live: process.env.BENCH_LIVE === "1",
+        live,
         writeReportOutput: !has(argv, "--no-report"),
       });
     } catch (error) {
@@ -102,7 +110,7 @@ export const main = async (argv = process.argv.slice(2)) => {
     return;
   }
   if (command === "screen" || command === "evaluate") {
-    if (process.env.BENCH_LIVE !== "1") {
+    if (!live) {
       const report = unavailableTier(command, config);
       console.error(`Tier ${command}: ${report.status}`);
       process.exitCode = 2;

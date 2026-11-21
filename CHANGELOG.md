@@ -17,6 +17,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Store JEV API keys through an atomic 0600-from-creation key-file write in all four key stores, so a failed permission repair can no longer leave a replacement secret readable; removing a plaintext `typesafe_api_key` from `advisor.json` is now atomic too.
 - Reject `advisorJevTimeoutMs` values above the 32-bit timer ceiling (2147483647 ms), which runtimes silently clamp to ~1 ms and thereby fail screening open.
 - The Advisor thinking renderer now honors the effective Pi `hide_thinking` setting — including a trusted project's override — instead of only the global `settings.json`.
+
+### Fixed (benchmark harness)
+
+- Reject repeated TOML answer keys in benchmark fixtures instead of silently replacing ground truth; require an explicit `--config` for live benchmark tiers; and aggregate usage across an empty-response retry so cost and budget accounting includes both attempts.
 - Keep already-active Advisor tools in place during successful always-on activation so pending tools can still be restored.
 
 ### Changed

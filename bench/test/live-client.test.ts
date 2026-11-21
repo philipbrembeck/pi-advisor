@@ -21,7 +21,7 @@ describe("live model client unusable-response policy", () => {
       replyFor: () => {
         calls += 1;
         return calls === 1
-          ? { text: "" }
+          ? { text: "", usage: { input: 3, output: 4 } }
           : { text: "usable advice", usage: { input: 1, output: 2 } };
       },
     }).start();
@@ -35,6 +35,7 @@ describe("live model client unusable-response policy", () => {
       expect(result.attempts).toBe(2);
       expect(result.text).toBe("usable advice");
       expect(result.firstEmpty?.stopReason).toBe("stop");
+      expect(result.usage).toMatchObject({ input: 4, output: 6 });
       expect(client.requests).toHaveLength(2);
       for (const request of client.requests) {
         expect(request.model).toBe("glm-5.3");

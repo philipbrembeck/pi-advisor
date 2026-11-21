@@ -7,12 +7,20 @@ import {
   assertAdvisorPayloadExcludesKey,
 } from "../src/decision-context.ts";
 import { runDecisions } from "../src/decisions.ts";
-import { discoverDecisionItems } from "../src/fixture.ts";
+import { discoverDecisionItems, parseFlatToml } from "../src/fixture.ts";
 import { MockProviderServer } from "../src/replay/mock-provider.ts";
 import { judgeAdvice, parseJudgeResponse } from "../src/score/judge.ts";
 import { mechanicalScore } from "../src/score/mechanical.ts";
 
 const items = discoverDecisionItems("bench/tasks");
+
+describe("Flat TOML reader", () => {
+  test("rejects duplicate keys instead of replacing ground truth", () => {
+    expect(() =>
+      parseFlatToml('targetFile = "a.ts"\ntargetFile = "b.ts"\n', "item.toml")
+    ).toThrow('repeats key "targetFile"');
+  });
+});
 
 describe("Tier 2 decision corpus", () => {
   test("contains the preregistered polarity split and complete item shape", () => {

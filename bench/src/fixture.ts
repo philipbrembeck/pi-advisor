@@ -96,6 +96,13 @@ export const parseFlatToml = (text: string, path = "fixture.toml") => {
     const line = stripComment(original).trim();
     if (line) {
       const [key, value] = parseTomlLine(line, path, index + 1);
+
+      if (key in result) {
+        throw new TypeError(
+          `${path}:${index + 1} repeats key "${key}"; later entries must not silently replace earlier ones.`
+        );
+      }
+
       result[key] = value;
     }
   }
