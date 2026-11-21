@@ -169,6 +169,21 @@ const advisorToolsItem = (settings: AdvisorSettings): SettingItem => ({
   values: TOGGLE_VALUES,
 });
 
+const trackedFileHandoffItem = (settings: AdvisorSettings): SettingItem => {
+  const mode = settings.trackedFileHandoff ?? "advisor-named";
+
+  return {
+    currentValue: mode,
+    description: t(
+      "settings.trackedFileHandoff.desc",
+      "When the Executor may attach tracked files: only after the Advisor names them, or on any consultation. Requires Tracked file content."
+    ),
+    id: "trackedFileHandoff",
+    label: t("settings.trackedFileHandoff.label", "Tracked file handoff"),
+    values: withCurrentValue(mode, ["advisor-named", "executor"]),
+  };
+};
+
 export const createSettingsItems = ({
   effortLevels,
   fallbackModel,
@@ -591,6 +606,7 @@ export const createSettingsItems = ({
       settings.trackedFileContent,
       false
     ),
+    trackedFileHandoffItem(settings),
     toggle(
       "untrackedContent",
       t("settings.untrackedContent.label", "Untracked file content"),

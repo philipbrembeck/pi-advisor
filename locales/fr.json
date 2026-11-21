@@ -314,6 +314,8 @@
   "settings.toolResultMaxLines.label": "Lignes de résultat d'outil",
   "settings.trackedFileContent.desc": "Autoriser l'envoi du contenu des fichiers suivis avec le contexte Advisor.",
   "settings.trackedFileContent.label": "Contenu des fichiers suivis",
+  "settings.trackedFileHandoff.desc": "Définit quand l'Executor peut joindre des fichiers suivis : seulement après que l'Advisor les a nommés, ou à chaque consultation. Nécessite le contenu des fichiers suivis.",
+  "settings.trackedFileHandoff.label": "Transmission des fichiers suivis",
   "settings.untrackedContent.desc": "Autoriser l'envoi du contenu des fichiers non suivis avec le contexte Advisor.",
   "settings.untrackedContent.label": "Contenu des fichiers non suivis",
   "settingsCmd.off.alwaysOnTurnedOff": "Toujours actif désactivé.",

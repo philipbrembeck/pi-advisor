@@ -68,6 +68,13 @@ export const GATE_FAILURE_MODES: GateFailureMode[] = [
   "warn-and-continue",
 ];
 
+export type TrackedFileHandoffMode = "advisor-named" | "executor";
+
+export const TRACKED_FILE_HANDOFF_MODES: TrackedFileHandoffMode[] = [
+  "advisor-named",
+  "executor",
+];
+
 export type AdvisorActivation = "persistent" | "session";
 
 export interface AdvisorConfig {
@@ -114,6 +121,7 @@ export interface AdvisorConfig {
   advisorToolResultMaxBytes?: number;
   advisorToolResultMaxLines?: number;
   advisorTrackedFileContent?: boolean;
+  advisorTrackedFileHandoff?: TrackedFileHandoffMode;
   advisorToolsEnabled?: boolean;
   advisorUntrackedContent?: boolean;
   alwaysOn?: boolean;

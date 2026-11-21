@@ -38,6 +38,10 @@ var GATE_FAILURE_MODES = [
   "block-tool",
   "warn-and-continue"
 ];
+var TRACKED_FILE_HANDOFF_MODES = [
+  "advisor-named",
+  "executor"
+];
 
 // src/config/state.ts
 var executorRef = "";
@@ -92,6 +96,7 @@ var advisorToolPoliciesRef = {};
 var advisorOutcomeLoggingRef = false;
 var advisorUntrackedContentRef = false;
 var advisorTrackedFileContentRef = false;
+var advisorTrackedFileHandoffRef = "advisor-named";
 var advisorScoutEnabledRef = false;
 var advisorScoutTimeoutMsRef = DEFAULT_SCOUT_TIMEOUT_MS;
 var showUsageDetailsRef = true;
@@ -258,6 +263,9 @@ var setAdvisorUntrackedContentRef = (enabled) => {
 var setAdvisorTrackedFileContentRef = (enabled) => {
   advisorTrackedFileContentRef = enabled;
 };
+var setAdvisorTrackedFileHandoffRef = (mode) => {
+  advisorTrackedFileHandoffRef = mode;
+};
 var setAdvisorScoutEnabledRef = (enabled) => {
   advisorScoutEnabledRef = enabled;
 };
@@ -320,6 +328,7 @@ var getAdvisorSettings = () => ({
   toolResultMaxBytes: advisorToolResultMaxBytesRef,
   toolResultMaxLines: advisorToolResultMaxLinesRef,
   trackedFileContent: advisorTrackedFileContentRef,
+  trackedFileHandoff: advisorTrackedFileHandoffRef,
   untrackedContent: advisorUntrackedContentRef
 });
 var getAdvisorMaxCallsPerSession = () => getAdvisorSettings().maxCallsPerSession;
@@ -539,6 +548,8 @@ var isValidLoopThreshold = (value) => typeof value === "number" && Number.isSafe
 var isValidMaxCallsPerSession = (value) => isValidNonNegativeSafeInteger(value);
 var GATE_FAILURE_MODE_NAMES = new Set(GATE_FAILURE_MODES);
 var isValidGateFailureMode = (value) => isString(value) && GATE_FAILURE_MODE_NAMES.has(value);
+var TRACKED_FILE_HANDOFF_MODE_NAMES = new Set(TRACKED_FILE_HANDOFF_MODES);
+var isValidTrackedFileHandoffMode = (value) => isString(value) && TRACKED_FILE_HANDOFF_MODE_NAMES.has(value);
 var isValidToolResultMaxLines = (value) => isValidNonNegativeSafeInteger(value);
 var isValidToolResultMaxBytes = (value) => isValidNonNegativeSafeInteger(value);
 var isValidJevTimeoutMs = (value) => typeof value === "number" && Number.isSafeInteger(value) && value >= 1;
@@ -841,6 +852,13 @@ var CONFIG_SCHEMA = {
     persisted: true,
     type: "boolean"
   },
+  advisorTrackedFileHandoff: {
+    accepted: TRACKED_FILE_HANDOFF_MODES.join(", "),
+    current: () => advisorTrackedFileHandoffRef,
+    persisted: true,
+    type: "enum",
+    validate: isValidTrackedFileHandoffMode
+  },
   advisorUntrackedContent: {
     accepted: "true or false",
     current: () => advisorUntrackedContentRef,
@@ -1112,6 +1130,7 @@ var resetDefaults = () => {
   setAdvisorOutcomeLoggingRef(false);
   setAdvisorUntrackedContentRef(false);
   setAdvisorTrackedFileContentRef(false);
+  setAdvisorTrackedFileHandoffRef("advisor-named");
   setAdvisorScoutEnabledRef(false);
   setAdvisorScoutTimeoutMsRef(DEFAULT_SCOUT_TIMEOUT_MS);
   setShowUsageDetailsRef(true);
@@ -1181,6 +1200,7 @@ var applyConfig = (config) => {
   applyOptionalConfig(config, "advisorToolPolicies", setAdvisorToolPoliciesRef);
   applyOptionalConfig(config, "advisorUntrackedContent", setAdvisorUntrackedContentRef);
   applyOptionalConfig(config, "advisorTrackedFileContent", setAdvisorTrackedFileContentRef);
+  applyOptionalConfig(config, "advisorTrackedFileHandoff", setAdvisorTrackedFileHandoffRef);
   applyOptionalConfig(config, "advisorOutcomeLogging", setAdvisorOutcomeLoggingRef);
 };
 
@@ -4249,10 +4269,19 @@ var advisorRepositoryContext = (result, requested, allowed, budget) => {
 `);
 };
 var advisorRequestConversation = (ctx, maxChars = contextMaxCharsRef, describeImages = false, imageNonce = "") => recentConversation(ctx, maxChars, undefined, undefined, undefined, undefined, describeImages, imageNonce);
+var trackedFileHandoffGuidelines = () => {
+  if (!advisorTrackedFileContentRef) {
+    return [];
+  }
+  return [
+    advisorTrackedFileHandoffRef === "executor" ? "Tracked files may be attached before the Advisor names them. When your question or draft depends on specific repository documents, attach them with `includeTrackedFiles` on the first consultation. Prefer a few key files within the size limits." : "Attach tracked files with `includeTrackedFiles` only after the Advisor names them."
+  ];
+};
 var advisorInvocationGuidelines = () => {
   if (isSimpleMode()) {
     return [
-      "When uncertain and normal available tools cannot resolve it, call ask_advisor for a second opinion."
+      "When uncertain and normal available tools cannot resolve it, call ask_advisor for a second opinion.",
+      ...trackedFileHandoffGuidelines()
     ];
   }
   const guidelines = [];
@@ -4271,6 +4300,7 @@ var advisorInvocationGuidelines = () => {
   if (guidelines.length > 0) {
     guidelines.push("Call ask_advisor with an empty object by default. Do not invent a question merely to request a review: the Advisor already receives context. Include question only for a genuinely specific assumption or trade-off.");
   }
+  guidelines.push(...trackedFileHandoffGuidelines());
   return guidelines;
 };
 var ADVISOR_SYSTEM = [
@@ -6095,13 +6125,22 @@ var automationRiskNotes = (changes, before) => {
   }
   return notes;
 };
-var disclosureRiskNotes = (changes) => {
+var disclosureRiskNotes = (changes, before) => {
   const notes = [];
   if (changes.advisorGitContext === "full") {
     notes.push("Future Advisor requests may include repository patch contents.");
   }
   if (changes.advisorTrackedFileContent === true) {
     notes.push("This enables explicitly requested tracked file contents to be sent to the Advisor.");
+  }
+  if (changes.advisorTrackedFileHandoff === "executor") {
+    notes.push("The Executor will choose which tracked files to attach, and their contents may be sent to the Advisor on any consultation without the Advisor naming them first. Tracked file content consent is still required.");
+  }
+  const trackedFileContent = changes.advisorTrackedFileContent === undefined ? before.advisorTrackedFileContent : changes.advisorTrackedFileContent;
+  const trackedFileHandoff = changes.advisorTrackedFileHandoff === undefined ? before.advisorTrackedFileHandoff : changes.advisorTrackedFileHandoff;
+  const touchesTrackedFiles = changes.advisorTrackedFileContent !== undefined || changes.advisorTrackedFileHandoff !== undefined;
+  if (touchesTrackedFiles && trackedFileHandoff === "executor" && trackedFileContent !== true) {
+    notes.push("Executor tracked file handoff has no effect until Tracked file content is enabled.");
   }
   if (changes.advisorUntrackedContent === true) {
     notes.push("This enables explicitly requested untracked file contents to be sent to the Advisor.");
@@ -6135,7 +6174,7 @@ var advisorConfigRiskNotes = (changes, before, persisted) => [
     ...before,
     alwaysOn: Object.hasOwn(persisted, "alwaysOn") ? persisted.alwaysOn === true : before.alwaysOn
   }),
-  ...disclosureRiskNotes(changes),
+  ...disclosureRiskNotes(changes, before),
   ...costRiskNotes(changes)
 ];
 
@@ -8861,6 +8900,16 @@ var advisorToolsItem = (settings) => ({
   label: settings.advisorActivation === "session" ? t("settings.advisorToolsEnabled.savedLabel", "Advisor tools (saved)") : t("settings.advisorToolsEnabled.label", "Advisor tools"),
   values: TOGGLE_VALUES
 });
+var trackedFileHandoffItem = (settings) => {
+  const mode = settings.trackedFileHandoff ?? "advisor-named";
+  return {
+    currentValue: mode,
+    description: t("settings.trackedFileHandoff.desc", "When the Executor may attach tracked files: only after the Advisor names them, or on any consultation. Requires Tracked file content."),
+    id: "trackedFileHandoff",
+    label: t("settings.trackedFileHandoff.label", "Tracked file handoff"),
+    values: withCurrentValue(mode, ["advisor-named", "executor"])
+  };
+};
 var createSettingsItems = ({
   effortLevels,
   fallbackModel,
@@ -9015,7 +9064,7 @@ var createSettingsItems = ({
       title: t("settings.toolPolicies.label", "Tool disclosure policies"),
       tui
     })
-  }, toggle("trackedFileContent", t("settings.trackedFileContent.label", "Tracked file content"), t("settings.trackedFileContent.desc", "Allow tracked file contents to be sent with Advisor context."), settings.trackedFileContent, false), toggle("untrackedContent", t("settings.untrackedContent.label", "Untracked file content"), t("settings.untrackedContent.desc", "Allow untracked file contents to be sent with Advisor context."), settings.untrackedContent, false), toggle("outcomeLogging", t("settings.outcomeLogging.label", "Outcome logging (global)"), t("settings.outcomeLogging.desc", "Allow anonymized Advisor outcomes to be logged globally."), settings.outcomeLogging, false), ...jevItems(settings, theme, tui, {
+  }, toggle("trackedFileContent", t("settings.trackedFileContent.label", "Tracked file content"), t("settings.trackedFileContent.desc", "Allow tracked file contents to be sent with Advisor context."), settings.trackedFileContent, false), trackedFileHandoffItem(settings), toggle("untrackedContent", t("settings.untrackedContent.label", "Untracked file content"), t("settings.untrackedContent.desc", "Allow untracked file contents to be sent with Advisor context."), settings.untrackedContent, false), toggle("outcomeLogging", t("settings.outcomeLogging.label", "Outcome logging (global)"), t("settings.outcomeLogging.desc", "Allow anonymized Advisor outcomes to be logged globally."), settings.outcomeLogging, false), ...jevItems(settings, theme, tui, {
     jevClassifierRegistry,
     jevKeyDeps,
     onJevFilter,
@@ -9189,6 +9238,10 @@ var applyCoreMutation = (settings, id, value, presets) => {
     }
     case "gitContext": {
       settings.gitContext = value;
+      return true;
+    }
+    case "trackedFileHandoff": {
+      settings.trackedFileHandoff = value === "executor" ? "executor" : "advisor-named";
       return true;
     }
     default: {
@@ -9503,6 +9556,7 @@ var applyDisclosureSettings = (settings) => {
   setAdvisorToolPoliciesRef(settings.toolPolicies ?? {});
   setAdvisorAgentsMdContextRef(settings.agentsMdContext ?? true);
   setAdvisorTrackedFileContentRef(settings.trackedFileContent ?? false);
+  setAdvisorTrackedFileHandoffRef(settings.trackedFileHandoff ?? "advisor-named");
   setAdvisorUntrackedContentRef(settings.untrackedContent ?? false);
   setAdvisorOutcomeLoggingRef(settings.outcomeLogging ?? false);
 };
@@ -10099,8 +10153,12 @@ var claimTrackedHandoff = (session, includeTrackedFiles) => {
   if (!includeTrackedFiles?.length) {
     return;
   }
-  if (!getAdvisorSettings().trackedFileContent) {
+  const settings = getAdvisorSettings();
+  if (!settings.trackedFileContent) {
     throw new Error("Tracked file attachments are disabled: enable the global advisorTrackedFileContent setting (Tracked file content in /advisor-settings) and retry.");
+  }
+  if (settings.trackedFileHandoff === "executor") {
+    return;
   }
   if (!session.claimTrackedFiles(includeTrackedFiles)) {
     throw new Error("Tracked file handoff requires a prior Advisor response that explicitly names every requested path and is consumed once.");
@@ -10115,7 +10173,7 @@ var registerAskAdvisorTool = ({
   session
 }) => {
   pi.registerTool({
-    description: "Consult the on-demand Advisor model for strategic guidance. Call with an empty object for a contextual review; attach an optional draft for concrete plan or completion review. Use followUpTo with a new question to continue one cached consultation without rebuilding its redacted context. If the Advisor explicitly names a missing file, you may make a sequential fresh consultation with includeTrackedFiles when enabled and relevant. In Pi Codemode, gather and filter deterministic tool results first, then call tools.ask_advisor. Nested results are not automatically reconstructed: pass only permitted, concise summaries in draft (untrusted, capped at 8 KiB, not independently verified). Draft does not inherit source-tool disclosure policies; use gitContext for patches within the user's allowance.",
+    description: "Consult the on-demand Advisor model for strategic guidance. Call with an empty object for a contextual review; attach an optional draft for concrete plan or completion review. Use followUpTo with a new question to continue one cached consultation without rebuilding its redacted context. Attach tracked files with includeTrackedFiles only after the Advisor names them, unless the Advisor invocation settings explicitly allow attaching them earlier; it requires global advisorTrackedFileContent consent and sends file contents as untrusted data. In Pi Codemode, gather and filter deterministic tool results first, then call tools.ask_advisor. Nested results are not automatically reconstructed: pass only permitted, concise summaries in draft (untrusted, capped at 8 KiB, not independently verified). Draft does not inherit source-tool disclosure policies; use gitContext for patches within the user's allowance.",
     async execute(_id, params, signal, onUpdate, ctx) {
       let followUp;
       try {
@@ -10329,7 +10387,7 @@ ${result.markdown}`,
         description: "How much of the working tree to include. Use full when the review depends on the exact code changes, such as a completion review. Use summary for changed file names only, or none when the question is not about the current changes. The user's configured allowance is the ceiling and a larger request is narrowed to it."
       })),
       includeTrackedFiles: Type3.Optional(Type3.Array(Type3.String({
-        description: "Exact tracked repository-relative files to attach after the Advisor explicitly names a file it cannot review. Requires global advisorTrackedFileContent consent; current working-tree contents are sent as untrusted data."
+        description: "Exact tracked repository-relative files to attach. By default only files the latest Advisor answer names are accepted, unless the Advisor invocation settings explicitly allow earlier attachment. Requires global advisorTrackedFileContent consent; current working-tree contents are sent as untrusted data."
       }))),
       includeUntracked: Type3.Optional(Type3.Array(Type3.String({
         description: "Exact new repository-relative files to include only when user configuration allows it."
@@ -10339,7 +10397,7 @@ ${result.markdown}`,
       }))
     }),
     promptGuidelines: [
-      "Call ask_advisor with an empty object for general consultation. For a plan or completion review, include a concise draft naming work, validation, and remaining risks; its claims are not evidence. To drill into an existing answer, pass its adviceId as followUpTo with a new question and no draft, Git context, or attachments. If the Advisor explicitly says it cannot review a specifically named file, you may make a sequential follow-up call with includeTrackedFiles when the file is relevant, permitted, and worth the shared call budget; do not infer paths or retry automatically."
+      "Call ask_advisor with an empty object for general consultation. For a plan or completion review, include a concise draft naming work, validation, and remaining risks; its claims are not evidence. To drill into an existing answer, pass its adviceId as followUpTo with a new question and no draft, Git context, or attachments. Attach tracked files with includeTrackedFiles only after the Advisor names them, unless the Advisor invocation settings explicitly allow attaching them earlier; use exact repository-relative paths that are relevant and permitted, and do not guess paths."
     ],
     promptSnippet: "Consult the Advisor using its existing context; attach a draft for plan or completion review",
     renderCall(args, theme) {

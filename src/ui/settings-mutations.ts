@@ -159,6 +159,13 @@ const applyCoreMutation = (
       return true;
     }
 
+    case "trackedFileHandoff": {
+      settings.trackedFileHandoff =
+        value === "executor" ? "executor" : "advisor-named";
+
+      return true;
+    }
+
     default: {
       return false;
     }

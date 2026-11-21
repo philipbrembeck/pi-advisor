@@ -195,6 +195,18 @@ describe("Config Module", () => {
       expect(() =>
         validateConfig({ gateFailureMode: "bad" }, "/tmp/advisor.json")
       ).toThrow(INVALID_FAILURE_MODE_PATTERN);
+      expect(
+        validateConfig(
+          { advisorTrackedFileHandoff: "executor" },
+          "/tmp/advisor.json"
+        )
+      ).toBe(true);
+      expect(() =>
+        validateConfig(
+          { advisorTrackedFileHandoff: "always" },
+          "/tmp/advisor.json"
+        )
+      ).toThrow("advisorTrackedFileHandoff");
 
       for (const invalid of [[], { bash: "invalid" }, { "": "full" }]) {
         expect(() => validateConfig({ advisorToolPolicies: invalid })).toThrow(

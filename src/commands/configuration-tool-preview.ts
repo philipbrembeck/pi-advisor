@@ -200,7 +200,10 @@ const automationRiskNotes = (
   return notes;
 };
 
-const disclosureRiskNotes = (changes: AdvisorConfigPatch) => {
+const disclosureRiskNotes = (
+  changes: AdvisorConfigPatch,
+  before: AdvisorConfigSnapshot
+) => {
   const notes: string[] = [];
 
   if (changes.advisorGitContext === "full") {
@@ -212,6 +215,38 @@ const disclosureRiskNotes = (changes: AdvisorConfigPatch) => {
   if (changes.advisorTrackedFileContent === true) {
     notes.push(
       "This enables explicitly requested tracked file contents to be sent to the Advisor."
+    );
+  }
+
+  if (changes.advisorTrackedFileHandoff === "executor") {
+    notes.push(
+      "The Executor will choose which tracked files to attach, and their contents may be sent to the Advisor on any consultation without the Advisor naming them first. Tracked file content consent is still required."
+    );
+  }
+
+  // A null patch value resets to the extension default: consent off, advisor-named.
+  const trackedFileContent =
+    changes.advisorTrackedFileContent === undefined
+      ? before.advisorTrackedFileContent
+      : changes.advisorTrackedFileContent;
+
+  const trackedFileHandoff =
+    changes.advisorTrackedFileHandoff === undefined
+      ? before.advisorTrackedFileHandoff
+      : changes.advisorTrackedFileHandoff;
+
+  // Only a tracked-file change can create this state; unrelated updates must not repeat it.
+  const touchesTrackedFiles =
+    changes.advisorTrackedFileContent !== undefined ||
+    changes.advisorTrackedFileHandoff !== undefined;
+
+  if (
+    touchesTrackedFiles &&
+    trackedFileHandoff === "executor" &&
+    trackedFileContent !== true
+  ) {
+    notes.push(
+      "Executor tracked file handoff has no effect until Tracked file content is enabled."
     );
   }
 
@@ -280,6 +315,6 @@ export const advisorConfigRiskNotes = (
       ? persisted.alwaysOn === true
       : before.alwaysOn,
   }),
-  ...disclosureRiskNotes(changes),
+  ...disclosureRiskNotes(changes, before),
   ...costRiskNotes(changes),
 ];

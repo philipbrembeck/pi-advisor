@@ -314,6 +314,8 @@
   "settings.toolResultMaxLines.label": "Tool-Ergebnis Zeilen",
   "settings.trackedFileContent.desc": "Getrackte Dateiinhalte dürfen mit dem Advisor-Kontext gesendet werden.",
   "settings.trackedFileContent.label": "Getrackter Dateiinhalt",
+  "settings.trackedFileHandoff.desc": "Legt fest, wann der Executor getrackte Dateien anhängen darf: erst nachdem der Advisor sie benannt hat, oder bei jeder Konsultation. Setzt die Option „Getrackter Dateiinhalt“ voraus.",
+  "settings.trackedFileHandoff.label": "Übergabe getrackter Dateien",
   "settings.untrackedContent.desc": "Ungetrackte Dateiinhalte dürfen mit dem Advisor-Kontext gesendet werden.",
   "settings.untrackedContent.label": "Ungetrackter Dateiinhalt",
   "settingsCmd.off.alwaysOnTurnedOff": "Immer aktiv ausgeschaltet.",

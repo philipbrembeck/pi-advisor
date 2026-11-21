@@ -245,6 +245,19 @@ describe("Advisor settings selector", () => {
     selector.dispose();
   });
 
+  test("cycles the tracked file handoff mode and saves each change", () => {
+    const { saved, selector } = openSelector({});
+
+    changeSetting(selector, "Tracked file handoff");
+    expect(saved.at(-1)).toMatchObject({ trackedFileHandoff: "executor" });
+
+    changeSetting(selector, "Tracked file handoff");
+    expect(saved.at(-1)).toMatchObject({
+      trackedFileHandoff: "advisor-named",
+    });
+    selector.dispose();
+  });
+
   test("toggles same-model suppression in Simple mode", () => {
     const { saved, selector } = openSelector({ initial: { simpleMode: true } });
     focusSettingsRow(selector, "Disable same-model Advisor");

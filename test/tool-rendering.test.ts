@@ -258,7 +258,7 @@ describe("Advisor tool rendering", () => {
     expect(advisorTool.promptSnippet).toContain("existing context");
     expect(advisorTool.promptGuidelines.join(" ")).toContain("empty object");
     expect(advisorTool.promptGuidelines.join(" ")).toContain(
-      "sequential follow-up"
+      "Attach tracked files with includeTrackedFiles only after the Advisor names them"
     );
     expect(ADVISOR_SYSTEM).toContain(
       "No question or other input from the Executor is needed"

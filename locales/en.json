@@ -315,6 +315,8 @@
   "settings.toolResultMaxLines.label": "Tool result lines",
   "settings.trackedFileContent.desc": "Allow tracked file contents to be sent with Advisor context.",
   "settings.trackedFileContent.label": "Tracked file content",
+  "settings.trackedFileHandoff.desc": "When the Executor may attach tracked files: only after the Advisor names them, or on any consultation. Requires Tracked file content.",
+  "settings.trackedFileHandoff.label": "Tracked file handoff",
   "settings.untrackedContent.desc": "Allow untracked file contents to be sent with Advisor context.",
   "settings.untrackedContent.label": "Untracked file content",
   "settingsCmd.off.alwaysOnTurnedOff": "Always on turned off.",

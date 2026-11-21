@@ -9,6 +9,8 @@ import {
   registerFauxProvider,
 } from "@earendil-works/pi-ai/compat";
 
+import { getAdvisorConfigSnapshot } from "../src/commands/configuration-tool-policy.ts";
+import { advisorConfigRiskNotes } from "../src/commands/configuration-tool-preview.ts";
 import { loadConfig, resetConfigCache } from "../src/config.ts";
 import { AdvisorSessionState } from "../src/session-state.ts";
 import { registerAdvisorTool } from "../src/tools.ts";
@@ -247,6 +249,336 @@ describe("Tracked file handoff", () => {
     } finally {
       faux.unregister();
       rmSync(repoDir, { force: true, recursive: true });
+    }
+  });
+});
+
+const NAMED_RULE_LINE =
+  "- Attach tracked files with `includeTrackedFiles` only after the Advisor names them.";
+
+const EXECUTOR_RULE_LINE =
+  "- Tracked files may be attached before the Advisor names them. When your question or draft depends on specific repository documents, attach them with `includeTrackedFiles` on the first consultation. Prefer a few key files within the size limits.";
+
+/** Returns the advisor_invocation_settings section as before_agent_start builds it. */
+const invocationSection = (dir: string) => {
+  const events = new Map<string, any>();
+  registerAdvisorTool(
+    mockPi({ activeTools: ["ask_advisor"], events }),
+    new AdvisorSessionState()
+  );
+  const sections: Record<string, string> = {};
+
+  events.get("before_agent_start")(
+    { systemPromptOptions: { sections } },
+    handoffContext(dir)
+  );
+
+  return sections.advisor_invocation_settings ?? "";
+};
+
+describe("Tracked file handoff modes", () => {
+  test("executor mode attaches a file the Advisor never named, then restores the claim rule", async () => {
+    await withAgentDir(
+      {
+        advisorTrackedFileContent: true,
+        advisorTrackedFileHandoff: "executor",
+      },
+      async (agentDir) => {
+        const configPath = join(agentDir, "advisor.json");
+        const consulted: (string[] | undefined)[] = [];
+        const state = new AdvisorSessionState();
+        const getTool = registerHandoffTool(state, consulted);
+        const ctx = handoffContext(agentDir);
+        const handoff = { includeTrackedFiles: ["src/foo.ts"] };
+
+        loadConfig(ctx);
+        await getTool().execute(
+          "call-1",
+          handoff,
+          new AbortController().signal,
+          undefined,
+          ctx
+        );
+        await getTool().execute(
+          "call-2",
+          handoff,
+          new AbortController().signal,
+          undefined,
+          ctx
+        );
+        expect(consulted).toEqual([["src/foo.ts"], ["src/foo.ts"]]);
+
+        // The last Advisor answer ("Done.") does not name the file, so the
+        // Advisor-named rule rejects the call once the mode is switched back.
+        writeFileSync(
+          configPath,
+          JSON.stringify({
+            advisorTrackedFileContent: true,
+            advisorTrackedFileHandoff: "advisor-named",
+          })
+        );
+        resetConfigCache();
+        loadConfig(ctx);
+        await expect(
+          getTool().execute(
+            "call-3",
+            handoff,
+            new AbortController().signal,
+            undefined,
+            ctx
+          )
+        ).rejects.toThrow("Tracked file handoff requires a prior");
+        expect(consulted).toHaveLength(2);
+      }
+    );
+  });
+
+  test("executor mode still requires tracked file content consent", async () => {
+    await withAgentDir(
+      {
+        advisorTrackedFileContent: false,
+        advisorTrackedFileHandoff: "executor",
+      },
+      async (agentDir) => {
+        const consulted: (string[] | undefined)[] = [];
+
+        const state = new AdvisorSessionState();
+        const getTool = registerHandoffTool(state, consulted);
+        const ctx = handoffContext(agentDir);
+
+        loadConfig(ctx);
+        await expect(
+          getTool().execute(
+            "call-1",
+            { includeTrackedFiles: ["src/foo.ts"] },
+            new AbortController().signal,
+            undefined,
+            ctx
+          )
+        ).rejects.toThrow("advisorTrackedFileContent");
+        expect(consulted).toHaveLength(0);
+      }
+    );
+  });
+
+  test("advisor-named mode rejects a path the Advisor did not name", async () => {
+    await withAgentDir(
+      {
+        advisorTrackedFileContent: true,
+        advisorTrackedFileHandoff: "advisor-named",
+      },
+      async (agentDir) => {
+        const consulted: (string[] | undefined)[] = [];
+        const state = new AdvisorSessionState();
+        const getTool = registerHandoffTool(state, consulted);
+        const ctx = handoffContext(agentDir);
+        const handoff = { includeTrackedFiles: ["src/foo.ts"] };
+
+        loadConfig(ctx);
+        await expect(
+          getTool().execute(
+            "call-1",
+            handoff,
+            new AbortController().signal,
+            undefined,
+            ctx
+          )
+        ).rejects.toThrow("Tracked file handoff requires a prior");
+        expect(consulted).toHaveLength(0);
+
+        state.issueAdvice(
+          "advice-1",
+          "Review src/foo.ts",
+          "executor-requested"
+        );
+        await getTool().execute(
+          "call-2",
+          handoff,
+          new AbortController().signal,
+          undefined,
+          ctx
+        );
+        expect(consulted).toEqual([["src/foo.ts"]]);
+      }
+    );
+  });
+});
+
+describe("Tracked file handoff guidance", () => {
+  test("advisor-named mode adds the named-file rule when consent is on", async () => {
+    await withAgentDir({ advisorTrackedFileContent: true }, (dir) => {
+      expect(invocationSection(dir).split("\n")).toContain(NAMED_RULE_LINE);
+    });
+  });
+
+  test("executor mode adds the attach rule when consent is on", async () => {
+    await withAgentDir(
+      {
+        advisorTrackedFileContent: true,
+        advisorTrackedFileHandoff: "executor",
+      },
+      (dir) => {
+        expect(invocationSection(dir).split("\n")).toContain(
+          EXECUTOR_RULE_LINE
+        );
+        expect(invocationSection(dir)).toContain(
+          "Tracked files may be attached before the Advisor names them"
+        );
+      }
+    );
+  });
+
+  test("adds no tracked-file rule in either mode while consent is off", async () => {
+    for (const handoff of ["advisor-named", "executor"] as const) {
+      await withAgentDir(
+        {
+          advisorTrackedFileContent: false,
+          advisorTrackedFileHandoff: handoff,
+        },
+        (dir) => {
+          expect(invocationSection(dir)).not.toContain("includeTrackedFiles");
+        }
+      );
+    }
+  });
+
+  test("adds only the mode rule in both simple and full modes", async () => {
+    for (const simpleMode of [false, true]) {
+      let withoutConsent = "";
+      let withConsent = "";
+
+      await withAgentDir(
+        { advisorTrackedFileContent: false, simpleMode },
+        (dir) => {
+          withoutConsent = invocationSection(dir);
+        }
+      );
+      await withAgentDir(
+        { advisorTrackedFileContent: true, simpleMode },
+        (dir) => {
+          withConsent = invocationSection(dir);
+        }
+      );
+
+      expect(withConsent.split("\n")).toContain(NAMED_RULE_LINE);
+      expect(
+        withConsent.split("\n").filter((line) => line !== NAMED_RULE_LINE)
+      ).toEqual(withoutConsent.split("\n"));
+    }
+  });
+
+  test("omits the empty-object default line when only the mode rule remains", async () => {
+    await withAgentDir(
+      {
+        advisorCompletionGate: false,
+        advisorFailureGate: false,
+        advisorPlanGate: false,
+        advisorTrackedFileContent: true,
+        advisorTrackedFileHandoff: "executor",
+      },
+      (dir) => {
+        expect(invocationSection(dir)).toBe(
+          [
+            "Advisor invocation settings:",
+            EXECUTOR_RULE_LINE,
+            "- Reserve Advisor calls for material decisions, repeated failures, or final review.",
+          ].join("\n")
+        );
+      }
+    );
+  });
+
+  test("keeps static ask_advisor texts neutral and still states consent and untrusted data", () => {
+    const tools = new Map<string, any>();
+    registerAdvisorTool(mockPi({ tools }), new AdvisorSessionState());
+    const tool = tools.get("ask_advisor");
+
+    const texts = [
+      tool.description,
+      ...tool.promptGuidelines,
+      tool.parameters.properties.includeTrackedFiles.items.description,
+    ].join("\n");
+
+    expect(texts).not.toMatch(/explicitly (?:names|says)/u);
+    expect(texts).toContain("advisorTrackedFileContent");
+    expect(texts).toContain("untrusted");
+  });
+
+  test("the static ask_advisor texts state the Advisor-named default", () => {
+    const tools = new Map<string, any>();
+    registerAdvisorTool(mockPi({ tools }), new AdvisorSessionState());
+    const tool = tools.get("ask_advisor");
+
+    expect(tool.description).toContain(
+      "only after the Advisor names them, unless the Advisor invocation settings explicitly allow attaching them earlier"
+    );
+    expect(tool.promptGuidelines.join(" ")).toContain(
+      "only after the Advisor names them, unless the Advisor invocation settings explicitly allow"
+    );
+    expect(
+      tool.parameters.properties.includeTrackedFiles.items.description
+    ).toContain("By default only files the latest Advisor answer names");
+  });
+
+  test("the configuration preview warns before enabling executor handoff", () => {
+    const notes = advisorConfigRiskNotes(
+      {
+        advisorTrackedFileContent: true,
+        advisorTrackedFileHandoff: "executor",
+      },
+      getAdvisorConfigSnapshot(),
+      {}
+    );
+
+    expect(notes.join("\n")).toContain(
+      "The Executor will choose which tracked files to attach, and their contents may be sent to the Advisor on any consultation without the Advisor naming them first. Tracked file content consent is still required."
+    );
+    expect(notes.join("\n")).not.toContain("has no effect");
+  });
+
+  test("the configuration preview flags executor handoff that consent leaves inert", () => {
+    const notes = advisorConfigRiskNotes(
+      {
+        advisorTrackedFileContent: false,
+        advisorTrackedFileHandoff: "executor",
+      },
+      getAdvisorConfigSnapshot(),
+      {}
+    );
+
+    expect(notes.join("\n")).toContain(
+      "Executor tracked file handoff has no effect until Tracked file content is enabled."
+    );
+  });
+
+  test("the configuration preview does not repeat the inert note on unrelated updates", () => {
+    const before = {
+      ...getAdvisorConfigSnapshot(),
+      advisorTrackedFileContent: false,
+      advisorTrackedFileHandoff: "executor" as const,
+    };
+
+    expect(
+      advisorConfigRiskNotes({ advisorRedactSecrets: true }, before, {}).join(
+        "\n"
+      )
+    ).not.toContain("has no effect");
+  });
+
+  test("the configuration preview shows the inert note when consent is disabled or reset", () => {
+    const before = {
+      ...getAdvisorConfigSnapshot(),
+      advisorTrackedFileContent: true,
+      advisorTrackedFileHandoff: "executor" as const,
+    };
+
+    for (const patch of [
+      { advisorTrackedFileContent: false },
+      { advisorTrackedFileContent: null },
+    ]) {
+      expect(advisorConfigRiskNotes(patch, before, {}).join("\n")).toContain(
+        "has no effect until Tracked file content is enabled"
+      );
     }
   });
 });
