@@ -7,8 +7,8 @@ import type { ImageContent } from "@earendil-works/pi-ai/compat";
 import {
   imageFileCandidate,
   imageMime,
-  isPermitted,
   normalizeRequestedPath,
+  permittedPaths,
   repositoryRoot,
   within,
 } from "./attachments.ts";
@@ -104,30 +104,46 @@ export const readImageFiles = async (
   }
 
   const seen = new Set<string>();
-  const images: ImageAttachment[] = [];
-  let omitted = 0;
-  let bytes = 0;
+  const candidates: { mime: string; name: string }[] = [];
 
   for (const path of names) {
     const name = normalizeRequestedPath(root, path);
 
-    if (name && seen.has(name)) {
+    if (!name || seen.has(name)) {
       continue;
     }
 
-    if (name) {
-      seen.add(name);
+    seen.add(name);
+
+    const mime = imageMime(name);
+
+    if (mime) {
+      candidates.push({ mime, name });
     }
+  }
 
+  let permitted: Set<string>;
+
+  try {
+    permitted = permittedPaths(
+      root,
+      candidates.map((candidate) => candidate.name),
+      kind
+    );
+  } catch {
+    return { images: [], omitted: names.length };
+  }
+
+  const images: ImageAttachment[] = [];
+  let omitted = names.length - candidates.length;
+  let bytes = 0;
+
+  for (const { mime, name } of candidates) {
     try {
-      const mime = name && imageMime(name);
-
       const image =
-        name &&
-        mime &&
         images.length < remainingCount &&
         remainingBytes - bytes > 0 &&
-        isPermitted(root, name, kind)
+        permitted.has(name)
           ? await readImageAttachment(root, name, mime, remainingBytes - bytes)
           : undefined;
 

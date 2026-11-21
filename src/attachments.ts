@@ -72,48 +72,55 @@ export const repositoryRoot = (cwd: string) => {
   }
 };
 
-const untracked = (cwd: string, path: string) => {
-  const output = git(cwd, [
-    "ls-files",
-    "--others",
-    "--exclude-standard",
-    "-z",
-    "--",
-    path,
-  ]);
+const MEMBERSHIP_QUERY_BATCH = 256;
 
-  const expected = normalizeRelativePath(cwd, path);
+const normalizeAll = (root: string, paths: readonly string[]) =>
+  new Set(paths.map((path) => normalizeRelativePath(root, path)));
 
-  return output
-    .split("\0")
-    .filter(Boolean)
-    .some((entry) => normalizeRelativePath(cwd, entry) === expected);
-};
-
-const tracked = (cwd: string, path: string) => {
-  const output = git(cwd, ["ls-files", "--stage", "-z", "--", path]);
-  const expected = normalizeRelativePath(cwd, path);
-
-  return output.split("\0").some((entry) => {
-    if (!entry) {
-      return false;
-    }
-
-    const [metadata, name] = entry.split("\t");
-
-    return (
-      name &&
-      normalizeRelativePath(cwd, name) === expected &&
-      !metadata.startsWith("160000 ")
-    );
-  });
-};
-
-export const isPermitted = (
+export const permittedPaths = (
   root: string,
-  path: string,
+  paths: readonly string[],
   kind: "tracked" | "untracked"
-) => (kind === "tracked" ? tracked(root, path) : untracked(root, path));
+): Set<string> => {
+  const wanted = normalizeAll(root, paths);
+  const permitted = new Set<string>();
+
+  for (let start = 0; start < paths.length; start += MEMBERSHIP_QUERY_BATCH) {
+    const batch = paths.slice(start, start + MEMBERSHIP_QUERY_BATCH);
+
+    const output =
+      kind === "tracked"
+        ? git(root, ["ls-files", "--stage", "-z", "--", ...batch])
+        : git(root, [
+            "ls-files",
+            "--others",
+            "--exclude-standard",
+            "-z",
+            "--",
+            ...batch,
+          ]);
+
+    for (const entry of output.split("\0")) {
+      if (!entry) {
+        continue;
+      }
+
+      const name = kind === "tracked" ? (entry.split("\t")[1] ?? "") : entry;
+
+      if (kind === "tracked" && entry.startsWith("160000 ")) {
+        continue;
+      }
+
+      const normalized = normalizeRelativePath(root, name);
+
+      if (wanted.has(normalized)) {
+        permitted.add(normalized);
+      }
+    }
+  }
+
+  return permitted;
+};
 
 const readAttachment = async (
   root: string,
@@ -193,8 +200,6 @@ const readFiles = async (
   }
 
   const unique = new Set<string>();
-  const attachments: UntrackedAttachment[] = [];
-  let total = 0;
 
   for (const name of requested) {
     const normalizedName = normalizeRequestedPath(root, name);
@@ -208,9 +213,22 @@ const readFiles = async (
     }
 
     unique.add(normalizedName);
+  }
 
+  let permitted: Set<string>;
+
+  try {
+    permitted = permittedPaths(root, [...unique], kind);
+  } catch {
+    return [];
+  }
+
+  const attachments: UntrackedAttachment[] = [];
+  let total = 0;
+
+  for (const normalizedName of unique) {
     try {
-      if (!isPermitted(root, normalizedName, kind)) {
+      if (!permitted.has(normalizedName)) {
         continue;
       }
 

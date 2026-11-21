@@ -2534,30 +2534,37 @@ var repositoryRoot = (cwd) => {
     return Promise.resolve();
   }
 };
-var untracked = (cwd, path) => {
-  const output = git(cwd, [
-    "ls-files",
-    "--others",
-    "--exclude-standard",
-    "-z",
-    "--",
-    path
-  ]);
-  const expected = normalizeRelativePath(cwd, path);
-  return output.split("\x00").filter(Boolean).some((entry) => normalizeRelativePath(cwd, entry) === expected);
-};
-var tracked = (cwd, path) => {
-  const output = git(cwd, ["ls-files", "--stage", "-z", "--", path]);
-  const expected = normalizeRelativePath(cwd, path);
-  return output.split("\x00").some((entry) => {
-    if (!entry) {
-      return false;
+var MEMBERSHIP_QUERY_BATCH = 256;
+var normalizeAll = (root, paths) => new Set(paths.map((path) => normalizeRelativePath(root, path)));
+var permittedPaths = (root, paths, kind) => {
+  const wanted = normalizeAll(root, paths);
+  const permitted = new Set;
+  for (let start = 0;start < paths.length; start += MEMBERSHIP_QUERY_BATCH) {
+    const batch = paths.slice(start, start + MEMBERSHIP_QUERY_BATCH);
+    const output = kind === "tracked" ? git(root, ["ls-files", "--stage", "-z", "--", ...batch]) : git(root, [
+      "ls-files",
+      "--others",
+      "--exclude-standard",
+      "-z",
+      "--",
+      ...batch
+    ]);
+    for (const entry of output.split("\x00")) {
+      if (!entry) {
+        continue;
+      }
+      const name = kind === "tracked" ? entry.split("\t")[1] ?? "" : entry;
+      if (kind === "tracked" && entry.startsWith("160000 ")) {
+        continue;
+      }
+      const normalized = normalizeRelativePath(root, name);
+      if (wanted.has(normalized)) {
+        permitted.add(normalized);
+      }
     }
-    const [metadata, name] = entry.split("\t");
-    return name && normalizeRelativePath(cwd, name) === expected && !metadata.startsWith("160000 ");
-  });
+  }
+  return permitted;
 };
-var isPermitted = (root, path, kind) => kind === "tracked" ? tracked(root, path) : untracked(root, path);
 var readAttachment = async (root, normalizedName, redact, available) => {
   const absolute = resolve(root, normalizedName);
   if (!(within(root, absolute) && available > 0)) {
@@ -2603,16 +2610,24 @@ var readFiles = async (cwd, requested, enabled, redact, kind, totalLimit = ADVIS
     return [];
   }
   const unique = new Set;
-  const attachments = [];
-  let total = 0;
   for (const name of requested) {
     const normalizedName = normalizeRequestedPath(root, name);
     if (!normalizedName || unique.has(normalizedName) || imageFileCandidate(normalizedName)) {
       continue;
     }
     unique.add(normalizedName);
+  }
+  let permitted;
+  try {
+    permitted = permittedPaths(root, [...unique], kind);
+  } catch {
+    return [];
+  }
+  const attachments = [];
+  let total = 0;
+  for (const normalizedName of unique) {
     try {
-      if (!isPermitted(root, normalizedName, kind)) {
+      if (!permitted.has(normalizedName)) {
         continue;
       }
       const available = Math.min(ADVISOR_FILE_MAX_BYTES, totalLimit - total);
@@ -2997,20 +3012,30 @@ var readImageFiles = async (cwd, requested, enabled, kind, remainingBytes, remai
     return { images: [], omitted: names.length };
   }
   const seen = new Set;
-  const images = [];
-  let omitted = 0;
-  let bytes = 0;
+  const candidates = [];
   for (const path of names) {
     const name = normalizeRequestedPath(root, path);
-    if (name && seen.has(name)) {
+    if (!name || seen.has(name)) {
       continue;
     }
-    if (name) {
-      seen.add(name);
+    seen.add(name);
+    const mime = imageMime(name);
+    if (mime) {
+      candidates.push({ mime, name });
     }
+  }
+  let permitted;
+  try {
+    permitted = permittedPaths(root, candidates.map((candidate) => candidate.name), kind);
+  } catch {
+    return { images: [], omitted: names.length };
+  }
+  const images = [];
+  let omitted = names.length - candidates.length;
+  let bytes = 0;
+  for (const { mime, name } of candidates) {
     try {
-      const mime = name && imageMime(name);
-      const image = name && mime && images.length < remainingCount && remainingBytes - bytes > 0 && isPermitted(root, name, kind) ? await readImageAttachment(root, name, mime, remainingBytes - bytes) : undefined;
+      const image = images.length < remainingCount && remainingBytes - bytes > 0 && permitted.has(name) ? await readImageAttachment(root, name, mime, remainingBytes - bytes) : undefined;
       if (image) {
         images.push(image);
         bytes += image.bytes;

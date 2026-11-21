@@ -17,6 +17,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Store JEV API keys through an atomic 0600-from-creation key-file write in all four key stores, so a failed permission repair can no longer leave a replacement secret readable; removing a plaintext `typesafe_api_key` from `advisor.json` is now atomic too.
 - Reject `advisorJevTimeoutMs` values above the 32-bit timer ceiling (2147483647 ms), which runtimes silently clamp to ~1 ms and thereby fail screening open.
 - The Advisor thinking renderer now honors the effective Pi `hide_thinking` setting — including a trusted project's override — instead of only the global `settings.json`.
+- Batch the Git membership queries behind tracked/untracked attachments into one `git ls-files` call per request list (chunked at 256 paths), so a long list of nonexistent paths no longer launches one synchronous Git process per path.
 
 ### Fixed (benchmark harness)
 

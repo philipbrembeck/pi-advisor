@@ -1,5 +1,6 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import { execFileSync } from "node:child_process";
+import * as childProcess from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -95,6 +96,61 @@ describe("Advisor file attachments", () => {
       expect(attachments).toHaveLength(1);
       expect(attachments[0]?.bytes).toBe(10);
     } finally {
+      rmSync(cwd, { force: true, recursive: true });
+    }
+  });
+
+  test("answers a path list with one batched Git membership query", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "pi-advisor-untracked-"));
+    git(cwd, ["init"]);
+    writeFileSync(join(cwd, "one.md"), "one");
+    writeFileSync(join(cwd, "two.md"), "two");
+
+    const execCalls: string[][] = [];
+    const realExecFileSync = childProcess.execFileSync;
+
+    // SAFETY: shim matches execFileSync's (file, args, options) overload shape.
+    const execShim = ((
+      file: string,
+      args?: readonly string[],
+      options?: childProcess.ExecFileSyncOptions
+    ) => {
+      if (args?.[0] === "ls-files") {
+        execCalls.push([...args]);
+
+        return "";
+      }
+
+      return realExecFileSync(file, args, options);
+    }) as typeof execFileSync;
+
+    const execSpy = spyOn(childProcess, "execFileSync").mockImplementation(
+      execShim
+    );
+
+    try {
+      const attachments = await readUntrackedFiles(
+        cwd,
+        ["one.md", "two.md", "missing-1.md", "missing-2.md"],
+        true,
+        true
+      );
+
+      expect(attachments).toEqual([]);
+      expect(execCalls).toHaveLength(1);
+      expect(execCalls[0]).toEqual([
+        "ls-files",
+        "--others",
+        "--exclude-standard",
+        "-z",
+        "--",
+        "one.md",
+        "two.md",
+        "missing-1.md",
+        "missing-2.md",
+      ]);
+    } finally {
+      execSpy.mockRestore();
       rmSync(cwd, { force: true, recursive: true });
     }
   });
