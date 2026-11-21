@@ -6904,12 +6904,44 @@ class ManualAdvisorDialog {
 }
 
 // src/jev/classifier-key-store.ts
-import { chmodSync, readFileSync as readFileSync3, rmSync, writeFileSync as writeFileSync2 } from "node:fs";
+import { readFileSync as readFileSync3, rmSync } from "node:fs";
 import { join as join4 } from "node:path";
 import { getAgentDir as getAgentDir4 } from "@earendil-works/pi-coding-agent";
+
+// src/jev/key-file.ts
+import { randomUUID as randomUUID4 } from "node:crypto";
+import {
+  closeSync as closeSync2,
+  openSync as openSync2,
+  renameSync as renameSync2,
+  unlinkSync as unlinkSync2,
+  writeFileSync as writeFileSync2
+} from "node:fs";
+var KEY_FILE_MODE = 384;
+var writeKeyFile = (path, key) => {
+  const temporaryPath = `${path}.${process.pid}.${randomUUID4()}.tmp`;
+  let fileDescriptor;
+  try {
+    fileDescriptor = openSync2(temporaryPath, "wx", KEY_FILE_MODE);
+    writeFileSync2(fileDescriptor, `${key}
+`, "utf-8");
+    closeSync2(fileDescriptor);
+    fileDescriptor = undefined;
+    renameSync2(temporaryPath, path);
+  } catch (error) {
+    if (fileDescriptor !== undefined) {
+      closeSync2(fileDescriptor);
+    }
+    try {
+      unlinkSync2(temporaryPath);
+    } catch {}
+    throw error;
+  }
+};
+
+// src/jev/classifier-key-store.ts
 var JEV_CLASSIFIER_KEY_SERVICE = "pi-advisor-jev-classifier";
 var JEV_CLASSIFIER_KEY_NAME = "classifier-api-key";
-var KEY_FILE_MODE = 384;
 var keyFilePath = () => join4(getAgentDir4(), "jev_classifier_api_key");
 var classifierKeyFailClosed = false;
 var disableJevClassifierKeyForRuntime = () => {
@@ -6929,12 +6961,7 @@ var defaultReadFile = () => {
     return;
   }
 };
-var defaultWriteFile = (key) => {
-  const path = keyFilePath();
-  writeFileSync2(path, `${key}
-`, { mode: KEY_FILE_MODE });
-  chmodSync(path, KEY_FILE_MODE);
-};
+var defaultWriteFile = (key) => writeKeyFile(keyFilePath(), key);
 var readJevClassifierKey = async (deps = {}) => {
   const secrets = deps.secrets === undefined ? runtimeSecrets() : deps.secrets;
   if (secrets) {

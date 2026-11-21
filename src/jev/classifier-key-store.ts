@@ -1,7 +1,9 @@
-import { chmodSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
+
+import { writeKeyFile } from "./key-file.ts";
 
 export interface JevClassifierSecrets {
   delete: (options: {
@@ -34,7 +36,6 @@ export interface JevClassifierKeySnapshot {
 
 export const JEV_CLASSIFIER_KEY_SERVICE = "pi-advisor-jev-classifier";
 export const JEV_CLASSIFIER_KEY_NAME = "classifier-api-key";
-const KEY_FILE_MODE = 0o600;
 const keyFilePath = () => join(getAgentDir(), "jev_classifier_api_key");
 let classifierKeyFailClosed = false;
 
@@ -65,11 +66,7 @@ const defaultReadFile = () => {
   }
 };
 
-const defaultWriteFile = (key: string) => {
-  const path = keyFilePath();
-  writeFileSync(path, `${key}\n`, { mode: KEY_FILE_MODE });
-  chmodSync(path, KEY_FILE_MODE);
-};
+const defaultWriteFile = (key: string) => writeKeyFile(keyFilePath(), key);
 
 export const readJevClassifierKey = async (
   deps: JevClassifierKeyStoreDeps = {}

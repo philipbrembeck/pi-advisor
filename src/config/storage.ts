@@ -400,6 +400,23 @@ const writeConfigAtomically = (
   }
 };
 
+export const removeConfigKeys = (keys: readonly string[]) => {
+  const path = join(getAgentDir(), "advisor.json");
+  const identity = configFileIdentity(path);
+  const existing = readConfigForSave(path);
+
+  const retained = Object.fromEntries(
+    Object.entries(existing).filter(([key]) => !keys.includes(key))
+  );
+
+  writeConfigAtomically(
+    path,
+    `${JSON.stringify(retained, null, 2)}\n`,
+    identity
+  );
+  resetConfigCache();
+};
+
 /** Outcome logging is deliberately written only to the global Pi configuration. */
 export const saveGlobalOutcomeLogging = (
   enabled: boolean | null,

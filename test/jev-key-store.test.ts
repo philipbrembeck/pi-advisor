@@ -1,5 +1,13 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { afterEach, describe, expect, spyOn, test } from "bun:test";
+import * as fs from "node:fs";
+import {
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -202,6 +210,72 @@ describe("writeKeyTypeSafeKey", () => {
     expect(result.ok).toBe(false);
     expect(result.message).toContain("disk full");
     expect(result.message).toContain("TYPESAFE_API_KEY");
+  });
+
+  test("file stores replace a loose-mode key file with a 0600 file", async () => {
+    const agentDir = mkdtempSync(join(tmpdir(), "pi-advisor-keystore-"));
+    const previousAgentDir = process.env.PI_CODING_AGENT_DIR;
+    process.env.PI_CODING_AGENT_DIR = agentDir;
+
+    try {
+      const keyPath = join(agentDir, "typesafe_api_key");
+      writeFileSync(keyPath, "old-key\n", { mode: 0o644 });
+
+      const result = await writeKeyTypeSafeKey("new-key", {
+        env: {},
+        readAdvisorJson: () => ({}),
+        secrets: null,
+      });
+
+      expect(result.ok).toBe(true);
+      expect(readFileSync(keyPath, "utf-8")).toBe("new-key\n");
+      expect(statSync(keyPath).mode % 0o1000).toBe(0o600);
+      expect(readdirSync(agentDir)).toEqual(["typesafe_api_key"]);
+    } finally {
+      rmSync(agentDir, { force: true, recursive: true });
+
+      if (previousAgentDir === undefined) {
+        delete process.env.PI_CODING_AGENT_DIR;
+      } else {
+        process.env.PI_CODING_AGENT_DIR = previousAgentDir;
+      }
+    }
+  });
+
+  test("a failed replacement keeps the previous key file and mode", async () => {
+    const agentDir = mkdtempSync(join(tmpdir(), "pi-advisor-keystore-"));
+    const previousAgentDir = process.env.PI_CODING_AGENT_DIR;
+    process.env.PI_CODING_AGENT_DIR = agentDir;
+
+    const renameSpy = spyOn(fs, "renameSync").mockImplementation(() => {
+      throw new Error("EPERM: replacement denied");
+    });
+
+    try {
+      const keyPath = join(agentDir, "typesafe_api_key");
+      writeFileSync(keyPath, "old-key\n", { mode: 0o600 });
+
+      const result = await writeKeyTypeSafeKey("new-key", {
+        env: {},
+        readAdvisorJson: () => ({}),
+        secrets: null,
+      });
+
+      expect(result.ok).toBe(false);
+      expect(result.message).toContain("EPERM");
+      expect(readFileSync(keyPath, "utf-8")).toBe("old-key\n");
+      expect(statSync(keyPath).mode % 0o1000).toBe(0o600);
+      expect(readdirSync(agentDir)).toEqual(["typesafe_api_key"]);
+    } finally {
+      renameSpy.mockRestore();
+      rmSync(agentDir, { force: true, recursive: true });
+
+      if (previousAgentDir === undefined) {
+        delete process.env.PI_CODING_AGENT_DIR;
+      } else {
+        process.env.PI_CODING_AGENT_DIR = previousAgentDir;
+      }
+    }
   });
 
   test("surfaces a secret-store write failure redacted", async () => {

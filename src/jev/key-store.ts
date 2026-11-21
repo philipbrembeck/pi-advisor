@@ -1,18 +1,13 @@
-import {
-  chmodSync,
-  existsSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 
-import { readExistingConfig, resetConfigCache } from "../config/storage.ts";
+import { readExistingConfig, removeConfigKeys } from "../config/storage.ts";
 import { isString } from "../content-utils.ts";
 import type { RecordValue } from "../content-utils.ts";
 import { redactSecrets } from "../redaction.ts";
+import { writeKeyFile } from "./key-file.ts";
 
 export type JevKeySource = "bun-secrets" | "env" | "file" | "advisor-json";
 
@@ -55,8 +50,6 @@ const TYPESAFE_KEY_SERVICE = "pi-advisor";
 const TYPESAFE_KEY_NAME = "typesafe-api-key";
 const TYPESAFE_KEY_CONFIG_FIELD = "typesafe_api_key";
 
-const KEY_FILE_MODE = 0o600;
-
 const keyFilePath = () => join(getAgentDir(), "typesafe_api_key");
 
 interface BunGlobal {
@@ -84,12 +77,7 @@ const defaultReadFileStore = (): string | undefined => {
   }
 };
 
-const defaultWriteFileStore = (key: string) => {
-  const path = keyFilePath();
-  writeFileSync(path, `${key}\n`, { mode: KEY_FILE_MODE });
-  // writeFileSync's mode only applies at creation; re-assert it on every write.
-  chmodSync(path, KEY_FILE_MODE);
-};
+const defaultWriteFileStore = (key: string) => writeKeyFile(keyFilePath(), key);
 
 const defaultDeleteFileStore = () => {
   rmSync(keyFilePath(), { force: true });
@@ -255,14 +243,7 @@ export const removeTypeSafeKeyFromAdvisorJson = (): JevKeyStoreResult => {
       return { message: "No plaintext key in advisor.json.", ok: true };
     }
 
-    const retained = Object.fromEntries(
-      Object.entries(existing).filter(
-        ([key]) => key !== TYPESAFE_KEY_CONFIG_FIELD
-      )
-    );
-
-    writeFileSync(path, `${JSON.stringify(retained, null, 2)}\n`);
-    resetConfigCache();
+    removeConfigKeys([TYPESAFE_KEY_CONFIG_FIELD]);
 
     return { message: "Plaintext key removed from advisor.json.", ok: true };
   } catch (error) {

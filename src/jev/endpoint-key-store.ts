@@ -1,22 +1,15 @@
-import {
-  chmodSync,
-  existsSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 
 import { redactSecrets } from "../redaction.ts";
+import { writeKeyFile } from "./key-file.ts";
 import type { JevKeyStoreResult, JevSecretsLike } from "./key-store.ts";
 
 export const JEV_ENDPOINT_KEY_ENV_VAR = "JEV_API_KEY";
 const JEV_ENDPOINT_KEY_SERVICE = "pi-advisor";
 const JEV_ENDPOINT_KEY_NAME = "jev-api-key";
-
-const KEY_FILE_MODE = 0o600;
 
 type JevEndpointKeySource = "jev-bun-secrets" | "jev-env" | "jev-file";
 
@@ -57,11 +50,7 @@ const readDefaultFileStore = (): string | undefined => {
   }
 };
 
-const writeDefaultFileStore = (key: string) => {
-  const path = keyFilePath();
-  writeFileSync(path, `${key}\n`, { mode: KEY_FILE_MODE });
-  chmodSync(path, KEY_FILE_MODE);
-};
+const writeDefaultFileStore = (key: string) => writeKeyFile(keyFilePath(), key);
 
 const deleteDefaultFileStore = () => rmSync(keyFilePath(), { force: true });
 
