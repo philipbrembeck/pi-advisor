@@ -65,6 +65,9 @@ export const advisorBudgetUpdate = (
   }
 
   return {
-    entries: [{ ...message, type: "custom_message" as const }],
+    entries: [
+      ...(event.entries ?? []),
+      { ...message, type: "custom_message" as const },
+    ],
   };
 };

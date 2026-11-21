@@ -84,7 +84,9 @@ The Executor is whichever model your Pi session is using unless you pin one with
 /advisor executor=openai-codex/gpt-5.6-luna advisor=openai-codex/gpt-5.6-sol
 ```
 
-From the Executor, `ask_advisor({})` requests a general review. A targeted `question` or concise `draft` can focus the review on a particular decision. Advisor log feedback is off by default; enable **Advisor log feedback** in `/advisor-settings` to include budget and Scout status messages in session logs. Actual Advisor call and result messages remain visible either way, and call limits and enforcement are unchanged. `/advisor-settings` can restrict this tool and every automatic Advisor gate to a whitelist of exact `provider/model` Executor references; an empty whitelist preserves the default of allowing every model.
+From the Executor, `ask_advisor({})` requests a general review. A targeted `question` or concise `draft` can focus the review on a particular decision. Advisor log feedback is off by default; enable **Advisor log feedback** in `/advisor-settings` to include budget and Scout status messages in session logs. Budget feedback preserves session entries proposed by other extensions. Actual Advisor call and result messages remain visible either way, and call limits and enforcement are unchanged. `/advisor-settings` can restrict this tool and every automatic Advisor gate to a whitelist of exact `provider/model` Executor references; an empty whitelist preserves the default of allowing every model.
+
+With **Always on**, successful automatic activation leaves already-active Advisor tools in place, so Pi can still restore deferred tools when they become available. If automatic activation fails, the Advisor tools are disabled.
 
 In the Settings, enable Simple Mode for a quick start.
 

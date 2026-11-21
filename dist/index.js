@@ -5885,7 +5885,7 @@ ${t("activation.flow", "Advisor flow")} ${sameModelAdvisorDisabled(ctx, activeMo
 };
 var activateAdvisor = async (runtime, args, ctx, announce = true) => {
   if (!loadCommandConfig(ctx)) {
-    return;
+    return false;
   }
   const { toolAvailabilityRevision } = runtime;
   const canContinue = () => runtime.toolAvailabilityRevision === toolAvailabilityRevision;
@@ -5899,22 +5899,22 @@ var activateAdvisor = async (runtime, args, ctx, announce = true) => {
     attempted = liveRefSnapshot();
     restoreRefs(attempted);
     notify(ctx, argumentError, "error");
-    return;
+    return false;
   }
   const prepared = await prepareActivationModels(runtime, ctx, announce, executorOverride, advisorOverride, canContinue);
   if (!prepared) {
     attempted = liveRefSnapshot();
     restoreActivationRefsIfCurrent(canContinue, () => restoreRefs(attempted));
-    return;
+    return false;
   }
   const { cancelled, error } = await resolveActivationModels(runtime, ctx, canContinue);
   if (cancelled || !canContinue()) {
-    return;
+    return false;
   }
   if (error) {
     restoreRefs(attempted);
     notify(ctx, error, "error");
-    return;
+    return false;
   }
   const sessionScoped = advisorActivationRef === "session";
   const reenableTools = !sessionScoped && !advisorToolsEnabledRef;
@@ -5923,7 +5923,7 @@ var activateAdvisor = async (runtime, args, ctx, announce = true) => {
   }
   const shouldSave = !sessionScoped && Boolean(args.trim() || prepared.pickedModels || reenableTools);
   if (!persistSuccessfulActivation(ctx, shouldSave, reenableTools, () => restoreRefs(liveRefSnapshot()))) {
-    return;
+    return false;
   }
   if (executorEffortRef && !isMarkedSubagent()) {
     runtime.pi.setThinkingLevel(executorEffortRef);
@@ -5939,6 +5939,7 @@ var activateAdvisor = async (runtime, args, ctx, announce = true) => {
   if (announce) {
     announceActivation(ctx, activeModel);
   }
+  return true;
 };
 
 // src/commands/configuration-tool.ts
@@ -6528,8 +6529,11 @@ var registerCommandLifecycle = (runtime, activateAdvisor) => {
         return;
       }
       if (alwaysOnRef) {
-        setAdvisorToolsActive(runtime.pi, false);
-        await activateAdvisor("", ctx, false);
+        const { toolAvailabilityRevision } = runtime;
+        const activated = await activateAdvisor("", ctx, false);
+        if (!activated && runtime.toolAvailabilityRevision === toolAvailabilityRevision) {
+          setAdvisorToolsActive(runtime.pi, false);
+        }
       } else {
         runtime.updateSameModelNotice(ctx);
       }
@@ -7663,7 +7667,9 @@ var MODEL_SETTINGS = [
 var registerModelCommands = (runtime) => {
   runtime.pi.registerCommand("advisor", {
     description: "Enable the Executor/Advisor flow and switch to the configured or explicitly selected Executor model; accepts contextMaxChars=N",
-    handler: (args, ctx) => activateAdvisor(runtime, args, ctx)
+    handler: async (args, ctx) => {
+      await activateAdvisor(runtime, args, ctx);
+    }
   });
   runtime.pi.registerCommand("advisor-models", {
     description: "Select and persist the Executor, Advisor, and optional fallback models with reasoning levels",
@@ -9759,7 +9765,10 @@ var advisorBudgetUpdate = (event, ctx, pi, session) => {
     return;
   }
   return {
-    entries: [{ ...message, type: "custom_message" }]
+    entries: [
+      ...event.entries ?? [],
+      { ...message, type: "custom_message" }
+    ]
   };
 };
 

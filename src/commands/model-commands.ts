@@ -32,7 +32,9 @@ export const registerModelCommands = (runtime: CommandRuntime) => {
   runtime.pi.registerCommand("advisor", {
     description:
       "Enable the Executor/Advisor flow and switch to the configured or explicitly selected Executor model; accepts contextMaxChars=N",
-    handler: (args, ctx) => activateAdvisor(runtime, args, ctx),
+    handler: async (args, ctx) => {
+      await activateAdvisor(runtime, args, ctx);
+    },
   });
 
   runtime.pi.registerCommand("advisor-models", {
