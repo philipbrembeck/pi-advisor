@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { execFile } from "node:child_process";
 
 import { isString } from "./content-utils.ts";
 
@@ -77,7 +77,51 @@ const EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
 const GIT_TOTAL_TIMEOUT_MS = 5000;
 const GIT_MAX_BUFFER = 16 * 1024 * 1024;
 
-export type GitRunner = (args: string[], cwd: string) => string;
+export type GitRunner = (args: string[], cwd: string) => Promise<string>;
+
+interface GitExecOptions {
+  cwd: string;
+  encoding: "utf-8";
+  maxBuffer: number;
+  shell: false;
+  timeout: number;
+  windowsHide: boolean;
+}
+
+// SAFETY: execFile is callback-based; this adapter resolves exactly once.
+const execFileText = (
+  file: string,
+  args: readonly string[],
+  options: GitExecOptions
+): Promise<string> =>
+  new Promise<string>((resolve, reject) => {
+    // SAFETY: execFile accepts the readonly argument list without mutation.
+    execFile(
+      file,
+      args as string[],
+      options,
+      (error: Error | null, stdout: string | Buffer) => {
+        if (error) {
+          reject(error);
+
+          return;
+        }
+
+        resolve(String(stdout));
+      }
+    );
+  });
+
+// Never use a shell: arguments are fixed and must not be re-parsed.
+const execGit = (args: string[], cwd: string, timeoutMs: number) =>
+  execFileText("git", args, {
+    cwd,
+    encoding: "utf-8",
+    maxBuffer: GIT_MAX_BUFFER,
+    shell: false,
+    timeout: timeoutMs,
+    windowsHide: true,
+  });
 
 /** Shares one deadline across commands so a pathological repository cannot block for the sum of per-command timeouts. */
 const deadlineRunner = (): GitRunner => {
@@ -90,23 +134,14 @@ const deadlineRunner = (): GitRunner => {
       throw new Error("Git context collection exceeded its time budget.");
     }
 
-    return execFileSync("git", args, {
-      cwd,
-      encoding: "utf-8",
-      maxBuffer: GIT_MAX_BUFFER,
-      // Never use a shell: arguments are fixed and must not be re-parsed.
-      shell: false,
-      stdio: ["ignore", "pipe", "pipe"],
-      timeout: remaining,
-      windowsHide: true,
-    });
+    return execGit(args, cwd, remaining);
   };
 };
 
 /** Resolves the base revision, falling back to the empty tree before any commit. */
-const diffBase = (run: GitRunner, cwd: string): string => {
+const diffBase = async (run: GitRunner, cwd: string): Promise<string> => {
   try {
-    run(["rev-parse", "--verify", "--quiet", "HEAD"], cwd);
+    await run(["rev-parse", "--verify", "--quiet", "HEAD"], cwd);
 
     return "HEAD";
   } catch {
@@ -115,19 +150,19 @@ const diffBase = (run: GitRunner, cwd: string): string => {
 };
 
 /** Collects staged and unstaged changes vs HEAD; summary omits diff hunk headers because git derives them from untouched lines that can reproduce secrets. */
-export const collectGitContext = (
+export const collectGitContext = async (
   cwd: string,
   level: GitContextLevel,
   maxChars: number,
   redact: (value: string) => string = (value) => value,
   run: GitRunner = deadlineRunner()
-): GitContextResult => {
+): Promise<GitContextResult> => {
   if (level === "off" || maxChars <= 0) {
     return { level: "off", status: "disabled", text: "" };
   }
 
   try {
-    run(["rev-parse", "--is-inside-work-tree"], cwd);
+    await run(["rev-parse", "--is-inside-work-tree"], cwd);
   } catch (error) {
     return {
       detail: error instanceof Error ? error.message : String(error),
@@ -138,14 +173,18 @@ export const collectGitContext = (
   }
 
   try {
-    const base = diffBase(run, cwd);
-    const nameStatus = run(["diff", "--name-status", base], cwd).trim();
-    const shortstat = run(["diff", "--shortstat", base], cwd).trim();
+    const base = await diffBase(run, cwd);
+    const nameStatusOutput = await run(["diff", "--name-status", base], cwd);
+    const shortstatOutput = await run(["diff", "--shortstat", base], cwd);
 
-    const untracked = run(
+    const untrackedOutput = await run(
       ["ls-files", "--others", "--exclude-standard"],
       cwd
-    ).trim();
+    );
+
+    const nameStatus = nameStatusOutput.trim();
+    const shortstat = shortstatOutput.trim();
+    const untracked = untrackedOutput.trim();
 
     if (!(nameStatus || untracked)) {
       return { level, status: "no-changes", text: "" };
@@ -161,7 +200,7 @@ export const collectGitContext = (
     ];
 
     if (level === "full") {
-      const patch = run(["diff", base], cwd);
+      const patch = await run(["diff", base], cwd);
       sections.push(
         patch.trim()
           ? `Patch:\n${patch}`

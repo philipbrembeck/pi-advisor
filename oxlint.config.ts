@@ -23,6 +23,14 @@ export default defineConfig({
       },
     },
     {
+      files: ["src/git.ts"],
+      rules: {
+        // SAFETY: execFile is callback-based; this adapter intentionally wraps it in one deferred promise.
+        "promise/avoid-new": "off",
+        "promise/prefer-await-to-callbacks": "off",
+      },
+    },
+    {
       files: ["src/image-validation.ts"],
       rules: {
         // SAFETY: binary image-format field extraction is the intended use of bitwise operators.

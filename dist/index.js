@@ -377,7 +377,7 @@ var capUtf8Bytes = (value, maxBytes) => {
 };
 
 // src/git.ts
-import { execFileSync } from "node:child_process";
+import { execFile } from "node:child_process";
 var GIT_CONTEXT_LEVELS = ["off", "summary", "full"];
 var GIT_CONTEXT_LEVEL_SET = new Set(GIT_CONTEXT_LEVELS);
 var isValidGitContextLevel = (value) => isString(value) && GIT_CONTEXT_LEVEL_SET.has(value);
@@ -403,6 +403,23 @@ var capRepositoryContext = (value, maxChars) => {
 var EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
 var GIT_TOTAL_TIMEOUT_MS = 5000;
 var GIT_MAX_BUFFER = 16 * 1024 * 1024;
+var execFileText = (file, args, options) => new Promise((resolve, reject) => {
+  execFile(file, args, options, (error, stdout) => {
+    if (error) {
+      reject(error);
+      return;
+    }
+    resolve(String(stdout));
+  });
+});
+var execGit = (args, cwd, timeoutMs) => execFileText("git", args, {
+  cwd,
+  encoding: "utf-8",
+  maxBuffer: GIT_MAX_BUFFER,
+  shell: false,
+  timeout: timeoutMs,
+  windowsHide: true
+});
 var deadlineRunner = () => {
   const expiresAt = Date.now() + GIT_TOTAL_TIMEOUT_MS;
   return (args, cwd) => {
@@ -410,31 +427,23 @@ var deadlineRunner = () => {
     if (remaining <= 0) {
       throw new Error("Git context collection exceeded its time budget.");
     }
-    return execFileSync("git", args, {
-      cwd,
-      encoding: "utf-8",
-      maxBuffer: GIT_MAX_BUFFER,
-      shell: false,
-      stdio: ["ignore", "pipe", "pipe"],
-      timeout: remaining,
-      windowsHide: true
-    });
+    return execGit(args, cwd, remaining);
   };
 };
-var diffBase = (run, cwd) => {
+var diffBase = async (run, cwd) => {
   try {
-    run(["rev-parse", "--verify", "--quiet", "HEAD"], cwd);
+    await run(["rev-parse", "--verify", "--quiet", "HEAD"], cwd);
     return "HEAD";
   } catch {
     return EMPTY_TREE;
   }
 };
-var collectGitContext = (cwd, level, maxChars, redact = (value) => value, run = deadlineRunner()) => {
+var collectGitContext = async (cwd, level, maxChars, redact = (value) => value, run = deadlineRunner()) => {
   if (level === "off" || maxChars <= 0) {
     return { level: "off", status: "disabled", text: "" };
   }
   try {
-    run(["rev-parse", "--is-inside-work-tree"], cwd);
+    await run(["rev-parse", "--is-inside-work-tree"], cwd);
   } catch (error) {
     return {
       detail: error instanceof Error ? error.message : String(error),
@@ -444,10 +453,13 @@ var collectGitContext = (cwd, level, maxChars, redact = (value) => value, run = 
     };
   }
   try {
-    const base = diffBase(run, cwd);
-    const nameStatus = run(["diff", "--name-status", base], cwd).trim();
-    const shortstat = run(["diff", "--shortstat", base], cwd).trim();
-    const untracked = run(["ls-files", "--others", "--exclude-standard"], cwd).trim();
+    const base = await diffBase(run, cwd);
+    const nameStatusOutput = await run(["diff", "--name-status", base], cwd);
+    const shortstatOutput = await run(["diff", "--shortstat", base], cwd);
+    const untrackedOutput = await run(["ls-files", "--others", "--exclude-standard"], cwd);
+    const nameStatus = nameStatusOutput.trim();
+    const shortstat = shortstatOutput.trim();
+    const untracked = untrackedOutput.trim();
     if (!(nameStatus || untracked)) {
       return { level, status: "no-changes", text: "" };
     }
@@ -460,7 +472,7 @@ ${nameStatus}` : "",
 ${untracked}` : ""
     ];
     if (level === "full") {
-      const patch = run(["diff", base], cwd);
+      const patch = await run(["diff", base], cwd);
       sections.push(patch.trim() ? `Patch:
 ${patch}` : "Patch: (no tracked-file content changes)");
     } else {
@@ -2491,7 +2503,7 @@ var sessionContextEntries = (ctx) => {
 import { randomUUID as randomUUID2 } from "node:crypto";
 
 // src/attachments.ts
-import { execFileSync as execFileSync2 } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { constants } from "node:fs";
 import { lstat, open, realpath } from "node:fs/promises";
 import { isAbsolute, relative, resolve } from "node:path";
@@ -2518,7 +2530,7 @@ var normalizeRequestedPath = (root, value) => {
   }
   return normalizeRelativePath(root, value);
 };
-var git = (cwd, args) => execFileSync2("git", args, {
+var git = (cwd, args) => execFileSync("git", args, {
   cwd,
   encoding: "utf-8",
   maxBuffer: 16 * 1024 * 1024,
@@ -4356,7 +4368,7 @@ var assembleConsultationContext = async (options) => {
   const allowed = advisorGitContextRef;
   const level = clampGitContextLevel(options.gitContext ?? allowed, allowed);
   const gitBudget = advisorGitContextBudget(contextMaxCharsRef, advisorGitContextMaxCharsRef);
-  const changes = collectGitContext(ctx.cwd, level, gitBudget, advisorRedactSecretsRef ? redactSecrets : undefined);
+  const changes = await collectGitContext(ctx.cwd, level, gitBudget, advisorRedactSecretsRef ? redactSecrets : undefined);
   const changeText = advisorRepositoryContext(changes, options.gitContext ?? allowed, level, gitBudget);
   const conversationBudget = Math.max(0, contextMaxCharsRef - changeText.length);
   const imageNonce = randomUUID2();

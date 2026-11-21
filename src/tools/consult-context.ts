@@ -93,7 +93,7 @@ export const assembleConsultationContext = async (
     advisorGitContextMaxCharsRef
   );
 
-  const changes = collectGitContext(
+  const changes = await collectGitContext(
     ctx.cwd,
     level,
     gitBudget,
