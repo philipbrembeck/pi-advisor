@@ -3,7 +3,10 @@ import { describe, expect, test } from "bun:test";
 import { validateToolArguments } from "@earendil-works/pi-ai";
 
 import { executeCodemode } from "../node_modules/@earendil-works/pi-coding-agent/dist/extensions/codemode/execute.js";
-import { setAdvisorToolsEnabledRef } from "../src/config/state.ts";
+import {
+  setAdvisorActivationRef,
+  setAdvisorToolsEnabledRef,
+} from "../src/config/state.ts";
 import { AdvisorSessionState } from "../src/session-state.ts";
 import { registerAdvisorTool } from "../src/tools.ts";
 import { assembleConsultationContext } from "../src/tools/consult-context.ts";
@@ -23,10 +26,7 @@ const harness = (
   const tools = new Map<string, any>();
   const events = new Map<string, any>();
   const session = new AdvisorSessionState();
-  // The enabled flag is module-global state; concurrent test files (for
-  // example config-storage's opt-out test) can leave it disabled while this
-  // file is still running, which blocks ask_advisor with "Advisor tools are
-  // disabled" instead of producing JSON output. Pin it explicitly.
+  setAdvisorActivationRef("persistent");
   setAdvisorToolsEnabledRef(true);
   registerAdvisorTool(
     mockPi({ activeTools: ["ask_advisor"], events, tools }),
