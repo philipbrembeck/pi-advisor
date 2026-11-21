@@ -167,7 +167,10 @@ export const saveAdvisorSettings = (
       persistExecutor: Boolean(persisted.executor),
     });
 
-    if (!options.skipOutcomeLogging) {
+    if (
+      !options.skipOutcomeLogging &&
+      (settings.outcomeLogging ?? false) !== previous.outcomeLogging
+    ) {
       saveGlobalOutcomeLogging(settings.outcomeLogging ?? false);
     }
 

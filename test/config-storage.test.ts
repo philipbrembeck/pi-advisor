@@ -32,6 +32,7 @@ import {
   saveGlobalAdvisorConfigPatch,
   saveGlobalOutcomeLogging,
 } from "../src/config/storage.ts";
+import * as configStorageModule from "../src/config/storage.ts";
 import { savedConfig, withAgentDir } from "./helpers/config-fixture.ts";
 import { mockPi } from "./helpers/mock-pi.ts";
 
@@ -332,6 +333,35 @@ describe("Advisor config persistence", () => {
     expect(changed).toBe(true);
     expect(readFileSync(configPath(), "utf-8")).toBe(concurrent);
     expect(readdirSync(agentDir)).toEqual(["advisor.json"]);
+  });
+
+  test("skips a redundant outcome-logging write so a later failure cannot roll back a committed save", () => {
+    writeFileSync(configPath(), JSON.stringify({ simpleMode: false }));
+    loadConfig(context);
+    const settings = { ...getAdvisorSettings(), simpleMode: true };
+
+    const outcomeWriteSpy = spyOn(
+      configStorageModule,
+      "saveGlobalOutcomeLogging"
+    ).mockImplementation(() => {
+      throw new Error("injected outcome write failure");
+    });
+
+    try {
+      expect(() => saveAdvisorSettings(context, settings)).not.toThrow();
+      expect(outcomeWriteSpy).not.toHaveBeenCalled();
+      expect(getAdvisorSettings().simpleMode).toBe(true);
+
+      expect(() =>
+        saveAdvisorSettings(context, {
+          ...getAdvisorSettings(),
+          outcomeLogging: true,
+        })
+      ).toThrow("injected outcome write failure");
+      expect(outcomeWriteSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      outcomeWriteSpy.mockRestore();
+    }
   });
 
   test("does not replace malformed configuration during a save", () => {

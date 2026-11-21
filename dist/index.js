@@ -5869,7 +5869,9 @@ var resolveActivationModels = async (runtime, ctx, canContinue) => {
       error: `${t("activation.noExecutorApiKey.prefix", "No API key for Executor")} ${executorRef}`
     };
   }
-  return {};
+  return {
+    switchedExecutor: Boolean(executor) && !isMarkedSubagent()
+  };
 };
 var restoreActivationRefsIfCurrent = (canContinue, restoreRefs) => {
   if (canContinue()) {
@@ -5904,7 +5906,7 @@ var restoreActivationRefs = (previous, attempted) => {
     setExecutorEffortRef(previous.executorEffort);
   }
 };
-var persistSuccessfulActivation = (ctx, shouldSave, reenableTools, restoreRefs) => {
+var persistSuccessfulActivation = async (ctx, shouldSave, reenableTools, restoreRefs, restoreHostModel) => {
   if (!shouldSave) {
     return true;
   }
@@ -5912,10 +5914,12 @@ var persistSuccessfulActivation = (ctx, shouldSave, reenableTools, restoreRefs) 
     saveConfig(ctx, { persistAdvisor: true, persistExecutor: true });
   } catch (saveError) {
     if (!reenableTools) {
+      await restoreHostModel();
       throw saveError;
     }
     setAdvisorToolsEnabledRef(false);
     restoreRefs();
+    await restoreHostModel();
     const message = saveError instanceof Error ? saveError.message : String(saveError);
     notify(ctx, `${t("activation.saveFailed.prefix", "Could not save Advisor activation:")} ${message}`, "error");
     return false;
@@ -5947,13 +5951,15 @@ var activateAdvisor = async (runtime, args, ctx, announce = true) => {
     notify(ctx, argumentError, "error");
     return false;
   }
+  attempted = liveRefSnapshot();
   const prepared = await prepareActivationModels(runtime, ctx, announce, executorOverride, advisorOverride, canContinue);
   if (!prepared) {
     attempted = liveRefSnapshot();
     restoreActivationRefsIfCurrent(canContinue, () => restoreRefs(attempted));
     return false;
   }
-  const { cancelled, error } = await resolveActivationModels(runtime, ctx, canContinue);
+  const entryModel = ctx.model;
+  const { cancelled, error, switchedExecutor } = await resolveActivationModels(runtime, ctx, canContinue);
   if (cancelled || !canContinue()) {
     return false;
   }
@@ -5968,7 +5974,8 @@ var activateAdvisor = async (runtime, args, ctx, announce = true) => {
     setAdvisorToolsEnabledRef(true);
   }
   const shouldSave = !sessionScoped && Boolean(args.trim() || prepared.pickedModels || reenableTools);
-  if (!persistSuccessfulActivation(ctx, shouldSave, reenableTools, () => restoreRefs(liveRefSnapshot()))) {
+  const restoreHostModel = () => switchedExecutor && entryModel ? runtime.setExecutorModel(entryModel) : Promise.resolve(false);
+  if (!await persistSuccessfulActivation(ctx, shouldSave, reenableTools, () => restoreRefs(liveRefSnapshot()), restoreHostModel)) {
     return false;
   }
   if (executorEffortRef && !isMarkedSubagent()) {
@@ -9653,7 +9660,7 @@ var saveAdvisorSettings = (ctx, settings, options = {}) => {
       persistAdvisor: Boolean(persisted.advisor),
       persistExecutor: Boolean(persisted.executor)
     });
-    if (!options.skipOutcomeLogging) {
+    if (!options.skipOutcomeLogging && (settings.outcomeLogging ?? false) !== previous.outcomeLogging) {
       saveGlobalOutcomeLogging(settings.outcomeLogging ?? false);
     }
     if (previous.advisorActivation === "session") {

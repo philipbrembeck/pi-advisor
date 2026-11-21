@@ -19,6 +19,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - The Advisor thinking renderer now honors the effective Pi `hide_thinking` setting — including a trusted project's override — instead of only the global `settings.json`.
 - Batch the Git membership queries behind tracked/untracked attachments into one `git ls-files` call per request list (chunked at 256 paths), so a long list of nonexistent paths no longer launches one synchronous Git process per path.
 - A failed Jev provider save now restores the previously stored key (or clears the store when none existed) instead of leaving a freshly written key active under the old endpoint.
+- Activation fixes: a failed Advisor authentication now also rolls back argument-provided model refs; a failed activation save restores Pi's host Executor model alongside the extension's refs; and an unchanged outcome-logging value no longer triggers a second `advisor.json` write whose failure could roll back runtime state after the main settings were already committed.
 
 ### Fixed (benchmark harness)
 

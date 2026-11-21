@@ -95,7 +95,9 @@ const resolveActivationModels = async (
     };
   }
 
-  return {};
+  return {
+    switchedExecutor: Boolean(executor) && !isMarkedSubagent(),
+  };
 };
 
 const restoreActivationRefsIfCurrent = (
@@ -145,11 +147,12 @@ const restoreActivationRefs = (
   }
 };
 
-const persistSuccessfulActivation = (
+const persistSuccessfulActivation = async (
   ctx: ExtensionContext,
   shouldSave: boolean,
   reenableTools: boolean,
-  restoreRefs: () => void
+  restoreRefs: () => void,
+  restoreHostModel: () => Promise<boolean>
 ) => {
   if (!shouldSave) {
     return true;
@@ -159,11 +162,13 @@ const persistSuccessfulActivation = (
     saveConfig(ctx, { persistAdvisor: true, persistExecutor: true });
   } catch (saveError) {
     if (!reenableTools) {
+      await restoreHostModel();
       throw saveError;
     }
 
     setAdvisorToolsEnabledRef(false);
     restoreRefs();
+    await restoreHostModel();
 
     const message =
       saveError instanceof Error ? saveError.message : String(saveError);
@@ -237,6 +242,9 @@ export const activateAdvisor = async (
     return false;
   }
 
+  // parseArgs mutates the refs; refresh so a later failure rolls them back.
+  attempted = liveRefSnapshot();
+
   const prepared = await prepareActivationModels(
     runtime,
     ctx,
@@ -253,7 +261,9 @@ export const activateAdvisor = async (
     return false;
   }
 
-  const { cancelled, error } = await resolveActivationModels(
+  const entryModel = ctx.model;
+
+  const { cancelled, error, switchedExecutor } = await resolveActivationModels(
     runtime,
     ctx,
     canContinue
@@ -282,10 +292,19 @@ export const activateAdvisor = async (
     !sessionScoped &&
     Boolean(args.trim() || prepared.pickedModels || reenableTools);
 
+  const restoreHostModel = () =>
+    switchedExecutor && entryModel
+      ? runtime.setExecutorModel(entryModel)
+      : Promise.resolve(false);
+
   if (
-    !persistSuccessfulActivation(ctx, shouldSave, reenableTools, () =>
-      restoreRefs(liveRefSnapshot())
-    )
+    !(await persistSuccessfulActivation(
+      ctx,
+      shouldSave,
+      reenableTools,
+      () => restoreRefs(liveRefSnapshot()),
+      restoreHostModel
+    ))
   ) {
     return false;
   }

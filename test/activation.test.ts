@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { writeFileSync } from "node:fs";
+import { chmodSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
@@ -11,7 +11,9 @@ import {
 
 import { registerCommands } from "../src/commands.ts";
 import {
+  advisorRef,
   contextMaxCharsRef,
+  executorRef,
   loadConfig,
   resetConfigCache,
   setShowUsageDetailsRef,
@@ -950,6 +952,94 @@ describe("Advisor activation flow", () => {
         expect(contextMaxCharsRef).toBe(15_000);
         expect(pi.getActiveTools()).toEqual(["read"]);
         expect(selectedModels).toEqual([]);
+      }
+    );
+  });
+
+  test("failed Advisor authentication restores argument-provided models", async () => {
+    await withAgentDir(
+      {
+        advisor: "provider/advisor",
+        executor: "provider/executor",
+      },
+      async (agentDir) => {
+        const { commands, pi } = activationHarness();
+        registerCommands(pi);
+        const notes: string[] = [];
+
+        const ctx = asExtensionContext({
+          cwd: agentDir,
+          hasUI: true,
+          isProjectTrusted: () => false,
+          modelRegistry: {
+            find: (provider: string, id: string) => ({ id, provider }),
+            getApiKeyAndHeaders: (model: RegistryModel) =>
+              Promise.resolve(
+                model.id === "locked"
+                  ? { apiKey: undefined, ok: false }
+                  : { apiKey: "key", ok: true }
+              ),
+          },
+          ui: { notify: (message: string) => notes.push(message) },
+        });
+
+        await commands
+          .get("advisor")
+          .handler("advisor=provider/locked executor=provider/newexec", ctx);
+
+        expect(notes.join("\n")).toContain("No API key for Advisor");
+        expect(advisorRef).toBe("provider/advisor");
+        expect(executorRef).toBe("provider/executor");
+        expect(savedConfig(agentDir)).toMatchObject({
+          advisor: "provider/advisor",
+          executor: "provider/executor",
+        });
+      }
+    );
+  });
+
+  test("a failed activation save restores the host Executor model", async () => {
+    await withAgentDir(
+      {
+        advisor: "provider/advisor",
+        advisorToolsEnabled: false,
+        executor: "provider/executor",
+      },
+      async (agentDir) => {
+        const { commands, pi, selectedModels } = activationHarness();
+        registerCommands(pi);
+        const notes: string[] = [];
+
+        const ctx = asExtensionContext({
+          cwd: agentDir,
+          hasUI: true,
+          isProjectTrusted: () => false,
+          model: { id: "old-executor", provider: "provider" },
+          modelRegistry: modelsRegistry([
+            { id: "advisor", provider: "provider" },
+            { id: "executor", provider: "provider" },
+            { id: "newexec", provider: "provider" },
+          ]),
+          ui: { notify: (message: string) => notes.push(message) },
+        });
+
+        chmodSync(agentDir, 0o555);
+
+        try {
+          await commands
+            .get("advisor")
+            .handler("executor=provider/newexec", ctx);
+
+          expect(notes.join("\n")).toContain(
+            "Could not save Advisor activation"
+          );
+          expect(selectedModels).toEqual([
+            { id: "newexec", provider: "provider" },
+            { id: "old-executor", provider: "provider" },
+          ]);
+        } finally {
+          chmodSync(agentDir, 0o755);
+        }
       }
     );
   });
