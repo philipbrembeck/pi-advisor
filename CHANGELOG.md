@@ -20,7 +20,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed (benchmark harness)
 
-- Reject repeated TOML answer keys in benchmark fixtures instead of silently replacing ground truth; require an explicit `--config` for live benchmark tiers; and aggregate usage across an empty-response retry so cost and budget accounting includes both attempts.
+- Reject repeated TOML answer keys in benchmark fixtures instead of silently replacing ground truth; require an explicit `--config` for live benchmark tiers; aggregate usage across an empty-response retry so cost and budget accounting includes both attempts; and re-read plus merge the Codex auth file before persisting a rotated refresh while activating rotated tokens only after the write succeeds.
 - Keep already-active Advisor tools in place during successful always-on activation so pending tools can still be restored.
 
 ### Changed

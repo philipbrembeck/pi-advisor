@@ -3,9 +3,19 @@
 import { describe, expect, test } from "bun:test";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { unlinkSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { zstdCompressSync } from "node:zlib";
 
 const BROKER_PATH = "bench/harbor/codex-broker.mjs";
@@ -20,6 +30,26 @@ const AUTH = {
     type: "oauth",
   },
 };
+
+const EXPIRED_AUTH = {
+  "openai-codex": {
+    ...AUTH["openai-codex"],
+    expires: Date.now() - 1_000,
+  },
+};
+
+const listen = (server: ReturnType<typeof createServer>) =>
+  new Promise<number>((resolveListen, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () =>
+      resolveListen((server.address() as AddressInfo).port)
+    );
+  });
+
+const closeServer = (server: ReturnType<typeof createServer>) =>
+  new Promise<void>((resolveClose, reject) => {
+    server.close((error) => (error ? reject(error) : resolveClose()));
+  });
 
 const waitForReady = (child: ReturnType<typeof spawn>) => {
   let output = "";
@@ -151,5 +181,143 @@ describe("host-side Codex OAuth broker", () => {
       unlinkSync(authPath);
     }
     expect(forwarded).toBe(1);
+  });
+
+  test("a rotated refresh merges concurrent auth edits instead of overwriting", async () => {
+    const authPath = join(
+      process.env.TMPDIR ?? "/tmp",
+      `pi-advisor-broker-merge-${process.pid}.json`
+    );
+    writeFileSync(authPath, `${JSON.stringify(EXPIRED_AUTH)}\n`);
+    let refreshRequests = 0;
+    const tokenServer = createServer((request, response) => {
+      refreshRequests += 1;
+      writeFileSync(
+        authPath,
+        `${JSON.stringify({
+          "another-provider": { access: "other-provider-key" },
+          ...EXPIRED_AUTH,
+        })}\n`
+      );
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(
+        JSON.stringify({
+          access_token: "rotated-access",
+          expires_in: 3600,
+          refresh_token: "rotated-refresh",
+        })
+      );
+    });
+    const tokenPort = await listen(tokenServer);
+
+    const broker = spawn("node", [BROKER_PATH], {
+      env: {
+        ...process.env,
+        BENCH_ADVISOR_MODEL: "",
+        BENCH_CODEX_AUTH_FILE: authPath,
+        BENCH_CODEX_PROXY_TOKEN: "test-broker-token",
+        BENCH_CODEX_TOKEN_URL: `http://127.0.0.1:${tokenPort}/oauth/token`,
+        BENCH_EXECUTOR_MODEL: MODEL,
+        BENCH_PROXY_PORT: "0",
+        BENCH_TRIAL_BUDGET_USD: "1",
+        BENCH_TRIAL_PRICING_JSON: JSON.stringify({
+          executor: {
+            cacheReadPerMillion: 0,
+            cacheWritePerMillion: 0,
+            inputPerMillion: 1,
+            outputPerMillion: 1,
+          },
+        }),
+      },
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+
+    try {
+      await waitForReady(broker);
+      const persisted = JSON.parse(readFileSync(authPath, "utf8"));
+      expect(refreshRequests).toBe(1);
+      expect(persisted["another-provider"]).toEqual({
+        access: "other-provider-key",
+      });
+      expect(persisted["openai-codex"]).toMatchObject({
+        access: "rotated-access",
+        accountId: "account-for-test",
+        refresh: "rotated-refresh",
+        type: "oauth",
+      });
+    } finally {
+      if (broker.exitCode === null) {
+        broker.kill("SIGTERM");
+        await once(broker, "exit");
+      }
+      await closeServer(tokenServer);
+      unlinkSync(authPath);
+    }
+  });
+
+  test("a failed persist keeps the previous auth file and never activates rotated tokens", async () => {
+    const authDir = mkdtempSync(join(tmpdir(), "pi-advisor-broker-fail-"));
+    const authPath = join(authDir, "auth.json");
+    writeFileSync(authPath, `${JSON.stringify(EXPIRED_AUTH)}\n`);
+    const tokenServer = createServer((request, response) => {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(
+        JSON.stringify({
+          access_token: "rotated-access",
+          expires_in: 3600,
+          refresh_token: "rotated-refresh",
+        })
+      );
+    });
+    const tokenPort = await listen(tokenServer);
+    chmodSync(authDir, 0o555);
+
+    const broker = spawn("node", [BROKER_PATH], {
+      env: {
+        ...process.env,
+        BENCH_ADVISOR_MODEL: "",
+        BENCH_CODEX_AUTH_FILE: authPath,
+        BENCH_CODEX_PROXY_TOKEN: "test-broker-token",
+        BENCH_CODEX_TOKEN_URL: `http://127.0.0.1:${tokenPort}/oauth/token`,
+        BENCH_EXECUTOR_MODEL: MODEL,
+        BENCH_PROXY_PORT: "0",
+        BENCH_TRIAL_BUDGET_USD: "1",
+        BENCH_TRIAL_PRICING_JSON: JSON.stringify({
+          executor: {
+            cacheReadPerMillion: 0,
+            cacheWritePerMillion: 0,
+            inputPerMillion: 1,
+            outputPerMillion: 1,
+          },
+        }),
+      },
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+
+    try {
+      await expect(waitForReady(broker)).rejects.toThrow(
+        /exited before ready/u
+      );
+      expect(broker.exitCode).not.toBe(0);
+      chmodSync(authDir, 0o755);
+      const persisted = JSON.parse(readFileSync(authPath, "utf8"));
+      expect(persisted["openai-codex"]).toMatchObject({
+        access: "access-token",
+        refresh: "refresh-token",
+      });
+      expect(
+        readdirSync(authDir).filter((name) => name.includes(".tmp"))
+      ).toEqual([]);
+    } finally {
+      chmodSync(authDir, 0o755);
+
+      if (broker.exitCode === null) {
+        broker.kill("SIGTERM");
+        await once(broker, "exit");
+      }
+
+      await closeServer(tokenServer);
+      rmSync(authDir, { force: true, recursive: true });
+    }
   });
 });

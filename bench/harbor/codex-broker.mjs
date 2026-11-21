@@ -19,7 +19,9 @@ import { zstdDecompressSync } from "node:zlib";
 const CODEX_UPSTREAM =
   process.env.BENCH_CODEX_UPSTREAM_URL?.trim() ||
   "https://chatgpt.com/backend-api";
-const CODEX_TOKEN_URL = "https://auth.openai.com/oauth/token";
+const CODEX_TOKEN_URL =
+  process.env.BENCH_CODEX_TOKEN_URL?.trim() ||
+  "https://auth.openai.com/oauth/token";
 const CODEX_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann";
 const CODEX_ACCOUNT_CLAIM = "https://api.openai.com/auth";
 const READY_PREFIX = "BENCH_CODEX_BROKER_PORT=";
@@ -146,18 +148,28 @@ if (!accountId) {
   fail("BENCH_CODEX_AUTH_FILE access token has no ChatGPT account id");
 }
 
-const persistAuth = () => {
+const persistAuth = (access, refresh, expires, account) => {
   const temporaryPath = `${authPath}.bench-${process.pid}.tmp`;
   try {
-    auth["openai-codex"] = {
+    let current;
+    try {
+      current = JSON.parse(readFileSync(authPath, "utf8"));
+    } catch {
+      fail("Codex OAuth auth file could not be re-read before persisting");
+    }
+    if (!current || typeof current !== "object" || Array.isArray(current)) {
+      fail("Codex OAuth auth file is not a JSON object");
+    }
+    current["openai-codex"] = {
       ...credential,
-      access: accessToken,
-      accountId,
-      expires: expiresAt,
-      refresh: refreshToken,
+      ...current["openai-codex"],
+      access,
+      accountId: account,
+      expires: expires,
+      refresh,
       type: "oauth",
     };
-    writeFileSync(temporaryPath, `${JSON.stringify(auth, null, 2)}\n`, {
+    writeFileSync(temporaryPath, `${JSON.stringify(current, null, 2)}\n`, {
       encoding: "utf8",
       mode: 0o600,
     });
@@ -168,8 +180,7 @@ const persistAuth = () => {
     try {
       unlinkSync(temporaryPath);
     } catch {
-      // Keep the original failure generic and do not expose auth paths beyond
-      // the already operator-selected file in a provider error.
+      // The temporary file may not exist.
     }
     fail("Codex OAuth refresh could not be persisted");
   }
@@ -211,11 +222,15 @@ const refreshAccessToken = async () => {
   ) {
     fail("Codex OAuth refresh omitted required token fields");
   }
-  accessToken = value.access_token;
-  refreshToken = value.refresh_token;
-  expiresAt = Date.now() + value.expires_in * 1000;
-  accountId = decodeAccountId(accessToken) ?? accountId;
-  persistAuth();
+  const nextAccess = value.access_token;
+  const nextRefresh = value.refresh_token;
+  const nextExpires = Date.now() + value.expires_in * 1000;
+  const nextAccount = decodeAccountId(nextAccess) ?? accountId;
+  persistAuth(nextAccess, nextRefresh, nextExpires, nextAccount);
+  accessToken = nextAccess;
+  refreshToken = nextRefresh;
+  expiresAt = nextExpires;
+  accountId = nextAccount;
 };
 
 const ensureAccessToken = async (forceRefresh = false) => {
