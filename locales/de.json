@@ -333,5 +333,7 @@
   "usage.call": "Aufruf",
   "usage.calls": "Aufrufe",
   "usage.unavailable": "nicht verfügbar",
-  "usage.withoutData": "ohne Nutzungsdaten"
+  "usage.withoutData": "ohne Nutzungsdaten",
+  "jevSetup.providerKeyRestored": "Provider verifiziert, aber Einstellungen konnten nicht gespeichert werden; der vorherige Schlüssel wurde wiederhergestellt.",
+  "jevSetup.providerKeyNotRestored": "Provider verifiziert, aber Einstellungen konnten nicht gespeichert werden und der vorherige Schlüssel konnte nicht wiederhergestellt werden. Gib vor dem erneuten Versuch einen gültigen Schlüssel ein."
 }

@@ -308,4 +308,113 @@ describe("JevProviderSubmenu custom endpoint", () => {
 
     expect(cleared).toEqual(["typesafe-compatible"]);
   });
+
+  test("a rejected save restores the previous entered key", async () => {
+    const written: [string, string][] = [];
+
+    const { selections, submenu } = open({
+      deps: baseDeps({
+        clearStoredKey: () => Promise.resolve({ message: "cleared", ok: true }),
+        resolveTransport: (transport) =>
+          Promise.resolve({
+            apiKey: "old-key",
+            baseUrl: "https://api.codiv.ai",
+            source: "jev-bun-secrets",
+            transport: transport ?? "typesafe-compatible",
+          }),
+        writeKey: (key, transport) => {
+          written.push([key, transport]);
+
+          return Promise.resolve({ message: "stored", ok: true });
+        },
+      }),
+      onSelection: () => false,
+    });
+
+    await settle();
+    await chooseAction(submenu, CUSTOM);
+    await typeText(submenu, "https://api.codiv.ai");
+    await typeKey(submenu, "new-key");
+
+    expect(written).toEqual([
+      ["new-key", "typesafe-compatible"],
+      ["old-key", "typesafe-compatible"],
+    ]);
+    expect(selections).toHaveLength(1);
+
+    // SAFETY: the component exposes its current notice for assertions.
+    expect((submenu as any).notice).toContain("previous key was restored");
+  });
+
+  test("a rejected save clears the key when none existed before", async () => {
+    const written: [string, string][] = [];
+    const cleared: string[] = [];
+
+    const { submenu } = open({
+      deps: baseDeps({
+        clearStoredKey: (transport) => {
+          cleared.push(transport);
+
+          return Promise.resolve({ message: "cleared", ok: true });
+        },
+        writeKey: (key, transport) => {
+          written.push([key, transport]);
+
+          return Promise.resolve({ message: "stored", ok: true });
+        },
+      }),
+      onSelection: () => false,
+    });
+
+    await settle();
+    await chooseAction(submenu, CUSTOM);
+    await typeText(submenu, "https://api.codiv.ai");
+    await typeKey(submenu, "new-key");
+
+    expect(written).toEqual([["new-key", "typesafe-compatible"]]);
+    expect(cleared).toEqual(["typesafe-compatible"]);
+
+    // SAFETY: the component exposes its current notice for assertions.
+    expect((submenu as any).notice).toContain("previous key was restored");
+  });
+
+  test("a rejected save reports when the previous key cannot be restored", async () => {
+    const written: [string, string][] = [];
+
+    const { submenu } = open({
+      deps: baseDeps({
+        clearStoredKey: () => Promise.resolve({ message: "nope", ok: false }),
+        resolveTransport: (transport) =>
+          Promise.resolve({
+            apiKey: "old-key",
+            baseUrl: "https://api.codiv.ai",
+            source: "jev-file",
+            transport: transport ?? "typesafe-compatible",
+          }),
+        writeKey: (key, transport) => {
+          written.push([key, transport]);
+
+          return key === "old-key"
+            ? Promise.resolve({ message: "restore denied", ok: false })
+            : Promise.resolve({ message: "stored", ok: true });
+        },
+      }),
+      onSelection: () => false,
+    });
+
+    await settle();
+    await chooseAction(submenu, CUSTOM);
+    await typeText(submenu, "https://api.codiv.ai");
+    await typeKey(submenu, "new-key");
+
+    expect(written).toEqual([
+      ["new-key", "typesafe-compatible"],
+      ["old-key", "typesafe-compatible"],
+    ]);
+
+    // SAFETY: the component exposes its current notice for assertions.
+    expect((submenu as any).notice).toContain(
+      "previous key could not be restored"
+    );
+  });
 });

@@ -333,5 +333,7 @@
   "usage.call": "appel",
   "usage.calls": "appels",
   "usage.unavailable": "indisponible",
-  "usage.withoutData": "sans données d'utilisation"
+  "usage.withoutData": "sans données d'utilisation",
+  "jevSetup.providerKeyRestored": "Fournisseur vérifié, mais les réglages n'ont pas pu être enregistrés ; la clé précédente a été restaurée.",
+  "jevSetup.providerKeyNotRestored": "Fournisseur vérifié, mais les réglages n'ont pas pu être enregistrés et la clé précédente n'a pas pu être restaurée. Saisissez une clé valide avant de réessayer."
 }

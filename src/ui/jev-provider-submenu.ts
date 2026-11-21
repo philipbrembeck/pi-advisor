@@ -463,7 +463,16 @@ export class JevProviderSubmenu implements Component, Focusable {
       return;
     }
 
+    let previousKey: { apiKey?: string } | undefined;
+    let previousKeyKnown = true;
+
     if (enteredKey) {
+      try {
+        previousKey = await this.deps.resolveTransport(credentials.transport);
+      } catch {
+        previousKeyKnown = false;
+      }
+
       const stored = await this.deps.writeKey(
         enteredKey,
         credentials.transport
@@ -503,7 +512,35 @@ export class JevProviderSubmenu implements Component, Focusable {
       "jevSetup.providerVerifiedNotSaved",
       "Provider verified, but settings could not be saved."
     );
+
+    if (enteredKey) {
+      const restored =
+        previousKeyKnown &&
+        (await this.restorePreviousKey(credentials.transport, previousKey));
+
+      this.notice = restored
+        ? t(
+            "jevSetup.providerKeyRestored",
+            "Provider verified, but settings could not be saved; the previous key was restored."
+          )
+        : t(
+            "jevSetup.providerKeyNotRestored",
+            "Provider verified, but settings could not be saved and the previous key could not be restored. Re-enter a valid key before retrying."
+          );
+    }
+
     this.options.tui.requestRender();
+  }
+
+  private async restorePreviousKey(
+    transport: JevTransportKind,
+    previous: { apiKey?: string } | undefined
+  ): Promise<boolean> {
+    const result = previous?.apiKey
+      ? await this.deps.writeKey(previous.apiKey, transport)
+      : await this.deps.clearStoredKey(transport);
+
+    return result.ok;
   }
 
   private commitSelection(credentials: JevCredentials): boolean {

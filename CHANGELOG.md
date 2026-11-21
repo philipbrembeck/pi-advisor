@@ -18,6 +18,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Reject `advisorJevTimeoutMs` values above the 32-bit timer ceiling (2147483647 ms), which runtimes silently clamp to ~1 ms and thereby fail screening open.
 - The Advisor thinking renderer now honors the effective Pi `hide_thinking` setting — including a trusted project's override — instead of only the global `settings.json`.
 - Batch the Git membership queries behind tracked/untracked attachments into one `git ls-files` call per request list (chunked at 256 paths), so a long list of nonexistent paths no longer launches one synchronous Git process per path.
+- A failed Jev provider save now restores the previously stored key (or clears the store when none existed) instead of leaving a freshly written key active under the old endpoint.
 
 ### Fixed (benchmark harness)
 

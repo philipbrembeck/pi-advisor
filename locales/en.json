@@ -334,5 +334,7 @@
   "usage.call": "call",
   "usage.calls": "calls",
   "usage.unavailable": "unavailable",
-  "usage.withoutData": "without usage data"
+  "usage.withoutData": "without usage data",
+  "jevSetup.providerKeyRestored": "Provider verified, but settings could not be saved; the previous key was restored.",
+  "jevSetup.providerKeyNotRestored": "Provider verified, but settings could not be saved and the previous key could not be restored. Re-enter a valid key before retrying."
 }
