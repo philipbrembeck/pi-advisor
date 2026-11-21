@@ -52,6 +52,22 @@ export const imageFromPart = (part: RecordValue): ImageContent | undefined => {
   return imageFromBytes(bytes, part.mimeType);
 };
 
+const IMAGE_OMITTED_MARKER =
+  "[Image omitted: unsupported format, invalid data, or over 4 MiB; pixels not reviewed]";
+
+const imageMarkerFromImage = (
+  image: Pick<ImageContent, "data">,
+  nonce = ""
+): string => {
+  const id = createHash("sha256")
+    .update(nonce)
+    .update(image.data)
+    .digest("hex")
+    .slice(0, 24);
+
+  return `[Image ref=img_${id}; pixels reviewed only if attached below]`;
+};
+
 export const imageMarker = (
   part: RecordValue,
   nonce = ""
@@ -62,17 +78,7 @@ export const imageMarker = (
 
   const image = imageFromPart(part);
 
-  if (!image) {
-    return "[Image omitted: unsupported format, invalid data, or over 4 MiB; pixels not reviewed]";
-  }
-
-  const id = createHash("sha256")
-    .update(nonce)
-    .update(image.data)
-    .digest("hex")
-    .slice(0, 24);
-
-  return `[Image ref=img_${id}; pixels reviewed only if attached below]`;
+  return image ? imageMarkerFromImage(image, nonce) : IMAGE_OMITTED_MARKER;
 };
 
 interface SelectedImage {
@@ -111,18 +117,22 @@ const entryImageCensus = (
       parts += 1;
     }
 
-    const marker = imageMarker(part, nonce);
-
-    if (!marker || seen.has(marker) || !conversation.includes(marker)) {
+    if (part.type !== "image") {
       continue;
     }
 
     const image = imageFromPart(part);
 
-    if (image) {
-      seen.add(marker);
-      selected.push({ image, marker });
+    const marker = image
+      ? imageMarkerFromImage(image, nonce)
+      : IMAGE_OMITTED_MARKER;
+
+    if (!image || seen.has(marker) || !conversation.includes(marker)) {
+      continue;
     }
+
+    seen.add(marker);
+    selected.push({ image, marker });
   }
 
   return { parts, selected };

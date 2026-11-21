@@ -2908,16 +2908,17 @@ var imageFromPart = (part) => {
   }
   return imageFromBytes(bytes, part.mimeType);
 };
+var IMAGE_OMITTED_MARKER = "[Image omitted: unsupported format, invalid data, or over 4 MiB; pixels not reviewed]";
+var imageMarkerFromImage = (image, nonce = "") => {
+  const id = createHash("sha256").update(nonce).update(image.data).digest("hex").slice(0, 24);
+  return `[Image ref=img_${id}; pixels reviewed only if attached below]`;
+};
 var imageMarker = (part, nonce = "") => {
   if (part.type !== "image") {
     return;
   }
   const image = imageFromPart(part);
-  if (!image) {
-    return "[Image omitted: unsupported format, invalid data, or over 4 MiB; pixels not reviewed]";
-  }
-  const id = createHash("sha256").update(nonce).update(image.data).digest("hex").slice(0, 24);
-  return `[Image ref=img_${id}; pixels reviewed only if attached below]`;
+  return image ? imageMarkerFromImage(image, nonce) : IMAGE_OMITTED_MARKER;
 };
 var eligibleImagePart = (part) => part.type === "image" && isString(part.data) && isString(part.mimeType);
 var entryImageCensus = (content, conversation, nonce, seen) => {
@@ -2930,15 +2931,16 @@ var entryImageCensus = (content, conversation, nonce, seen) => {
     if (eligibleImagePart(part)) {
       parts += 1;
     }
-    const marker = imageMarker(part, nonce);
-    if (!marker || seen.has(marker) || !conversation.includes(marker)) {
+    if (part.type !== "image") {
       continue;
     }
     const image = imageFromPart(part);
-    if (image) {
-      seen.add(marker);
-      selected.push({ image, marker });
+    const marker = image ? imageMarkerFromImage(image, nonce) : IMAGE_OMITTED_MARKER;
+    if (!image || seen.has(marker) || !conversation.includes(marker)) {
+      continue;
     }
+    seen.add(marker);
+    selected.push({ image, marker });
   }
   return { parts, selected };
 };
