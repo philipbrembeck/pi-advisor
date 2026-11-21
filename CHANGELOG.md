@@ -13,6 +13,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ### Fixed
 
 - Preserve session entries proposed by earlier `turn_end` handlers when appending Advisor budget feedback.
+- Write `advisor.json` updates atomically so a failed save cannot leave the config truncated or partially written.
 - Keep already-active Advisor tools in place during successful always-on activation so pending tools can still be restored.
 
 ### Changed

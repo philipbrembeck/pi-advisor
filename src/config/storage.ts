@@ -318,6 +318,7 @@ export const saveConfig = (
     return path;
   }
 
+  const identity = configFileIdentity(path);
   const existing = readConfigForSave(path);
 
   const data = applyChangedConfigValues(
@@ -328,7 +329,7 @@ export const saveConfig = (
     persistExecutor
   );
 
-  writeFileSync(path, `${JSON.stringify(data, null, 2)}\n`);
+  writeConfigAtomically(path, `${JSON.stringify(data, null, 2)}\n`, identity);
   resetConfigCache();
   const nextLoadedState = { ...current };
 

@@ -1,7 +1,9 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
+import * as fs from "node:fs";
 import {
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -42,6 +44,12 @@ const originalAgentDir = process.env.PI_CODING_AGENT_DIR;
 let agentDir = "";
 
 const configPath = () => join(agentDir, "advisor.json");
+const originalWriteFileSync = fs.writeFileSync;
+
+// SAFETY: saveConfig's atomic writer writes via a file descriptor.
+const atomicWriteDescriptor = (
+  target: Parameters<typeof fs.writeFileSync>[0] | number
+): number => target as number;
 
 const readSavedConfig = () =>
   // SAFETY: advisor.json is flat JSON written by saveConfig in these fixtures.
@@ -254,6 +262,76 @@ describe("Advisor config persistence", () => {
     expect(saved.alwaysOn).toBe(true);
     expect(saved.externallyEdited).toBe("keep me");
     expect(saved.showUsageFooter).toBe(true);
+  });
+
+  test("keeps advisor.json intact when an atomic config write fails", () => {
+    writeFileSync(
+      configPath(),
+      JSON.stringify({ advisor: "openai-codex/advisor", simpleMode: false })
+    );
+    loadConfig(context);
+    setShowUsageFooterRef(true);
+    const before = readFileSync(configPath(), "utf-8");
+
+    const writeSpy = spyOn(fs, "writeFileSync").mockImplementation(
+      (...args) => {
+        fs.writeSync(
+          atomicWriteDescriptor(args[0]),
+          String(args[1]).slice(0, 12)
+        );
+        throw new Error("injected temp-file write failure");
+      }
+    );
+
+    try {
+      expect(() => saveConfig(context)).toThrow(
+        "injected temp-file write failure"
+      );
+    } finally {
+      writeSpy.mockRestore();
+    }
+
+    expect(readFileSync(configPath(), "utf-8")).toBe(before);
+    expect(readdirSync(agentDir)).toEqual(["advisor.json"]);
+    expect(() => loadConfig(context)).not.toThrow();
+  });
+
+  test("rejects a save if advisor.json changes before atomic replacement", () => {
+    writeFileSync(
+      configPath(),
+      JSON.stringify({ advisor: "openai-codex/advisor", simpleMode: false })
+    );
+    loadConfig(context);
+    setShowUsageFooterRef(true);
+    const concurrent = JSON.stringify({ externallyEdited: true });
+    let changed = false;
+
+    const writeSpy = spyOn(fs, "writeFileSync").mockImplementation(
+      (...args) => {
+        const result = originalWriteFileSync(
+          atomicWriteDescriptor(args[0]),
+          String(args[1]),
+          "utf-8"
+        );
+
+        if (!changed) {
+          originalWriteFileSync(configPath(), concurrent, "utf-8");
+          changed = true;
+        }
+
+        return result;
+      }
+    );
+
+    try {
+      expect(() => saveConfig(context)).toThrow("changed during the update");
+    } finally {
+      writeSpy.mockRestore();
+    }
+
+    expect(changed).toBe(true);
+    expect(readFileSync(configPath(), "utf-8")).toBe(concurrent);
+    expect(readdirSync(agentDir)).toEqual(["advisor.json"]);
   });
 
   test("does not replace malformed configuration during a save", () => {

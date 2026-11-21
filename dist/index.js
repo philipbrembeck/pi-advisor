@@ -1332,10 +1332,11 @@ var saveConfig = (_ctx, options = {}) => {
   if (changedKeys.length === 0) {
     return path;
   }
+  const identity = configFileIdentity(path);
   const existing = readConfigForSave(path);
   const data = applyChangedConfigValues(existing, current, changedKeys, persistAdvisor, persistExecutor);
-  writeFileSync(path, `${JSON.stringify(data, null, 2)}
-`);
+  writeConfigAtomically(path, `${JSON.stringify(data, null, 2)}
+`, identity);
   resetConfigCache();
   const nextLoadedState = { ...current };
   if (!persistAdvisor) {
