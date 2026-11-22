@@ -93,6 +93,7 @@ const expectedFiles = [
   "src/jev/decisions-response.ts",
   "src/jev/endpoint-key-store.ts",
   "src/jev/failure.ts",
+  "src/jev/key-file.ts",
   "src/jev/key-store.ts",
   "src/jev/ledger.ts",
   "src/jev/openai-key-store.ts",
