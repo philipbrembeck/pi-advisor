@@ -12,7 +12,7 @@ Pi extension providing an Executor/Advisor flow and optional Herdr integration.
 | Tests         | `bun test`                             |
 | Release       | GitHub Actions manages tags/publishing |
 
-Use Bun 1.4.4 or newer. Format with `bun fmt` (`bun run format` / `bun run format:check`); lint with Oxlint.
+Use Bun 1.4.5 or newer. Format with `bun fmt` (`bun run format` / `bun run format:check`); lint with Oxlint.
 
 ## Rules
 

@@ -40,17 +40,17 @@ const withTempDirectory = (run: (directory: string) => void) => {
 };
 
 describe("Bun install version guard", () => {
-  test("rejects versions older than 1.4.4", () => {
+  test("rejects versions older than 1.4.5", () => {
     withTempDirectory((cwd) => {
-      const result = runGuard(guardPath, cwd, "bun/1.4.3 npm/?", projectRoot);
+      const result = runGuard(guardPath, cwd, "bun/1.4.4 npm/?", projectRoot);
       expect(result.status).toBe(1);
-      expect(result.stderr).toContain("requires Bun 1.4.4 or newer");
+      expect(result.stderr).toContain("requires Bun 1.4.5 or newer");
     });
   });
 
   test("accepts the minimum and newer Bun releases", () => {
     withTempDirectory((cwd) => {
-      const minimum = runGuard(guardPath, cwd, "bun/1.4.4 npm/?", projectRoot);
+      const minimum = runGuard(guardPath, cwd, "bun/1.4.5 npm/?", projectRoot);
 
       const newer = runGuard(
         guardPath,
@@ -69,7 +69,7 @@ describe("Bun install version guard", () => {
       const result = runGuard(
         guardPath,
         cwd,
-        "bun/1.4.4-canary.1 npm/?",
+        "bun/1.4.5-canary.1 npm/?",
         projectRoot
       );
 
@@ -112,7 +112,7 @@ describe("Bun install version guard", () => {
       copyFileSync(guardPath, consumerGuard);
       writeFileSync(
         join(consumerRoot, "package.json"),
-        JSON.stringify({ packageManager: "bun@1.4.4" })
+        JSON.stringify({ packageManager: "bun@1.4.5" })
       );
 
       const result = runGuard(

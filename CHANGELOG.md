@@ -30,6 +30,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- Upgraded the required Bun runtime to 1.4.5 across local development and CI.
 - Updated development dependencies: Pi packages (`pi-ai`, `pi-coding-agent`, and `pi-tui`) to 1.6.0, Oxlint and plugins to 1.94.0, Bun types to 1.4.5, Knip to 6.47.0, lint-staged to 17.6.1, TypeBox to 1.4.7, and Ultracite to 8.3.1. Existing peer dependency ranges remain unchanged.
 
 ## 0.17.0 - 2026-11-20

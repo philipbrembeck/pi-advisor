@@ -110,7 +110,7 @@
     "safe-buffer": "npm:@socketregistry/safe-buffer@1.0.9",
     "undici": "8.12.2"
   },
-  "packageManager": "bun@1.4.4",
+  "packageManager": "bun@1.4.5",
   "pi": {
     "extensions": [
       "./dist/index.js"

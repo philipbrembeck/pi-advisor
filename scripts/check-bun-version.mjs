@@ -66,7 +66,7 @@ if (
   !isAtLeast(currentVersion, minimumVersion)
 ) {
   console.error(
-    `This repository requires Bun ${minimumVersion ?? "1.4.4"} or newer; found ${currentVersion ?? "a non-Bun package manager"}.`
+    `This repository requires Bun ${minimumVersion ?? "1.4.5"} or newer; found ${currentVersion ?? "a non-Bun package manager"}.`
   );
   process.exitCode = 1;
 } else {
