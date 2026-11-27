@@ -32,7 +32,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ### Changed
 
 - Upgraded the required Bun runtime to 1.4.5 across local development and CI.
-- Updated development dependencies: Pi packages (`pi-ai`, `pi-coding-agent`, and `pi-tui`) to 1.6.1, Oxlint and plugins to 1.95.0, `@types/node` to 26.6.11, Knip to 6.48.0, and lint-staged to 17.6.2. Bun types remain at 1.4.5, TypeBox at 1.4.7, and Ultracite at 8.3.1. Existing peer dependency ranges remain unchanged.
+- Updated development dependencies: Pi packages (`pi-ai`, `pi-coding-agent`, and `pi-tui`) to 1.7.0 and `@juicesharp/rpiv-i18n` to 2.16.0; Oxlint and plugins remain at 1.95.0, `@types/node` at 26.6.11, Knip at 6.48.0, and lint-staged at 17.6.2. Bun types remain at 1.4.5, TypeBox at 1.4.7, and Ultracite at 8.3.1. Existing peer dependency ranges remain unchanged.
 
 ## 0.17.0 - 2026-11-20
 
