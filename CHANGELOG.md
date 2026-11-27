@@ -6,6 +6,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## Unreleased
 
+## 0.18.0 - 2026-11-27
+
 ### Added
 
 - Added **Tracked file handoff** (`advisorTrackedFileHandoff`) in `/advisor-settings`. The default `advisor-named` keeps the current rule: `includeTrackedFiles` works only for files the latest Advisor answer names. `executor` lets the Executor attach tracked files on any consultation, without that extra round trip. Tracked file content consent, exact path checks, size limits, redaction, and untrusted-data labelling still apply.
