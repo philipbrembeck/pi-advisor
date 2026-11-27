@@ -138,6 +138,14 @@ const deadlineRunner = (): GitRunner => {
   };
 };
 
+// Both flags stop git from executing configured external diff drivers and textconv filters.
+const diffArgs = (...rest: string[]): string[] => [
+  "diff",
+  "--no-ext-diff",
+  "--no-textconv",
+  ...rest,
+];
+
 /** Resolves the base revision, falling back to the empty tree before any commit. */
 const diffBase = async (run: GitRunner, cwd: string): Promise<string> => {
   try {
@@ -174,8 +182,8 @@ export const collectGitContext = async (
 
   try {
     const base = await diffBase(run, cwd);
-    const nameStatusOutput = await run(["diff", "--name-status", base], cwd);
-    const shortstatOutput = await run(["diff", "--shortstat", base], cwd);
+    const nameStatusOutput = await run(diffArgs("--name-status", base), cwd);
+    const shortstatOutput = await run(diffArgs("--shortstat", base), cwd);
 
     const untrackedOutput = await run(
       ["ls-files", "--others", "--exclude-standard"],
@@ -200,7 +208,7 @@ export const collectGitContext = async (
     ];
 
     if (level === "full") {
-      const patch = await run(["diff", base], cwd);
+      const patch = await run(diffArgs(base), cwd);
       sections.push(
         patch.trim()
           ? `Patch:\n${patch}`

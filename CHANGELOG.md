@@ -23,6 +23,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Activation fixes: a failed Advisor authentication now also rolls back argument-provided model refs; a failed activation save restores Pi's host Executor model alongside the extension's refs; and an unchanged outcome-logging value no longer triggers a second `advisor.json` write whose failure could roll back runtime state after the main settings were already committed.
 - Conversation image census now decodes and validates each image part once per walk instead of twice.
 - Git context collection now runs through asynchronous subprocesses under the same shared five-second deadline, so it no longer blocks the event loop during consultations.
+- Git context collection now passes `--no-ext-diff --no-textconv` to every diff command, so external diff drivers and textconv filters configured in a repository no longer execute during consultations.
 
 ### Fixed (benchmark harness)
 

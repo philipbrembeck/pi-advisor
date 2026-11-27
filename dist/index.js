@@ -430,6 +430,12 @@ var deadlineRunner = () => {
     return execGit(args, cwd, remaining);
   };
 };
+var diffArgs = (...rest) => [
+  "diff",
+  "--no-ext-diff",
+  "--no-textconv",
+  ...rest
+];
 var diffBase = async (run, cwd) => {
   try {
     await run(["rev-parse", "--verify", "--quiet", "HEAD"], cwd);
@@ -454,8 +460,8 @@ var collectGitContext = async (cwd, level, maxChars, redact = (value) => value, 
   }
   try {
     const base = await diffBase(run, cwd);
-    const nameStatusOutput = await run(["diff", "--name-status", base], cwd);
-    const shortstatOutput = await run(["diff", "--shortstat", base], cwd);
+    const nameStatusOutput = await run(diffArgs("--name-status", base), cwd);
+    const shortstatOutput = await run(diffArgs("--shortstat", base), cwd);
     const untrackedOutput = await run(["ls-files", "--others", "--exclude-standard"], cwd);
     const nameStatus = nameStatusOutput.trim();
     const shortstat = shortstatOutput.trim();
@@ -472,7 +478,7 @@ ${nameStatus}` : "",
 ${untracked}` : ""
     ];
     if (level === "full") {
-      const patch = await run(["diff", base], cwd);
+      const patch = await run(diffArgs(base), cwd);
       sections.push(patch.trim() ? `Patch:
 ${patch}` : "Patch: (no tracked-file content changes)");
     } else {

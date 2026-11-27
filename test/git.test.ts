@@ -1,6 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -196,6 +202,59 @@ describe("Git context collection", () => {
     expect(gitContextNote(result, "summary", "summary")).toContain(
       "could not be collected"
     );
+  });
+
+  test("never executes external diff drivers or textconv filters", async () => {
+    await withRepo(async (dir) => {
+      const marker = (name: string) => join(dir, `${name}.ran`);
+      const script = (name: string) => join(dir, `${name}.sh`);
+
+      const configure = (key: string, name: string) => {
+        writeFileSync(script(name), `touch "${marker(name)}"\n`);
+
+        execFileSync("git", ["config", key, `sh "${script(name)}"`], {
+          cwd: dir,
+        });
+      };
+
+      configure("diff.ext.command", "ext");
+      configure("diff.conv.textconv", "conv");
+
+      writeFileSync(join(dir, "data.conv"), "before\n");
+      writeFileSync(join(dir, "plain.txt"), "before\n");
+      execFileSync("git", ["add", "data.conv", "plain.txt"], { cwd: dir });
+      execFileSync("git", ["commit", "-qm", "add files"], { cwd: dir });
+
+      writeFileSync(
+        join(dir, ".gitattributes"),
+        "env.sh diff=ext\ndata.conv diff=conv\n"
+      );
+      writeFileSync(join(dir, "data.conv"), "after\n");
+      writeFileSync(join(dir, "plain.txt"), "after\n");
+      writeFileSync(join(dir, "env.sh"), "changed\n");
+
+      // Control: `diff.external` preempts textconv, so it is added last.
+      execFileSync("git", ["diff", "HEAD"], { cwd: dir });
+      expect(existsSync(marker("ext"))).toBe(true);
+      expect(existsSync(marker("conv"))).toBe(true);
+      rmSync(marker("ext"));
+      rmSync(marker("conv"));
+
+      configure("diff.external", "global");
+      const markers = ["global", "ext", "conv"].map(marker);
+
+      for (const level of ["summary", "full"] as const) {
+        const result = await collectGitContext(dir, level, 20_000);
+        expect(result.status).toBe("collected");
+
+        for (const path of markers) {
+          expect(existsSync(path)).toBe(false);
+        }
+      }
+
+      execFileSync("git", ["diff", "HEAD"], { cwd: dir });
+      expect(existsSync(marker("global"))).toBe(true);
+    });
   });
 });
 

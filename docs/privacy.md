@@ -24,6 +24,7 @@ The `advisor_config` tool reads recognized effective settings and persisted glob
 - `advisorGitContextMaxChars` defaults to `20000`. Repository context may claim its own cap or half of `contextMaxChars`, whichever is smaller, so it cannot crowd out the conversation.
 - The Executor may pass `gitContext` to `ask_advisor` as `none`, `summary`, or `full`. `advisorGitContext` is the ceiling. A larger request is narrowed to the configured level, and the Advisor is told that a fuller view was withheld.
 - `summary` deliberately excludes diff hunk headers. Git derives those from surrounding file content, so a hunk header can reproduce a line the change never touched, including a credential.
+- Collection runs every `git diff` with `--no-ext-diff --no-textconv`, so external diff drivers and textconv filters configured in a repository never execute and their output never reaches the Advisor.
 - Redaction runs before the region is capped. Repository content is labelled as untrusted data, and paths and patch text are escaped so a crafted path cannot close the region early and have the remainder read as instructions.
 - File names can be sensitive. `summary` withholds file contents, not file names; use `off` when names must not leave the machine.
 - Collection shares a single overall time budget across its Git commands and degrades to a stated failure rather than implying a clean tree.
